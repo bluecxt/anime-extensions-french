@@ -1,0 +1,18 @@
+ext {
+    extName = 'ADKami'
+    extClass = '.ADKami'
+    extVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:sibnetextractor'))
+    implementation(project(':lib:doodextractor'))
+    implementation(project(':lib:voeextractor'))
+    implementation(project(':lib:vidmolyextractor'))
+    implementation(project(':lib:luluextractor'))
+    implementation(project(':lib:filemoonextractor'))
+    implementation(project(':lib:cloudflareinterceptor'))
+}

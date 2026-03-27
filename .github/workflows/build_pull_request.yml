@@ -1,0 +1,189 @@
+name: PR check
+
+on:
+  pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!.github/**'
+      - '.github/workflows/**'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CI_CHUNK_SIZE: 65
+  IS_PR_CHECK: true
+
+jobs:
+  prepare:
+    name: Prepare job
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.generate-matrices.outputs.matrix }}
+      delete: ${{ steps.generate-matrices.outputs.delete }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set env
+        id: set-env
+        run: |
+          echo "LATEST_COMMIT_MESSAGE<<{delimiter}
+          $(git log -1 --pretty=%B)
+
+          Built on commit: $(git log -1 --pretty=%H)
+          {delimiter}" >> $GITHUB_OUTPUT
+
+      - name: Find lib changes
+        id: modified-libs
+        uses: tj-actions/changed-files@e0021407031f5be11a464abee9a0776171c79891 # v47.0.1
+        with:
+          files: lib/
+          files_ignore: lib/**.md
+          files_separator: " "
+          safe_output: false
+
+      # This step is to alert whether a bumping version might occur.
+      - name: Bump extensions that uses a modified lib
+        if: steps.modified-libs.outputs.any_changed == 'true'
+        env:
+          COMMIT_MESSAGE: ${{ steps.set-env.outputs.LATEST_COMMIT_MESSAGE }}
+        run: |
+          latest_commit_author=$(git log -1 --pretty=%an)
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          chmod +x ./.github/scripts/bump-versions.py
+          ./.github/scripts/bump-versions.py "$COMMIT_MESSAGE" ${{ steps.modified-libs.outputs.all_changed_files }}
+          echo "!!! This PR will bumping extensions version that uses a modified lib"
+
+      - name: Set up Java
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5.1.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
+        with:
+          cache-read-only: true
+
+      - id: generate-matrices
+        name: Generate build matrices
+        run: |
+          python ./.github/scripts/generate-build-matrices.py origin/master ${{ secrets.SIGNING_KEY != '' && 'Release' || 'Debug' }}
+
+  build:
+    name: Build extensions (${{ matrix.chunk.number }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5.1.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
+        with:
+          cache-read-only: true
+
+      - name: Prepare signing key
+        run: |
+          echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
+          chmod 600 signingkey.jks
+
+      - name: Build extensions (${{ matrix.chunk.number }})
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          MEGACLOUD_API: ${{ secrets.MEGACLOUD_API }}
+          KISSKH_API: ${{ secrets.KISSKH_API }}
+          KISSKH_SUB_API: ${{ secrets.KISSKH_SUB_API }}
+          KAISVA: ${{ secrets.KAISVA }}
+          TMDB_API: ${{ secrets.TMDB_API }}
+          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
+        run: |
+          ./gradlew $MODULES
+
+      - name: Upload APKs (${{ matrix.chunk.number }})
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: github.repository == github.event.pull_request.head.repo.full_name
+        with:
+          name: "individual-apks-${{ matrix.chunk.number }}"
+          path: "**/*.apk"
+          retention-days: 1
+
+      - name: Clean up CI files
+        run: rm signingkey.jks
+
+  publish:
+    name: Check extension repo
+    needs: [prepare, build]
+    if: github.repository == github.event.pull_request.head.repo.full_name
+    runs-on: 'ubuntu-24.04'
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: ~/apk-artifacts
+
+      - name: Set up JDK
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5.1.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Checkout PR
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: PR
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create repo artifacts
+        run: |
+          cd PR
+          python ./.github/scripts/move-built-apks.py
+          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/komikku-app/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
+          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
+          java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
+          python ./.github/scripts/create-repo.py
+
+      - name: Checkout repo branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: cuong-tran/aniyomi-repo
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Merge repo
+        run: |
+          cd repo
+          python ../PR/.github/scripts/merge-repo.py '${{ needs.prepare.outputs.delete }}' 'PR/repo'
+
+      # Showing which extensions are to be updated with this PR
+      - name: Check Deploy repo
+        run: |
+          cd repo
+          git status

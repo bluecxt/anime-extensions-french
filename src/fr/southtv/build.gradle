@@ -1,0 +1,11 @@
+ext {
+    extName = 'SouthTV'
+    extClass = '.SouthTV'
+    extVersionCode = 6
+    extVersionName = "1.0.1" // Your custom version
+    isNsfw = false
+}
+apply from: "$rootDir/common.gradle"
+
+// Override the version name from the project's properties
+project.ext.libVersion = project.ext.extVersionName

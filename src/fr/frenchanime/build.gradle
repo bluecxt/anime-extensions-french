@@ -1,0 +1,27 @@
+ext {
+    extName = 'French Anime'
+    extClass = '.FrenchAnime'
+    themePkg = 'datalifeengine'
+    baseUrl = 'https://french-anime.com'
+    overrideVersionCode = 31
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:doodextractor'))
+    implementation(project(':lib:vidoextractor'))
+    implementation(project(':lib:uqloadextractor'))
+    implementation(project(':lib:vudeoextractor'))
+    implementation(project(':lib:streamhidevidextractor'))
+    implementation(project(':lib:upstreamextractor'))
+    implementation(project(':lib:streamvidextractor'))
+    implementation(project(':lib:sibnetextractor'))
+    implementation(project(':lib:okruextractor'))
+    implementation(project(':lib:streamhubextractor'))
+    implementation(project(':lib:vidmolyextractor'))
+    implementation(project(':lib:voeextractor'))
+    implementation(project(':lib:filemoonextractor'))
+    implementation(project(':lib:luluextractor'))
+    implementation(project(':lib:streamwishextractor'))
+}

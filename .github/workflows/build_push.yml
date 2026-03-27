@@ -1,0 +1,181 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**"
+      - "!**.md"
+      - "!.github/**"
+      - ".github/scripts/**"
+      - ".github/workflows/build_push.yml"
+  # Manual trigger
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI_CHUNK_SIZE: 65
+  IS_PR_CHECK: false
+
+jobs:
+  prepare:
+    permissions:
+      contents: write
+    name: Prepare job
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      latestCommitMessage: ${{ steps.set-env.outputs.LATEST_COMMIT_MESSAGE }}
+      matrix: ${{ steps.generate-matrices.outputs.matrix }}
+      delete: ${{ steps.generate-matrices.outputs.delete }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set env
+        id: set-env
+        run: |
+          echo "LATEST_COMMIT_MESSAGE<<{delimiter}
+          $(git log -1 --pretty=%B)
+
+          Built on commit: $(git log -1 --pretty=%H)
+          {delimiter}" >> $GITHUB_OUTPUT
+
+      - id: generate-matrices
+        name: Create output matrices
+        run: |
+          python ./.github/scripts/generate-build-matrices.py "HEAD~1" Release
+
+  build:
+    name: Build extensions (${{ matrix.chunk.number }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ matrix.chunk.number > 1 }}
+
+      - name: Prepare signing key
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          echo "$SIGNING_KEY" | base64 -d > signingkey.jks
+          chmod 600 signingkey.jks
+
+      - name: Build extensions (${{ matrix.chunk.number }})
+        env:
+          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          TMDB_API: ${{ secrets.TMDB_API }}
+        run: |
+          ./gradlew $MODULES
+
+      - name: Upload APKs (${{ matrix.chunk.number }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: "individual-apks-${{ matrix.chunk.number }}"
+          path: "**/*.apk"
+          retention-days: 1
+
+      - name: Clean up CI files
+        run: rm signingkey.jks
+
+  publish:
+    name: Publish extension repo
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ~/apk-artifacts
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout repo branch
+        uses: actions/checkout@v4
+        with:
+          ref: repo
+          path: repo
+
+      - name: Create repo artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python ./.github/scripts/move-built-apks.py
+          INSPECTOR_LINK="$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/komikku-app/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -n 1)"
+
+          if [ -z "$INSPECTOR_LINK" ] || [ "$INSPECTOR_LINK" = "null" ]; then
+            echo "Error: Could not find Inspector.jar download link. Check GitHub API rate limits."
+            exit 1
+          fi
+
+          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
+
+          # Inspector needs to generate output.json for create-repo.py
+          java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
+
+          # This script uses output.json to create repo/index.min.json
+          python ./.github/scripts/create-repo.py
+
+          # Copy index.min.json to index.json for compatibility (both should be in the same format)
+          cp repo/index.min.json repo/index.json
+
+          # Extract signing fingerprint and create mandatory repo.json for Anikku
+          SAMPLE_APK=$(find repo/apk -name "*.apk" | head -n 1)
+          if [ -n "$SAMPLE_APK" ]; then
+            FINGERPRINT=$(keytool -printcert -jarfile "$SAMPLE_APK" | grep "SHA256:" | head -n 1 | awk -F': ' '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
+            REPO_ICON_URL="https://raw.githubusercontent.com/${{ github.repository }}/repo/icon.png"
+            echo "{\"meta\":{\"name\":\"bluecxt french repo\",\"shortName\":\"BCXT-FR\",\"website\":\"https://github.com/bluecxt/aniyomi-extensions-french-only\",\"signingKeyFingerprint\":\"$FINGERPRINT\",\"iconUrl\":\"$REPO_ICON_URL\"}}" > repo/repo.json
+            echo "Successfully generated repo.json with name: bluecxt french repo"
+          else
+            echo "Error: No APK found to extract fingerprint!"
+            exit 1
+          fi
+
+          # Use local French flag as repository icon/logo
+          sudo apt-get update && sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 512 -h 512 repo_logo.svg -o repo/icon.png
+          cp repo/icon.png repo/logo.png
+
+      - name: Deploy to repo branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: repo
+          folder: repo
+          clean: true
+          commit-message: "Update extension repo: ${{ needs.prepare.outputs.latestCommitMessage }}"

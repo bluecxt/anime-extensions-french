@@ -1,0 +1,16 @@
+ext {
+    extName = 'FrAnime'
+    extClass = '.FrAnime'
+    extVersionCode = 33
+    isNsfw = true
+}
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:vidoextractor'))
+    implementation(project(':lib:vkextractor'))
+    implementation(project(':lib:sendvidextractor'))
+    implementation(project(':lib:sibnetextractor'))
+    implementation(project(':lib:vidmolyextractor'))
+    implementation(project(':lib:filemoonextractor'))
+}

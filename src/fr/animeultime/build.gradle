@@ -1,0 +1,14 @@
+ext {
+    extName = 'Anime-Ultime'
+    extClass = '.AnimeUltime'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:sibnetextractor'))
+    implementation(project(':lib:vidmolyextractor'))
+    implementation(project(':lib:doodextractor'))
+    implementation(project(':lib:voeextractor'))
+}

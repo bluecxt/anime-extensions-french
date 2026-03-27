@@ -1,0 +1,48 @@
+name: 🗑 Source removal request
+description: Scanlators can request their site to be removed
+labels: [Meta request]
+body:
+
+  - type: input
+    id: link
+    attributes:
+      label: Source link
+      placeholder: |
+        Example: "https://notrealscans.org"
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      placeholder: |
+        Additional details and attachments.
+
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Your request will be denied if you don't meet these requirements.
+      options:
+        - label: Proof of ownership/intent to remove.
+          required: true
+        - label: Site only hosts content scanlated by the group and not stolen from other scanlators or official releases (i.e., not an aggregator site)
+          required: true
+        - label: Site is not infested with user-hostile features (e.g., invasive or malicious ads)
+          required: true
+
+  - type: "textarea"
+    id: "prioritisation"
+    attributes:
+      label: "Is this issue important to you?"
+      description: |
+        **Please do not modify this text area!**
+
+        This template lets users vote with a :+1: reaction if they find it important.
+        This is not a guarantee that highly-requested issues will be fixed first, but it helps us to figure out what's important to users. Please react on other users' issues if you find them important.
+      value: |
+        Add a :+1: [reaction] to [issues you find important].
+
+        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [issues you find important]: https://github.com/yuzono/aniyomi-extensions/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

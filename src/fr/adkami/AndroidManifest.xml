@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="eu.kanade.tachiyomi.animeextension.nsfw"
+            android:value="1" />
+        <activity
+            android:name=".fr.adkami.ADKamiUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="www.adkami.com"
+                    android:pathPattern="/anime/..*"
+                    android:scheme="https" />
+                <data
+                    android:host="adkami.com"
+                    android:pathPattern="/anime/..*"
+                    android:scheme="https" />
+                <data
+                    android:host="hentai.adkami.com"
+                    android:pathPattern="/hentai/..*"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
