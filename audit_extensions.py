@@ -48,12 +48,17 @@ def run_kotlin_test(ext_name):
     apk = find_apk(ext_name)
     if not apk:
         print(f"   ⚠️  Pas d'APK trouvé. Compilation en cours...")
-        # Add ANDROID_HOME directly to the shell command
+        # Force AAPT2 to use the SDK version (essential for ARM64/Raspberry Pi)
+        aapt2_path = f"{android_home}/build-tools/34.0.0/aapt2"
+        
         env_prefix = f"JAVA_HOME={JAVA_HOME} "
         if android_home:
             env_prefix += f"ANDROID_HOME={android_home} "
             
-        gradle_cmd = f"{env_prefix} ./gradlew :src:fr:{ext_name}:assembleDebug -q"
+        gradle_cmd = f"{env_prefix} ./gradlew :src:fr:{ext_name}:assembleDebug -q -Pandroid.aapt2FromMaven=false"
+        if os.path.exists(aapt2_path):
+             gradle_cmd += f" -Dandroid.aapt2.executable={aapt2_path}"
+             
         result = subprocess.run(gradle_cmd, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"   ❌ Échec de la compilation")
