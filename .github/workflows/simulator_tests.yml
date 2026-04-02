@@ -13,6 +13,8 @@ jobs:
   audit:
     name: Run Simulators Audit
     runs-on: self-hosted
+    env:
+      ANDROID_HOME: /home/actions-runner/android-sdk
     steps:
       - uses: actions/checkout@v6
 
@@ -21,9 +23,6 @@ jobs:
         with:
           java-version: 17
           distribution: temurin
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
