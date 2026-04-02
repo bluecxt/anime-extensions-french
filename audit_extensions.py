@@ -9,8 +9,11 @@ import urllib.request
 ANITESTER_URL = "https://github.com/Claudemirovsky/aniyomi-extensions-tester/releases/download/v2.6.1/anitester-min.jar"
 SCRIPTS_DIR = os.path.join(".github", "scripts")
 ANITESTER_JAR = os.path.join(SCRIPTS_DIR, "anitester.jar")
-JAVA_HOME = os.environ.get("JAVA_HOME", "/usr/lib/jvm/java-17-openjdk")
-JAVA_BIN = os.path.join(JAVA_HOME, "bin", "java")
+JAVA_HOME = os.environ.get("JAVA_HOME")
+if JAVA_HOME:
+    JAVA_BIN = os.path.join(JAVA_HOME, "bin", "java")
+else:
+    JAVA_BIN = shutil.which("java")
 
 def ensure_anitester():
     """Télécharge anitester.jar s'il n'existe pas."""
