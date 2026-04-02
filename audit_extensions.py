@@ -52,10 +52,9 @@ def run_kotlin_test(ext_name):
         new_env["JAVA_HOME"] = JAVA_HOME
         if android_home:
             new_env["ANDROID_HOME"] = android_home
-            # Force AAPT2 path in Gradle options
-            new_env["GRADLE_OPTS"] = f"-Dandroid.aapt2.executable={aapt2_path}"
 
-        gradle_cmd = f"./gradlew :src:fr:{ext_name}:assembleDebug -q -Pandroid.aapt2FromMaven=false"
+        # Use init.gradle to force the AAPT2 path globally in the project
+        gradle_cmd = f"./gradlew :src:fr:{ext_name}:assembleDebug -q --init-script init.gradle -Pandroid.aapt2FromMaven=false"
         result = subprocess.run(gradle_cmd, shell=True, capture_output=True, text=True, env=new_env)
         
         if result.returncode != 0:

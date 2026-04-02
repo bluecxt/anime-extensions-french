@@ -1,0 +1,15 @@
+allprojects {
+    afterEvaluate { project ->
+        if (project.plugins.hasPlugin("com.android.application") || project.plugins.hasPlugin("com.android.library")) {
+            project.android {
+                aaptOptions {
+                    endpoint = "http://fake.local" // This forces AGP to think it has a custom endpoint
+                }
+            }
+            // For newer AGP versions (8.0+)
+            project.tasks.withType(com.android.build.gradle.internal.res.LinkApplicationAndroidResourcesTask).configureEach {
+                it.aapt2Executable.set(file("/home/actions-runner/.android/sdk/build-tools/36.0.0/aapt2"))
+            }
+        }
+    }
+}
