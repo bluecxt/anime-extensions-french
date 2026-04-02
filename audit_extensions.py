@@ -49,9 +49,21 @@ def run_kotlin_test(ext_name):
     if not apk:
         print(f"   ⚠️  Pas d'APK trouvé. Compilation en cours...")
         # Force AAPT2 to use the SDK version (essential for ARM64/Raspberry Pi)
-        # Using version 36.0.0 found on the runner
         aapt2_path = f"{android_home}/build-tools/36.0.0/aapt2"
         
+        # BRUTE FORCE: Replace any aapt2 in Gradle cache with the ARM64 version
+        gradle_cache = os.path.expanduser("~/.gradle/caches")
+        if os.path.exists(gradle_cache) and os.path.exists(aapt2_path):
+            for root, dirs, files in os.walk(gradle_cache):
+                if "aapt2" in files:
+                    target = os.path.join(root, "aapt2")
+                    if "transformed" in target and "aapt2" in target:
+                        try:
+                            shutil.copy2(aapt2_path, target)
+                            # print(f"      🔧 Patché : {os.path.basename(root)}")
+                        except Exception:
+                            pass
+
         env_prefix = f"JAVA_HOME={JAVA_HOME} "
         if android_home:
             env_prefix += f"ANDROID_HOME={android_home} "
