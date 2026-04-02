@@ -120,30 +120,7 @@ class WaveAnime :
             }
         }.sortedBy { it.title }
 
-        val allSeasons = items.flatMap { fetchSeasons(it) }
-        return AnimesPage(allSeasons, false)
-    }
-
-    private fun fetchSeasons(anime: SAnime): List<SAnime> {
-        return try {
-            val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
-            val document = response.asJsoup()
-            val seasonGrids = document.select("div.component.episode-card-grid")
-
-            if (seasonGrids.isEmpty()) return listOf(anime)
-
-            seasonGrids.map { grid ->
-                val seasonNum = grid.attr("data-season")
-                SAnime.create().apply {
-                    title = if (seasonGrids.size > 1) "${anime.title} S$seasonNum" else anime.title
-                    url = if (anime.url.contains("?")) "${anime.url}&s=$seasonNum" else "${anime.url}?s=$seasonNum"
-                    thumbnail_url = anime.thumbnail_url
-                    initialized = true
-                }
-            }
-        } catch (e: Exception) {
-            listOf(anime)
-        }
+        return AnimesPage(items, false)
     }
 
     // =============================== Latest ===============================
@@ -163,11 +140,9 @@ class WaveAnime :
     // =========================== Anime Details ============================
     override fun animeDetailsParse(response: Response): SAnime {
         val document = response.asJsoup()
-        val seasonNum = response.request.url.queryParameter("s") ?: "1"
         return SAnime.create().apply {
             val info = document.selectFirst("div.serie-info")
-            val baseTitle = info?.selectFirst("h1")?.text() ?: ""
-            title = if (document.select("div.component.episode-card-grid").size > 1) "$baseTitle S$seasonNum" else baseTitle
+            title = info?.selectFirst("h1")?.text() ?: ""
             description = document.selectFirst("div.synopsis p")?.text()
             genre = document.select("div.metadata .item:contains(Genres) .value").text()
             status = parseStatus(document.select("div.metadata .item:contains(Statut) .value").text())
@@ -185,10 +160,10 @@ class WaveAnime :
     // ============================== Episodes ==============================
     override fun episodeListParse(response: Response): List<SEpisode> {
         val document = response.asJsoup()
-        val seasonNum = response.request.url.queryParameter("s") ?: "1"
         val episodes = mutableListOf<SEpisode>()
 
-        document.select("div.component.episode-card-grid[data-season=$seasonNum]").forEach { seasonGrid ->
+        document.select("div.component.episode-card-grid").forEach { seasonGrid ->
+            val seasonNum = seasonGrid.attr("data-season") ?: "1"
             seasonGrid.select("div.component.episode-card").forEach { element ->
                 episodes.add(
                     SEpisode.create().apply {
@@ -196,9 +171,12 @@ class WaveAnime :
                         setUrlWithoutDomain(link)
                         val epName = element.selectFirst("h4")?.text() ?: ""
                         val epNum = element.selectFirst("h5")?.text() ?: ""
-                        // Remove season prefix (e.g., "S1 E1" -> "E1")
-                        val cleanEpNum = if (epNum.contains("E")) epNum.substringAfter("E").let { "E$it" } else epNum
-                        name = if (cleanEpNum.isNotEmpty()) "$cleanEpNum - $epName" else epName
+                        // Maintain season info in the episode title for Clarity if needed,
+                        // or just clean it up if AniZen handles it.
+                        // WaveAnime usually puts "S1 E1" in h5.
+                        name = if (epNum.isNotEmpty()) "$epNum - $epName" else epName
+
+                        // Try to extract a global episode number or just use what's there
                         episode_number = epNum.substringAfter("E").toFloatOrNull() ?: 0f
                     },
                 )
