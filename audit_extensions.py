@@ -39,44 +39,25 @@ def run_kotlin_test(ext_name):
     # Create local.properties to help Gradle find the SDK
     android_home = os.environ.get("ANDROID_HOME")
     if android_home:
-        if not os.path.exists(android_home):
-            print(f"   ❌ ERREUR : Le dossier ANDROID_HOME n'existe pas : {android_home}")
         with open("local.properties", "w") as f:
             f.write(f"sdk.dir={android_home}\n")
-        # print(f"   📝 local.properties créé avec sdk.dir={android_home}")
 
     apk = find_apk(ext_name)
     if not apk:
         print(f"   ⚠️  Pas d'APK trouvé. Compilation en cours...")
-        # Force AAPT2 to use the SDK version (essential for ARM64/Raspberry Pi)
         aapt2_path = f"{android_home}/build-tools/36.0.0/aapt2"
         
-        # BRUTE FORCE: Replace any aapt2 in Gradle cache with the ARM64 version
-        gradle_cache = os.path.expanduser("~/.gradle/caches")
-        if os.path.exists(gradle_cache) and os.path.exists(aapt2_path):
-            for root, dirs, files in os.walk(gradle_cache):
-                if "aapt2" in files:
-                    target = os.path.join(root, "aapt2")
-                    if "transformed" in target and "aapt2" in target:
-                        try:
-                            shutil.copy2(aapt2_path, target)
-                            # print(f"      🔧 Patché : {os.path.basename(root)}")
-                        except Exception:
-                            pass
-
-        env_prefix = f"JAVA_HOME={JAVA_HOME} "
+        # Build environment for subprocess
+        new_env = os.environ.copy()
+        new_env["JAVA_HOME"] = JAVA_HOME
         if android_home:
-            env_prefix += f"ANDROID_HOME={android_home} "
-            
-        # Standard Gradle properties for ARM64 compatibility
-        params = [
-            "-q",
-            "-Pandroid.aapt2FromMaven=false",
-            f"-Pandroid.aapt2.executable={aapt2_path}"
-        ]
+            new_env["ANDROID_HOME"] = android_home
+            # Force AAPT2 path in Gradle options
+            new_env["GRADLE_OPTS"] = f"-Dandroid.aapt2.executable={aapt2_path}"
+
+        gradle_cmd = f"./gradlew :src:fr:{ext_name}:assembleDebug -q -Pandroid.aapt2FromMaven=false"
+        result = subprocess.run(gradle_cmd, shell=True, capture_output=True, text=True, env=new_env)
         
-        gradle_cmd = f"{env_prefix} ./gradlew :src:fr:{ext_name}:assembleDebug {' '.join(params)}"
-        result = subprocess.run(gradle_cmd, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"   ❌ Échec de la compilation")
             if result.stderr:
