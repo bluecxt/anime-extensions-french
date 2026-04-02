@@ -55,18 +55,3 @@ Le repository a été optimisé pour ne conserver que les scrapers les plus perf
 
 ---
 
-## 🎯 Objectifs Atteints (Mars 2026)
-
-- [x] **Provider-UX** : Fusion de métadonnées et formatage des flux.
-- [x] **Provider-AK** : Correction de la gestion des caractères spéciaux.
-- [x] **Provider-AF** : Optimisation des requêtes (Agrégation de données).
-- [x] **Provider-FR & Provider-FA** : Nettoyage des chaînes de métadonnées (Qualité).
-- [x] **Harmonisation** : Possibilité de configurer les BaseURL dans les paramètres globaux.
-- [x] **Provider-VA** : Inversion de l'indexation chronologique.
-- [x] **Provider-AU** : Implémentation du module v1.
-
-## 🎯 Prochains Objectifs
-
-- [ ] **Provider-FA** : Unification des flux (Catalogue unifié).
-- [ ] **Maintenance** : Veille sur les changements de protocoles distants.
-
