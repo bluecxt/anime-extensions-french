@@ -75,7 +75,7 @@ class SouthTV : AnimeHttpSource() {
                 for (i in 1..count) {
                     episodes.add(
                         SEpisode.create().apply {
-                            name = "Saison ${seasonIndex + 1} Épisode $i"
+                            name = "S${seasonIndex + 1} E$i"
                             url = "south_park#s=${seasonIndex + 1}&e=$i"
                             episode_number = (episodeCountSoFar + i).toFloat()
                             scanlator = "S${seasonIndex + 1}"
