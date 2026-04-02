@@ -36,6 +36,12 @@ def find_apk(ext_name):
 
 def run_kotlin_test(ext_name):
     """Teste une extension avec anitester.jar (code Kotlin réel)."""
+    # Create local.properties to help Gradle find the SDK
+    android_home = os.environ.get("ANDROID_HOME")
+    if android_home:
+        with open("local.properties", "w") as f:
+            f.write(f"sdk.dir={android_home}\n")
+
     apk = find_apk(ext_name)
     if not apk:
         print(f"   ⚠️  Pas d'APK trouvé. Compilation en cours...")
