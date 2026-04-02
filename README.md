@@ -48,8 +48,7 @@ Le repository a été optimisé pour ne conserver que les scrapers les plus perf
 | **Provider-FA** | ✅ Opérationnel |
 | **Provider-FM** | ✅ Opérationnel |
 | **Provider-FR** | ✅ Opérationnel |
-| **Provider-VA (.io)** | ✅ Opérationnel |
-| **Provider-VA (.com)** | ✅ Opérationnel |
+| **Provider-VA** | ✅ Opérationnel |
 | **Provider-ST** | ✅ Opérationnel |
 | **Provider-WA** | ✅ Opérationnel |
 | **Provider-UX** | ✅ Opérationnel |
@@ -63,7 +62,7 @@ Le repository a été optimisé pour ne conserver que les scrapers les plus perf
 - [x] **Provider-AF** : Optimisation des requêtes (Agrégation de données).
 - [x] **Provider-FR & Provider-FA** : Nettoyage des chaînes de métadonnées (Qualité).
 - [x] **Harmonisation** : Possibilité de configurer les BaseURL dans les paramètres globaux.
-- [x] **Provider-VA.io** : Inversion de l'indexation chronologique.
+- [x] **Provider-VA** : Inversion de l'indexation chronologique.
 - [x] **Provider-AU** : Implémentation du module v1.
 
 ## 🎯 Prochains Objectifs
