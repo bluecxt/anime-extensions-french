@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.util.parallelFlatMapBlocking
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -149,7 +150,17 @@ class AnimeSama :
             }
         }
         return videos.map { video ->
-            Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers)
+            val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder()
+                .set("User-Agent", headers["User-Agent"]!!)
+                .build()
+            Video(
+                url = video.url,
+                quality = cleanQuality(video.quality),
+                videoUrl = video.videoUrl,
+                headers = updatedHeaders,
+                subtitleTracks = video.subtitleTracks,
+                audioTracks = video.audioTracks,
+            )
         }.sort()
     }
 
