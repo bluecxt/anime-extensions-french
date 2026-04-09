@@ -1,0 +1,19 @@
+apply plugin: 'com.android.application'
+
+ext {
+    extName = 'AnimeSamaFan'
+    extClass = '.AnimeSamaFan'
+    extVersionCode = 12
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:sibnetextractor'))
+    implementation(project(':lib:sendvidextractor'))
+    implementation(project(':lib:streamtapeextractor'))
+    implementation(project(':lib:doodextractor'))
+    implementation(project(':lib:vidoextractor'))
+    implementation(project(':lib:voeextractor'))
+}
