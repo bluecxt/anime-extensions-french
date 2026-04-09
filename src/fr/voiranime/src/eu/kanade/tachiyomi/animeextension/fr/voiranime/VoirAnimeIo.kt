@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.animeextension.fr.voiranimeio
+package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import android.util.Base64
 import androidx.preference.EditTextPreference
@@ -27,11 +27,11 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class VoirAnimeIo :
+class VoirAnime :
     ParsedAnimeHttpSource(),
     ConfigurableAnimeSource {
 
-    override val name = "VoirAnime.io"
+    override val name = "VoirAnime"
 
     override val baseUrl by lazy {
         preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!

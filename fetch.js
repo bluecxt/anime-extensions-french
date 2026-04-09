@@ -7,7 +7,7 @@ const fs = require('fs');
   await page.goto('https://anime-sama.rip/', { waitUntil: 'networkidle2' });
   await new Promise(r => setTimeout(r, 5000));
   const html = await page.content();
-  fs.writeFileSync('/tmp/animesamarip_home.html', html);
+  fs.writeFileSync('/tmp/animesamafan_home.html', html);
   await browser.close();
   console.log('Saved to /tmp/animoflix_episode.html');
 })();

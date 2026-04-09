@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.animeextension.fr.voiranimeio
+package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -11,7 +11,7 @@ import kotlin.system.exitProcess
  * Springboard that accepts https://voiranime.io/anime/<item> intents
  * and redirects them to the main Aniyomi process.
  */
-class VoirAnimeIoUrlActivity : Activity() {
+class VoirAnimeUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -22,7 +22,7 @@ class VoirAnimeIoUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.ANIMESEARCH"
-                putExtra("query", "${VoirAnimeIo.PREFIX_SEARCH}$item")
+                putExtra("query", "${VoirAnime.PREFIX_SEARCH}$item")
                 putExtra("filter", packageName)
             }
 

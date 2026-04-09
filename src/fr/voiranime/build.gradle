@@ -1,6 +1,6 @@
 ext {
-    extName = 'VoirAnime.io'
-    extClass = '.VoirAnimeIo'
+    extName = 'VoirAnime'
+    extClass = '.VoirAnime'
     extVersionCode = 15
 }
 
