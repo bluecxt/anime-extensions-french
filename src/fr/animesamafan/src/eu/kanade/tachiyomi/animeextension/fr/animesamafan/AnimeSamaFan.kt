@@ -148,15 +148,15 @@ class AnimeSamaFan :
             if (langs.contains("VF")) availableLangs.add("VF")
 
             SEpisode.create().apply {
-                url = card.attr("abs:href")
-                name = if (sName.isNotEmpty()) {
+                this.url = card.attr("abs:href")
+                this.name = if (sName.isNotEmpty()) {
                     "$sName - ${card.selectFirst("h3.episode-title")?.text()}"
                 } else {
                     card.selectFirst("h3.episode-title")?.text() ?: "Épisode"
                 }
-                episode_number = (card.selectFirst(".episode-number")?.text() ?: "0")
+                this.episode_number = (card.selectFirst(".episode-number")?.text() ?: "0")
                     .replace(Regex("[^0-9.]"), "").toFloatOrNull() ?: 0f
-                scanlator = availableLangs.joinToString(", ")
+                this.scanlator = availableLangs.joinToString(", ")
             }
         }
     }
@@ -243,19 +243,19 @@ class AnimeSamaFan :
         screen.addPreference(serverPref)
     }
 
-    override fun popularAnimeSelector() = ""
-    override fun popularAnimeFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun popularAnimeNextPageSelector() = ""
-    override fun latestUpdatesSelector() = ""
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = ""
-    override fun searchAnimeSelector() = ""
-    override fun searchAnimeFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun searchAnimeNextPageSelector() = ""
-    override fun episodeListSelector() = ""
-    override fun episodeFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun videoListParse(response: Response) = throw UnsupportedOperationException()
-    override fun videoListSelector() = ""
-    override fun videoFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun popularAnimeSelector(): String = ""
+    override fun popularAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
+    override fun popularAnimeNextPageSelector(): String? = ""
+    override fun latestUpdatesSelector(): String = ""
+    override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = ""
+    override fun searchAnimeSelector(): String = ""
+    override fun searchAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
+    override fun searchAnimeNextPageSelector(): String? = ""
+    override fun episodeListSelector(): String = ""
+    override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
+    override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
+    override fun videoListSelector(): String = ""
+    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
+    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
 }
