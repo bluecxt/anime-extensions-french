@@ -136,9 +136,41 @@ def run_all():
         print(f"{name:<15} | {status:<20}")
     print("="*50)
 
+    write_job_summary(results)
+
     if any(status == "❌ FAIL" for _, status in results):
         sys.exit(1)
     sys.exit(0)
+
+def write_job_summary(results):
+    """Écrit un résumé Markdown dans GitHub Actions Step Summary."""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+
+    total = len(results)
+    passed = sum(1 for _, status in results if status == "✅ PASS")
+    failed = sum(1 for _, status in results if status == "❌ FAIL")
+    ignored = sum(1 for _, status in results if status == "⚠️ FAIL (Ignoré)")
+
+    lines = [
+        "## Simulators Audit Summary",
+        "",
+        f"- Total: **{total}**",
+        f"- PASS: **{passed}**",
+        f"- FAIL: **{failed}**",
+        f"- FAIL (Ignoré): **{ignored}**",
+        "",
+        "| Extension | Statut |",
+        "|---|---|",
+    ]
+
+    for name, status in results:
+        lines.append(f"| `{name}` | {status} |")
+
+    lines.append("")
+    with open(summary_path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines))
 
 if __name__ == "__main__":
     run_all()
