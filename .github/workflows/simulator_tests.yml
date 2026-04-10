@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  audit:
-    name: Run Simulators Audit
+  build:
+    name: Build APKs for Audit
     runs-on: ubuntu-latest
     env:
       ANDROID_HOME: /home/actions-runner/.android/sdk
@@ -29,5 +29,47 @@ jobs:
         with:
           add-job-summary: never
 
+      - name: Build all French debug APKs
+        run: |
+          MODULES=$(find src/fr -mindepth 1 -maxdepth 1 -type d -printf ':src:fr:%f:assembleDebug ')
+          ./gradlew $MODULES -q
+
+      - name: Upload APK artifacts for audit
+        uses: actions/upload-artifact@v7
+        with:
+          name: simulator-audit-apks
+          path: src/fr/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  audit:
+    name: Run Simulators Audit
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /home/actions-runner/.android/sdk
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          add-job-summary: never
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: simulator-audit-apks
+          path: apk-artifacts
+
       - name: Run Orchestrator
+        env:
+          AUDIT_APK_DIR: apk-artifacts
+          AUDIT_SKIP_GRADLE_BUILD: "1"
         run: python3 audit_extensions.py

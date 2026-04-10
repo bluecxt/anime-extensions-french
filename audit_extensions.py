@@ -9,6 +9,8 @@ import urllib.request
 ANITESTER_URL = "https://github.com/Claudemirovsky/aniyomi-extensions-tester/releases/download/v2.6.1/anitester-min.jar"
 SCRIPTS_DIR = os.path.join(".github", "scripts")
 ANITESTER_JAR = os.path.join(SCRIPTS_DIR, "anitester.jar")
+AUDIT_APK_DIR = os.environ.get("AUDIT_APK_DIR")
+AUDIT_SKIP_GRADLE_BUILD = os.environ.get("AUDIT_SKIP_GRADLE_BUILD", "0") == "1"
 JAVA_HOME = os.environ.get("JAVA_HOME")
 if JAVA_HOME:
     JAVA_BIN = os.path.join(JAVA_HOME, "bin", "java")
@@ -29,15 +31,31 @@ def ensure_anitester():
 
 def find_apk(ext_name):
     """Recherche l'APK compilé d'une extension."""
-    pattern = f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk"
-    apks = glob.glob(pattern)
-    apks = [a for a in apks if "androidTest" not in a]
-    return apks[0] if apks else None
+    patterns = []
+
+    if AUDIT_APK_DIR:
+        patterns.extend([
+            os.path.join(AUDIT_APK_DIR, f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk"),
+            os.path.join(AUDIT_APK_DIR, "**", f"*{ext_name}*.apk"),
+        ])
+
+    patterns.append(f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk")
+
+    for pattern in patterns:
+        apks = glob.glob(pattern, recursive=True)
+        apks = [a for a in apks if "androidTest" not in a]
+        if apks:
+            return apks[0]
+
+    return None
 
 def run_kotlin_test(ext_name):
     """Teste une extension avec anitester.jar (code Kotlin réel)."""
     apk = find_apk(ext_name)
     if not apk:
+        if AUDIT_SKIP_GRADLE_BUILD:
+            print(f"   ❌ Pas d'APK trouvé dans les artifacts et compilation désactivée")
+            return False
         print(f"   ⚠️  Pas d'APK trouvé. Compilation en cours...")
         gradle_cmd = f"./gradlew :src:fr:{ext_name}:assembleDebug -q"
         result = subprocess.run(gradle_cmd, shell=True, capture_output=True, text=True)
