@@ -33,7 +33,7 @@ class AnimeSamaFan :
     ParsedAnimeHttpSource(),
     ConfigurableAnimeSource {
     override val name = "Anime-Sama-Fan"
-    override val baseUrl = "https://animesama.fan"
+    override val baseUrl = "https://anime-samaa.com"
     override val lang = "fr"
     override val supportsLatest = true
 
@@ -84,6 +84,19 @@ class AnimeSamaFan :
 
     // ================== Search ==================
     private fun parseSearchPage(document: Document): AnimesPage {
+        val titleElement = document.selectFirst("h1.anime-title") ?: document.selectFirst("h1")
+        val isAnimePage = document.selectFirst(".anime-cover, .synopsis-content, .seasons-grid") != null
+
+        if (isAnimePage && titleElement != null) {
+            val anime = SAnime.create().apply {
+                title = titleElement.text().replace("VOSTFR", "", true).replace("VF", "", true).trim()
+                thumbnail_url = document.selectFirst(".anime-cover img")?.attr("abs:src")
+                    ?: document.selectFirst("meta[property=og:image]")?.attr("content")
+                url = document.location().replace(baseUrl, "")
+            }
+            return AnimesPage(listOf(anime), false)
+        }
+
         val items = document.select("a.asn-search-result").map { element ->
             SAnime.create().apply {
                 title = element.selectFirst(".asn-search-result-title")?.text() ?: ""
@@ -95,6 +108,10 @@ class AnimeSamaFan :
     }
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+        if (query.startsWith(PREFIX_SEARCH)) {
+            val id = query.removePrefix(PREFIX_SEARCH)
+            return GET("$baseUrl/anime/$id", headers)
+        }
         val formBody = FormBody.Builder()
             .add("query", query)
             .build()
@@ -126,12 +143,16 @@ class AnimeSamaFan :
         val document = response.asJsoup()
         val episodes = mutableListOf<SEpisode>()
 
+        episodes.addAll(parseEpisodesFromDocument(document))
+
         document.select(".seasons-grid a.season-card").forEach { seasonLink ->
             val sUrl = seasonLink.attr("abs:href")
-            try {
-                val sDoc = client.newCall(GET(sUrl, headers)).execute().asJsoup()
-                episodes.addAll(parseEpisodesFromDocument(sDoc))
-            } catch (e: Exception) {}
+            if (sUrl != document.location()) {
+                try {
+                    val sDoc = client.newCall(GET(sUrl, headers)).execute().asJsoup()
+                    episodes.addAll(parseEpisodesFromDocument(sDoc))
+                } catch (e: Exception) {}
+            }
         }
         return episodes.distinctBy { it.url }.reversed()
     }
@@ -258,4 +279,8 @@ class AnimeSamaFan :
     override fun videoListSelector(): String = ""
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+
+    companion object {
+        const val PREFIX_SEARCH = "id:"
+    }
 }

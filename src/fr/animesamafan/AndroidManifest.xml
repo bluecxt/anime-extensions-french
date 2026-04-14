@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name="eu.kanade.tachiyomi.animeextension.fr.animesamafan.AnimeSamaFanUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="animesama.fan"
+                    android:pathPrefix="/anime/"
+                    android:scheme="http" />
+                <data
+                    android:host="animesama.fan"
+                    android:pathPrefix="/anime/"
+                    android:scheme="https" />
+                <data
+                    android:host="animesama.fan"
+                    android:pathPrefix="/episode/"
+                    android:scheme="http" />
+                <data
+                    android:host="animesama.fan"
+                    android:pathPrefix="/episode/"
+                    android:scheme="https" />
+
+                <data
+                    android:host="anime-samaa.com"
+                    android:pathPrefix="/anime/"
+                    android:scheme="http" />
+                <data
+                    android:host="anime-samaa.com"
+                    android:pathPrefix="/anime/"
+                    android:scheme="https" />
+                <data
+                    android:host="anime-samaa.com"
+                    android:pathPrefix="/episode/"
+                    android:scheme="http" />
+                <data
+                    android:host="anime-samaa.com"
+                    android:pathPrefix="/episode/"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

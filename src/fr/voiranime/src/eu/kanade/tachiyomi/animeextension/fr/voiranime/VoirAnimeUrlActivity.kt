@@ -38,7 +38,7 @@ class VoirAnimeUrlActivity : Activity() {
                         .replace("-", " ")
                     putExtra("query", cleanQuery)
                 } else {
-                    putExtra("query", "${VoirAnime.PREFIX_SEARCH}$item")
+                    putExtra("query", item.replace("-", " "))
                 }
                 putExtra("filter", packageName)
             }
