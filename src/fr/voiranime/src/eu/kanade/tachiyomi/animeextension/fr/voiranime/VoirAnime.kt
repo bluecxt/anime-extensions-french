@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection")
+
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import android.util.Base64
@@ -43,7 +45,6 @@ class VoirAnime :
     private val preferences by getPreferencesLazy()
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Extracteurs pré-initialisés (Lazy pour économiser la RAM)
     private val doodExtractor by lazy { DoodExtractor(client) }
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
     private val voeExtractor by lazy { VoeExtractor(client, headers) }
@@ -52,7 +53,6 @@ class VoirAnime :
     private val vkExtractor by lazy { VkExtractor(client, headers) }
     private val filemoonExtractor by lazy { FilemoonExtractor(client) }
 
-    // Regex pré-compilés pour la performance
     private val qualityRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
     private val sizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
     private val serverDefaultRegex = Regex("(?i)(Sendvid|Sibnet|Doodstream|Voe|Vidmoly|Filemoon|Okru|VK):default")
@@ -66,7 +66,7 @@ class VoirAnime :
         title = link.selectFirst(".tt")?.ownText() ?: "Inconnu"
         thumbnail_url = link.selectFirst("img")?.attr("abs:src")?.substringBefore("?")
     }
-    override fun popularAnimeNextPageSelector(): String = "div.pagination a.next"
+    override fun popularAnimeNextPageSelector(): String = "div.hpage a.r"
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/series/?page=$page&order=update", headers)
     override fun latestUpdatesSelector() = popularAnimeSelector()
@@ -116,7 +116,7 @@ class VoirAnime :
     // =========================== Anime Details ============================
     override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
         title = document.selectFirst("h1.entry-title")?.text() ?: "Titre inconnu"
-        description = document.select(".entry-content[itemprop=description]").text().ifBlank { null }
+        description = document.select(".entry-content[itemprop=description]").text().ifBlank { "Description non trouvée (Vérifier le sélecteur .entry-content[itemprop=description])" }
         genre = document.select(".genxed a").joinToString { it.text() }
         thumbnail_url = document.selectFirst(".thumb img")?.attr("abs:src")?.substringBefore("?")
 

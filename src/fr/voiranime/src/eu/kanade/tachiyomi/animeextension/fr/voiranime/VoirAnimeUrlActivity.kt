@@ -5,7 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import kotlin.system.exitProcess
 
 /**
  * Springboard that accepts https://voiranime.io/anime/<item> intents
@@ -17,12 +16,27 @@ class VoirAnimeUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val item = pathSegments[1]
+        val data = intent?.data
+        Log.d(tag, "URL reçue : $data")
+        val pathSegments = data?.pathSegments
+        if (pathSegments != null && pathSegments.isNotEmpty()) {
+            val item = pathSegments.last { it.isNotEmpty() }
+
+            // On vérifie si c'est un épisode (contient des chiffres suivis de -vostfr ou -vf)
+            val isEpisode = item.contains(Regex("-\\d+-(?:vostfr|vf)", RegexOption.IGNORE_CASE))
+
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.ANIMESEARCH"
-                putExtra("query", "${VoirAnime.PREFIX_SEARCH}$item")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                if (isEpisode) {
+                    // Si c'est un épisode, on nettoie le nom pour faire une recherche textuelle
+                    val cleanQuery = item.replace(Regex("-\\d+-(?:vostfr|vf).*", RegexOption.IGNORE_CASE), "")
+                        .replace("-", " ")
+                    putExtra("query", cleanQuery)
+                } else {
+                    // Si c'est une série, on utilise le préfixe ID pour l'ouvrir directement
+                    putExtra("query", "${VoirAnime.PREFIX_SEARCH}$item")
+                }
                 putExtra("filter", packageName)
             }
 
@@ -36,6 +50,5 @@ class VoirAnimeUrlActivity : Activity() {
         }
 
         finish()
-        exitProcess(0)
     }
 }
