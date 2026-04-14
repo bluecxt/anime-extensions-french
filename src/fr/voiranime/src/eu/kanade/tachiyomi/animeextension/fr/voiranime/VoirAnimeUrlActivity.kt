@@ -22,19 +22,22 @@ class VoirAnimeUrlActivity : Activity() {
         if (pathSegments != null && pathSegments.isNotEmpty()) {
             val item = pathSegments.last { it.isNotEmpty() }
 
-            // On vérifie si c'est un épisode (contient des chiffres suivis de -vostfr ou -vf)
-            val isEpisode = item.contains(Regex("-\\d+-(?:vostfr|vf)", RegexOption.IGNORE_CASE))
+            // Détection plus large: si l'URL contient -vostfr ou -vf, c'est probablement un épisode
+            val isEpisode = item.contains("-vostfr", ignoreCase = true) || item.contains("-vf", ignoreCase = true)
 
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.ANIMESEARCH"
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 if (isEpisode) {
-                    // Si c'est un épisode, on nettoie le nom pour faire une recherche textuelle
+                    // On nettoie le slug pour enlever le numéro d'épisode et la langue
                     val cleanQuery = item.replace(Regex("-\\d+-(?:vostfr|vf).*", RegexOption.IGNORE_CASE), "")
+                        .replace(Regex("-(?:vostfr|vf).*", RegexOption.IGNORE_CASE), "")
+                        // Séparer les lettres des chiffres (ex: zero4th -> zero 4th)
+                        .replace(Regex("([a-zA-Z])(\\d)"), "$1 $2")
+                        .replace(Regex("(\\d)([a-zA-Z])"), "$1 $2")
                         .replace("-", " ")
                     putExtra("query", cleanQuery)
                 } else {
-                    // Si c'est une série, on utilise le préfixe ID pour l'ouvrir directement
                     putExtra("query", "${VoirAnime.PREFIX_SEARCH}$item")
                 }
                 putExtra("filter", packageName)

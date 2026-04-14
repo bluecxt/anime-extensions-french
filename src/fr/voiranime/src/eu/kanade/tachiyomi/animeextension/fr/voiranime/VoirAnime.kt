@@ -100,17 +100,24 @@ class VoirAnime :
     data class SearchResponse(val all: List<AnimeResult>)
 
     private fun parseSearchPage(responseString: String): AnimesPage {
-        val responseJson = JSONObject(responseString)
-        val seriesDataString = responseJson.getJSONArray("series").getJSONObject(0).toString()
-        val data = json.decodeFromString<SearchResponse>(seriesDataString)
-        val items = data.all.map { result ->
-            SAnime.create().apply {
-                title = result.post_title
-                thumbnail_url = result.post_image.substringBefore("?")
-                url = result.post_link.substringAfter(baseUrl)
+        try {
+            val responseJson = JSONObject(responseString)
+            val seriesArray = responseJson.optJSONArray("series")
+            if (seriesArray == null || seriesArray.length() == 0) return AnimesPage(emptyList(), false)
+
+            val seriesDataString = seriesArray.getJSONObject(0).toString()
+            val data = json.decodeFromString<SearchResponse>(seriesDataString)
+            val items = data.all.map { result ->
+                SAnime.create().apply {
+                    title = result.post_title
+                    thumbnail_url = result.post_image.substringBefore("?")
+                    url = result.post_link.substringAfter(baseUrl)
+                }
             }
+            return AnimesPage(items, false)
+        } catch (e: Exception) {
+            return AnimesPage(emptyList(), false)
         }
-        return AnimesPage(items, false)
     }
 
     // =========================== Anime Details ============================
