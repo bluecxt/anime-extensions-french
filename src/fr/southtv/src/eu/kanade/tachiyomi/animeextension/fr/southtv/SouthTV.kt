@@ -6,9 +6,11 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import eu.kanade.tachiyomi.network.GET
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONObject
 
 class SouthTV : AnimeHttpSource() {
 
@@ -65,35 +67,142 @@ class SouthTV : AnimeHttpSource() {
         return AnimesPage(filtered, false)
     }
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        val tmdbPath = getTmdbPath(anime.url)
+
+        if (tmdbPath != null) {
+            val url = "https://api.themoviedb.org/3/$tmdbPath?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR&append_to_response=credits"
+            try {
+                client.newCall(GET(url, headers)).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val json = JSONObject(response.body!!.string())
+
+                        // Titre
+                        val title = json.optString("title").ifBlank { json.optString("name") }
+                        if (title.isNotBlank()) {
+                            anime.title = title
+                        }
+
+                        // Description (Overview)
+                        val overview = json.optString("overview")
+                        val releaseDate = json.optString("release_date").ifBlank { json.optString("first_air_date") }
+
+                        anime.description = buildString {
+                            if (releaseDate.isNotBlank()) append("Date de sortie : $releaseDate\n\n")
+                            append(overview)
+                        }
+
+                        // Auteurs (Créateurs, Réalisateurs, Scénaristes)
+                        val authors = mutableSetOf<String>()
+                        json.optJSONArray("created_by")?.let { creators ->
+                            for (i in 0 until creators.length()) {
+                                authors.add(creators.getJSONObject(i).getString("name"))
+                            }
+                        }
+                        json.optJSONObject("credits")?.optJSONArray("crew")?.let { crew ->
+                            for (i in 0 until crew.length()) {
+                                val member = crew.getJSONObject(i)
+                                val job = member.optString("job")
+                                if (job == "Director" || job == "Writer" || job == "Screenplay") {
+                                    authors.add(member.getString("name"))
+                                }
+                            }
+                        }
+                        anime.author = authors.joinToString(", ")
+
+                        // Genres
+                        anime.genre = json.optJSONArray("genres")?.let { genres ->
+                            (0 until genres.length()).map { i ->
+                                genres.getJSONObject(i).getString("name")
+                            }.joinToString(", ")
+                        }
+
+                        // Affiche (Poster)
+                        val posterPath = json.optString("poster_path")
+                        if (posterPath.isNotBlank()) {
+                            anime.thumbnail_url = "https://image.tmdb.org/t/p/original$posterPath"
+                        }
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        return anime
+    }
+
+    private fun getTmdbPath(url: String): String? = when {
+        url == "south_park_vf" -> "tv/2190"
+        url.contains("creed.mp4") -> "movie/1219926"
+        url.contains("pandav.mp4") -> "movie/1190012"
+        url.contains("obes.mp4") -> "movie/1290938"
+        url.contains("streamwar1.mp4") -> "movie/974691"
+        url.contains("streamwar2.mp4") -> "movie/993729"
+        url.contains("s24e3.mp4") -> "movie/874299"
+        url.contains("s24e4.mp4") -> "movie/874300"
+        url.contains("Filmsouthpark.mp4") -> "movie/9473"
+        else -> null
+    }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val episodes = mutableListOf<SEpisode>()
         if (anime.url.startsWith("south_park")) {
             var episodeCountSoFar = 0
             episodesPerSeason.forEachIndexed { seasonIndex, count ->
+                val seasonNum = seasonIndex + 1
+                val namesMap = fetchSeasonNames(seasonNum)
                 for (i in 1..count) {
+                    val tmdbName = namesMap[i]
                     episodes.add(
                         SEpisode.create().apply {
-                            name = "S${seasonIndex + 1} E$i"
-                            url = "south_park#s=${seasonIndex + 1}&e=$i"
+                            name = "S$seasonNum E$i" + (tmdbName?.let { " - $it" } ?: "")
+                            url = "south_park#s=$seasonNum&e=$i"
                             episode_number = (episodeCountSoFar + i).toFloat()
-                            scanlator = "S${seasonIndex + 1}"
+                            scanlator = "S$seasonNum"
                         },
                     )
                 }
                 episodeCountSoFar += count
             }
         } else { // movie
+            val tmdbPath = getTmdbPath(anime.url)
+            var movieTitle = anime.title
+            if (tmdbPath != null) {
+                try {
+                    val url = "https://api.themoviedb.org/3/$tmdbPath?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
+                    client.newCall(GET(url, headers)).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val json = JSONObject(response.body!!.string())
+                            movieTitle = json.optString("title").ifBlank { json.optString("name") }.ifBlank { movieTitle }
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
             episodes.add(
                 SEpisode.create().apply {
-                    name = anime.title
+                    name = movieTitle
                     url = anime.url
                     episode_number = 1f
                 },
             )
         }
         return episodes.reversed()
+    }
+
+    private fun fetchSeasonNames(seasonNumber: Int): Map<Int, String> {
+        val url = "https://api.themoviedb.org/3/tv/2190/season/$seasonNumber?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
+        return try {
+            client.newCall(GET(url, headers)).execute().use { response ->
+                val json = JSONObject(response.body?.string().orEmpty())
+                val episodesJson = json.getJSONArray("episodes")
+                val map = mutableMapOf<Int, String>()
+                for (i in 0 until episodesJson.length()) {
+                    val ep = episodesJson.getJSONObject(i)
+                    map[ep.getInt("episode_number")] = ep.getString("name")
+                }
+                map
+            }
+        } catch (e: Exception) {
+            emptyMap()
+        }
     }
 
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
