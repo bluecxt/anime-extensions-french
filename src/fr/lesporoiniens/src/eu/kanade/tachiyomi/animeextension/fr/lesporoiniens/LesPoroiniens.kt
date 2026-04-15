@@ -10,10 +10,6 @@ import eu.kanade.tachiyomi.lib.googledriveextractor.GoogleDriveExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -42,36 +38,40 @@ class LesPoroiniens : AnimeHttpSource() {
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
 
-    // --- Catalogue ---
+    // --- Catalogue (Utilisation d'une boucle simple pour compatibilité) ---
     override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/data/config.json")
 
     override fun popularAnimeParse(response: Response): AnimesPage {
         val configObj = json.decodeFromString<JsonObject>(response.body.string())
         val fileList = configObj["LOCAL_SERIES_FILES"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
 
-        val animes = runBlocking(Dispatchers.IO) {
-            fileList.map { fileName ->
-                async {
-                    try {
-                        val seriesResponse = client.newCall(GET("$baseUrl/data/series/$fileName")).execute()
-                        val seriesJson = json.decodeFromString<JsonObject>(seriesResponse.body.string())
-                        if (seriesJson["episodes"]?.jsonArray?.isEmpty() != false) return@async null
+        val animes = mutableListOf<SAnime>()
 
-                        val seriesTitle = seriesJson["title"]?.jsonPrimitive?.content ?: ""
-                        val animeInfo = seriesJson["anime"]?.jsonArray?.firstOrNull()?.jsonObject
+        // On utilise une boucle classique pour éviter les erreurs de classes Kotlin internes manquantes dans les testeurs
+        for (fileName in fileList) {
+            try {
+                val seriesResponse = client.newCall(GET("$baseUrl/data/series/$fileName")).execute()
+                val seriesJson = json.decodeFromString<JsonObject>(seriesResponse.body.string())
+                val epArray = seriesJson["episodes"]?.jsonArray
 
+                if (epArray != null && epArray.isNotEmpty()) {
+                    val seriesTitle = seriesJson["title"]?.jsonPrimitive?.content ?: ""
+                    val animeInfo = seriesJson["anime"]?.jsonArray?.firstOrNull()?.jsonObject
+
+                    animes.add(
                         SAnime.create().apply {
                             title = seriesTitle
                             url = "/${slugify(seriesTitle)}/episodes"
                             thumbnail_url = seriesJson["cover"]?.jsonPrimitive?.content
                             status = parseStatus(animeInfo?.get("status_an")?.jsonPrimitive?.content ?: seriesJson["release_status"]?.jsonPrimitive?.content)
-                        }
-                    } catch (e: Exception) {
-                        null
-                    }
+                        },
+                    )
                 }
-            }.awaitAll().filterNotNull()
+            } catch (e: Exception) {
+                continue
+            }
         }
+
         return AnimesPage(animes, false)
     }
 
@@ -137,7 +137,6 @@ class LesPoroiniens : AnimeHttpSource() {
                 val gDriveHeaders = Headers.Builder().add("User-Agent", "Mozilla/5.0").build()
                 GoogleDriveExtractor(client, gDriveHeaders).videosFromUrl(id, "(VOSTFR) Google Drive -")
                     .map { video ->
-                        // On ne retire les parenthèses QUE si elles entourent la taille à la fin (ex: " - (500 MB)")
                         val cleanQuality = video.quality.replace(" - (", " - ").removeSuffix(")")
                         Video(video.url, cleanQuality, video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
