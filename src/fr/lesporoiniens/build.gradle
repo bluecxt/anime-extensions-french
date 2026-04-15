@@ -1,0 +1,15 @@
+apply plugin: 'com.android.application'
+
+ext {
+    extName = 'Les Poroïniens'
+    extClass = '.LesPoroiniens'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:googledriveextractor'))
+    implementation(project(':lib:vidmolyextractor'))
+}
