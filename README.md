@@ -34,35 +34,24 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk # Si nécessaire
 ./gradlew :src:fr:exemple:assembleDebug
 ```
 
-## ✅ État des Media Handlers (Mars 2026)
+## ✅ État des Media Handlers (Avril 2026)
 
 Le repository a été optimisé pour ne conserver que les scrapers les plus performants.
 
 | Scraper | État |
 | :--- | :--- |
-| **Provider-AS** | ✅ Opérationnel |
-| **Provider-AS (RIP)** | ✅ Opérationnel |
-| **Provider-AK** | ✅ Opérationnel |
-| **Provider-AF** | ✅ Opérationnel |
-| **Provider-AU** | ✅ Opérationnel |
-| **Provider-FA** | ✅ Opérationnel |
-| **Provider-FM** | ✅ Opérationnel |
-| **Provider-FR** | ✅ Opérationnel |
-| **Provider-VA** | ✅ Opérationnel |
-| **Provider-ST** | ✅ Opérationnel |
-| **Provider-WA** | ✅ Opérationnel |
-| **Provider-UX** | ✅ Opérationnel |
+| **Provider-AS** | ✅ |
+| **Provider-AS (FAN)** | ✅ |
+| **Provider-AK** | ✅ |
+| **Provider-AF** | ✅ |
+| **Provider-AU** | ✅ |
+| **Provider-FA** | ✅ |
+| **Provider-FM** | ✅ |
+| **Provider-FR** | ✅ |
+| **Provider-LP** | ✅ |
+| **Provider-VA** | ✅ |
+| **Provider-ST** | ✅ |
+| **Provider-WA** | ✅ |
+| **Provider-UX** | ✅ |
 
 ---
-
-
----
-
-## 🚀 Roadmap & Travaux en cours
-
-Voici les tâches restantes ou en cours de résolution pour les extensions francophones :
-
-- [ ] **ADKami** : Résoudre les problèmes de Timeout lors des audits.
-- [ ] **AnimeUltime** : Corriger l'erreur HTTP 403 (détection de robot par le serveur).
-- [ ] **AnimoFlix** : Stabiliser le bypass Cloudflare sur les serveurs CI.
-- [ ] **CI ARM64** : Adapter le script d'audit pour fonctionner proprement sur Raspberry Pi (problème récurrent de binaire AAPT2).
