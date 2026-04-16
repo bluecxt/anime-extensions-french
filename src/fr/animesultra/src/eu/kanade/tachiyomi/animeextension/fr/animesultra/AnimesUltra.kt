@@ -221,7 +221,7 @@ class AnimesUltra :
 
         return episodes.map { (num, langUrls) ->
             SEpisode.create().apply {
-                name = "Épisode $num"
+                name = "Episode $num"
                 episode_number = num.toFloatOrNull() ?: 0f
                 url = buildJsonObject { langUrls.forEach { (l, u) -> put(l.lowercase(), u) } }.toString()
                 scanlator = langUrls.keys.joinToString(" / ") { it.uppercase() }
@@ -231,7 +231,15 @@ class AnimesUltra :
 
     override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
 
-    // ============================ Video Links =============================
+    // = :::::::::::::::::::::::::: Video Links :::::::::::::::::::::::::: =
+    override fun List<Video>.sort(): List<Video> = this.sortedWith(
+        compareBy(
+            {
+                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            },
+        ),
+    ).reversed()
+
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
     private val vidmolyExtractor by lazy { VidMolyExtractor(client) }
     private val voeExtractor by lazy { VoeExtractor(client, headers) }
@@ -272,8 +280,18 @@ class AnimesUltra :
                 doc.select("[id^=content_player_]").forEach { element ->
                     val playerUrl = element.text().trim()
                     if (playerUrl.startsWith("http")) {
+                        val serverName = when {
+                            playerUrl.contains("sibnet.ru") -> "Sibnet"
+                            playerUrl.contains("vidmoly") -> "Vidmoly"
+                            playerUrl.contains("voe.sx") -> "Voe"
+                            playerUrl.contains("sendvid.com") -> "Sendvid"
+                            playerUrl.contains("dood") || playerUrl.contains("d0000d") -> "Doodstream"
+                            playerUrl.contains("ok.ru") -> "Okru"
+                            playerUrl.contains("filemoon") || playerUrl.contains("fmoon") -> "Filemoon"
+                            else -> "Player"
+                        }
                         videoList.addAll(
-                            extractVideosFromEmbed(playerUrl, "Player").map { video ->
+                            extractVideosFromEmbed(playerUrl, serverName).map { video ->
                                 Video(video.url, "($langTag) ${cleanQuality(video.quality)}", video.videoUrl, video.headers)
                             },
                         )
@@ -298,21 +316,36 @@ class AnimesUltra :
             } catch (e: Exception) {}
         }
 
-        return videoList.distinctBy { it.url }
+        return videoList.distinctBy { it.url }.sort()
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\(\\s*Player\\s*\\)\\s*|\\s*\\(\\d+x\\d+\\)|\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "").trim()
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\(\\s*Player\\s*\\)\\s*|\\(\\s*None\\s*\\)\\s*|\\s*\\(\\d+x\\d+\\)|\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("(?i)Sendvid:default|Sibnet:default|Voe:default|Vidmoly:default"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "Voe", "Doodstream", "Okru", "Filemoon", "Player")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server", RegexOption.IGNORE_CASE), server)
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
+
     private fun extractVideosFromEmbed(url: String, name: String): List<Video> {
         val absoluteUrl = if (url.startsWith("//")) "https:$url" else url
+        val prefix = "$name - "
         return try {
             when {
-                absoluteUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(absoluteUrl, "($name) ")
-                absoluteUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(absoluteUrl, "($name) ")
-                absoluteUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(absoluteUrl, "($name) ")
-                absoluteUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(absoluteUrl, "($name) ")
-                absoluteUrl.contains("dood") || absoluteUrl.contains("d0000d") -> doodExtractor.videosFromUrl(absoluteUrl, "($name) Doodstream")
-                absoluteUrl.contains("ok.ru") -> okruExtractor.videosFromUrl(absoluteUrl, "($name) Okru")
-                absoluteUrl.contains("filemoon") || absoluteUrl.contains("fmoon") -> filemoonExtractor.videosFromUrl(absoluteUrl, "($name) Filemoon")
+                absoluteUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(absoluteUrl, prefix)
+                absoluteUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(absoluteUrl, prefix)
+                absoluteUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(absoluteUrl, prefix)
+                absoluteUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(absoluteUrl, prefix)
+                absoluteUrl.contains("dood") || absoluteUrl.contains("d0000d") -> doodExtractor.videosFromUrl(absoluteUrl, "${name}Doodstream - ")
+                absoluteUrl.contains("ok.ru") -> okruExtractor.videosFromUrl(absoluteUrl, "${name}Okru - ")
+                absoluteUrl.contains("filemoon") || absoluteUrl.contains("fmoon") -> filemoonExtractor.videosFromUrl(absoluteUrl, "${name}Filemoon - ")
                 else -> emptyList()
             }
         } catch (e: Exception) {
