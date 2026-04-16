@@ -128,10 +128,32 @@ class FrenchManga :
             val id = query.removePrefix(PREFIX_SEARCH)
             return GET("$baseUrl/index.php?newsid=$id", headers)
         }
-        return GET("$baseUrl/index.php?do=search&subaction=search&story=$query&search_start=$page", headers)
+        val formBody = okhttp3.FormBody.Builder()
+            .add("query", query)
+            .add("page", page.toString())
+            .build()
+
+        return Request.Builder()
+            .url("$baseUrl/engine/ajax/search.php")
+            .post(formBody)
+            .headers(headers)
+            .addHeader("X-Requested-With", "XMLHttpRequest")
+            .build()
     }
 
-    override fun searchAnimeParse(response: Response): AnimesPage = popularAnimeParse(response)
+    override fun searchAnimeParse(response: Response): AnimesPage {
+        val document = org.jsoup.Jsoup.parse(response.body.string(), baseUrl)
+        val animes = document.select("div.search-item").map { element ->
+            SAnime.create().apply {
+                val onclick = element.attr("onclick")
+                val path = onclick.substringAfter("'").substringBefore("'")
+                url = path.substringAfterLast("/").substringBefore("-")
+                title = element.selectFirst(".search-title")?.text() ?: ""
+                thumbnail_url = element.selectFirst(".search-poster img")?.attr("abs:src")
+            }
+        }
+        return AnimesPage(unifyAnimes(animes), false)
+    }
 
     override fun searchAnimeSelector(): String = popularAnimeSelector()
 
@@ -153,8 +175,10 @@ class FrenchManga :
 
         return SAnime.create().apply {
             title = anime.title
-            description = document.select(".full-story").text()
-            genre = document.select(".full-inf li:contains(Genre) a").joinToString { it.text() }
+            description = document.selectFirst(".fdesc")?.text() ?: document.select(".full-story").text()
+            author = document.select("li").firstOrNull { it.text().contains("Studio", true) }?.text()?.substringAfter(":")?.trim()
+                ?: document.selectFirst("li:contains(Director) a")?.text()
+            genre = document.select(".genres a, .full-inf li:contains(Genre) a").joinToString { it.text() }
             thumbnail_url = anime.thumbnail_url
             url = anime.url
             initialized = true
@@ -191,7 +215,7 @@ class FrenchManga :
             SEpisode.create().apply {
                 val actualEpNum = epNum.toFloatOrNull() ?: 0f
                 episode_number = actualEpNum
-                name = "Épisode $epNum"
+                name = "Episode $epNum"
                 url = buildJsonObject {
                     put("epNum", epNum)
                     put(
@@ -205,7 +229,7 @@ class FrenchManga :
                 scanlator = listOfNotNull(
                     if (langMap.containsKey("vostfr")) "VOSTFR" else null,
                     if (langMap.containsKey("vf")) "VF" else null,
-                ).joinToString(" / ")
+                ).joinToString(", ")
             }
         }.sortedByDescending { it.episode_number }
     }
@@ -221,7 +245,7 @@ class FrenchManga :
 
         val videos = mutableListOf<Video>()
 
-        val fmExtractor = FrenchMangaExtractor(client)
+        val fmExtractor = FrenchMangaExtractor(network.cloudflareClient, baseUrl)
         val doodExtractor = DoodExtractor(client)
         val voeExtractor = VoeExtractor(client, headers)
         val sibnetExtractor = SibnetExtractor(client)
