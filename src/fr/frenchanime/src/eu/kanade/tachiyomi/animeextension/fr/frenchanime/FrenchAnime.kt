@@ -80,7 +80,7 @@ class FrenchAnime :
             val data = it.split("!", limit = 2)
             val episode = SEpisode.create()
             episode.episode_number = data[0].toFloatOrNull() ?: 0F
-            episode.name = "Épisode ${data[0]}"
+            episode.name = "Episode ${data[0]}"
             episode.url = "$lang|${data[1]}"
             episodeList.add(episode)
         }
@@ -157,19 +157,36 @@ class FrenchAnime :
         }
         return list.map {
             Video(it.url, cleanQuality(it.quality), it.videoUrl, it.headers, it.subtitleTracks, it.audioTracks)
-        }
+        }.sort()
     }
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-        .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-        .replace(Regex("(?i)Sendvid:default"), "")
-        .replace(Regex("(?i)Sibnet:default"), "")
-        .replace(Regex("(?i)Doodstream:default"), "")
-        .replace(Regex("(?i)Voe:default"), "")
-        .replace(Regex("(?i)(Lulu|Sibnet|Voe|Doodstream|Sendvid|Vidmoly|Filemoon|Upstream|Vudeo|Uqload|StreamHide|StreamVid|Vidoza|StreamHub|StreamWish) - \\1"), "$1")
-        .replace(" - - ", " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+
+    override fun List<Video>.sort(): List<Video> = this.sortedWith(
+        compareBy(
+            {
+                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            },
+        ),
+    ).reversed()
+
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+            .replace(Regex("(?i)Sendvid:default"), "")
+            .replace(Regex("(?i)Sibnet:default"), "")
+            .replace(Regex("(?i)Doodstream:default"), "")
+            .replace(Regex("(?i)Voe:default"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("Lulu", "Sibnet", "Voe", "Doodstream", "Sendvid", "Vidmoly", "Filemoon", "Upstream", "Vudeo", "Uqload", "StreamHide", "StreamVid", "Vidoza", "StreamHub", "StreamWish")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
+            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
 
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
 
