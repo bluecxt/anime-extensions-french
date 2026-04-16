@@ -115,10 +115,28 @@ class LesPoroiniens : AnimeHttpSource() {
         obj["episodes"]?.jsonArray?.forEach { epElement ->
             val ep = epElement.jsonObject
             val num = ep["indice_ep"]?.jsonPrimitive?.content ?: "0"
+            val title = ep["title_ep"]?.jsonPrimitive?.content ?: ""
+
             episodes.add(
                 SEpisode.create().apply {
                     episode_number = num.toFloatOrNull() ?: 0f
-                    name = "Épisode $num : ${ep["title_ep"]?.jsonPrimitive?.content ?: ""}"
+
+                    val cleanTitle = title.replace("Épisode", "Episode", true)
+                    val displayNum = num.replace(".", ",")
+                    val prefix = when {
+                        cleanTitle.contains("OAV", true) -> "Episode OAV $displayNum"
+                        cleanTitle.contains("ONA", true) -> "Episode ONA $displayNum"
+                        cleanTitle.contains("Special", true) || cleanTitle.contains("Spécial", true) -> "Episode Special $displayNum"
+                        cleanTitle.contains("Film", true) -> if ((obj["episodes"]?.jsonArray?.size ?: 0) > 1) "Film $displayNum" else "Film"
+                        else -> "Episode $displayNum"
+                    }
+                    val epTitle = ep["title_ep"]?.jsonPrimitive?.content ?: ""
+                    name = if (epTitle.isNotBlank() && !epTitle.contains("Épisode", true) && !epTitle.contains("Episode", true)) {
+                        "$prefix : $epTitle"
+                    } else {
+                        prefix
+                    }
+
                     url = "/video?type=${ep["type"]?.jsonPrimitive?.content}&id=${ep["id"]?.jsonPrimitive?.content}"
                     date_upload = parseDate(ep["date_ep"]?.jsonPrimitive?.content)
                 },
@@ -138,23 +156,26 @@ class LesPoroiniens : AnimeHttpSource() {
                 val gDriveHeaders = Headers.Builder().add("User-Agent", "Mozilla/5.0").build()
                 GoogleDriveExtractor(client, gDriveHeaders).videosFromUrl(id, "(VOSTFR) Google Drive -")
                     .map { video ->
-                        val cleanQuality = video.quality.replace(" - (", " - ").removeSuffix(")")
-                        Video(video.url, cleanQuality, video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
+                        Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
             }
 
             "vidmoly" -> {
                 val vidmolyUrl = "https://vidmoly.to/embed-$id.html"
-                VidMolyExtractor(client, headers).videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly - ")
+                VidMolyExtractor(client, headers).videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly -")
                     .map { video ->
-                        val cleanQuality = video.quality.replace(" - (", " - ").removeSuffix(")")
-                        Video(video.url, cleanQuality, video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
+                        Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
             }
 
             else -> emptyList()
         }
     }
+
+    private fun cleanQuality(quality: String): String = quality.replace(" - (", " - ")
+        .replace(Regex("""(?<=\d{3,4}p)\)"""), "")
+        .replace(" - - ", " - ")
+        .trim()
 
     // --- Utils ---
     private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[\\u0300-\\u036f]"), "")
