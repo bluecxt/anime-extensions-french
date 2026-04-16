@@ -17,9 +17,9 @@ https://raw.githubusercontent.com/bluecxt/aniyomi-extensions-french-only/repo/in
 
 ## 🛠️ Développement Local et Validation
 
-Ce repository inclut des outils pour valider les scrapers de métadonnées.
+Ce repository inclut des outils pour valider les extensions.
 
-### 🧪 Validation des Scrapers
+### 🧪 Validation des Extensions
 Chaque module dispose d'un validateur qui vérifie si le flux de données distant est toujours conforme aux schémas attendus.
 
 **Lancer tous les tests :**
@@ -34,9 +34,9 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk # Si nécessaire
 ./gradlew :src:fr:exemple:assembleDebug
 ```
 
-## ✅ État des Media Handlers (Avril 2026)
+## ✅ État des Extensions (Avril 2026)
 
-Le repository a été optimisé pour ne conserver que les scrapers les plus performants.
+Le repository a été optimisé pour ne conserver que les extensions les plus performantes.
 
 | Extension | État | Description | Langues | +18 |
 | :--- | :--- | :--- | :--- | :--- |
