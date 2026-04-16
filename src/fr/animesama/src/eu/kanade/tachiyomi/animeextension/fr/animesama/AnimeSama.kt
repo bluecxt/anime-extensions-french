@@ -164,15 +164,25 @@ class AnimeSama :
         }.sort()
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-        .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-        .replace(Regex("(?i)Sendvid:default"), "")
-        .replace(Regex("(?i)Sibnet:default"), "")
-        .replace(Regex("(?i)VK:default"), "")
-        .replace(" - - ", " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+            .replace(Regex("(?i)Sendvid:default"), "")
+            .replace(Regex("(?i)Sibnet:default"), "")
+            .replace(Regex("(?i)VK:default"), "")
+            .replace(Regex("(?i)VidMoly:default"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("VidMoly", "Sibnet", "Sendvid", "VK")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
+            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
 
     // ============================ Utils =============================
     override fun List<Video>.sort(): List<Video> {
@@ -183,6 +193,9 @@ class AnimeSama :
         return this.sortedWith(
             compareByDescending<Video> { it.quality.contains("($voices", true) }
                 .thenByDescending { it.quality.contains(quality) }
+                .thenByDescending {
+                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                }
                 .thenByDescending { it.quality.contains(player, true) },
         )
     }
@@ -240,7 +253,7 @@ class AnimeSama :
     private fun playersToEpisodes(list: List<List<List<String>>>): List<SEpisode> = List(list.fold(0) { acc, it -> maxOf(acc, it.size) }) { episodeNumber ->
         val players = list.map { it.getOrElse(episodeNumber) { emptyList() } }
         SEpisode.create().apply {
-            name = "Épisode ${episodeNumber + 1}"
+            name = "Episode ${episodeNumber + 1}"
             url = json.encodeToString(players)
             episode_number = (episodeNumber + 1).toFloat()
             scanlator = players.mapIndexedNotNull { i, it -> if (it.isNotEmpty()) VOICES_VALUES[i] else null }.joinToString().uppercase()
