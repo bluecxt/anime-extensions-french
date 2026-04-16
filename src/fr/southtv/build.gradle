@@ -1,7 +1,7 @@
 ext {
     extName = 'SouthTV'
     extClass = '.SouthTV'
-    extVersionCode = 8
+    extVersionCode = 9
     extVersionName = "1.0.1" // Your custom version
     isNsfw = false
 }

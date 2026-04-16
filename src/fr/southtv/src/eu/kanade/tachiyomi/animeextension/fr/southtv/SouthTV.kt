@@ -73,15 +73,9 @@ class SouthTV : AnimeHttpSource() {
         if (tmdbPath != null) {
             val url = "https://api.themoviedb.org/3/$tmdbPath?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR&append_to_response=credits"
             try {
-                client.newCall(GET(url, headers)).execute().use { response ->
+                client.newCall(GET(url, Headers.Builder().build())).execute().use { response ->
                     if (response.isSuccessful) {
                         val json = JSONObject(response.body!!.string())
-
-                        // Titre
-                        val title = json.optString("title").ifBlank { json.optString("name") }
-                        if (title.isNotBlank()) {
-                            anime.title = title
-                        }
 
                         // Description (Overview)
                         val overview = json.optString("overview")
@@ -153,10 +147,10 @@ class SouthTV : AnimeHttpSource() {
                     val tmdbName = namesMap[i]
                     episodes.add(
                         SEpisode.create().apply {
-                            name = "S$seasonNum E$i" + (tmdbName?.let { " - $it" } ?: "")
+                            name = "Season $seasonNum Episode $i" + (tmdbName?.let { " - $it" } ?: "")
                             url = "south_park#s=$seasonNum&e=$i"
                             episode_number = (episodeCountSoFar + i).toFloat()
-                            scanlator = "S$seasonNum"
+                            scanlator = "Season $seasonNum"
                         },
                     )
                 }
@@ -168,7 +162,7 @@ class SouthTV : AnimeHttpSource() {
             if (tmdbPath != null) {
                 try {
                     val url = "https://api.themoviedb.org/3/$tmdbPath?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
-                    client.newCall(GET(url, headers)).execute().use { response ->
+                    client.newCall(GET(url, Headers.Builder().build())).execute().use { response ->
                         if (response.isSuccessful) {
                             val json = JSONObject(response.body!!.string())
                             movieTitle = json.optString("title").ifBlank { json.optString("name") }.ifBlank { movieTitle }
@@ -190,7 +184,7 @@ class SouthTV : AnimeHttpSource() {
     private fun fetchSeasonNames(seasonNumber: Int): Map<Int, String> {
         val url = "https://api.themoviedb.org/3/tv/2190/season/$seasonNumber?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
         return try {
-            client.newCall(GET(url, headers)).execute().use { response ->
+            client.newCall(GET(url, Headers.Builder().build())).execute().use { response ->
                 val json = JSONObject(response.body?.string().orEmpty())
                 val episodesJson = json.getJSONArray("episodes")
                 val map = mutableMapOf<Int, String>()
