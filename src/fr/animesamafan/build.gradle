@@ -3,7 +3,7 @@ apply plugin: 'com.android.application'
 ext {
     extName = 'AnimeSamaFan'
     extClass = '.AnimeSamaFan'
-    extVersionCode = 12
+    extVersionCode = 13
     isNsfw = false
 }
 

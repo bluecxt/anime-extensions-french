@@ -151,7 +151,8 @@ class AnimeSamaFan :
                 try {
                     val sDoc = client.newCall(GET(sUrl, headers)).execute().asJsoup()
                     episodes.addAll(parseEpisodesFromDocument(sDoc))
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                }
             }
         }
         return episodes.distinctBy { it.url }.reversed()
@@ -160,7 +161,9 @@ class AnimeSamaFan :
     private fun parseEpisodesFromDocument(document: Document): List<SEpisode> {
         val url = document.location()
         val seasonMatch = Regex("""saison-(\d+)""").find(url)
-        val sName = seasonMatch?.let { "Saison ${it.groupValues[1]}" } ?: ""
+        val sNum = seasonMatch?.groupValues?.get(1)?.toIntOrNull()
+        val totalSeasons = document.select(".seasons-grid a.season-card").size + (if (document.selectFirst(".seasons-grid") != null) 1 else 0)
+        val sPrefix = if (totalSeasons > 1 && sNum != null) "Season $sNum " else ""
 
         return document.select("a.episode-card").map { card ->
             val availableLangs = mutableListOf<String>()
@@ -170,13 +173,17 @@ class AnimeSamaFan :
 
             SEpisode.create().apply {
                 this.url = card.attr("abs:href")
-                this.name = if (sName.isNotEmpty()) {
-                    "$sName - ${card.selectFirst("h3.episode-title")?.text()}"
+                val epTitle = card.selectFirst("h3.episode-title")?.text()?.replace("Épisode", "Episode", true) ?: "Episode"
+                val epNumStr = (card.selectFirst(".episode-number")?.text() ?: "0")
+                    .replace(Regex("[^0-9.]"), "")
+
+                this.name = if (epTitle.contains("Episode", true)) {
+                    sPrefix + epTitle
                 } else {
-                    card.selectFirst("h3.episode-title")?.text() ?: "Épisode"
+                    "${sPrefix}Episode $epNumStr" + (if (epTitle.isNotBlank()) " - $epTitle" else "")
                 }
-                this.episode_number = (card.selectFirst(".episode-number")?.text() ?: "0")
-                    .replace(Regex("[^0-9.]"), "").toFloatOrNull() ?: 0f
+
+                this.episode_number = epNumStr.toFloatOrNull() ?: 0f
                 this.scanlator = availableLangs.joinToString(", ")
             }
         }
@@ -185,7 +192,6 @@ class AnimeSamaFan :
     // ================== Video (Extracteurs) ==================
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
         val videoList = mutableListOf<Video>()
-
         val langs = episode.scanlator?.split(", ") ?: listOf("VOSTFR")
 
         langs.forEach { lang ->
@@ -202,7 +208,9 @@ class AnimeSamaFan :
             } catch (e: Exception) {
             }
         }
-        return videoList.sort()
+        return videoList.map {
+            Video(it.url, cleanQuality(it.quality), it.videoUrl, it.headers, it.subtitleTracks, it.audioTracks)
+        }.sort()
     }
 
     private fun addVideosFromUrl(serverUrl: String, lang: String, videoList: MutableList<Video>) {
@@ -218,27 +226,42 @@ class AnimeSamaFan :
         val prefix = "($lang) $server - "
         when (server) {
             "Sibnet" -> SibnetExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-
-            "Sendvid" -> SendvidExtractor(client, headers).videosFromUrl(serverUrl, prefix)
-                .forEach { videoList.add(it) }
-
+            "Sendvid" -> SendvidExtractor(client, headers).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
             "Streamtape" -> StreamTapeExtractor(client).videoFromUrl(serverUrl, prefix)?.let { videoList.add(it) }
-
             "Doodstream" -> DoodExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-
             "Vidoza" -> VidoExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-
             "Voe" -> VoeExtractor(client, headers).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
         }
     }
 
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+            .replace(Regex("(?i)Sendvid:default"), "")
+            .replace(Regex("(?i)Sibnet:default"), "")
+            .replace(Regex("(?i)Voe:default"), "")
+            .replace(Regex("(?i)Vidoza:default"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("Sibnet", "Sendvid", "Streamtape", "Doodstream", "Vidoza", "Voe")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
+            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
+
     override fun List<Video>.sort(): List<Video> {
         val prefVoice = preferences.getString("preferred_voices", "VOSTFR")!!
-        val prefServer = preferences.getString("preferred_server", "sibnet")!!
         return this.sortedWith(
             compareBy(
                 { it.quality.contains(prefVoice, true) },
-                { it.quality.contains(prefServer, true) },
+                {
+                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                },
             ),
         ).reversed()
     }
