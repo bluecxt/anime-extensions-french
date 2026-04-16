@@ -237,21 +237,38 @@ class FrAnime :
         }.sort()
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-        .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-        .replace(Regex("(?i)Sendvid:default"), "")
-        .replace(Regex("(?i)Sibnet:default"), "")
-        .replace(Regex("(?i)VK:default"), "")
-        .replace(Regex("(?i)Vidmoly:default"), "")
-        .replace(Regex("(?i)Filemoon:default"), "")
-        .replace(" - - ", " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+            .replace(Regex("(?i)Sendvid:default"), "")
+            .replace(Regex("(?i)Sibnet:default"), "")
+            .replace(Regex("(?i)VK:default"), "")
+            .replace(Regex("(?i)Vidmoly:default"), "")
+            .replace(Regex("(?i)Filemoon:default"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        // Supprimer les répétitions de serveur (ex: "Vidmoly - Vidmoly")
+        val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon")
+        for (server in servers) {
+            val pattern = Regex("(?i)$server\\s*-\\s*$server")
+            cleaned = cleaned.replace(pattern, server)
+        }
+        return cleaned
+    }
 
     override fun List<Video>.sort(): List<Video> {
         val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
-        return this.sortedWith(compareBy({ it.quality.contains(prefVoice, true) })).reversed()
+        return this.sortedWith(
+            compareBy(
+                { it.quality.contains(prefVoice, true) },
+                {
+                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                },
+            ),
+        ).reversed()
     }
 
     // = :::::::::::::::::::::::::: Utilities :::::::::::::::::::::::::: =
