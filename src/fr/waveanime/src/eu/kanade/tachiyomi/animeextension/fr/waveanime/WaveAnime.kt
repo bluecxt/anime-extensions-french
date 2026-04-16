@@ -116,7 +116,7 @@ class WaveAnime :
             SAnime.create().apply {
                 setUrlWithoutDomain(link.attr("href"))
                 title = element.attr("title")
-                thumbnail_url = baseUrl + element.selectFirst("img")!!.attr("src")
+                thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
             }
         }.sortedBy { it.title }
 
@@ -143,11 +143,15 @@ class WaveAnime :
         return SAnime.create().apply {
             val info = document.selectFirst("div.serie-info")
             title = info?.selectFirst("h1")?.text() ?: ""
-            description = document.selectFirst("div.synopsis p")?.text()
-            genre = document.select("div.metadata .item:contains(Genres) .value").text()
+            val releaseDate = document.select("div.metadata .item:contains(Date) .value").text()
+            description = buildString {
+                if (releaseDate.isNotBlank()) append("Date de sortie : $releaseDate\n\n")
+                append(document.selectFirst(".serie-details > p")?.text() ?: "")
+            }
+            genre = document.select(".genres span").joinToString { it.text() }
             status = parseStatus(document.select("div.metadata .item:contains(Statut) .value").text())
             author = document.select("div.metadata .item:contains(Studio) .value").text()
-            thumbnail_url = baseUrl + document.selectFirst("div.poster img")?.attr("src")
+            thumbnail_url = document.selectFirst(".poster img")?.attr("abs:src")
         }
     }
 
@@ -161,8 +165,10 @@ class WaveAnime :
     override fun episodeListParse(response: Response): List<SEpisode> {
         val document = response.asJsoup()
         val episodes = mutableListOf<SEpisode>()
+        val seasonGrids = document.select("div.component.episode-card-grid")
+        val seasonCount = seasonGrids.size
 
-        document.select("div.component.episode-card-grid").forEach { seasonGrid ->
+        seasonGrids.forEach { seasonGrid ->
             val seasonNum = seasonGrid.attr("data-season") ?: "1"
             seasonGrid.select("div.component.episode-card").forEach { element ->
                 episodes.add(
@@ -170,14 +176,20 @@ class WaveAnime :
                         val link = element.selectFirst("a")!!.attr("href")
                         setUrlWithoutDomain(link)
                         val epName = element.selectFirst("h4")?.text() ?: ""
-                        val epNum = element.selectFirst("h5")?.text() ?: ""
-                        // Maintain season info in the episode title for Clarity if needed,
-                        // or just clean it up if AniZen handles it.
-                        // WaveAnime usually puts "S1 E1" in h5.
-                        name = if (epNum.isNotEmpty()) "$epNum - $epName" else epName
+                        val epNumStr = element.selectFirst("h5")?.text() ?: ""
 
-                        // Try to extract a global episode number or just use what's there
-                        episode_number = epNum.substringAfter("E").toFloatOrNull() ?: 0f
+                        name = buildString {
+                            if (seasonCount > 1) {
+                                append("Season $seasonNum ")
+                            }
+                            val epActualNum = epNumStr.substringAfter("E").trim()
+                            append("Episode $epActualNum")
+                            if (epName.isNotBlank()) {
+                                append(" : $epName")
+                            }
+                        }
+
+                        episode_number = epNumStr.substringAfter("E").toFloatOrNull() ?: 0f
                     },
                 )
             }
@@ -260,12 +272,20 @@ class WaveAnime :
         return videoList
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-        .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-        .replace(" - - ", " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("WavePlayer")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
 
     override fun List<Video>.sort(): List<Video> {
         val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
