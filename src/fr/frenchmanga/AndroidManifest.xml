@@ -1,26 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:icon="@mipmap/ic_launcher">
-        <activity
-            android:name=".fr.frenchmanga.FrenchMangaUrlActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
+    <application
+        android:hasCode="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="French-Manga"
+        tools:replace="android:label">
 
-                <data
-                    android:host="w16.french-manga.net"
-                    android:pathPattern="/index.php?newsid=..*"
-                    android:scheme="https" />
-                <data
-                    android:host="french-manga.net"
-                    android:pathPattern="/index.php?newsid=..*"
-                    android:scheme="https" />
-            </intent-filter>
-        </activity>
+        <meta-data
+            android:name="tachiyomi.animeextension.class"
+            android:value=".FrenchMangaFactory"
+            tools:replace="android:value" />
+
+        <meta-data
+            android:name="tachiyomi.animeextension.factory"
+            android:value="true"
+            tools:replace="android:value" />
+
     </application>
+
 </manifest>

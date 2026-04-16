@@ -32,21 +32,23 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class FrenchManga :
-    ParsedAnimeHttpSource(),
+open class FrenchManga(
+    override val name: String = "French-Manga",
+    protected open val prefUrlDefault: String = "https://w16.french-manga.net",
+) : ParsedAnimeHttpSource(),
     ConfigurableAnimeSource {
 
-    override val name = "French-Manga"
-
     override val baseUrl by lazy {
-        preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!.removeSuffix("/")
+        preferences.getString(prefUrlKey, prefUrlDefault)!!.removeSuffix("/")
     }
 
     override val lang = "fr"
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy()
+    protected val preferences by getPreferencesLazy()
+
+    protected open val prefUrlKey = "preferred_baseUrl_${name.lowercase().replace(" ", "_")}"
 
     private val json: Json by injectLazy()
 
@@ -316,12 +318,13 @@ class FrenchManga :
     // ============================= Preferences ============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
+            key = prefUrlKey
             title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
+            setDefaultValue(prefUrlDefault)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
+                preferences.edit().putString(prefUrlKey, newValue as String).commit()
+                true
             }
         }.also(screen::addPreference)
 
