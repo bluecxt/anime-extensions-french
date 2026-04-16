@@ -60,14 +60,16 @@ class LesPoroiniens : AnimeHttpSource() {
 
                         val seriesTitle = seriesJson["title"]?.jsonPrimitive?.content ?: ""
                         val animeInfo = seriesJson["anime"]?.jsonArray?.firstOrNull()?.jsonObject
-                        
+
                         SAnime.create().apply {
                             title = seriesTitle
                             url = "/${slugify(seriesTitle)}/episodes"
                             thumbnail_url = seriesJson["cover"]?.jsonPrimitive?.content
                             status = parseStatus(animeInfo?.get("status_an")?.jsonPrimitive?.content ?: seriesJson["release_status"]?.jsonPrimitive?.content)
                         }
-                    } catch (e: Exception) { null }
+                    } catch (e: Exception) {
+                        null
+                    }
                 }
             }.awaitAll().filterNotNull()
         }
@@ -93,7 +95,7 @@ class LesPoroiniens : AnimeHttpSource() {
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: throw Exception("Données introuvables")
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val animeInfo = obj["anime"]?.jsonArray?.firstOrNull()?.jsonObject
-        
+
         return SAnime.create().apply {
             title = obj["title"]?.jsonPrimitive?.content ?: ""
             description = (animeInfo?.get("description") ?: obj["description"])?.jsonPrimitive?.content?.removeHtml()
@@ -109,16 +111,18 @@ class LesPoroiniens : AnimeHttpSource() {
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: return emptyList()
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val episodes = mutableListOf<SEpisode>()
-        
+
         obj["episodes"]?.jsonArray?.forEach { epElement ->
             val ep = epElement.jsonObject
             val num = ep["indice_ep"]?.jsonPrimitive?.content ?: "0"
-            episodes.add(SEpisode.create().apply {
-                episode_number = num.toFloatOrNull() ?: 0f
-                name = "Épisode $num : ${ep["title_ep"]?.jsonPrimitive?.content ?: ""}"
-                url = "/video?type=${ep["type"]?.jsonPrimitive?.content}&id=${ep["id"]?.jsonPrimitive?.content}"
-                date_upload = parseDate(ep["date_ep"]?.jsonPrimitive?.content)
-            })
+            episodes.add(
+                SEpisode.create().apply {
+                    episode_number = num.toFloatOrNull() ?: 0f
+                    name = "Épisode $num : ${ep["title_ep"]?.jsonPrimitive?.content ?: ""}"
+                    url = "/video?type=${ep["type"]?.jsonPrimitive?.content}&id=${ep["id"]?.jsonPrimitive?.content}"
+                    date_upload = parseDate(ep["date_ep"]?.jsonPrimitive?.content)
+                },
+            )
         }
         return episodes.sortedByDescending { it.episode_number }
     }
@@ -138,6 +142,7 @@ class LesPoroiniens : AnimeHttpSource() {
                         Video(video.url, cleanQuality, video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
             }
+
             "vidmoly" -> {
                 val vidmolyUrl = "https://vidmoly.to/embed-$id.html"
                 VidMolyExtractor(client, headers).videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly - ")
@@ -146,15 +151,14 @@ class LesPoroiniens : AnimeHttpSource() {
                         Video(video.url, cleanQuality, video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
             }
+
             else -> emptyList()
         }
     }
 
     // --- Utils ---
-    private fun slugify(text: String): String {
-        return Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[\\u0300-\\u036f]"), "")
-            .lowercase().replace(Regex("[^a-z0-9]"), "_").replace(Regex("_+"), "_").trim('_')
-    }
+    private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[\\u0300-\\u036f]"), "")
+        .lowercase().replace(Regex("[^a-z0-9]"), "_").replace(Regex("_+"), "_").trim('_')
 
     private fun parseStatus(status: String?): Int = when (status?.lowercase()?.trim()) {
         "en cours" -> SAnime.ONGOING
@@ -164,7 +168,9 @@ class LesPoroiniens : AnimeHttpSource() {
 
     private fun String.removeHtml(): String = this.replace(Regex("<[^>]*>"), "").trim()
 
-    private fun parseDate(date: String?): Long = try { dateFormat.parse(date ?: "")?.time ?: 0L } catch (e: Exception) { 
+    private fun parseDate(date: String?): Long = try {
+        dateFormat.parse(date ?: "")?.time ?: 0L
+    } catch (e: Exception) {
         date?.toLongOrNull()?.let { it * 1000 } ?: 0L
     }
 }

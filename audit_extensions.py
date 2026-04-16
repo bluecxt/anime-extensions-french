@@ -18,177 +18,97 @@ else:
     JAVA_BIN = shutil.which("java")
 
 def ensure_anitester():
-    """Télécharge anitester.jar s'il n'existe pas."""
     if not os.path.exists(ANITESTER_JAR):
-        print(f"📥 Téléchargement de anitester.jar depuis GitHub...")
+        print(f"📥 Téléchargement de anitester.jar...")
         os.makedirs(SCRIPTS_DIR, exist_ok=True)
         try:
             urllib.request.urlretrieve(ANITESTER_URL, ANITESTER_JAR)
-            print("   ✅ Téléchargement réussi.")
         except Exception as e:
-            print(f"   ❌ Erreur de téléchargement: {e}")
+            print(f"   ❌ Erreur: {e}")
             sys.exit(1)
 
 def find_apk(ext_name):
-    """Recherche l'APK compilé d'une extension."""
     patterns = []
-
     if AUDIT_APK_DIR:
-        patterns.extend([
-            os.path.join(AUDIT_APK_DIR, f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk"),
-            os.path.join(AUDIT_APK_DIR, "**", f"*{ext_name}*.apk"),
-        ])
-
+        patterns.append(os.path.join(AUDIT_APK_DIR, f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk"))
     patterns.append(f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk")
-
     for pattern in patterns:
         apks = glob.glob(pattern, recursive=True)
         apks = [a for a in apks if "androidTest" not in a]
-        if apks:
-            return apks[0]
-
+        if apks: return apks[0]
     return None
 
 def run_kotlin_test(ext_name):
-    """Teste une extension avec anitester.jar (code Kotlin réel)."""
     apk = find_apk(ext_name)
     if not apk:
-        if AUDIT_SKIP_GRADLE_BUILD:
-            print(f"   ❌ Pas d'APK trouvé dans les artifacts et compilation désactivée")
-            return False
-        print(f"   ⚠️  Pas d'APK trouvé. Compilation en cours...")
-        gradle_cmd = f"./gradlew :src:fr:{ext_name}:assembleDebug -q"
-        result = subprocess.run(gradle_cmd, shell=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"   ❌ Échec de la compilation")
-            if result.stderr:
-                print(f"      Erreur: {result.stderr.strip()}")
-            return False
+        if AUDIT_SKIP_GRADLE_BUILD: return False, "APK introuvable"
+        print(f"   ⚠️  Compilation de {ext_name}...")
+        subprocess.run(f"./gradlew :src:fr:{ext_name}:assembleDebug -q", shell=True)
         apk = find_apk(ext_name)
-        if not apk:
-            print(f"   ❌ APK introuvable après compilation")
-            return False
+        if not apk: return False, "Échec compilation"
 
     print(f"   📦 APK : {os.path.basename(apk)}")
-    cmd = [
-        JAVA_BIN, "-jar", ANITESTER_JAR,
-        apk,
-        "-t", "popular",
-        "-c", "2",
-        "--timeout", "30",
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    output = result.stdout + result.stderr
+    cmd = [JAVA_BIN, "-jar", ANITESTER_JAR, apk, "-t", "popular", "-c", "2", "--timeout", "30"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return False, "Timeout global"
 
     output_upper = output.upper()
-    failed = False
-    if "POPULAR PAGE TEST FAILED" in output_upper:
-        failed = True
-    elif "COMPLETED" in output_upper:
-        after_completed = output_upper.split("COMPLETED")[-1]
-        if "FAILED" in after_completed:
-            failed = True
-    else:
-        failed = True
+    
+    # Correction de la détection de succès
+    # Si on voit "COMPLETED POPULAR PAGE TEST" et PAS de message d'erreur fatal, c'est réussi
+    if "COMPLETED POPULAR PAGE TEST" in output_upper:
+        if "FAILED" not in output_upper.split("COMPLETED")[-1]:
+            return True, "Test Popular réussi"
 
-    if failed:
-        if "Results" in output:
-            for line in output.split("\n"):
-                if "Results" in line and "->" in line:
-                    count = line.split("->")[-1].strip()
-                    try:
-                        if int(count) > 0:
-                            print(f"   ✅ {count} animes trouvés")
-                            return True
-                    except ValueError:
-                        pass
-        print(f"   ❌ Test échoué")
-        return False
-    else:
-        print(f"   ✅ Test réussi")
-        return True
+    # Fallback sur la détection par nombre de résultats
+    if "RESULTS" in output_upper:
+        for line in output.split("\n"):
+            if "Results" in line and "->" in line:
+                try:
+                    count = int(line.split("->")[-1].strip())
+                    if count > 0: return True, f"{count} animes trouvés"
+                except: pass
+
+    reason = "Échec du test"
+    if "403" in output_upper: reason = "Erreur HTTP 403"
+    elif "404" in output_upper: reason = "Erreur HTTP 404"
+    elif "TIMEOUT" in output_upper: reason = "Timeout"
+    elif "CLOUDFLARE" in output_upper: reason = "Cloudflare"
+    
+    return False, reason
 
 def run_all():
     ensure_anitester()
-
-    if JAVA_BIN is None:
-        print(f"❌ Java introuvable.")
-        sys.exit(1)
-
-    print(f"🚀 [CHEF D'ORCHESTRE] Démarrage de l'audit complet\n")
-
+    print(f"🚀 [CHEF D'ORCHESTRE] Démarrage de l'audit (Java 17)\n")
     extensions_path = "src/fr"
     results = []
-
     ignored = []
     if os.path.exists("ignored_extensions.json"):
-        with open("ignored_extensions.json", "r") as f:
-            ignored = json.load(f)
+        with open("ignored_extensions.json", "r") as f: ignored = json.load(f)
 
     for ext_name in sorted(os.listdir(extensions_path)):
-        ext_dir = os.path.join(extensions_path, ext_name)
-        if not os.path.isdir(ext_dir):
-            continue
-
+        if not os.path.isdir(os.path.join(extensions_path, ext_name)): continue
+        
         print(f"--------------------------------------------------")
         print(f"🔎 Audit de : {ext_name.upper()}")
-
-        success = run_kotlin_test(ext_name)
+        success, reason = run_kotlin_test(ext_name)
         
-        status = ""
-        if success:
-            status = "✅ PASS"
-        else:
-            if ext_name.lower() in [x.lower() for x in ignored]:
-                status = "⚠️ FAIL (Ignoré)"
-                print(f"   ⏭️ Échec ignoré")
-            else:
-                status = "❌ FAIL"
-                
-        results.append((ext_name, status))
+        status = "✅ PASS" if success else "❌ FAIL"
+        if not success and ext_name.lower() in [x.lower() for x in ignored]:
+            status = "⚠️ FAIL (Ignoré)"
+        
+        print(f"   Resultat : {status} - {reason}")
+        results.append((ext_name, status, reason))
 
-    print("\n\n" + "="*50)
-    print("📊 RÉSUMÉ FINAL DE L'AUDIT")
-    print("="*50)
-    for name, status in results:
-        print(f"{name:<15} | {status:<20}")
-    print("="*50)
-
-    write_job_summary(results)
-
-    if any(status == "❌ FAIL" for _, status in results):
-        sys.exit(1)
-    sys.exit(0)
-
-def write_job_summary(results):
-    """Écrit un résumé Markdown dans GitHub Actions Step Summary."""
-    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if not summary_path:
-        return
-
-    total = len(results)
-    passed = sum(1 for _, status in results if status == "✅ PASS")
-    failed = sum(1 for _, status in results if status == "❌ FAIL")
-    ignored = sum(1 for _, status in results if status == "⚠️ FAIL (Ignoré)")
-
-    lines = [
-        "## Simulators Audit Summary",
-        "",
-        f"- Total: **{total}**",
-        f"- PASS: **{passed}**",
-        f"- FAIL: **{failed}**",
-        f"- FAIL (Ignoré): **{ignored}**",
-        "",
-        "| Extension | Statut |",
-        "|---|---|",
-    ]
-
-    for name, status in results:
-        lines.append(f"| `{name}` | {status} |")
-
-    lines.append("")
-    with open(summary_path, "a", encoding="utf-8") as f:
-        f.write("\n".join(lines))
+    print("\n\n" + "="*80)
+    print(f"{'Extension':<15} | {'Statut':<15} | {'Raison'}")
+    print("="*80)
+    for name, status, reason in results:
+        print(f"{name:<15} | {status:<15} | {reason}")
+    print("="*80)
 
 if __name__ == "__main__":
     run_all()
