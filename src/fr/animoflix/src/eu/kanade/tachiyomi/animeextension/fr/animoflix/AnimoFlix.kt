@@ -223,10 +223,11 @@ class AnimoFlix :
         val allEpisodeCards = document.select("a.episode-card")
         val episodesMap = mutableMapOf<Float, MutableMap<String, String>>()
         val titlesMap = mutableMapOf<Float, String>()
+        val seasonCount = document.select(".seasons-grid a.season-card").size
 
         allEpisodeCards.forEach { card ->
             val url = card.attr("abs:href")
-            val epTitle = card.selectFirst("h3.episode-title")?.text() ?: "Épisode"
+            val epTitle = card.selectFirst("h3.episode-title")?.text() ?: "Episode"
             val epNumStr = card.selectFirst(".episode-number")?.text() ?: epTitle.replace(Regex("[^0-9]"), "")
             val epNum = epNumStr.toFloatOrNull() ?: 0f
 
@@ -234,7 +235,7 @@ class AnimoFlix :
 
             if (!episodesMap.containsKey(epNum)) {
                 episodesMap[epNum] = mutableMapOf()
-                titlesMap[epNum] = epTitle
+                titlesMap[epNum] = epTitle.replace("Épisode", "Episode", true)
             }
             episodesMap[epNum]!![lang] = url
         }
@@ -243,8 +244,13 @@ class AnimoFlix :
             val langs = episodesMap[epNum]!!
             SEpisode.create().apply {
                 episode_number = epNum
-                val baseTitle = titlesMap[epNum] ?: "Épisode $epNum"
-                name = if (seasonName.isNotEmpty()) "$seasonName - $baseTitle" else baseTitle
+                val baseTitle = titlesMap[epNum] ?: "Episode $epNum"
+                val sPrefix = if (seasonCount > 1 && seasonName.isNotBlank()) {
+                    seasonName.replace("Saison", "Season", true).trim() + " "
+                } else {
+                    ""
+                }
+                name = "$sPrefix$baseTitle"
 
                 val scanlators = mutableListOf<String>()
                 if (langs.containsKey("VOSTFR")) scanlators.add("VOSTFR")
@@ -270,12 +276,7 @@ class AnimoFlix :
             return emptyList()
         }
 
-        val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
-        val targetLangs = if (langsMap.containsKey(prefVoice)) {
-            listOf(prefVoice)
-        } else {
-            langsMap.keys.toList()
-        }
+        val targetLangs = langsMap.keys.toList()
 
         targetLangs.forEach { lang ->
             val url = langsMap[lang]!!
@@ -285,7 +286,15 @@ class AnimoFlix :
 
                 doc.select("select#lecteurSelect option").forEach { option ->
                     val serverUrl = option.attr("value")
-                    val serverName = option.text().trim()
+                    val serverName = when {
+                        serverUrl.contains("sibnet.ru") -> "Sibnet"
+                        serverUrl.contains("sendvid.com") -> "Sendvid"
+                        serverUrl.contains("streamtape") || serverUrl.contains("shavetape") -> "Streamtape"
+                        serverUrl.contains("dood") -> "Doodstream"
+                        serverUrl.contains("vidoza.net") -> "Vidoza"
+                        serverUrl.contains("voe.sx") -> "Voe"
+                        else -> option.text().trim().replace(Regex("(?i)Lecteur\\s*\\d+\\s*-?\\s*"), "")
+                    }
                     val prefix = "($lang) $serverName - "
 
                     when {
@@ -305,25 +314,34 @@ class AnimoFlix :
         }.sort()
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-        .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-        .replace(Regex("(?i)Sendvid:default"), "")
-        .replace(Regex("(?i)Sibnet:default"), "")
-        .replace(Regex("(?i)Doodstream:default"), "")
-        .replace(Regex("(?i)Voe:default"), "")
-        .replace(" - - ", " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+            .replace(Regex("(?i)Sendvid:default"), "")
+            .replace(Regex("(?i)Sibnet:default"), "")
+            .replace(Regex("(?i)Doodstream:default"), "")
+            .replace(Regex("(?i)Voe:default"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("Sibnet", "Sendvid", "Voe", "Streamtape", "Doodstream", "Vidoza")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
+            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
 
     override fun List<Video>.sort(): List<Video> {
         val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
-        val prefServer = preferences.getString(PREF_SERVER_KEY, PREF_SERVER_DEFAULT)!!
-
         return this.sortedWith(
             compareBy(
                 { it.quality.contains(prefVoice, true) },
-                { it.quality.contains(prefServer, true) },
+                {
+                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                },
             ),
         ).reversed()
     }
