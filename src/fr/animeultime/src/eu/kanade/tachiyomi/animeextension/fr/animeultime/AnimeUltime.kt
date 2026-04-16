@@ -19,7 +19,12 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -72,7 +77,7 @@ class AnimeUltime :
         val link = element.selectFirst("a")!!
         setUrlWithoutDomain(link.attr("abs:href"))
         title = element.selectFirst(".box-text p")?.text() ?: ""
-        thumbnail_url = element.selectFirst(".imgCtn img")?.attr("abs:src")
+        thumbnail_url = element.selectFirst(".imgCtn img")?.attr("abs:src")?.replace("_thindex", "")
     }
 
     override fun popularAnimeNextPageSelector(): String? = null
@@ -100,7 +105,7 @@ class AnimeUltime :
         val animes = searchData.map {
             SAnime.create().apply {
                 title = it.title
-                thumbnail_url = it.img_url
+                thumbnail_url = it.img_url.replace("_thindex", "")
                 url = it.url.toHttpUrl().encodedPath
             }
         }
@@ -123,7 +128,7 @@ class AnimeUltime :
         val h1 = document.selectFirst("h1")
         title = h1?.ownText()?.substringBefore(" vostfr")?.substringBefore(" vf")?.trim() ?: ""
         description = document.selectFirst("div[data-target=synopsis] p")?.text()
-        thumbnail_url = document.selectFirst("div.main img")?.attr("abs:src")
+        thumbnail_url = document.selectFirst("div.main img")?.attr("abs:src")?.replace("_thindex", "")
 
         val infoBlock = document.selectFirst("div[data-target=info] ul")
         genre = infoBlock?.selectFirst("li:contains(Genre)")?.text()?.substringAfter(":")?.trim()?.replace(" | ", ", ")
@@ -132,18 +137,56 @@ class AnimeUltime :
     }
 
     // ============================== Episodes ==============================
-    override fun episodeListParse(response: Response): List<SEpisode> = super.episodeListParse(response).reversed()
+    override fun episodeListParse(response: Response): List<SEpisode> {
+        val document = response.asJsoup()
+        val h1 = document.selectFirst("h1")?.text() ?: ""
+        val seasonNum = Regex("""\[Saison\s*(\d+)\]""").find(h1)?.groupValues?.get(1)
+        val sPrefix = if (seasonNum != null && !h1.contains("Saison $seasonNum", true) && !h1.contains("Season $seasonNum", true)) {
+            "Season $seasonNum "
+        } else {
+            ""
+        }
+
+        val episodesMap = mutableMapOf<String, MutableList<Pair<String, String>>>()
+        val epOrder = mutableListOf<String>()
+
+        document.select(episodeListSelector()).forEach { element ->
+            val rawNum = element.selectFirst(".number label")?.text() ?: ""
+            val fansub = element.selectFirst(".fansub label")?.text()?.trim()?.ifBlank { "Unknown" } ?: "Unknown"
+            val link = element.selectFirst("a")?.attr("abs:href") ?: return@forEach
+
+            val cleanNum = rawNum.replace("Épisode", "Episode", true)
+                .replace("OAV", "Episode OAV", true)
+                .replace("ONA", "Episode ONA", true)
+                .replace("Special", "Episode Special", true)
+                .replace("Spécial", "Episode Special", true)
+
+            val epName = sPrefix + cleanNum
+            if (!episodesMap.containsKey(epName)) {
+                episodesMap[epName] = mutableListOf()
+                epOrder.add(epName)
+            }
+            episodesMap[epName]!!.add(link to fansub)
+        }
+
+        return epOrder.map { name ->
+            val infoList = episodesMap[name]!!
+            SEpisode.create().apply {
+                this.name = name
+                this.url = infoList.map {
+                    buildJsonObject {
+                        put("url", it.first)
+                        put("fansub", it.second)
+                    }
+                }.toString()
+                this.episode_number = name.replace(Regex("[^0-9.]"), "").toFloatOrNull() ?: 1f
+            }
+        }.reversed()
+    }
 
     override fun episodeListSelector(): String = "ul.ficheDownload li.file"
 
-    override fun episodeFromElement(element: Element): SEpisode = SEpisode.create().apply {
-        val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.attr("abs:href"))
-        val epNum = element.selectFirst(".number label")?.text() ?: ""
-        name = epNum
-        episode_number = epNum.substringAfter("Episode ").substringBefore(" ").toFloatOrNull() ?: 1f
-        date_upload = element.selectFirst(".date label")?.text()?.let { parseDate(it) } ?: 0L
-    }
+    override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
 
     private fun parseDate(date: String): Long {
         val parts = date.split("/")
@@ -161,52 +204,66 @@ class AnimeUltime :
 
     override fun videoListSelector(): String = throw UnsupportedOperationException()
 
-    override fun videoListParse(response: Response): List<Video> {
-        val document = response.asJsoup()
-        val h1 = document.selectFirst("h1")?.text()?.lowercase() ?: ""
-        val lang = if (h1.contains(" vf")) "VF" else "VOSTFR"
+    override fun videoListParse(response: Response): List<Video> = emptyList()
 
-        val playerElement = document.selectFirst(".AUVideoPlayer") ?: return emptyList()
-        val idserie = playerElement.attr("data-serie")
-        val idfile = playerElement.attr("data-file").takeIf { it.isNotEmpty() } ?: playerElement.attr("data-focus")
+    override suspend fun getVideoList(episode: SEpisode): List<Video> {
+        val infoList = try {
+            json.decodeFromString<List<kotlinx.serialization.json.JsonObject>>(episode.url)
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        val allVideos = mutableListOf<Video>()
 
-        val body = FormBody.Builder()
-            .add("idfile", idfile)
-            .add("idserie", idserie)
-            .build()
+        infoList.forEach { item ->
+            val url = item["url"]?.jsonPrimitive?.content ?: return@forEach
+            val fansub = item["fansub"]?.jsonPrimitive?.content ?: "Unknown"
 
-        val videoResponse = client.newCall(POST("$baseUrl/VideoPlayer.html", ajaxHeaders, body)).execute()
-        val videoDataJson = videoResponse.body.string()
+            val response = client.newCall(GET(url, headers)).execute()
+            val document = response.asJsoup()
+            val h1 = document.selectFirst("h1")?.text()?.lowercase() ?: ""
+            val lang = if (h1.contains(" vf")) "VF" else "VOSTFR"
 
-        val videoList = mutableListOf<Video>()
+            val playerElement = document.selectFirst(".AUVideoPlayer")
+            if (playerElement != null) {
+                val idserie = playerElement.attr("data-serie")
+                val idfile = playerElement.attr("data-file").takeIf { it.isNotEmpty() } ?: playerElement.attr("data-focus")
 
-        try {
-            val jsonMap = json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(videoDataJson)
-            jsonMap.forEach { (quality, element) ->
-                if (element is kotlinx.serialization.json.JsonObject) {
-                    val mp4 = element["mp4"]?.let { it as? kotlinx.serialization.json.JsonObject }
-                    if (mp4 != null) {
-                        val videoUrl = mp4["url"]?.let { it as? kotlinx.serialization.json.JsonPrimitive }?.content
-                        if (videoUrl != null) {
-                            videoList.add(Video(videoUrl, "($lang) Anime-Ultime - $quality", videoUrl))
+                val body = FormBody.Builder()
+                    .add("idfile", idfile)
+                    .add("idserie", idserie)
+                    .build()
+
+                try {
+                    val videoResponse = client.newCall(POST("$baseUrl/VideoPlayer.html", ajaxHeaders, body)).execute()
+                    val videoDataJson = videoResponse.body.string()
+                    val jsonMap = json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(videoDataJson)
+
+                    jsonMap.forEach { (quality, element) ->
+                        if (element is kotlinx.serialization.json.JsonObject) {
+                            val mp4 = element["mp4"]?.let { it as? kotlinx.serialization.json.JsonObject }
+                            if (mp4 != null) {
+                                val videoUrl = mp4["url"]?.let { it as? kotlinx.serialization.json.JsonPrimitive }?.content
+                                if (videoUrl != null) {
+                                    allVideos.add(Video(videoUrl, "($lang) $fansub $quality", videoUrl))
+                                }
+                            }
                         }
                     }
-                }
+                } catch (e: Exception) {}
             }
-        } catch (e: Exception) {}
 
-        // Also check for external iframes in the document
-        document.select("iframe").forEach { iframe ->
-            val url = iframe.attr("abs:src")
-            videoList.addAll(extractVideosFromUrl(url, lang))
+            document.select("iframe").forEach { iframe ->
+                val iframeUrl = iframe.attr("abs:src")
+                allVideos.addAll(extractVideosFromUrl(iframeUrl, lang, fansub))
+            }
         }
 
-        return videoList.map { video ->
+        return allVideos.map { video ->
             Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers)
-        }
+        }.sort()
     }
 
-    private fun extractVideosFromUrl(url: String, lang: String): List<Video> {
+    private fun extractVideosFromUrl(url: String, lang: String, fansub: String): List<Video> {
         val server = when {
             url.contains("sibnet.ru") -> "Sibnet"
             url.contains("vidmoly") -> "Vidmoly"
@@ -214,7 +271,7 @@ class AnimeUltime :
             url.contains("voe.sx") -> "Voe"
             else -> "Serveur"
         }
-        val prefix = "($lang) $server - "
+        val prefix = "($lang) $fansub $server - "
         return when (server) {
             "Sibnet" -> sibnetExtractor.videosFromUrl(url, prefix)
             "Vidmoly" -> vidmolyExtractor.videosFromUrl(url, prefix)
@@ -224,16 +281,33 @@ class AnimeUltime :
         }
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-        .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-        .replace(Regex("(?i)Sendvid:default"), "")
-        .replace(Regex("(?i)Sibnet:default"), "")
-        .replace(Regex("(?i)Doodstream:default"), "")
-        .replace(Regex("(?i)Voe:default"), "")
-        .replace(" - - ", " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+    override fun List<Video>.sort(): List<Video> = this.sortedWith(
+        compareBy(
+            {
+                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            },
+        ),
+    ).reversed()
+
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+            .replace(Regex("(?i)Sendvid:default"), "")
+            .replace(Regex("(?i)Sibnet:default"), "")
+            .replace(Regex("(?i)Doodstream:default"), "")
+            .replace(Regex("(?i)Voe:default"), "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("Sibnet", "Vidmoly", "Doodstream", "Voe")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
+            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
 
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
