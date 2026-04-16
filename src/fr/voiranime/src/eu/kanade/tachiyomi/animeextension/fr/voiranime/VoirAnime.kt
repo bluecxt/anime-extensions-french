@@ -123,9 +123,10 @@ class VoirAnime :
     // =========================== Anime Details ============================
     override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
         title = document.selectFirst("h1.entry-title")?.text() ?: "Titre inconnu"
-        description = document.select(".entry-content[itemprop=description]").text().ifBlank { "Description non trouvée (Vérifier le sélecteur .entry-content[itemprop=description])" }
+        description = document.select(".entry-content[itemprop=description]").text().ifBlank { "Description non trouvée" }
         genre = document.select(".genxed a").joinToString { it.text() }
         thumbnail_url = document.selectFirst(".thumb img")?.attr("abs:src")?.substringBefore("?")
+        author = document.select(".spe > span:nth-child(2)").text().substringAfter(":").trim()
 
         val statusText = document.select("span:contains(Status) i").text().lowercase()
         status = when {
@@ -143,7 +144,7 @@ class VoirAnime :
         val num = element.selectFirst(".epl-num")?.text() ?: "0"
         val subText = element.selectFirst(".epl-sub")?.text() ?: "VOSTFR"
 
-        name = "Épisode $num"
+        name = "Episode $num"
         episode_number = num.toFloatOrNull() ?: 0f
         scanlator = if (subText.contains("VF", true)) "VF" else "VOSTFR"
     }
@@ -174,7 +175,7 @@ class VoirAnime :
             extractVideos(iframeUrl, lang)
         }.map { video ->
             Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
-        }
+        }.sort()
     }
 
     private fun extractVideos(url: String, lang: String): List<Video> {
@@ -203,14 +204,31 @@ class VoirAnime :
         }
     }
 
-    private fun cleanQuality(quality: String): String = quality
-        .replace(qualityRegex, "")
-        .replace(sizeRegex, "")
-        .replace(serverDefaultRegex, "$1")
-        .replace(" - - ", " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+    private fun cleanQuality(quality: String): String {
+        var cleaned = quality
+            .replace(qualityRegex, "")
+            .replace(sizeRegex, "")
+            .replace(serverDefaultRegex, "$1")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon", "Voe", "Doodstream", "Okru")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server", RegexOption.IGNORE_CASE), server)
+            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+    }
+
+    override fun List<Video>.sort(): List<Video> = this.sortedWith(
+        compareBy(
+            {
+                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            },
+        ),
+    ).reversed()
 
     // ============================== Utils ==============================
     override fun searchAnimeSelector(): String = ""
