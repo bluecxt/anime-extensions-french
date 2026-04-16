@@ -10,6 +10,10 @@ import eu.kanade.tachiyomi.lib.googledriveextractor.GoogleDriveExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -38,40 +42,35 @@ class LesPoroiniens : AnimeHttpSource() {
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
 
-    // --- Catalogue (Utilisation d'une boucle simple pour compatibilité) ---
+    // --- Catalogue (Scan Parallèle pour la performance) ---
     override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/data/config.json")
 
     override fun popularAnimeParse(response: Response): AnimesPage {
         val configObj = json.decodeFromString<JsonObject>(response.body.string())
         val fileList = configObj["LOCAL_SERIES_FILES"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
 
-        val animes = mutableListOf<SAnime>()
+        val animes = runBlocking(Dispatchers.IO) {
+            fileList.map { fileName ->
+                async {
+                    try {
+                        val seriesResponse = client.newCall(GET("$baseUrl/data/series/$fileName")).execute()
+                        val seriesJson = json.decodeFromString<JsonObject>(seriesResponse.body.string())
+                        val epArray = seriesJson["episodes"]?.jsonArray
+                        if (epArray == null || epArray.isEmpty()) return@async null
 
-        // On utilise une boucle classique pour éviter les erreurs de classes Kotlin internes manquantes dans les testeurs
-        for (fileName in fileList) {
-            try {
-                val seriesResponse = client.newCall(GET("$baseUrl/data/series/$fileName")).execute()
-                val seriesJson = json.decodeFromString<JsonObject>(seriesResponse.body.string())
-                val epArray = seriesJson["episodes"]?.jsonArray
-
-                if (epArray != null && epArray.isNotEmpty()) {
-                    val seriesTitle = seriesJson["title"]?.jsonPrimitive?.content ?: ""
-                    val animeInfo = seriesJson["anime"]?.jsonArray?.firstOrNull()?.jsonObject
-
-                    animes.add(
+                        val seriesTitle = seriesJson["title"]?.jsonPrimitive?.content ?: ""
+                        val animeInfo = seriesJson["anime"]?.jsonArray?.firstOrNull()?.jsonObject
+                        
                         SAnime.create().apply {
                             title = seriesTitle
                             url = "/${slugify(seriesTitle)}/episodes"
                             thumbnail_url = seriesJson["cover"]?.jsonPrimitive?.content
                             status = parseStatus(animeInfo?.get("status_an")?.jsonPrimitive?.content ?: seriesJson["release_status"]?.jsonPrimitive?.content)
-                        },
-                    )
+                        }
+                    } catch (e: Exception) { null }
                 }
-            } catch (e: Exception) {
-                continue
-            }
+            }.awaitAll().filterNotNull()
         }
-
         return AnimesPage(animes, false)
     }
 
@@ -94,7 +93,7 @@ class LesPoroiniens : AnimeHttpSource() {
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: throw Exception("Données introuvables")
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val animeInfo = obj["anime"]?.jsonArray?.firstOrNull()?.jsonObject
-
+        
         return SAnime.create().apply {
             title = obj["title"]?.jsonPrimitive?.content ?: ""
             description = (animeInfo?.get("description") ?: obj["description"])?.jsonPrimitive?.content?.removeHtml()
@@ -110,18 +109,16 @@ class LesPoroiniens : AnimeHttpSource() {
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: return emptyList()
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val episodes = mutableListOf<SEpisode>()
-
+        
         obj["episodes"]?.jsonArray?.forEach { epElement ->
             val ep = epElement.jsonObject
             val num = ep["indice_ep"]?.jsonPrimitive?.content ?: "0"
-            episodes.add(
-                SEpisode.create().apply {
-                    episode_number = num.toFloatOrNull() ?: 0f
-                    name = "Épisode $num : ${ep["title_ep"]?.jsonPrimitive?.content ?: ""}"
-                    url = "/video?type=${ep["type"]?.jsonPrimitive?.content}&id=${ep["id"]?.jsonPrimitive?.content}"
-                    date_upload = parseDate(ep["date_ep"]?.jsonPrimitive?.content)
-                },
-            )
+            episodes.add(SEpisode.create().apply {
+                episode_number = num.toFloatOrNull() ?: 0f
+                name = "Épisode $num : ${ep["title_ep"]?.jsonPrimitive?.content ?: ""}"
+                url = "/video?type=${ep["type"]?.jsonPrimitive?.content}&id=${ep["id"]?.jsonPrimitive?.content}"
+                date_upload = parseDate(ep["date_ep"]?.jsonPrimitive?.content)
+            })
         }
         return episodes.sortedByDescending { it.episode_number }
     }
@@ -141,7 +138,6 @@ class LesPoroiniens : AnimeHttpSource() {
                         Video(video.url, cleanQuality, video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
             }
-
             "vidmoly" -> {
                 val vidmolyUrl = "https://vidmoly.to/embed-$id.html"
                 VidMolyExtractor(client, headers).videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly - ")
@@ -150,14 +146,15 @@ class LesPoroiniens : AnimeHttpSource() {
                         Video(video.url, cleanQuality, video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
             }
-
             else -> emptyList()
         }
     }
 
     // --- Utils ---
-    private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[\\u0300-\\u036f]"), "")
-        .lowercase().replace(Regex("[^a-z0-9]"), "_").replace(Regex("_+"), "_").trim('_')
+    private fun slugify(text: String): String {
+        return Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[\\u0300-\\u036f]"), "")
+            .lowercase().replace(Regex("[^a-z0-9]"), "_").replace(Regex("_+"), "_").trim('_')
+    }
 
     private fun parseStatus(status: String?): Int = when (status?.lowercase()?.trim()) {
         "en cours" -> SAnime.ONGOING
@@ -167,9 +164,7 @@ class LesPoroiniens : AnimeHttpSource() {
 
     private fun String.removeHtml(): String = this.replace(Regex("<[^>]*>"), "").trim()
 
-    private fun parseDate(date: String?): Long = try {
-        dateFormat.parse(date ?: "")?.time ?: 0L
-    } catch (e: Exception) {
+    private fun parseDate(date: String?): Long = try { dateFormat.parse(date ?: "")?.time ?: 0L } catch (e: Exception) { 
         date?.toLongOrNull()?.let { it * 1000 } ?: 0L
     }
 }
