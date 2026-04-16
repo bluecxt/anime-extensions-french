@@ -160,7 +160,16 @@ class FrAnime :
 
                 SEpisode.create().apply {
                     setUrlWithoutDomain(anime.url + "?s=${sIndex + 1}&ep=${eIndex + 1}")
-                    name = (if (animeData.seasons.size > 1) "S${sIndex + 1} " else "") + (episode.title ?: "Épisode ${eIndex + 1}")
+                    val format = animeData.format.uppercase()
+                    val epNumber = eIndex + 1
+                    val epName = when (format) {
+                        "FILM" -> if (season.episodes.size > 1) "Film $epNumber" else "Film"
+                        "OAV" -> "Episode OAV $epNumber"
+                        "ONA" -> "Episode ONA $epNumber"
+                        "SPECIAL" -> "Episode Special $epNumber"
+                        else -> "Episode $epNumber"
+                    }
+                    name = (if (animeData.seasons.size > 1) "Season ${sIndex + 1} " else "") + epName
                     episode_number = globalEpisodeNumber++
                 }
             }
