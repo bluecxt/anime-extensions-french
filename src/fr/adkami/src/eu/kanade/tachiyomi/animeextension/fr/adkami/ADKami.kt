@@ -30,7 +30,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class ADKami :
@@ -117,7 +116,7 @@ class ADKami :
                 tempDesc.text().trim()
             } else {
                 document.select("#look-video br").first()?.nextSibling()?.toString()?.trim()
-                    ?: document.select(".fiche-info h4[itemprop=alternateName]").next().text() ?: ""
+                    ?: document.select(".fiche-info h4[itemprop=alternateName]").next().text()
             }
 
             genre = document.select("a.label span[itemprop=genre]").joinToString { it.text() }
@@ -288,8 +287,8 @@ class ADKami :
                             videos.add(Video(decodedUrl, "$prefix - Original", decodedUrl))
                         }
                     }
-                } catch (e: Exception) {
-                    Log.d("ADKami", "Extraction failed for $decodedUrl: ${e.message}")
+                } catch (_: Exception) {
+                    Log.d("ADKami", "Extraction failed for $decodedUrl")
                 }
                 videos
             }
@@ -386,11 +385,9 @@ class ADKami :
     }
 
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
-        compareBy(
-            {
-                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            },
-        ),
+        compareBy {
+            Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        },
     ).reversed()
 
     override fun videoListParse(response: Response): List<Video> = emptyList()
@@ -402,12 +399,16 @@ class ADKami :
         val link = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return anime
         anime.setUrlWithoutDomain(link.attr("abs:href"))
         anime.title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
-        anime.thumbnail_url = element.selectFirst(".visual img, img")?.let { img ->
-            val url = img.attr("abs:data-original").ifBlank { img.attr("abs:src") }
-            if (url.contains("base64")) {
-                img.attr("abs:src")
+        val img = element.selectFirst(".visual img, img")
+        if (img != null) {
+            val dataOriginal = img.attr("abs:data-original")
+            val src = img.attr("abs:src")
+            anime.thumbnail_url = if (dataOriginal.isNotBlank()) {
+                dataOriginal
+            } else if (src.contains("base64")) {
+                src
             } else {
-                url
+                src
             }
         }
         return anime
@@ -437,7 +438,7 @@ class ADKami :
                 i = if (i > n.length - 2) 0 else i + 1
             }
             t
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -450,8 +451,8 @@ class ADKami :
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { preference, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
-                (preference as EditTextPreference).summary = newValue as String
+                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
+                (preference as EditTextPreference).summary = newValue
                 true
             }
         }.also(screen::addPreference)
