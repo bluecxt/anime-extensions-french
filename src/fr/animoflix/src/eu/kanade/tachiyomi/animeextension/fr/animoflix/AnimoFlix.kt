@@ -41,7 +41,7 @@ class AnimoFlix :
     override val lang = "fr"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
@@ -53,6 +53,13 @@ class AnimoFlix :
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
+
+    private val sibnetExtractor by lazy { SibnetExtractor(client) }
+    private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
+    private val streamTapeExtractor by lazy { StreamTapeExtractor(client) }
+    private val doodExtractor by lazy { DoodExtractor(client) }
+    private val vidoExtractor by lazy { VidoExtractor(client) }
+    private val voeExtractor by lazy { VoeExtractor(client, headers) }
 
     companion object {
         private const val PREF_URL_KEY = "preferred_baseUrl"
@@ -228,7 +235,7 @@ class AnimoFlix :
         allEpisodeCards.forEach { card ->
             val url = card.attr("abs:href")
             val epTitle = card.selectFirst("h3.episode-title")?.text() ?: "Episode"
-            val epNumStr = card.selectFirst(".episode-number")?.text() ?: epTitle.replace(Regex("[^0-9]"), "")
+            val epNumStr = card.selectFirst(".episode-number")?.text() ?: epTitle.replace(nonDigitRegex, "")
             val epNum = epNumStr.toFloatOrNull() ?: 0f
 
             val lang = if (url.contains("/vf/")) "VF" else "VOSTFR"
@@ -293,17 +300,17 @@ class AnimoFlix :
                         serverUrl.contains("dood") -> "Doodstream"
                         serverUrl.contains("vidoza.net") -> "Vidoza"
                         serverUrl.contains("voe.sx") -> "Voe"
-                        else -> option.text().trim().replace(Regex("(?i)Lecteur\\s*\\d+\\s*-?\\s*"), "")
+                        else -> option.text().trim().replace(lecteurRegex, "")
                     }
                     val prefix = "($lang) $serverName - "
 
                     when {
-                        serverUrl.contains("sibnet.ru") -> SibnetExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                        serverUrl.contains("sendvid.com") -> SendvidExtractor(client, headers).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                        serverUrl.contains("streamtape") || serverUrl.contains("shavetape") -> StreamTapeExtractor(client).videoFromUrl(serverUrl, prefix)?.let { videoList.add(it) }
-                        serverUrl.contains("dood") -> DoodExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                        serverUrl.contains("vidoza.net") -> VidoExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                        serverUrl.contains("voe.sx") -> VoeExtractor(client, headers).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+                        serverUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+                        serverUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+                        serverUrl.contains("streamtape") || serverUrl.contains("shavetape") -> streamTapeExtractor.videoFromUrl(serverUrl, prefix)?.let { videoList.add(it) }
+                        serverUrl.contains("dood") -> doodExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+                        serverUrl.contains("vidoza.net") -> vidoExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+                        serverUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
                     }
                 }
             } catch (e: Exception) {}
@@ -315,23 +322,21 @@ class AnimoFlix :
     }
 
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)Sendvid:default"), "")
-            .replace(Regex("(?i)Sibnet:default"), "")
-            .replace(Regex("(?i)Doodstream:default"), "")
-            .replace(Regex("(?i)Voe:default"), "")
+        var cleaned = quality.replace(qualityRegex, "")
+            .replace(sizeRegex, "")
+            .replace(sendvidRegex, "")
+            .replace(sibnetRegex, "")
+            .replace(doodRegex, "")
+            .replace(voeRegex, "")
             .replace(" - - ", " - ")
             .trim()
             .removeSuffix("-")
             .trim()
 
-        val servers = listOf("Sibnet", "Sendvid", "Voe", "Streamtape", "Doodstream", "Vidoza")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        cleaned = cleaned.replace(serverRegex, "$1")
+        cleaned = cleaned.replace(serverRegex2, "")
+
+        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
     override fun List<Video>.sort(): List<Video> {
@@ -340,11 +345,24 @@ class AnimoFlix :
             compareBy(
                 { it.quality.contains(prefVoice, true) },
                 {
-                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    qualityNumRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
             ),
         ).reversed()
     }
+
+    private val qualityRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val sizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val sendvidRegex = Regex("(?i)Sendvid:default")
+    private val sibnetRegex = Regex("(?i)Sibnet:default")
+    private val doodRegex = Regex("(?i)Doodstream:default")
+    private val voeRegex = Regex("(?i)Voe:default")
+    private val serverRegex = Regex("(?i)(Sibnet|Sendvid|Voe|Streamtape|Doodstream|Vidoza)\\s*-\\s*\\1(?!:)", RegexOption.IGNORE_CASE)
+    private val serverRegex2 = Regex("(?i)(Sibnet|Sendvid|Voe|Streamtape|Doodstream|Vidoza):", RegexOption.IGNORE_CASE)
+    private val whitespaceRegex = Regex("\\s+")
+    private val qualityNumRegex = Regex("""(\d+)p""")
+    private val lecteurRegex = Regex("(?i)Lecteur\\s*\\d+\\s*-?\\s*")
+    private val nonDigitRegex = Regex("[^0-9]")
 
     override fun videoListSelector() = throw UnsupportedOperationException()
     override fun videoFromElement(element: Element) = throw UnsupportedOperationException()

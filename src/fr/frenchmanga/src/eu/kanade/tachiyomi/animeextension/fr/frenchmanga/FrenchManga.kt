@@ -52,6 +52,13 @@ open class FrenchManga(
 
     private val json: Json by injectLazy()
 
+    private val fmExtractor by lazy { FrenchMangaExtractor(network.client, baseUrl) }
+    private val doodExtractor by lazy { DoodExtractor(client) }
+    private val voeExtractor by lazy { VoeExtractor(client, headers) }
+    private val sibnetExtractor by lazy { SibnetExtractor(client) }
+    private val vidMolyExtractor by lazy { VidMolyExtractor(client, headers) }
+    private val filemoonExtractor by lazy { FilemoonExtractor(client) }
+
     @Serializable
     data class AnimeUrl(
         val ids: List<String>,
@@ -88,27 +95,24 @@ open class FrenchManga(
         return AnimesPage(unifyAnimes(animes), hasNextPage)
     }
 
-    private fun unifyAnimes(animes: List<SAnime>): List<SAnime> {
-        val cleanRegex = Regex("(?i)\\s*\\((VF|VOSTFR|VF\\+VOSTFR|VOST|UNCUT)\\)")
-        return animes.distinctBy { it.url }.groupBy {
-            it.title.replace(cleanRegex, "").trim()
-        }.map { (title, versions) ->
-            val anime = versions.first()
-            anime.title = title
+    private fun unifyAnimes(animes: List<SAnime>): List<SAnime> = animes.distinctBy { it.url }.groupBy {
+        it.title.replace(cleanRegex, "").trim()
+    }.map { (title, versions) ->
+        val anime = versions.first()
+        anime.title = title
 
-            val allVersions = versions.flatMap { v ->
-                val vText = cleanRegex.find(v.title)?.groupValues?.get(1) ?: ""
-                vText.split("+", "/")
-            }.map { it.trim().uppercase() }.distinct().filter { it.isNotEmpty() }
+        val allVersions = versions.flatMap { v ->
+            val vText = cleanRegex.find(v.title)?.groupValues?.get(1) ?: ""
+            vText.split("+", "/")
+        }.map { it.trim().uppercase() }.distinct().filter { it.isNotEmpty() }
 
-            if (allVersions.isNotEmpty()) {
-                anime.title += " (${allVersions.joinToString("+")})"
-            }
-
-            val ids = versions.map { it.url }.distinct()
-            anime.url = json.encodeToString(AnimeUrl(ids))
-            anime
+        if (allVersions.isNotEmpty()) {
+            anime.title += " (${allVersions.joinToString("+")})"
         }
+
+        val ids = versions.map { it.url }.distinct()
+        anime.url = json.encodeToString(AnimeUrl(ids))
+        anime
     }
 
     override fun popularAnimeNextPageSelector(): String = ".pagi-nav a:contains(Suivant)"
@@ -247,13 +251,6 @@ open class FrenchManga(
 
         val videos = mutableListOf<Video>()
 
-        val fmExtractor = FrenchMangaExtractor(network.cloudflareClient, baseUrl)
-        val doodExtractor = DoodExtractor(client)
-        val voeExtractor = VoeExtractor(client, headers)
-        val sibnetExtractor = SibnetExtractor(client)
-        val vidMolyExtractor = VidMolyExtractor(client, headers)
-        val filemoonExtractor = FilemoonExtractor(client)
-
         langs.forEach { (langType, hosters) ->
             hosters.jsonObject.forEach { (hosterName, hosterUrlElement) ->
                 val hosterUrl = hosterUrlElement.toString().trim('"')
@@ -287,20 +284,33 @@ open class FrenchManga(
             Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers)
         }.sort()
     }
-    private fun cleanQuality(quality: String): String = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-        .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-        .replace(Regex("(?i)Sendvid:default"), "")
-        .replace(Regex("(?i)Sibnet:default"), "")
-        .replace(Regex("(?i)Doodstream:default"), "")
-        .replace(Regex("(?i)Voe:default"), "")
-        .replace(Regex("(?i)Vidzy:default"), "")
-        .replace(Regex("(?i)Lulu:default"), "")
-        .replace(Regex("(?i)\\bHD\\b"), "1080p")
-        .replace(Regex(" - - "), " - ")
-        .replace(Regex("\\s*-\\s*-\\s*"), " - ")
+    private fun cleanQuality(quality: String): String = quality.replace(qualityRegex, "")
+        .replace(sizeRegex, "")
+        .replace(sendvidRegex, "")
+        .replace(sibnetRegex, "")
+        .replace(doodRegex, "")
+        .replace(voeRegex, "")
+        .replace(vidzyRegex, "")
+        .replace(luluRegex, "")
+        .replace(hdRegex, "1080p")
+        .replace(hyphenRegex, " - ")
+        .replace(hyphenRegex2, " - ")
         .trim()
         .removeSuffix("-")
         .trim()
+
+    private val cleanRegex = Regex("(?i)\\s*\\((VF|VOSTFR|VF\\+VOSTFR|VOST|UNCUT)\\)")
+    private val qualityRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val sizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val sendvidRegex = Regex("(?i)Sendvid:default")
+    private val sibnetRegex = Regex("(?i)Sibnet:default")
+    private val doodRegex = Regex("(?i)Doodstream:default")
+    private val voeRegex = Regex("(?i)Voe:default")
+    private val vidzyRegex = Regex("(?i)Vidzy:default")
+    private val luluRegex = Regex("(?i)Lulu:default")
+    private val hdRegex = Regex("(?i)\\bHD\\b")
+    private val hyphenRegex = Regex(" - - ")
+    private val hyphenRegex2 = Regex("\\s*-\\s*-\\s*")
 
     override fun List<Video>.sort(): List<Video> {
         val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!

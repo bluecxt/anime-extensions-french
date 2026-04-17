@@ -237,14 +237,15 @@ class FrAnime :
         }.sort()
     }
 
+    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val qualityResRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val qualityServerRegex = Regex("(?i)(?:Sendvid|Sibnet|VK|Vidmoly|Filemoon):default")
+    private val qualityExtraSpaceRegex = Regex("\\s+")
+
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)Sendvid:default"), "")
-            .replace(Regex("(?i)Sibnet:default"), "")
-            .replace(Regex("(?i)VK:default"), "")
-            .replace(Regex("(?i)Vidmoly:default"), "")
-            .replace(Regex("(?i)Filemoon:default"), "")
+        var cleaned = quality.replace(qualityCleanRegex, "")
+            .replace(qualityResRegex, "")
+            .replace(qualityServerRegex, "")
             .replace(" - - ", " - ")
             .trim()
             .removeSuffix("-")
@@ -259,13 +260,15 @@ class FrAnime :
         return cleaned
     }
 
+    private val qualityRegex = Regex("""(\d+)p""")
+
     override fun List<Video>.sort(): List<Video> {
         val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
         return this.sortedWith(
             compareBy(
                 { it.quality.contains(prefVoice, true) },
                 {
-                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
             ),
         ).reversed()

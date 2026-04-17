@@ -36,7 +36,9 @@ class LesPoroiniens : AnimeHttpSource() {
     override val supportsLatest = false
 
     private val json: Json by injectLazy()
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.FRANCE)
+
+    private val gdriveExtractor by lazy { GoogleDriveExtractor(client, Headers.Builder().add("User-Agent", "Mozilla/5.0").build()) }
+    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
@@ -153,8 +155,7 @@ class LesPoroiniens : AnimeHttpSource() {
 
         return when (type) {
             "gdrive" -> {
-                val gDriveHeaders = Headers.Builder().add("User-Agent", "Mozilla/5.0").build()
-                GoogleDriveExtractor(client, gDriveHeaders).videosFromUrl(id, "(VOSTFR) Google Drive -")
+                gdriveExtractor.videosFromUrl(id, "(VOSTFR) Google Drive -")
                     .map { video ->
                         Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
@@ -162,7 +163,7 @@ class LesPoroiniens : AnimeHttpSource() {
 
             "vidmoly" -> {
                 val vidmolyUrl = "https://vidmoly.to/embed-$id.html"
-                VidMolyExtractor(client, headers).videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly -")
+                vidmolyExtractor.videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly -")
                     .map { video ->
                         Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
                     }
@@ -173,13 +174,13 @@ class LesPoroiniens : AnimeHttpSource() {
     }
 
     private fun cleanQuality(quality: String): String = quality.replace(" - (", " - ")
-        .replace(Regex("""(?<=\d{3,4}p)\)"""), "")
+        .replace(QUALITY_CLEAN_REGEX, "")
         .replace(" - - ", " - ")
         .trim()
 
     // --- Utils ---
-    private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[\\u0300-\\u036f]"), "")
-        .lowercase().replace(Regex("[^a-z0-9]"), "_").replace(Regex("_+"), "_").trim('_')
+    private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(SLUG_REGEX_1, "")
+        .lowercase().replace(SLUG_REGEX_2, "_").replace(SLUG_REGEX_3, "_").trim('_')
 
     private fun parseStatus(status: String?): Int = when (status?.lowercase()?.trim()) {
         "en cours" -> SAnime.ONGOING
@@ -187,11 +188,20 @@ class LesPoroiniens : AnimeHttpSource() {
         else -> SAnime.UNKNOWN
     }
 
-    private fun String.removeHtml(): String = this.replace(Regex("<[^>]*>"), "").trim()
+    private fun String.removeHtml(): String = this.replace(HTML_TAG_REGEX, "").trim()
 
     private fun parseDate(date: String?): Long = try {
-        dateFormat.parse(date ?: "")?.time ?: 0L
+        DATE_FORMAT.parse(date ?: "")?.time ?: 0L
     } catch (e: Exception) {
         date?.toLongOrNull()?.let { it * 1000 } ?: 0L
+    }
+
+    companion object {
+        private val DATE_FORMAT by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.FRANCE) }
+        private val QUALITY_CLEAN_REGEX = Regex("""(?<=\d{3,4}p)\)""")
+        private val SLUG_REGEX_1 = Regex("[\\u0300-\\u036f]")
+        private val SLUG_REGEX_2 = Regex("[^a-z0-9]")
+        private val SLUG_REGEX_3 = Regex("_+")
+        private val HTML_TAG_REGEX = Regex("<[^>]*>")
     }
 }

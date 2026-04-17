@@ -164,13 +164,16 @@ class AnimeSama :
         }.sort()
     }
 
+    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val qualitySizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|VK|VidMoly):default")
+    private val pQualityRegex = Regex("""(\d+)p""")
+    private val whitespaceRegex = Regex("\\s+")
+
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)Sendvid:default"), "")
-            .replace(Regex("(?i)Sibnet:default"), "")
-            .replace(Regex("(?i)VK:default"), "")
-            .replace(Regex("(?i)VidMoly:default"), "")
+        var cleaned = quality.replace(qualityCleanRegex, "")
+            .replace(qualitySizeRegex, "")
+            .replace(qualityDefaultRegex, "")
             .replace(" - - ", " - ")
             .trim()
             .removeSuffix("-")
@@ -181,7 +184,7 @@ class AnimeSama :
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
             cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
         }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
     // ============================ Utils =============================
@@ -194,7 +197,7 @@ class AnimeSama :
             compareByDescending<Video> { it.quality.contains("($voices", true) }
                 .thenByDescending { it.quality.contains(quality) }
                 .thenByDescending {
-                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 }
                 .thenByDescending { it.quality.contains(player, true) },
         )

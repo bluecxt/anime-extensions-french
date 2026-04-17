@@ -272,9 +272,14 @@ class WaveAnime :
         return videoList
     }
 
+    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val qualityResRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val qualityExtraSpaceRegex = Regex("\\s+")
+    private val qualityRegex = Regex("""(\d+)p""")
+
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
+        var cleaned = quality.replace(qualityCleanRegex, "")
+            .replace(qualityResRegex, "")
             .replace(" - - ", " - ")
             .trim()
             .removeSuffix("-")
@@ -284,7 +289,7 @@ class WaveAnime :
         for (server in servers) {
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
         }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        return cleaned.replace(qualityExtraSpaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
     override fun List<Video>.sort(): List<Video> {
@@ -292,7 +297,7 @@ class WaveAnime :
 
         val sortedList = this.sortedWith(
             compareByDescending {
-                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             },
         )
 
@@ -301,7 +306,7 @@ class WaveAnime :
         return sortedList.sortedWith(
             compareByDescending<Video> { it.quality.contains(quality) }
                 .thenByDescending {
-                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
         )
     }

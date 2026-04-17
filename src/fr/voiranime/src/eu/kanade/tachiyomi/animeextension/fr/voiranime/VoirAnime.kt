@@ -56,6 +56,8 @@ class VoirAnime :
     private val qualityRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
     private val sizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
     private val serverDefaultRegex = Regex("(?i)(Sendvid|Sibnet|Doodstream|Voe|Vidmoly|Filemoon|Okru|VK):default")
+    private val pQualityRegex = Regex("""(\d+)p""")
+    private val whitespaceRegex = Regex("\\s+")
 
     // ============================== Popular & Latest ===============================
     override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/series/?page=$page&order=popular", headers)
@@ -219,13 +221,13 @@ class VoirAnime :
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server", RegexOption.IGNORE_CASE), server)
             cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
         }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
         compareBy(
             {
-                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             },
         ),
     ).reversed()

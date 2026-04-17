@@ -59,7 +59,7 @@ class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl
                             val postHeaders = headers.newBuilder().add("Referer", dlUrl).build()
                             client.newCall(Request.Builder().url(dlUrl).post(formBody).headers(postHeaders).build()).execute().use { postRes ->
                                 if (postRes.isSuccessful) {
-                                    val resultHtml = postRes.body.string()
+                                    val resultHtml = postRes.body!!.string()
                                     val directLinkMatcher = Pattern.compile("""<a[^>]+href="([^"]+)"[^>]+class="main-button"""").matcher(resultHtml)
                                     if (directLinkMatcher.find()) {
                                         val directUrl = directLinkMatcher.group(1).replace("\\/", "/")

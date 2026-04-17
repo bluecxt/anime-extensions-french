@@ -41,6 +41,21 @@ class AnimeSamaFan :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
+    private val doodExtractor by lazy { DoodExtractor(client) }
+    private val sibnetExtractor by lazy { SibnetExtractor(client) }
+    private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
+    private val streamTapeExtractor by lazy { StreamTapeExtractor(client) }
+    private val vidoExtractor by lazy { VidoExtractor(client) }
+    private val voeExtractor by lazy { VoeExtractor(client, headers) }
+
+    private val seasonRegex = Regex("""saison-(\d+)""")
+    private val epNumRegex = Regex("[^0-9.]")
+    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val qualitySizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|Voe|Vidoza):default")
+    private val pQualityRegex = Regex("""(\d+)p""")
+    private val whitespaceRegex = Regex("\\s+")
+
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add(
@@ -160,7 +175,7 @@ class AnimeSamaFan :
 
     private fun parseEpisodesFromDocument(document: Document): List<SEpisode> {
         val url = document.location()
-        val seasonMatch = Regex("""saison-(\d+)""").find(url)
+        val seasonMatch = seasonRegex.find(url)
         val sNum = seasonMatch?.groupValues?.get(1)?.toIntOrNull()
         val totalSeasons = document.select(".seasons-grid a.season-card").size + (if (document.selectFirst(".seasons-grid") != null) 1 else 0)
         val sPrefix = if (totalSeasons > 1 && sNum != null) "Season $sNum " else ""
@@ -175,7 +190,7 @@ class AnimeSamaFan :
                 this.url = card.attr("abs:href")
                 val epTitle = card.selectFirst("h3.episode-title")?.text()?.replace("Épisode", "Episode", true) ?: "Episode"
                 val epNumStr = (card.selectFirst(".episode-number")?.text() ?: "0")
-                    .replace(Regex("[^0-9.]"), "")
+                    .replace(epNumRegex, "")
 
                 this.name = if (epTitle.contains("Episode", true)) {
                     sPrefix + epTitle
@@ -225,22 +240,19 @@ class AnimeSamaFan :
         }
         val prefix = "($lang) $server - "
         when (server) {
-            "Sibnet" -> SibnetExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            "Sendvid" -> SendvidExtractor(client, headers).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            "Streamtape" -> StreamTapeExtractor(client).videoFromUrl(serverUrl, prefix)?.let { videoList.add(it) }
-            "Doodstream" -> DoodExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            "Vidoza" -> VidoExtractor(client).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            "Voe" -> VoeExtractor(client, headers).videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+            "Sibnet" -> sibnetExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+            "Sendvid" -> sendvidExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+            "Streamtape" -> streamTapeExtractor.videoFromUrl(serverUrl, prefix)?.let { videoList.add(it) }
+            "Doodstream" -> doodExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+            "Vidoza" -> vidoExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+            "Voe" -> voeExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
         }
     }
 
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)Sendvid:default"), "")
-            .replace(Regex("(?i)Sibnet:default"), "")
-            .replace(Regex("(?i)Voe:default"), "")
-            .replace(Regex("(?i)Vidoza:default"), "")
+        var cleaned = quality.replace(qualityCleanRegex, "")
+            .replace(qualitySizeRegex, "")
+            .replace(qualityDefaultRegex, "")
             .replace(" - - ", " - ")
             .trim()
             .removeSuffix("-")
@@ -251,7 +263,7 @@ class AnimeSamaFan :
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
             cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
         }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
     override fun List<Video>.sort(): List<Video> {
@@ -260,7 +272,7 @@ class AnimeSamaFan :
             compareBy(
                 { it.quality.contains(prefVoice, true) },
                 {
-                    Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
             ),
         ).reversed()

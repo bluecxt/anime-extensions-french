@@ -6,12 +6,11 @@ import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.commonEmptyHeaders
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
-class FastreamExtractor(private val client: OkHttpClient, private val headers: Headers = commonEmptyHeaders) {
+class FastreamExtractor(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
     private val videoHeaders by lazy {
         headers.newBuilder()
             .set("Referer", "$FASTREAM_URL/")

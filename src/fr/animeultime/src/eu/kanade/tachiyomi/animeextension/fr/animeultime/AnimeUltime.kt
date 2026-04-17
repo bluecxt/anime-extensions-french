@@ -116,7 +116,7 @@ class AnimeUltime :
     override fun episodeListParse(response: Response): List<SEpisode> {
         val document = response.asJsoup()
         val animeTitle = document.selectFirst("h1")?.text() ?: ""
-        val seasonNum = Regex("""\[Saison\s*(\d+)\]""").find(animeTitle)?.groupValues?.get(1)
+        val seasonNum = seasonRegex.find(animeTitle)?.groupValues?.get(1)
         val sPrefix = if (seasonNum != null && !animeTitle.contains("Saison $seasonNum", true) && !animeTitle.contains("Season $seasonNum", true)) "Season $seasonNum " else ""
 
         val episodesMap = mutableMapOf<String, MutableList<Pair<String, String>>>()
@@ -147,7 +147,7 @@ class AnimeUltime :
                 this.name = name
                 // Store multiple links in the URL as JSON
                 this.url = json.encodeToString(infoList.map { mapOf("url" to it.first, "fansub" to it.second) })
-                this.episode_number = Regex("""\d+""").find(name)?.value?.toFloatOrNull() ?: 1f
+                this.episode_number = digitRegex.find(name)?.value?.toFloatOrNull() ?: 1f
             }
         }.reversed()
     }
@@ -166,7 +166,7 @@ class AnimeUltime :
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun List<Video>.sort(): List<Video> = this.sortedWith(compareBy({ Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0 })).reversed()
+    override fun List<Video>.sort(): List<Video> = this.sortedWith(compareBy({ qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0 })).reversed()
 
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
         val infoList = try {
@@ -188,14 +188,14 @@ class AnimeUltime :
 
             val playerElement = document.selectFirst(".AUVideoPlayer")
             if (playerElement != null) {
-                val targetNum = Regex("""\d+""").find(episode.name)?.value ?: ""
+                val targetNum = digitRegex.find(episode.name)?.value ?: ""
 
                 // On cherche l'ID réel de l'épisode via Regex dans la page
                 val idfile = document.select("a[data-idfile]").firstOrNull {
                     val text = it.text().lowercase()
                     Regex("""\b(0?$targetNum)\b""").containsMatchIn(text)
                 }?.attr("data-idfile")
-                    ?: Regex("""data-idfile=["'](\d+)["']""").findAll(document.html()).map { it.groupValues[1] }.firstOrNull { it != playerElement.attr("data-focus") }
+                    ?: dataIdFileRegex.findAll(document.html()).map { it.groupValues[1] }.firstOrNull { it != playerElement.attr("data-focus") }
                     ?: playerElement.attr("data-file").takeIf { it.isNotEmpty() }
                     ?: playerElement.attr("data-focus")
 
@@ -250,12 +250,21 @@ class AnimeUltime :
     }
 
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "").replace(Regex("\\s*\\(\\d+x\\d+\\)"), "").replace(Regex("(?i)Sendvid:default|Sibnet:default|Doodstream:default|Voe:default"), "").replace(" - - ", " - ").trim().removeSuffix("-").trim()
+        var cleaned = quality.replace(cleanQualityRegex, "").replace(cleanQualityRegex2, "").replace(cleanQualityRegex3, "").replace(" - - ", " - ").trim().removeSuffix("-").trim()
         listOf("Sibnet", "Vidmoly", "Doodstream", "Voe").forEach { server ->
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server).replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
         }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
     }
+
+    private val seasonRegex = Regex("""\[Saison\s*(\d+)\]""")
+    private val digitRegex = Regex("""\d+""")
+    private val qualityRegex = Regex("""(\d+)p""")
+    private val dataIdFileRegex = Regex("""data-idfile=["'](\d+)["']""")
+    private val cleanQualityRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val cleanQualityRegex2 = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val cleanQualityRegex3 = Regex("(?i)Sendvid:default|Sibnet:default|Doodstream:default|Voe:default")
+    private val whitespaceRegex = Regex("\\s+")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {

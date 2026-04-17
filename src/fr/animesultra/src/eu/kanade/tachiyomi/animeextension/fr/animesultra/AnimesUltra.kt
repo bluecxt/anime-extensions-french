@@ -55,6 +55,14 @@ class AnimesUltra :
     companion object {
         private const val PREF_URL_KEY = "preferred_baseUrl"
         private const val PREF_URL_DEFAULT = "https://ww.animesultra.org"
+
+        private val CLEAN_REGEX = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL)\\b)")
+        private val WHITESPACE_REGEX = Regex("\\s+")
+        private val NEWS_ID_REGEX = Regex("""/(\d+)-""")
+        private val QUALITY_REGEX = Regex("""(\d+)p""")
+        private val CLEAN_QUALITY_REGEX_1 = Regex("(?i)\\(\\s*Player\\s*\\)\\s*|\\(\\s*None\\s*\\)\\s*|\\s*\\(\\d+x\\d+\\)|\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+        private val CLEAN_QUALITY_REGEX_2 = Regex("(?i)Sendvid:default|Sibnet:default|Voe:default|Vidmoly:default")
+        private val SERVERS = listOf("Vidmoly", "Sibnet", "Sendvid", "Voe", "Doodstream", "Okru", "Filemoon", "Player")
     }
 
     @Serializable
@@ -108,9 +116,7 @@ class AnimesUltra :
         anime
     }
 
-    private fun cleanTitle(title: String): String = title.replace(cleanRegex, "").replace(Regex("\\s+"), " ").trim()
-
-    private val cleanRegex = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL)\\b)")
+    private fun cleanTitle(title: String): String = title.replace(CLEAN_REGEX, "").replace(WHITESPACE_REGEX, " ").trim()
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page/", headers)
     override fun latestUpdatesParse(response: Response): AnimesPage = popularAnimeParse(response)
@@ -173,7 +179,7 @@ class AnimesUltra :
     }
 
     // ============================== Episodes ==============================
-    private fun getNewsId(url: String): String = Regex("""/(\d+)-""").find(url)?.groupValues?.get(1) ?: url.substringAfterLast("/").substringBefore("-")
+    private fun getNewsId(url: String): String = NEWS_ID_REGEX.find(url)?.groupValues?.get(1) ?: url.substringAfterLast("/").substringBefore("-")
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         var urlMap = try {
@@ -235,7 +241,7 @@ class AnimesUltra :
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
         compareBy(
             {
-                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                QUALITY_REGEX.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             },
         ),
     ).reversed()
@@ -320,18 +326,17 @@ class AnimesUltra :
     }
 
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\(\\s*Player\\s*\\)\\s*|\\(\\s*None\\s*\\)\\s*|\\s*\\(\\d+x\\d+\\)|\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("(?i)Sendvid:default|Sibnet:default|Voe:default|Vidmoly:default"), "")
+        var cleaned = quality.replace(CLEAN_QUALITY_REGEX_1, "")
+            .replace(CLEAN_QUALITY_REGEX_2, "")
             .replace(" - - ", " - ")
             .trim()
             .removeSuffix("-")
             .trim()
 
-        val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "Voe", "Doodstream", "Okru", "Filemoon", "Player")
-        for (server in servers) {
+        for (server in SERVERS) {
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server", RegexOption.IGNORE_CASE), server)
         }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        return cleaned.replace(WHITESPACE_REGEX, " ").replace(" - - ", " - ").trim()
     }
 
     private fun extractVideosFromEmbed(url: String, name: String): List<Video> {

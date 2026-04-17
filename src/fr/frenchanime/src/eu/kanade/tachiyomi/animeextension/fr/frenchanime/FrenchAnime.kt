@@ -160,21 +160,24 @@ class FrenchAnime :
         }.sort()
     }
 
+    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val qualityResRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val qualityServerRegex = Regex("(?i)(?:Sendvid|Sibnet|Doodstream|Voe):default")
+    private val qualityExtraSpaceRegex = Regex("\\s+")
+    private val qualityRegex = Regex("""(\d+)p""")
+
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
         compareBy(
             {
-                Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             },
         ),
     ).reversed()
 
     private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)Sendvid:default"), "")
-            .replace(Regex("(?i)Sibnet:default"), "")
-            .replace(Regex("(?i)Doodstream:default"), "")
-            .replace(Regex("(?i)Voe:default"), "")
+        var cleaned = quality.replace(qualityCleanRegex, "")
+            .replace(qualityResRegex, "")
+            .replace(qualityServerRegex, "")
             .replace(" - - ", " - ")
             .trim()
             .removeSuffix("-")
@@ -185,7 +188,7 @@ class FrenchAnime :
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
             cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
         }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        return cleaned.replace(qualityExtraSpaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
