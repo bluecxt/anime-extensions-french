@@ -38,21 +38,21 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk # Si nécessaire
 
 Le repository a été optimisé pour ne conserver que les extensions les plus performantes.
 
-| Extension | État | Description | Langues | +18 |
-| :--- | :--- | :--- | :--- | :--- |
-| **Anime-Sama** | ✅ | Plus grosse source pour les sorties d'animes récents. | VOSTFR, VF, VA | Non |
-| **Anime-Sama (FAN)** | ✅ | Version alternative rapide, utile en secours à Anime-Sama. | VOSTFR, VF | Non |
-| **ADKami** | ✅ | Catalogue massif incluant une large section Hentai. | VOSTFR | **Oui** |
-| **AnimoFlix** | ✅ | Seule source proposant également des cartoons. | VOSTFR, VF | Non |
-| **Anime-Ultime** | ✅ | Haute qualité de Fantrad sur des titres peu diffusés. | VOSTFR | Non |
-| **FrAnime** | ✅ | Plus grosse source de films et d'animes. | VOSTFR, VF | **Oui** |
-| **French-Manga** | ✅ | Très complet avec flux haute qualité. | VOSTFR, VF | Non |
-| **VoirAnime.homes** | ✅ | Miroir de French-Manga. | VOSTFR, VF | Non |
-| **French Anime** | ✅ | Source de secours (backup). | VOSTFR, VF | Non |
-| **Les Poroïniens** | ✅ | Scrapers très précis et contenu haute qualité. | VOSTFR | **Oui** |
-| **VoirAnime** | ✅ | Uniquement VOSTFR avec une haute qualité d'image. | VOSTFR | Non |
-| **SouthTV** | ✅ | L'intégrale de South Park : épisodes VF et tous les films. | VF | Non |
-| **WaveAnime** | ✅ | Flux moderne optimisé au format DASH (Haute résolution). | VOSTFR, VF | Non |
-| **AnimesUltra** | ✅ | Alternative de secours de haute qualité. | VOSTFR | Non |
+| Extension | État | Description | Langues        | +18     |
+| :--- | :--- | :--- |:---------------|:--------|
+| **Anime-Sama** | ✅ | Plus grosse source pour les sorties d'animes récents. | VOSTFR, VF, VA | Non     |
+| **Anime-Sama (FAN)** | ✅ | Version alternative rapide, utile en secours à Anime-Sama. | VOSTFR, VF     | Non     |
+| **ADKami** | ✅ | Catalogue massif incluant une large section Hentai. | VOSTFR, RAW    | **Oui** |
+| **AnimoFlix** | ✅ | Seule source proposant également des cartoons. | VOSTFR, VF     | Non     |
+| **Anime-Ultime** | ✅ | Haute qualité de Fantrad sur des titres peu diffusés. | VOSTFR, RAW    | **Oui** |
+| **FrAnime** | ✅ | Plus grosse source de films et d'animes. | VOSTFR, VF     | **Oui** |
+| **French-Manga** | ✅ | Très complet avec flux haute qualité. | VOSTFR, VF     | Non     |
+| **VoirAnime.homes** | ✅ | Miroir de French-Manga. | VOSTFR, VF     | Non     |
+| **French Anime** | ✅ | Source de secours (backup). | VOSTFR, VF     | Non     |
+| **Les Poroïniens** | ✅ | Scrapers très précis et contenu haute qualité. | VOSTFR         | **Oui** |
+| **VoirAnime** | ✅ | Uniquement VOSTFR avec une haute qualité d'image. | VOSTFR         | Non     |
+| **SouthTV** | ✅ | L'intégrale de South Park : épisodes VF et tous les films. | VF             | Non     |
+| **WaveAnime** | ✅ | Flux moderne optimisé au format DASH (Haute résolution). | VOSTFR, VF     | Non     |
+| **AnimesUltra** | ✅ | Alternative de secours de haute qualité. | VOSTFR         | Non     |
 
 ---
