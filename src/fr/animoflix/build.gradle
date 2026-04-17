@@ -3,7 +3,7 @@ apply plugin: 'com.android.application'
 ext {
     extName = 'AnimoFlix'
     extClass = '.AnimoFlix'
-    extVersionCode = 8
+    extVersionCode = 9
 }
 
 apply from: "$rootDir/common.gradle"
