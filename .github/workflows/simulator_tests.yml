@@ -3,16 +3,56 @@ name: Extension Simulators Audit
 on:
   push:
     branches: [ main ]
+    paths:
+      - "src/**"
+      - "lib/**"
+      - "core/**"
+      - ".github/workflows/simulator_tests.yml"
+      - "audit_extensions.py"
   pull_request:
     branches: [ main ]
-  schedule:
-    - cron: '0 0 * * 0'
+    paths:
+      - "src/**"
+      - "lib/**"
+      - "core/**"
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build APKs for Audit
+  prepare:
+    name: Prepare Audit
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.generate-matrices.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - id: generate-matrices
+        name: Create build matrices
+        run: |
+          BASE_COMMIT="HEAD~1"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            BASE_COMMIT="${{ github.event.before }}"
+            if [ "$BASE_COMMIT" = "0000000000000000000000000000000000000000" ]; then BASE_COMMIT="HEAD~1"; fi
+          else
+            BASE_COMMIT="origin/main"
+          fi
+          python ./.github/scripts/generate-build-matrices.py "$BASE_COMMIT" Debug
+
+  build:
+    name: Build for Audit (${{ matrix.chunk.number }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     env:
       ANDROID_HOME: /home/actions-runner/.android/sdk
     steps:
@@ -29,25 +69,23 @@ jobs:
         with:
           add-job-summary: never
 
-      - name: Build all French debug APKs
-        run: |
-          MODULES=$(find src/fr -mindepth 1 -maxdepth 1 -type d -printf ':src:fr:%f:assembleDebug ')
-          ./gradlew $MODULES -q
+      - name: Build modules
+        env:
+          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
+        run: ./gradlew $MODULES
 
-      - name: Upload APK artifacts for audit
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: simulator-audit-apks
+          name: simulator-audit-apks-${{ matrix.chunk.number }}
           path: src/fr/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 1
 
   audit:
     name: Run Simulators Audit
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
-    env:
-      ANDROID_HOME: /home/actions-runner/.android/sdk
     steps:
       - uses: actions/checkout@v6
 
@@ -57,16 +95,12 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          add-job-summary: never
-
-      - name: Download APK artifacts
+      - name: Download all APK artifacts
         uses: actions/download-artifact@v8
         with:
-          name: simulator-audit-apks
+          pattern: simulator-audit-apks-*
           path: apk-artifacts
+          merge-multiple: true
 
       - name: Run Orchestrator
         env:

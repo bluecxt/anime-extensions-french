@@ -52,7 +52,11 @@ jobs:
       - id: generate-matrices
         name: Create output matrices
         run: |
-          python ./.github/scripts/generate-build-matrices.py "HEAD~1" Release
+          BASE_COMMIT="${{ github.event.before }}"
+          if [ "$BASE_COMMIT" = "0000000000000000000000000000000000000000" ]; then
+            BASE_COMMIT="HEAD~1"
+          fi
+          python ./.github/scripts/generate-build-matrices.py "$BASE_COMMIT" Release
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
