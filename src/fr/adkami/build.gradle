@@ -1,7 +1,7 @@
 ext {
     extName = 'ADKami'
     extClass = '.ADKami'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = true
 }
 
@@ -14,5 +14,7 @@ dependencies {
     implementation(project(':lib:vidmolyextractor'))
     implementation(project(':lib:luluextractor'))
     implementation(project(':lib:filemoonextractor'))
+    implementation(project(':lib:streamtapeextractor'))
+    implementation(project(':lib:vidoextractor'))
     implementation(project(':lib:cloudflareinterceptor'))
 }

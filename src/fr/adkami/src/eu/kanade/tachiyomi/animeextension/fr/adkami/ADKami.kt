@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.animeextension.fr.adkami
 
 import android.util.Base64
+import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
@@ -15,7 +16,9 @@ import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.luluextractor.LuluExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
+import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
+import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
@@ -24,6 +27,7 @@ import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -43,12 +47,13 @@ class ADKami :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(CloudflareInterceptor(network.client))
+        .protocols(listOf(Protocol.HTTP_1_1))
         .build()
 
     private val preferences by getPreferencesLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0")
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
@@ -102,8 +107,19 @@ class ADKami :
         return SAnime.create().apply {
             title = document.selectFirst("h1.title-header-video")?.text()?.substringBefore(" - Episode")
                 ?: document.selectFirst(".fiche-info h1")?.text() ?: ""
-            description = document.select("#look-video br").first()?.nextSibling()?.toString()?.trim()
-                ?: document.select(".fiche-info h4[itemprop=alternateName]").next().text() ?: ""
+
+            val descElement = document.selectFirst("p.m-hidden")
+            description = if (descElement != null) {
+                // On clone pour ne pas modifier le document original
+                val tempDesc = descElement.clone()
+                // On supprime les liens (genres) à l'intérieur
+                tempDesc.select("a").remove()
+                tempDesc.text().trim()
+            } else {
+                document.select("#look-video br").first()?.nextSibling()?.toString()?.trim()
+                    ?: document.select(".fiche-info h4[itemprop=alternateName]").next().text() ?: ""
+            }
+
             genre = document.select("a.label span[itemprop=genre]").joinToString { it.text() }
             thumbnail_url = document.selectFirst("#row-nav-episode img")?.attr("abs:src")
                 ?: document.selectFirst(".fiche-info img")?.attr("abs:src")
@@ -134,7 +150,7 @@ class ADKami :
                     else -> "VOSTFR"
                 }
 
-                val parts = rawName.split(" ")
+                val parts = rawName.split(Regex("\\s+")).filter { it.isNotBlank() }
                 val typeStr = parts.getOrNull(0)?.uppercase() ?: ""
                 val numStr = parts.getOrNull(1)?.trimStart('0')?.ifEmpty { "0" } ?: "1"
 
@@ -148,7 +164,7 @@ class ADKami :
 
                 episodes.add(
                     SEpisode.create().apply {
-                        name = (if (seasonCount > 1) "Season $currentSeason " else "") + finalType + numStr
+                        name = ((if (seasonCount > 1) "Season $currentSeason " else "") + finalType + numStr).trim()
                         episode_number = numStr.toFloatOrNull() ?: 1f
                         setUrlWithoutDomain(a.attr("abs:href") + "?lang=$lang")
                     },
@@ -163,101 +179,210 @@ class ADKami :
             episodes.add(sEp)
         }
 
-        return episodes.reversed()
+        // Fusionner les épisodes ayant le même nom (VOSTFR/RAW/VF)
+        val mergedEpisodes = episodes.groupBy { it.name }.map { entry ->
+            val first = entry.value.first()
+            val combinedUrl = entry.value.map { it.url }.distinct().joinToString("|")
+            SEpisode.create().apply {
+                name = entry.key
+                episode_number = first.episode_number
+                url = combinedUrl
+            }
+        }
+
+        return mergedEpisodes.sortedByDescending { it.episode_number }
     }
 
     // ============================ Video Links =============================
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        val url = (baseUrl + episode.url).toHttpUrl()
-        val response = client.newCall(GET(url.newBuilder().query(null).build(), headers)).execute()
-        val document = response.asJsoup()
-        val videos = mutableListOf<Video>()
+        Log.d("ADKami", "Fetching video list for episode: ${episode.name}")
 
-        val lang = url.queryParameter("lang")?.ifBlank { "VOSTFR" } ?: "VOSTFR"
+        // Gérer les épisodes fusionnés (séparés par '|')
+        val urls = episode.url.split("|")
 
-        val sibnetExtractor = SibnetExtractor(client)
-        val doodExtractor = DoodExtractor(client)
-        val voeExtractor = VoeExtractor(client, headers)
-        val vidMolyExtractor = VidMolyExtractor(client, headers)
-        val luluExtractor = LuluExtractor(client, headers)
-        val filemoonExtractor = FilemoonExtractor(client)
+        return urls.parallelCatchingFlatMap { rawUrl ->
+            val fullUrl = if (rawUrl.startsWith("http")) {
+                rawUrl.toHttpUrl()
+            } else {
+                (baseUrl + (if (rawUrl.startsWith("/")) "" else "/") + rawUrl).toHttpUrl()
+            }
+            val response = client.newCall(GET(fullUrl.newBuilder().query(null).build(), headers)).execute()
+            val document = response.asJsoup()
+            val lang = fullUrl.queryParameter("lang")?.ifBlank { "VOSTFR" } ?: "VOSTFR"
 
-        document.select("div.video-iframe").forEach { block ->
-            val encodedUrl = block.attr("data-url")
-            val serverName = block.attr("data-name").trim()
-            val prefix = "($lang) $serverName - "
+            val pairList = document.select("div.video-iframe").mapNotNull { block ->
+                val encodedUrl = block.attr("data-url")
+                val rawServerName = block.attr("data-name").trim().lowercase()
 
-            if (encodedUrl.isNotBlank()) {
-                val decodedUrl = decodeAdkamiUrl(encodedUrl)
-                if (decodedUrl != null) {
+                val serverName = when {
+                    rawServerName.contains("videoza") || rawServerName.contains("vidoza") -> "Vidoza"
+                    rawServerName.contains("dood") -> "Doodstream"
+                    rawServerName.contains("voe") -> "Voe"
+                    rawServerName.contains("streamtape") -> "Streamtape"
+                    rawServerName.contains("vidmoly") -> "Vidmoly"
+                    rawServerName.contains("lulu") -> "Lulustream"
+                    rawServerName.contains("sibnet") -> "Sibnet"
+                    rawServerName.contains("sendvid") -> "Sendvid"
+                    rawServerName.contains("filemoon") -> "Filemoon"
+                    rawServerName.contains("vk") -> "VK"
+                    else -> rawServerName.replaceFirstChar { it.uppercase() }
+                }
+
+                if (encodedUrl.isNotBlank()) {
+                    val decodedUrl = decodeAdkamiUrl(encodedUrl)
+                    if (decodedUrl != null) {
+                        Log.d("ADKami", "Found source: $serverName -> $decodedUrl")
+                        Pair(decodedUrl, "($lang) $serverName")
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+            }
+
+            val sibnetExtractor = SibnetExtractor(client)
+            val doodExtractor = DoodExtractor(client)
+            val voeExtractor = VoeExtractor(client, headers)
+            val vidMolyExtractor = VidMolyExtractor(client, headers)
+            val luluExtractor = LuluExtractor(client, headers)
+            val filemoonExtractor = FilemoonExtractor(client)
+            val streamTapeExtractor = StreamTapeExtractor(client)
+            val vidoExtractor = VidoExtractor(client)
+
+            pairList.parallelCatchingFlatMap { (decodedUrl, prefix) ->
+                val videos = mutableListOf<Video>()
+                try {
                     when {
                         decodedUrl.contains("sibnet") -> videos.addAll(sibnetExtractor.videosFromUrl(decodedUrl, prefix))
 
-                        decodedUrl.contains("dood") -> videos.addAll(doodExtractor.videosFromUrl(decodedUrl, prefix))
+                        decodedUrl.contains("dood") || decodedUrl.contains("vide0") -> {
+                            val url = decodedUrl.replace("vide0.net", "doodstream.com")
+                                .replace("dood.to", "doodstream.com")
+                            videos.addAll(doodExtractor.videosFromUrl(url, prefix))
+                        }
 
                         decodedUrl.contains("voe") -> videos.addAll(voeExtractor.videosFromUrl(decodedUrl, prefix))
 
-                        decodedUrl.contains("vidmoly") -> videos.addAll(vidMolyExtractor.videosFromUrl(decodedUrl, prefix))
+                        decodedUrl.contains("vidmoly") || decodedUrl.contains("vtbe") -> {
+                            val url = decodedUrl.replace("vtbe.to", "vidmoly.net")
+                            videos.addAll(vidMolyExtractor.videosFromUrl(url, prefix))
+                        }
 
-                        decodedUrl.contains("luluvid") || decodedUrl.contains("vidnest") || decodedUrl.contains("vidzy") -> {
-                            videos.addAll(luluExtractor.videosFromUrl(decodedUrl, prefix))
+                        decodedUrl.contains("luluvid") || decodedUrl.contains("vidnest") || decodedUrl.contains("vidzy") || decodedUrl.contains("lulustream") -> {
+                            val url = decodedUrl.replace("lulustream.com", "luluvid.com")
+                            videos.addAll(luluExtractor.videosFromUrl(url, prefix))
                         }
 
                         decodedUrl.contains("filemoon") -> videos.addAll(filemoonExtractor.videosFromUrl(decodedUrl, prefix))
 
-                        else -> videos.add(Video(decodedUrl, "$prefix Original", decodedUrl))
-                    }
-                }
-            }
-        }
+                        decodedUrl.contains("streamtape") -> {
+                            streamTapeExtractor.videoFromUrl(decodedUrl, prefix)?.let { videos.add(it) }
+                        }
 
-        return videos.parallelCatchingFlatMap { video ->
-            if (isLinkValid(video)) {
-                listOf(Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks))
-            } else {
-                emptyList()
+                        decodedUrl.contains("vidoza") -> {
+                            videos.addAll(vidoExtractor.videosFromUrl(decodedUrl, prefix))
+                        }
+
+                        else -> {
+                            videos.add(Video(decodedUrl, "$prefix - Original", decodedUrl))
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.d("ADKami", "Extraction failed for $decodedUrl: ${e.message}")
+                }
+                videos
             }
-        }.sort()
+        }.map { video ->
+            // Reconstruction forcée pour éviter les libellés vides ou pollués
+            val newQuality = cleanQuality(video.quality)
+            Video(video.videoUrl ?: "", newQuality, video.videoUrl ?: "", video.headers)
+        }.filter { video ->
+            val url = video.videoUrl ?: return@filter false
+
+            // Bloquer systématiquement les liens Voe:MP4 et les qualités "Unknown" qui sont souvent morts
+            if (video.quality.contains("Voe:MP4", ignoreCase = true) || video.quality.contains("Unknown", ignoreCase = true)) {
+                Log.d("ADKami", "Systematic block: ${video.quality}")
+                return@filter false
+            }
+
+            // Bypass le ping pour les flux HLS (.m3u8)
+            // Les flux HLS sont souvent rejetés par les tests de "Range" ou "HEAD"
+            if (url.contains(".m3u8")) return@filter true
+
+            val isValid = isLinkValid(video)
+            isValid
+        }.distinctBy { it.videoUrl }
+            .sort()
     }
+
     private fun isLinkValid(video: Video): Boolean {
         val url = video.videoUrl ?: return false
         if (url.isBlank()) return false
         return try {
-            val headers = (video.headers ?: Headers.Builder().build()).newBuilder()
-                .add("Range", "bytes=0-1")
-                .build()
             val request = Request.Builder()
                 .url(url)
-                .headers(headers)
-                .get()
+                .headers(video.headers ?: headers)
+                .addHeader("Range", "bytes=0-1")
                 .build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return false
+                val code = response.code
                 val contentType = response.header("Content-Type")?.lowercase() ?: ""
-                !contentType.contains("text/html") && !contentType.contains("text/plain")
+
+                // Un lien est valide s'il n'est pas une page Web (HTML/Text)
+                // et qu'il ne renvoie pas une erreur fatale (404 ou 5xx).
+                // On accepte le 403 car beaucoup de serveurs bloquent le "ping" mais pas le stream.
+                // On est plus souple sur le JSON pour Streamtape car il semble renvoyer ça parfois.
+                val isValid = (response.isSuccessful || code == 403) &&
+                    !contentType.contains("text/html") &&
+                    !contentType.contains("text/plain") &&
+                    (!contentType.contains("application/json") || url.contains("streamtape"))
+
+                if (!isValid) {
+                    Log.d("ADKami", "Filtering out: ${video.quality} (Code: $code, Type: $contentType, Url: $url)")
+                }
+                isValid
             }
         } catch (e: Exception) {
+            Log.d("ADKami", "Link check failed for ${video.quality}: ${e.message}")
             false
         }
-    } private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)Sendvid:default"), "")
-            .replace(Regex("(?i)Sibnet:default"), "")
-            .replace(Regex("(?i)VK:default"), "")
-            .replace(Regex("(?i)Vidmoly:default"), "")
-            .replace(Regex("(?i)Filemoon:default"), "")
+    }
+    private fun cleanQuality(quality: String): String {
+        val servers = listOf(
+            "Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon", "Voe",
+            "Doodstream", "Dood", "Luluvid", "Streamtape", "Byse",
+            "Lulustream", "Vidoza",
+        )
+
+        var res = quality
+            .replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "") // Vitesse
+            .replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)"), "") // Poids
+            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "") // Dimensions
+            .replace(Regex("(?i):?default"), "")
+            .replace(Regex("(?i)mirror"), "")
             .replace(" - - ", " - ")
             .trim()
-            .removeSuffix("-")
-            .trim()
 
-        val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon", "Voe", "Dood", "Luluvid", "Streamtape", "Byse", "Lulustream")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
+        // Extraire la langue (ex: (VOSTFR))
+        val langMatch = Regex("\\((VOSTFR|VF|VA|RAW)\\)").find(res)
+        val lang = langMatch?.value ?: "(VOSTFR)"
+        res = res.replace(lang, "").trim()
+
+        // Identifier le serveur
+        val server = servers.firstOrNull { res.contains(it, ignoreCase = true) } ?: ""
+        res = res.replace(Regex("(?i)$server"), "").trim()
+
+        // Nettoyer la qualité restante
+        var q = res.replace(Regex("^[:\\-\\s]+"), "").trim()
+        // Ignorer les qualités génériques qui n'apportent pas d'info de résolution
+        if (q.equals(server, true) || q.equals("MP4", true) || q.equals("Original", true)) q = ""
+
+        // Reconstruction finale propre : (Langue) Serveur - Qualité
+        return when {
+            q.isEmpty() -> "$lang $server".trim()
+            else -> "$lang $server - $q".trim()
+        }.replace(Regex("\\s+"), " ").trim()
     }
 
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
