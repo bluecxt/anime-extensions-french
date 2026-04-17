@@ -49,7 +49,6 @@ class WaveAnime :
         private const val PREF_URL_DEFAULT = "https://waveanime.fr"
 
         private const val PREF_LANG_KEY = "preferred_lang"
-        private const val PREF_LANG_TITLE = "Langue préférée"
         private val LANG_ENTRIES = arrayOf("VOSTFR", "VF")
         private val LANG_VALUES = arrayOf("VOSTFR", "VF")
         private const val PREF_LANG_DEFAULT = "VOSTFR"
@@ -166,7 +165,7 @@ class WaveAnime :
         val seasonCount = seasonGrids.size
 
         seasonGrids.forEach { seasonGrid ->
-            val seasonNum = seasonGrid.attr("data-season") ?: "1"
+            val seasonNum = seasonGrid.attr("data-season")
             seasonGrid.select("div.component.episode-card").forEach { element ->
                 episodes.add(
                     SEpisode.create().apply {
@@ -262,7 +261,7 @@ class WaveAnime :
                     videoList.add(Video(videoUrl, cleanQuality("$prefix$label"), videoUrl, subtitleTracks = tracks))
                 }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             videoList.add(Video(videoUrl, cleanQuality("${prefix}DASH"), videoUrl, subtitleTracks = tracks))
         }
 

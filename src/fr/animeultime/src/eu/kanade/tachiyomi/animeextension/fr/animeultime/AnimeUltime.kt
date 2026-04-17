@@ -32,7 +32,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.Calendar
 
 class AnimeUltime :
     ParsedAnimeHttpSource(),
@@ -165,16 +164,18 @@ class AnimeUltime :
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun List<Video>.sort(): List<Video> = this.sortedWith(compareBy {
-        qualityRegex.find(it.quality)?.groupValues?.get(
-            1
-        )?.toIntOrNull() ?: 0
-    }).reversed()
+    override fun List<Video>.sort(): List<Video> = this.sortedWith(
+        compareBy {
+            qualityRegex.find(it.quality)?.groupValues?.get(
+                1,
+            )?.toIntOrNull() ?: 0
+        },
+    ).reversed()
 
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
         val infoList = try {
             json.decodeFromString<List<Map<String, String>>>(episode.url)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return emptyList()
         }
 
@@ -222,7 +223,7 @@ class AnimeUltime :
                                 }
                             }
                         }
-                    } catch (e: Exception) {}
+                    } catch (_: Exception) {}
                 }
             }
 
@@ -260,7 +261,7 @@ class AnimeUltime :
         return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
-    private val seasonRegex = Regex("""\[Saison\s*(\d+)\]""")
+    private val seasonRegex = Regex("""\[Saison\s*(\d+)]""")
     private val digitRegex = Regex("""\d+""")
     private val qualityRegex = Regex("""(\d+)p""")
     private val dataIdFileRegex = Regex("""data-idfile=["'](\d+)["']""")
@@ -272,7 +273,7 @@ class AnimeUltime :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = PREF_URL_KEY
-            title = "URL de base"
+            title = "Base URL"
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
@@ -282,16 +283,8 @@ class AnimeUltime :
         }.also(screen::addPreference)
     }
 
-    private fun parseDate(date: String): Long = try {
-        val parts = date.split("/")
-        Calendar.getInstance().apply { set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt()) }.timeInMillis
-    } catch (e: Exception) {
-        0L
-    }
-
     companion object {
         private const val PREF_URL_KEY = "preferred_baseUrl"
         private const val PREF_URL_DEFAULT = "https://v5.anime-ultime.net"
-        const val PREFIX_SEARCH = "id:"
     }
 }

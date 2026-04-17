@@ -15,8 +15,7 @@
 
         <meta-data
             android:name="tachiyomi.animeextension.factory"
-            android:value="true"
-            tools:replace="android:value" />
+            android:value="true" />
 
     </application>
 

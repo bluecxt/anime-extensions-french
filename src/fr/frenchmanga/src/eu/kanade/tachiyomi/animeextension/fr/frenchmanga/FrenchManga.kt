@@ -172,7 +172,7 @@ open class FrenchManga(
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val ids = try {
             json.decodeFromString<AnimeUrl>(anime.url).ids
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             listOf(anime.url)
         }
         val response = client.newCall(GET("$baseUrl/index.php?newsid=${ids.first()}", headers)).execute()
@@ -194,7 +194,7 @@ open class FrenchManga(
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val ids = try {
             json.decodeFromString<AnimeUrl>(anime.url).ids
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             listOf(anime.url)
         }
         val episodesMap = mutableMapOf<String, MutableMap<String, JsonObject>>()
@@ -213,7 +213,7 @@ open class FrenchManga(
                         epMap[langType] = JsonObject(existingHosters)
                     }
                 }
-            } catch (e: Exception) {}
+            } catch (_: Exception) {}
         }
 
         return episodesMap.map { (epNum, langMap) ->
@@ -353,11 +353,8 @@ open class FrenchManga(
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://w16.french-manga.net"
 
         private const val PREF_VOICES_KEY = "preferred_voices"
-        private const val PREF_VOICES_TITLE = "Voices preference"
         private val VOICES_ENTRIES = arrayOf("Prefer VOSTFR", "Prefer VF")
         private val VOICES_VALUES = arrayOf("VOSTFR", "VF")
         private const val PREF_VOICES_DEFAULT = "VOSTFR"

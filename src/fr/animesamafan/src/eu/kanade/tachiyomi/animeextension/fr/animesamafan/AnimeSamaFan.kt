@@ -166,7 +166,7 @@ class AnimeSamaFan :
                 try {
                     val sDoc = client.newCall(GET(sUrl, headers)).execute().asJsoup()
                     episodes.addAll(parseEpisodesFromDocument(sDoc))
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                 }
             }
         }
@@ -220,7 +220,7 @@ class AnimeSamaFan :
                 doc.select("iframe").forEach { iframe ->
                     addVideosFromUrl(iframe.attr("abs:src"), lang, videoList)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }
         return videoList.map {

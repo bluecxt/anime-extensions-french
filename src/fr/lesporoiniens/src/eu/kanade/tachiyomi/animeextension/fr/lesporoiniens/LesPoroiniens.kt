@@ -68,7 +68,7 @@ class LesPoroiniens : AnimeHttpSource() {
                             thumbnail_url = seriesJson["cover"]?.jsonPrimitive?.content
                             status = parseStatus(animeInfo?.get("status_an")?.jsonPrimitive?.content ?: seriesJson["release_status"]?.jsonPrimitive?.content)
                         }
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         null
                     }
                 }
@@ -191,7 +191,7 @@ class LesPoroiniens : AnimeHttpSource() {
 
     private fun parseDate(date: String?): Long = try {
         DATE_FORMAT.parse(date ?: "")?.time ?: 0L
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         date?.toLongOrNull()?.let { it * 1000 } ?: 0L
     }
 

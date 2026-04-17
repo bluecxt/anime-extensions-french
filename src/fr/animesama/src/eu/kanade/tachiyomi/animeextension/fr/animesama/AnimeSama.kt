@@ -277,7 +277,7 @@ class AnimeSama :
                     Array.from({length: 40}, (e,i) => this[`eps${i + 1}`])
                         .filter(e => e !== undefined && e !== null)
                 )
-            """
+            """,
             )
             json.decodeFromString<List<List<String>>>(res as String)
         }

@@ -75,7 +75,7 @@ class SouthTV : AnimeHttpSource() {
             try {
                 client.newCall(GET(url, Headers.Builder().build())).execute().use { response ->
                     if (response.isSuccessful) {
-                        val json = JSONObject(response.body!!.string())
+                        val json = JSONObject(response.body.string())
 
                         // Description (Overview)
                         val overview = json.optString("overview")
@@ -118,7 +118,7 @@ class SouthTV : AnimeHttpSource() {
                         }
                     }
                 }
-            } catch (e: Exception) {}
+            } catch (_: Exception) {}
         }
         return anime
     }
@@ -164,11 +164,11 @@ class SouthTV : AnimeHttpSource() {
                     val url = "https://api.themoviedb.org/3/$tmdbPath?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
                     client.newCall(GET(url, Headers.Builder().build())).execute().use { response ->
                         if (response.isSuccessful) {
-                            val json = JSONObject(response.body!!.string())
+                            val json = JSONObject(response.body.string())
                             movieTitle = json.optString("title").ifBlank { json.optString("name") }.ifBlank { movieTitle }
                         }
                     }
-                } catch (e: Exception) {}
+                } catch (_: Exception) {}
             }
             episodes.add(
                 SEpisode.create().apply {
@@ -185,7 +185,7 @@ class SouthTV : AnimeHttpSource() {
         val url = "https://api.themoviedb.org/3/tv/2190/season/$seasonNumber?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
         return try {
             client.newCall(GET(url, Headers.Builder().build())).execute().use { response ->
-                val json = JSONObject(response.body?.string().orEmpty())
+                val json = JSONObject(response.body.string())
                 val episodesJson = json.getJSONArray("episodes")
                 val map = mutableMapOf<Int, String>()
                 for (i in 0 until episodesJson.length()) {
@@ -194,7 +194,7 @@ class SouthTV : AnimeHttpSource() {
                 }
                 map
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyMap()
         }
     }

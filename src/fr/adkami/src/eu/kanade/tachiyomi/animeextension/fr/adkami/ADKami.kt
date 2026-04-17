@@ -154,9 +154,9 @@ class ADKami :
                 val numStr = parts.getOrNull(1)?.trimStart('0')?.ifEmpty { "0" } ?: "1"
 
                 val finalType = when (typeStr) {
-                    "OAV" -> "Episode OAV "
-                    "ONA" -> "Episode ONA "
-                    "SPECIAL", "SPÉCIAL" -> "Episode Special "
+                    "OAV" -> "OAV "
+                    "ONA" -> "ONA "
+                    "SPECIAL", "SPÉCIAL" -> "Special "
                     "FILM" -> "Film "
                     else -> "Episode "
                 }
