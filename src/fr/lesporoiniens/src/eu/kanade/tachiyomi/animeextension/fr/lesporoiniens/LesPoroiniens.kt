@@ -14,7 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -58,7 +57,7 @@ class LesPoroiniens : AnimeHttpSource() {
                         val seriesResponse = client.newCall(GET("$baseUrl/data/series/$fileName")).execute()
                         val seriesJson = json.decodeFromString<JsonObject>(seriesResponse.body.string())
                         val epArray = seriesJson["episodes"]?.jsonArray
-                        if (epArray == null || epArray.isEmpty()) return@async null
+                        if (epArray.isNullOrEmpty()) return@async null
 
                         val seriesTitle = seriesJson["title"]?.jsonPrimitive?.content ?: ""
                         val animeInfo = seriesJson["anime"]?.jsonArray?.firstOrNull()?.jsonObject

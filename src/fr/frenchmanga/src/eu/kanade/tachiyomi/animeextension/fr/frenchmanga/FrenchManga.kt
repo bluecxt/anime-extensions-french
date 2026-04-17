@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -115,7 +114,7 @@ open class FrenchManga(
         anime
     }
 
-    override fun popularAnimeNextPageSelector(): String = ".pagi-nav a:contains(Suivant)"
+    override fun popularAnimeNextPageSelector(): String = ".pagi-nav a:contains(Suivant), .pagi-nav a:contains(Next)"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga-streaming/page/$page/", headers)
@@ -126,7 +125,7 @@ open class FrenchManga(
 
     override fun latestUpdatesParse(response: Response): AnimesPage = popularAnimeParse(response)
 
-    override fun latestUpdatesNextPageSelector(): String = ".pagi-nav a:contains(Suivant)"
+    override fun latestUpdatesNextPageSelector(): String = popularAnimeNextPageSelector()
 
     // =============================== Search ===============================
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
@@ -252,7 +251,7 @@ open class FrenchManga(
         val videos = mutableListOf<Video>()
 
         langs.forEach { (langType, hosters) ->
-            hosters.jsonObject.forEach { (hosterName, hosterUrlElement) ->
+            hosters.jsonObject.forEach { (_, hosterUrlElement) ->
                 val hosterUrl = hosterUrlElement.toString().trim('"')
                 val lang = langType.uppercase()
 
@@ -329,24 +328,25 @@ open class FrenchManga(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = prefUrlKey
-            title = "URL de base"
+            title = "Base URL"
             setDefaultValue(prefUrlDefault)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(prefUrlKey, newValue as String).commit()
+                preferences.edit().putString(prefUrlKey, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)
 
         androidx.preference.ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
-            title = "Préférence des voix"
+            title = "Voices preference"
             entries = VOICES_ENTRIES
             entryValues = VOICES_VALUES
             setDefaultValue(PREF_VOICES_DEFAULT)
             summary = "%s"
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).apply()
+                true
             }
         }.also(screen::addPreference)
     }
@@ -357,8 +357,8 @@ open class FrenchManga(
         private const val PREF_URL_DEFAULT = "https://w16.french-manga.net"
 
         private const val PREF_VOICES_KEY = "preferred_voices"
-        private const val PREF_VOICES_TITLE = "Préférence des voix"
-        private val VOICES_ENTRIES = arrayOf("Préférer VOSTFR", "Préférer VF")
+        private const val PREF_VOICES_TITLE = "Voices preference"
+        private val VOICES_ENTRIES = arrayOf("Prefer VOSTFR", "Prefer VF")
         private val VOICES_VALUES = arrayOf("VOSTFR", "VF")
         private const val PREF_VOICES_DEFAULT = "VOSTFR"
     }

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.animeextension.fr.animeultime
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
@@ -87,7 +86,7 @@ class AnimeUltime :
         val animes = searchData.map {
             SAnime.create().apply {
                 title = it.title
-                thumbnail_url = it.img_url.replace("_thindex", "")
+                thumbnail_url = it.imgUrl.replace("_thindex", "")
                 url = it.url.toHttpUrl().encodedPath
             }
         }
@@ -99,7 +98,7 @@ class AnimeUltime :
     override fun searchAnimeNextPageSelector(): String? = null
 
     @Serializable
-    data class SearchResponse(val title: String, val img_url: String, val url: String)
+    data class SearchResponse(val title: String, val imgUrl: String, val url: String)
 
     // =========================== Anime Details ============================
     override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
@@ -166,7 +165,11 @@ class AnimeUltime :
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun List<Video>.sort(): List<Video> = this.sortedWith(compareBy({ qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0 })).reversed()
+    override fun List<Video>.sort(): List<Video> = this.sortedWith(compareBy {
+        qualityRegex.find(it.quality)?.groupValues?.get(
+            1
+        )?.toIntOrNull() ?: 0
+    }).reversed()
 
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
         val infoList = try {
@@ -199,7 +202,7 @@ class AnimeUltime :
                     ?: playerElement.attr("data-file").takeIf { it.isNotEmpty() }
                     ?: playerElement.attr("data-focus")
 
-                if (!idfile.isNullOrEmpty()) {
+                if (idfile.isNotEmpty()) {
                     val apiHeaders = headersBuilder()
                         .add("Referer", url)
                         .add("X-Requested-With", "XMLHttpRequest")
@@ -273,7 +276,7 @@ class AnimeUltime :
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)

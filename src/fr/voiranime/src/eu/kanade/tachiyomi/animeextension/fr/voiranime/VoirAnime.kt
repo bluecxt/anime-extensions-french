@@ -96,7 +96,7 @@ class VoirAnime :
     override fun searchAnimeParse(response: Response): AnimesPage = parseSearchPage(response.body.string())
 
     @Serializable
-    data class AnimeResult(val post_title: String, val post_image: String, val post_link: String)
+    data class AnimeResult(val postTitle: String, val postImage: String, val postLink: String)
 
     @Serializable
     data class SearchResponse(val all: List<AnimeResult>)
@@ -111,9 +111,9 @@ class VoirAnime :
             val data = json.decodeFromString<SearchResponse>(seriesDataString)
             val items = data.all.map { result ->
                 SAnime.create().apply {
-                    title = result.post_title
-                    thumbnail_url = result.post_image.substringBefore("?")
-                    url = result.post_link.substringAfter(baseUrl)
+                    title = result.postTitle
+                    thumbnail_url = result.postImage.substringBefore("?")
+                    url = result.postLink.substringAfter(baseUrl)
                 }
             }
             return AnimesPage(items, false)
@@ -225,17 +225,15 @@ class VoirAnime :
     }
 
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
-        compareBy(
-            {
-                pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            },
-        ),
+        compareBy {
+            pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        },
     ).reversed()
 
     // ============================== Utils ==============================
     override fun searchAnimeSelector(): String = ""
     override fun searchAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
-    override fun searchAnimeNextPageSelector(): String? = ""
+    override fun searchAnimeNextPageSelector(): String = ""
     override fun videoListParse(response: Response) = throw UnsupportedOperationException()
     override fun videoListSelector() = ""
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()

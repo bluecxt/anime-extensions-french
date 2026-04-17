@@ -301,13 +301,13 @@ class AnimeSamaFan :
 
     override fun popularAnimeSelector(): String = ""
     override fun popularAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
-    override fun popularAnimeNextPageSelector(): String? = ""
+    override fun popularAnimeNextPageSelector(): String = ""
     override fun latestUpdatesSelector(): String = ""
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector(): String? = ""
+    override fun latestUpdatesNextPageSelector(): String = ""
     override fun searchAnimeSelector(): String = ""
     override fun searchAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
-    override fun searchAnimeNextPageSelector(): String? = ""
+    override fun searchAnimeNextPageSelector(): String = ""
     override fun episodeListSelector(): String = ""
     override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
     override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()

@@ -21,7 +21,6 @@ import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.parallelCatchingFlatMap
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -194,7 +193,7 @@ class FrAnime :
         val vidMolyExtractor by lazy { VidMolyExtractor(client) }
         val filemoonExtractor by lazy { FilemoonExtractor(client) }
 
-        suspend fun extractPlayerVideos(playerName: String, apiUrl: String, lang: String): List<Video> {
+        fun extractPlayerVideos(playerName: String, apiUrl: String, lang: String): List<Video> {
             val responseBody = client.newCall(GET(apiUrl, headers)).execute().body.string()
             val playerUrl = if (responseBody.contains("watch2")) {
                 val uri = responseBody.toHttpUrl()
@@ -251,7 +250,7 @@ class FrAnime :
             .removeSuffix("-")
             .trim()
 
-        // Supprimer les répétitions de serveur (ex: "Vidmoly - Vidmoly")
+        // Supprimer les répétitions de serveur (ex : "Vidmoly - Vidmoly")
         val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon")
         for (server in servers) {
             val pattern = Regex("(?i)$server\\s*-\\s*$server")

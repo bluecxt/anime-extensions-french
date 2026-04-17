@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.animeextension.fr.animesultra
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -21,13 +20,10 @@ import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
-import eu.kanade.tachiyomi.util.parallelCatchingFlatMapBlocking
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.Request
@@ -78,11 +74,12 @@ class AnimesUltra :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = PREF_URL_KEY
-            title = "URL de base"
+            title = "Base URL"
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
+                true
             }
         }.also(screen::addPreference)
     }
@@ -100,7 +97,7 @@ class AnimesUltra :
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
-        val hasNextPage = document.selectFirst(".pagi-nav a:contains(Suivant)") != null
+        val hasNextPage = document.selectFirst(".pagi-nav a:contains(Suivant), .pagi-nav a:contains(Next)") != null
         return AnimesPage(unifyAnimes(items), hasNextPage)
     }
 
@@ -239,11 +236,9 @@ class AnimesUltra :
 
     // = :::::::::::::::::::::::::: Video Links :::::::::::::::::::::::::: =
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
-        compareBy(
-            {
-                QUALITY_REGEX.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            },
-        ),
+        compareBy {
+            QUALITY_REGEX.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        },
     ).reversed()
 
     private val sibnetExtractor by lazy { SibnetExtractor(client) }

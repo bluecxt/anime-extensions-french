@@ -271,7 +271,14 @@ class AnimeSama :
         }
         val urls = QuickJs.create().use { qjs ->
             qjs.evaluate(doc)
-            val res = qjs.evaluate("JSON.stringify(Array.from({length: 40}, (e,i) => this[`eps\${i + 1}`]).filter(e => e !== undefined && e !== null))")
+            val res = qjs.evaluate(
+                $$"""
+                JSON.stringify(
+                    Array.from({length: 40}, (e,i) => this[`eps${i + 1}`])
+                        .filter(e => e !== undefined && e !== null)
+                )
+            """
+            )
             json.decodeFromString<List<List<String>>>(res as String)
         }
 
@@ -288,8 +295,8 @@ class AnimeSama :
             dialogTitle = PREF_URL_TITLE
             setOnPreferenceChangeListener { _, newValue ->
                 try {
-                    val res = preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
-                    res
+                    preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
+                    true
                 } catch (e: Exception) {
                     e.printStackTrace()
                     false
@@ -308,7 +315,7 @@ class AnimeSama :
 
         ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
-            title = "Préférence des voix"
+            title = "Voices preference"
             entries = VOICES
             entryValues = VOICES_VALUES
             setDefaultValue(PREF_VOICES_DEFAULT)
@@ -317,7 +324,7 @@ class AnimeSama :
 
         ListPreference(screen.context).apply {
             key = PREF_PLAYER_KEY
-            title = "Lecteur par défaut"
+            title = "Default player"
             entries = PLAYERS
             entryValues = PLAYERS_VALUES
             setDefaultValue(PREF_PLAYER_DEFAULT)
@@ -329,20 +336,20 @@ class AnimeSama :
         const val PREFIX_SEARCH = "id:"
 
         private const val PREF_URL_KEY = "base_url_pref"
-        private const val PREF_URL_TITLE = "URL de base"
+        private const val PREF_URL_TITLE = "Base URL"
         private const val PREF_URL_DEFAULT = "https://anime-sama.to"
-        private const val PREF_URL_SUMMARY = "Pour changer le domaine de l'extension. Voir https://anime-sama.pw"
+        private const val PREF_URL_SUMMARY = "To change the domain of the extension. See https://anime-sama.pw"
 
         private val voicesMap = mapOf(
-            "Préférer VOSTFR" to "vostfr",
-            "Préférer VF" to "vf",
-            "Préférer VF1" to "vf1",
-            "Préférer VF2" to "vf2",
-            "Préférer VA" to "va",
-            "Préférer VCN" to "vcn",
-            "Préférer VJ" to "vj",
-            "Préférer VKR" to "vkr",
-            "Préférer VQC" to "vqc",
+            "Prefer VOSTFR" to "vostfr",
+            "Prefer VF" to "vf",
+            "Prefer VF1" to "vf1",
+            "Prefer VF2" to "vf2",
+            "Prefer VA" to "va",
+            "Prefer VCN" to "vcn",
+            "Prefer VJ" to "vj",
+            "Prefer VKR" to "vkr",
+            "Prefer VQC" to "vqc",
         )
         private val VOICES = voicesMap.keys.toTypedArray()
         private val VOICES_VALUES = voicesMap.values.toTypedArray()

@@ -167,11 +167,9 @@ class FrenchAnime :
     private val qualityRegex = Regex("""(\d+)p""")
 
     override fun List<Video>.sort(): List<Video> = this.sortedWith(
-        compareBy(
-            {
-                qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            },
-        ),
+        compareBy {
+            qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        },
     ).reversed()
 
     private fun cleanQuality(quality: String): String {

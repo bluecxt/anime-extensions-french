@@ -109,9 +109,9 @@ class ADKami :
 
             val descElement = document.selectFirst("p.m-hidden")
             description = if (descElement != null) {
-                // On clone pour ne pas modifier le document original
+                // Clone to keep original document
                 val tempDesc = descElement.clone()
-                // On supprime les liens (genres) à l'intérieur
+                // Remove genre links
                 tempDesc.select("a").remove()
                 tempDesc.text().trim()
             } else {
@@ -178,7 +178,7 @@ class ADKami :
             episodes.add(sEp)
         }
 
-        // Fusionner les épisodes ayant le même nom (VOSTFR/RAW/VF)
+        // Merge episodes with same name (VOSTFR/RAW/VF)
         val mergedEpisodes = episodes.groupBy { it.name }.map { entry ->
             val first = entry.value.first()
             val combinedUrl = entry.value.map { it.url }.distinct().joinToString("|")
@@ -196,7 +196,7 @@ class ADKami :
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
         Log.d("ADKami", "Fetching video list for episode: ${episode.name}")
 
-        // Gérer les épisodes fusionnés (séparés par '|')
+        // Handle merged episodes
         val urls = episode.url.split("|")
 
         return urls.parallelCatchingFlatMap { rawUrl ->
@@ -288,25 +288,24 @@ class ADKami :
                         }
                     }
                 } catch (_: Exception) {
-                    Log.d("ADKami", "Extraction failed for $decodedUrl")
+                    Log.d("ADKami", "Extraction failed")
                 }
                 videos
             }
         }.map { video ->
-            // Reconstruction forcée pour éviter les libellés vides ou pollués
+            // Force reconstruction for clean labels
             val newQuality = cleanQuality(video.quality)
             Video(video.videoUrl ?: "", newQuality, video.videoUrl ?: "", video.headers)
         }.filter { video ->
             val url = video.videoUrl ?: return@filter false
 
-            // Bloquer systématiquement les liens Voe:MP4 et les qualités "Unknown" qui sont souvent morts
+            // Block dead Voe:MP4/Unknown links
             if (video.quality.contains("Voe:MP4", ignoreCase = true) || video.quality.contains("Unknown", ignoreCase = true)) {
                 Log.d("ADKami", "Systematic block: ${video.quality}")
                 return@filter false
             }
 
-            // Bypass le ping pour les flux HLS (.m3u8)
-            // Les flux HLS sont souvent rejetés par les tests de "Range" ou "HEAD"
+            // Skip ping for HLS (.m3u8)
             if (url.contains(".m3u8")) return@filter true
 
             val isValid = isLinkValid(video)
@@ -328,10 +327,9 @@ class ADKami :
                 val code = response.code
                 val contentType = response.header("Content-Type")?.lowercase() ?: ""
 
-                // Un lien est valide s'il n'est pas une page Web (HTML/Text)
-                // et qu'il ne renvoie pas une erreur fatale (404 ou 5xx).
-                // On accepte le 403 car beaucoup de serveurs bloquent le "ping" mais pas le stream.
-                // On est plus souple sur le JSON pour Streamtape car il semble renvoyer ça parfois.
+                // Link is valid if not a web page (HTML/Text) and not a fatal error
+                // Accept 403 as many servers block ping but not stream
+                // Allow JSON for Streamtape
                 val isValid = (response.isSuccessful || code == 403) &&
                     !contentType.contains("text/html") &&
                     !contentType.contains("text/plain") &&
@@ -363,21 +361,21 @@ class ADKami :
             .replace(" - - ", " - ")
             .trim()
 
-        // Extraire la langue (ex: (VOSTFR))
+        // Extract language
         val langMatch = Regex("\\((VOSTFR|VF|VA|RAW)\\)").find(res)
         val lang = langMatch?.value ?: "(VOSTFR)"
         res = res.replace(lang, "").trim()
 
-        // Identifier le serveur
+        // Identify server
         val server = servers.firstOrNull { res.contains(it, ignoreCase = true) } ?: ""
         res = res.replace(Regex("(?i)$server"), "").trim()
 
-        // Nettoyer la qualité restante
+        // Clean remaining quality
         var q = res.replace(Regex("^[:\\-\\s]+"), "").trim()
-        // Ignorer les qualités génériques qui n'apportent pas d'info de résolution
+        // Ignore generic labels
         if (q.equals(server, true) || q.equals("MP4", true) || q.equals("Original", true)) q = ""
 
-        // Reconstruction finale propre : (Langue) Serveur - Qualité
+        // Final label: (Lang) Server - Quality
         return when {
             q.isEmpty() -> "$lang $server".trim()
             else -> "$lang $server - $q".trim()

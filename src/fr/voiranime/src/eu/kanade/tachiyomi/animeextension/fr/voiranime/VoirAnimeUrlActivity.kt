@@ -17,22 +17,22 @@ class VoirAnimeUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val data = intent?.data
-        Log.d(tag, "URL reçue : $data")
+        Log.d(tag, "URL received: $data")
         val pathSegments = data?.pathSegments
-        if (pathSegments != null && pathSegments.isNotEmpty()) {
+        if (!pathSegments.isNullOrEmpty()) {
             val item = pathSegments.last { it.isNotEmpty() }
 
-            // Détection plus large: si l'URL contient -vostfr ou -vf, c'est probablement un épisode
+            // Broad detection: if URL contains -vostfr or -vf, it's likely an episode
             val isEpisode = item.contains("-vostfr", ignoreCase = true) || item.contains("-vf", ignoreCase = true)
 
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.ANIMESEARCH"
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 if (isEpisode) {
-                    // On nettoie le slug pour enlever le numéro d'épisode et la langue
+                    // Clean slug by removing episode number and language
                     val cleanQuery = item.replace(Regex("-\\d+-(?:vostfr|vf).*", RegexOption.IGNORE_CASE), "")
                         .replace(Regex("-(?:vostfr|vf).*", RegexOption.IGNORE_CASE), "")
-                        // Séparer les lettres des chiffres (ex: zero4th -> zero 4th)
+                        // Separate letters from numbers (e.g., zero4th -> zero 4th)
                         .replace(Regex("([a-zA-Z])(\\d)"), "$1 $2")
                         .replace(Regex("(\\d)([a-zA-Z])"), "$1 $2")
                         .replace("-", " ")

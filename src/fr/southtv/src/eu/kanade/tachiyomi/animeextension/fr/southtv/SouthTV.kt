@@ -106,9 +106,9 @@ class SouthTV : AnimeHttpSource() {
 
                         // Genres
                         anime.genre = json.optJSONArray("genres")?.let { genres ->
-                            (0 until genres.length()).map { i ->
+                            (0 until genres.length()).joinToString(", ") { i ->
                                 genres.getJSONObject(i).getString("name")
-                            }.joinToString(", ")
+                            }
                         }
 
                         // Affiche (Poster)
