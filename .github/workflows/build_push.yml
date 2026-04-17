@@ -32,6 +32,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       latestCommitMessage: ${{ steps.set-env.outputs.LATEST_COMMIT_MESSAGE }}
+      latestCommitHash: ${{ steps.set-env.outputs.LATEST_COMMIT_HASH }}
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
     steps:
@@ -43,11 +44,8 @@ jobs:
       - name: Set env
         id: set-env
         run: |
-          echo "LATEST_COMMIT_MESSAGE<<{delimiter}
-          $(git log -1 --pretty=%B)
-
-          Built on commit: $(git log -1 --pretty=%H)
-          {delimiter}" >> $GITHUB_OUTPUT
+          echo "LATEST_COMMIT_MESSAGE=$(git log -1 --pretty=%s | tr -d '\"')" >> $GITHUB_OUTPUT
+          echo "LATEST_COMMIT_HASH=$(git log -1 --pretty=%H)" >> $GITHUB_OUTPUT
 
       - id: generate-matrices
         name: Create output matrices
@@ -182,4 +180,4 @@ jobs:
           branch: repo
           folder: repo
           clean: true
-          commit-message: "Update extension repo: ${{ needs.prepare.outputs.latestCommitMessage }}"
+          commit-message: "Update extension repo: ${{ needs.prepare.outputs.latestCommitMessage }} (${{ needs.prepare.outputs.latestCommitHash }})"
