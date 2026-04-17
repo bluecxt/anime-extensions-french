@@ -3,7 +3,7 @@ apply plugin: 'com.android.application'
 ext {
     extName = 'Les Poroïniens'
     extClass = '.LesPoroiniens'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 
