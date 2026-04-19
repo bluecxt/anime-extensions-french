@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.animeextension.fr.frenchanime
 
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
@@ -67,6 +68,29 @@ class FrenchAnime :
     // ============================== Popular ===============================
 
     override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/animes-vostfr/page/$page/")
+
+    // =========================== Anime Details ============================
+
+    override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
+        val h1 = document.selectFirst("h1")
+        title = h1?.text()?.trim() ?: ""
+        thumbnail_url = document.selectFirst("#posterimg")?.absUrl("src")
+
+        val movList = document.select("ul.mov-list li")
+        val originalTitle = movList.select("div.mov-label:contains(TITRE ORIGINAL:) + div.mov-desc").text()
+        val releaseDate = movList.select("div.mov-label:contains(Date de sortie:) + div.mov-desc").text()
+        val director = movList.select("div.mov-label:contains(RÉALISATEUR:) + div.mov-desc").text()
+        val synopsis = movList.select("div.mov-label:contains(Synopsis:) + div.mov-desc").text()
+
+        description = buildString {
+            if (originalTitle.isNotBlank()) append("Titre original : $originalTitle\n")
+            if (releaseDate.isNotBlank()) append("Date de sortie : $releaseDate\n\n")
+            append(synopsis)
+        }
+
+        genre = movList.select("div.mov-label:contains(GENRE:) + div.mov-desc a").joinToString { it.text() }
+        artist = director.ifBlank { null }
+    }
 
     // ============================== Episodes ==============================
 
