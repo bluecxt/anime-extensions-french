@@ -125,7 +125,12 @@ class VoirAnime :
     // =========================== Anime Details ============================
     override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
         title = document.selectFirst("h1.entry-title")?.text() ?: "Titre inconnu"
-        description = document.select(".entry-content[itemprop=description]").text().ifBlank { "Description non trouvée" }
+
+        description = buildString {
+            append(document.selectFirst("span.split:contains(Released)")?.text()) ?: "year selector broken"
+            append("\n")
+            append(document.select(".entry-content[itemprop=description]").text().ifBlank { "selector broken" })
+        }
         genre = document.select(".genxed a").joinToString { it.text() }
         thumbnail_url = document.selectFirst(".thumb img")?.attr("abs:src")?.substringBefore("?")
         artist = document.select(".spe > span:nth-child(2)").text().substringAfter(":").trim()
