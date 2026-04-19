@@ -128,13 +128,14 @@ class VoirAnime :
         description = document.select(".entry-content[itemprop=description]").text().ifBlank { "Description non trouvée" }
         genre = document.select(".genxed a").joinToString { it.text() }
         thumbnail_url = document.selectFirst(".thumb img")?.attr("abs:src")?.substringBefore("?")
-        author = document.select(".spe > span:nth-child(2)").text().substringAfter(":").trim()
+        artist = document.select(".spe > span:nth-child(2)").text().substringAfter(":").trim()
 
-        val statusText = document.select("span:contains(Status) i").text().lowercase()
+        val latestEpisode = document.selectFirst(".eplister > ul:nth-child(2) > li:nth-child(1) > a:nth-child(1) > div:nth-child(1)")?.text()?.toIntOrNull() ?: document.selectFirst(".det > span:nth-child(2)")?.text()?.substringBeforeLast("/")?.filter { it.isDigit() }?.toIntOrNull()
+        val totalEpisodes = document.selectFirst(".spe > span:nth-child(6)")?.text()?.filter { it.isDigit() }?.toIntOrNull() ?: document.selectFirst(".spe > span:nth-child(7)")?.text()?.filter { it.isDigit() }?.toIntOrNull()
         status = when {
-            statusText.contains("ongoing") || statusText.contains("en cours") -> SAnime.ONGOING
-            statusText.contains("completed") || statusText.contains("terminé") -> SAnime.COMPLETED
-            else -> SAnime.UNKNOWN
+            latestEpisode == null || totalEpisodes == null -> SAnime.UNKNOWN
+            latestEpisode != totalEpisodes -> SAnime.ONGOING
+            else -> SAnime.COMPLETED
         }
     }
 
