@@ -117,7 +117,7 @@ class VoirAnime :
                 }
             }
             return AnimesPage(items, false)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return AnimesPage(emptyList(), false)
         }
     }
@@ -173,7 +173,7 @@ class VoirAnime :
 
             val decodedHtml = try {
                 Base64.decode(encodedData, Base64.DEFAULT).toString(Charsets.UTF_8)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 ""
             }
 

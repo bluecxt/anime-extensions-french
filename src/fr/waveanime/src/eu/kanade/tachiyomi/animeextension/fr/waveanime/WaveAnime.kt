@@ -138,14 +138,16 @@ class WaveAnime :
         val document = response.asJsoup()
         return SAnime.create().apply {
             val info = document.selectFirst("div.serie-info")
+            val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
             title = info?.selectFirst("h1")?.text() ?: ""
-            val releaseDate = document.select("div.metadata .item:contains(Date) .value").text()
+            val releaseDate = document.selectFirst("div.row:contains(Date de sortie)>span.value")?.text()
             description = buildString {
-                if (releaseDate.isNotBlank()) append("Date de sortie : $releaseDate\n\n")
+                append("Date de sortie : $releaseDate\n\n")
+                append("format $format\n")
                 append(document.selectFirst(".serie-details > p")?.text() ?: "")
             }
             genre = document.select(".genres span").joinToString { it.text() }
-            status = parseStatus(document.select("div.metadata .item:contains(Statut) .value").text())
+            status = SAnime.COMPLETED
             author = document.select("div.metadata .item:contains(Studio) .value").text()
             thumbnail_url = document.selectFirst(".poster img")?.attr("abs:src")
         }
@@ -173,22 +175,26 @@ class WaveAnime :
                         setUrlWithoutDomain(link)
                         val epName = element.selectFirst("h4")?.text() ?: ""
                         val epNumStr = element.selectFirst("h5")?.text() ?: ""
+                        val epActualNum = epNumStr.substringAfter("E").trim()
 
                         name = buildString {
                             if (seasonCount > 1) {
                                 append("Season $seasonNum ")
                             }
-                            val epActualNum = epNumStr.substringAfter("E").trim()
                             append("Episode $epActualNum")
                             if (epName.isNotBlank()) {
-                                append(" : $epName")
+                                append(" - $epName")
                             }
                         }
 
-                        episode_number = epNumStr.substringAfter("E").toFloatOrNull() ?: 0f
+                        episode_number = epActualNum.toFloatOrNull() ?: 0f
                     },
                 )
             }
+        }
+
+        if (episodes.size == 1) {
+            episodes[0].name = "Film"
         }
 
         return episodes.reversed()
