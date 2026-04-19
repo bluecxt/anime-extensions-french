@@ -104,6 +104,15 @@ class SouthTV : AnimeHttpSource() {
                         }
                         anime.author = authors.joinToString(", ")
 
+                        // Artistes (Studios de production)
+                        json.optJSONArray("production_companies")?.let { companies ->
+                            val studios = mutableListOf<String>()
+                            for (i in 0 until companies.length()) {
+                                studios.add(companies.getJSONObject(i).getString("name"))
+                            }
+                            anime.artist = studios.joinToString(", ")
+                        }
+
                         // Genres
                         anime.genre = json.optJSONArray("genres")?.let { genres ->
                             (0 until genres.length()).joinToString(", ") { i ->
