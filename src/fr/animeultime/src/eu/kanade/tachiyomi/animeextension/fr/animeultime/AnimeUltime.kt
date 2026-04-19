@@ -103,10 +103,16 @@ class AnimeUltime :
     override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
         val h1 = document.selectFirst("h1")
         title = h1?.ownText()?.substringBefore(" vostfr")?.substringBefore(" vf")?.trim() ?: ""
-        description = document.selectFirst("div[data-target=synopsis] p")?.text()
+        val synopsis = document.selectFirst("div[data-target=synopsis] p")?.text()
+        val releaseDate = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Année de production)")?.text()?.substringAfter(":")?.trim()
+
+        description = buildString {
+            if (releaseDate != null && releaseDate.isNotBlank()) append("Date de sortie : $releaseDate\n\n")
+            append(synopsis ?: "")
+        }
         thumbnail_url = document.selectFirst("div.main img")?.attr("abs:src")?.replace("_thindex", "")
         genre = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Genre)")?.text()?.substringAfter(":")?.trim()?.replace(" | ", ", ")
-        author = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Studio)")?.text()?.substringAfter(":")?.trim()
+        artist = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Studio)")?.text()?.substringAfter(":")?.trim()
         status = SAnime.UNKNOWN
     }
 
