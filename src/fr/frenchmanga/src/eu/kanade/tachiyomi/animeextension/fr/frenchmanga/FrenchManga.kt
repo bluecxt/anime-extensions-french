@@ -179,13 +179,34 @@ open class FrenchManga(
         val document = response.asJsoup()
 
         return SAnime.create().apply {
+            val synopsis = document.selectFirst(".fdesc")?.text() ?: document.select(".full-story").text()
+            val score = document.selectFirst(".rating-num")?.text() ?: document.selectFirst("li:contains(Note) span")?.text()
+            val releaseDate = document.selectFirst(
+                ".release" +
+                    "",
+            )?.text() ?: document.selectFirst("li:contains(Date) a")?.text()
+            val studio = document.select("li").firstOrNull { it.text().contains("Studio", true) }?.text()?.substringAfter(":")?.trim()
+            val director = document.selectFirst("li:contains(Director) a")?.text()
+
+            val animeLength = document.selectFirst("div.short-meta:nth-child(4)")?.text()?.substringAfterLast(" ")?.filter { it.isDigit() }?.toIntOrNull()
+            val animeReleased = document.selectFirst("div.short-meta:nth-child(4)")?.text()?.substringBeforeLast(" ")?.filter { it.isDigit() }?.toIntOrNull()
+
             title = anime.title
-            description = document.selectFirst(".fdesc")?.text() ?: document.select(".full-story").text()
-            author = document.select("li").firstOrNull { it.text().contains("Studio", true) }?.text()?.substringAfter(":")?.trim()
-                ?: document.selectFirst("li:contains(Director) a")?.text()
+            description = buildString {
+                if (!releaseDate.isNullOrBlank()) append("Date de sortie : $releaseDate\n")
+                if (!score.isNullOrBlank()) append("Note : $score / 10\n\n")
+                append(synopsis)
+            }
             genre = document.select(".genres a, .full-inf li:contains(Genre) a").joinToString { it.text() }
+            author = director
+            artist = studio
             thumbnail_url = anime.thumbnail_url
             url = anime.url
+            status = when {
+                animeLength == null || animeReleased == null -> SAnime.UNKNOWN
+                animeLength != animeReleased -> SAnime.ONGOING
+                else -> SAnime.COMPLETED
+            }
             initialized = true
         }
     }
