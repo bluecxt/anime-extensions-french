@@ -290,7 +290,12 @@ class FrAnime :
             thumbnail_url = anime.poster
             genre = anime.genres.joinToString()
             status = parseStatus(anime.status, anime.seasons.size, anime.seasons.size)
-            description = anime.description
+            description = buildString {
+                if (anime.startDate != null && anime.startDate.isNotBlank()) append("Diffusion : ${anime.startDate}\n")
+                if (anime.format.isNotBlank()) append("Format : ${anime.format}\n")
+                append("Note : ${anime.note} / 10\n\n")
+                append(anime.description)
+            }
             setUrlWithoutDomain("/anime/${titleToUrl(anime.originalTitle)}")
             initialized = true
         }
