@@ -12,7 +12,7 @@
 Pour intégrer ce repository à votre environnement de test, utilisez l'URL de métadonnées brute suivante :
 
 ```text
-https://raw.githubusercontent.com/bluecxt/aniyomi-extensions-french-only/repo/index.min.json
+https://raw.githubusercontent.com/bluecxt/anime-extensions-french/repo/index.min.json
 ```
 
 ## 🛠️ Développement Local et Validation
