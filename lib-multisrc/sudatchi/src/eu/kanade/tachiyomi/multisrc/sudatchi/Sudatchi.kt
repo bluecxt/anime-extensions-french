@@ -6,6 +6,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
@@ -40,6 +41,8 @@ open class Sudatchi(
     override val supportsLatest = true
 
     private val langCodeRegex by lazy { Regex("""\((.*)\)""") }
+
+    private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
     private val preferences by getPreferencesLazy()
 
@@ -116,9 +119,9 @@ open class Sudatchi(
     }
 
     // =========================== Related Anime ============================
-    override fun relatedAnimeListRequest(anime: SAnime) = animeDetailsRequest(anime)
+    fun relatedAnimeListRequest(anime: SAnime) = animeDetailsRequest(anime)
 
-    override fun relatedAnimeListParse(response: Response): List<SAnime> {
+    fun relatedAnimeListParse(response: Response): List<SAnime> {
         val data = response.parseAs<AnimeDetailDto>()
         return (data.related.orEmpty() + data.recommendations.orEmpty())
             .map { it.toSAnime(preferences.title) }
@@ -153,11 +156,14 @@ open class Sudatchi(
     }
 
     // ============================ Video Links =============================
-    override fun videoListRequest(episode: SEpisode) = GET("$baseUrl${episode.url}", headers)
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "Sudatchi", internalData = episode.url))
 
-    private val playlistUtils: PlaylistUtils by lazy { PlaylistUtils(client, headers) }
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val response = client.newCall(GET("$baseUrl${hoster.internalData}", headers)).execute()
+        return videoListParse(response, hoster)
+    }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> {
         val episodeId = response.request.url.queryParameter("episode")?.toIntOrNull()
             ?: throw Exception("Episode ID not found in request URL")
         val episode = response.parseAs<AnimeDetailDto>().episodes.firstOrNull { it.id == episodeId }
@@ -188,12 +194,15 @@ open class Sudatchi(
                         )
                     }
                     ?: emptyList()
-                ).sort(),
+                ).sortVideos(),
         )
     }
 
+    override fun seasonListParse(response: Response): List<SAnime> = throw UnsupportedOperationException()
+    override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
+
     @JvmName("trackSort")
-    private fun List<Track>.sort(): List<Track> {
+    private fun List<Track>.sortVideos(): List<Track> {
         val subtitles = preferences.subtitles
         return map { (langCodeRegex.find(it.lang)?.groupValues?.getOrNull(1) ?: it.lang) to it }
             .sortedWith(
@@ -206,10 +215,10 @@ open class Sudatchi(
             .map { it.second }
     }
 
-    override fun List<Video>.sort(): List<Video> {
-        val quality = preferences.quality
+    override fun List<Video>.sortVideos(): List<Video> {
+        val quality = preferences.videoTitle
         return sortedWith(
-            compareBy { it.quality.contains(quality) },
+            compareBy { it.videoTitle.contains(quality) },
         ).reversed()
     }
 
@@ -244,7 +253,7 @@ open class Sudatchi(
     }
 
     // ============================= Utilities ==============================
-    private val SharedPreferences.quality get() = getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
+    private val SharedPreferences.videoTitle get() = getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
     private val SharedPreferences.subtitles get() = getString(PREF_SUBTITLES_KEY, PREF_SUBTITLES_DEFAULT)!!
     private val SharedPreferences.title get() = getString(PREF_TITLE_KEY, PREF_TITLE_DEFAULT)!!
 

@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -215,17 +216,24 @@ abstract class WcoTheme :
                 fhd?.takeIf(String::isNotBlank)?.let { Pair("1080p", it) },
             ).map {
                 val videoUrl = "$server/getvid?evid=" + it.second
-                Video(videoUrl, it.first, videoUrl)
+                Video(videoUrl = videoUrl, videoTitle = it.first)
             }
         }
     }
 
     open val useOldIframeExtractor = false
 
-    override fun videoListParse(response: Response): List<Video> {
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val response = client.newCall(GET(hoster.internalData, headers)).execute()
+        return videoListParse(response, hoster)
+    }
+
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> {
         val document = response.asJsoup()
         return if (useOldIframeExtractor) iframeOldExtractor(document) else iframeExtractor(document)
     }
+
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "WcoStream", internalData = episode.url))
 
     open fun iframeExtractor(document: Document) = document.select("iframe")
         .ifEmpty { throw Exception("No iframe found in the episode page") }
@@ -299,17 +307,19 @@ abstract class WcoTheme :
         emptyList()
     }
 
-    override fun videoListSelector() = throw UnsupportedOperationException()
-    override fun videoFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
+    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+    protected open fun hosterListSelector() = throw UnsupportedOperationException()
+    protected open fun hosterFromElement(element: Element): Hoster = throw UnsupportedOperationException()
+    override fun seasonListSelector() = throw UnsupportedOperationException()
+    override fun seasonFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    override fun List<Video>.sort(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
 
         return sortedWith(
             compareBy(
-                { it.quality.contains(quality) },
-                { it.quality.contains("720") },
+                { it.videoTitle.contains(quality) },
+                { it.videoTitle.contains("720") },
             ),
         ).reversed()
     }
@@ -330,7 +340,6 @@ abstract class WcoTheme :
             summary = "%s",
         )
     }
-    override val supportsRelatedAnimes = false
 
     // ============================= Utilities ==============================
 

@@ -17,7 +17,9 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-abstract class AniListAnimeHttpSource : AnimeHttpSource() {
+abstract class AniListAnimeHttpSource :
+    AnimeHttpSource(),
+    eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource {
     override val supportsLatest = true
     val json by injectLazy<Json>()
 
@@ -182,6 +184,12 @@ abstract class AniListAnimeHttpSource : AnimeHttpSource() {
         TitleLanguage.ENGLISH -> title.english ?: title.romaji
         TitleLanguage.NATIVE -> title.native ?: title.romaji
     }
+
+    override fun episodeListParse(response: Response): List<eu.kanade.tachiyomi.animesource.model.SEpisode> = throw UnsupportedOperationException()
+    override fun seasonListParse(response: Response): List<eu.kanade.tachiyomi.animesource.model.SAnime> = throw UnsupportedOperationException()
+    override fun hosterListParse(response: Response): List<eu.kanade.tachiyomi.animesource.model.Hoster> = throw UnsupportedOperationException()
+    override fun videoListParse(response: Response, hoster: eu.kanade.tachiyomi.animesource.model.Hoster): List<eu.kanade.tachiyomi.animesource.model.Video> = throw UnsupportedOperationException()
+    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {}
 
     enum class TitleLanguage {
         ROMAJI,

@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -136,18 +137,28 @@ abstract class DooPlay(
     }
 
     // ============================ Video Links =============================
-    override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val response = client.newCall(GET(hoster.internalData, headers)).execute()
+        return videoListParse(response, hoster)
+    }
 
-    override fun videoListSelector(): String = throw UnsupportedOperationException()
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException()
 
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
+    protected open fun videoListSelector(): String = throw UnsupportedOperationException()
 
-    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+    protected open fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
+
+    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    protected open fun hosterListSelector(): String = throw UnsupportedOperationException()
+    protected open fun hosterFromElement(element: Element): Hoster = throw UnsupportedOperationException()
+    override fun seasonListSelector(): String = throw UnsupportedOperationException()
+    override fun seasonFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
     private fun searchAnimeByPathParse(response: Response): AnimesPage {
-        val details = animeDetailsParse(response).apply {
+        val details = animeDetailsParse(response.asJsoup()).apply {
             setUrlWithoutDomain(response.request.url.toString())
             initialized = true
         }
@@ -173,7 +184,7 @@ abstract class DooPlay(
             }
         }
 
-        val hasNextPage = document.selectFirst(searchAnimeNextPageSelector()) != null
+        val hasNextPage = searchAnimeNextPageSelector()?.let { document.selectFirst(it) } != null
         return AnimesPage(animes, hasNextPage)
     }
 
@@ -260,7 +271,7 @@ abstract class DooPlay(
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesNextPageSelector() = "div.resppages > a > span.fa-chevron-right"
+    override fun latestUpdatesNextPageSelector(): String? = "div.resppages > a > span.fa-chevron-right"
 
     override fun latestUpdatesSelector() = "div.content article > div.poster"
 
@@ -292,6 +303,7 @@ abstract class DooPlay(
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
                 preferences.edit().putString(key, entry).commit()
+                true
             }
         }
 
@@ -373,7 +385,7 @@ abstract class DooPlay(
     }
 
     protected open val genresMissingWarning: String = when (lang) {
-        "pt-BR" -> "Aperte 'Redefinir' para tentar mostrar os gêneros"
+        "pt-BR" -> "Aperte 'Redefinir' para tentar montrer os gêneros"
         else -> "Press 'Reset' to attempt to show the genres"
     }
 
@@ -449,10 +461,10 @@ abstract class DooPlay(
         else -> attr("abs:src")
     }
 
-    override fun List<Video>.sort(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val quality = preferences.getString(videoSortPrefKey, videoSortPrefDefault)!!
         return sortedWith(
-            compareBy { it.quality.lowercase().contains(quality.lowercase()) },
+            compareBy { it.videoTitle.lowercase().contains(quality.lowercase()) },
         ).reversed()
     }
 

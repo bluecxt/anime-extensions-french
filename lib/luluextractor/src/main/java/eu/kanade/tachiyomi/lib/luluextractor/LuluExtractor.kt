@@ -27,7 +27,7 @@ class LuluExtractor(private val client: OkHttpClient, private val baseHeaders: H
             val fixedUrl = fixM3u8Link(m3u8Url)
             val quality = getResolution(fixedUrl, headers)
 
-            videos.add(Video(fixedUrl, "${prefix}Lulu - $quality", fixedUrl, headers))
+            videos.add(Video(videoUrl = fixedUrl, videoTitle = "${prefix}Lulu - $quality", headers = headers))
         } catch (e: Exception) {
             e.printStackTrace()
         }

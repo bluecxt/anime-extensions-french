@@ -18,9 +18,8 @@ class GoodStreamExtractor(private val client: OkHttpClient, private val headers:
                 urlRegex.find(script.data())?.groupValues?.get(1)?.let { link ->
                     videos.add(
                         Video(
-                            url = link,
-                            quality = name,
                             videoUrl = link,
+                            videoTitle = name,
                             headers = headers
                         )
                     )

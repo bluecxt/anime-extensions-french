@@ -22,6 +22,15 @@ if (theme != null) evaluationDependsOn(theme.path)
 android {
     compileSdk = AndroidConfig.compileSdk
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        jvmToolchain(17)
+    }
+
     namespace = "eu.kanade.tachiyomi.animeextension"
     sourceSets {
         main {
@@ -42,7 +51,7 @@ android {
         targetSdk = AndroidConfig.targetSdk
         applicationIdSuffix = project.parent.name + "." + project.name
         versionCode = theme == null ? extVersionCode : theme.baseVersionCode + overrideVersionCode
-        versionName = "14.$versionCode"
+        versionName = "16.$versionCode"
         base {
             archivesName = "aniyomi-$applicationIdSuffix-v$versionName"
         }

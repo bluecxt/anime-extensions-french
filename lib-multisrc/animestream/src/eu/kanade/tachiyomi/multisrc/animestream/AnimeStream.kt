@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -167,12 +168,12 @@ abstract class AnimeStream(
     }
 
     protected open val filtersHeader = when (lang) {
-        "pt-BR" -> "NOTA: Filtros serão ignorados se usar a pesquisa por nome!"
+        "pt-BR" -> "NOTA: Filtros seront ignorés s'il y a une recherche par nom !"
         else -> "NOTE: Filters are going to be ignored if using search text!"
     }
 
     protected open val filtersMissingWarning: String = when (lang) {
-        "pt-BR" -> "Aperte 'Redefinir' para tentar mostrar os filtros"
+        "pt-BR" -> "Aperte 'Redefinir' para tentar mostrar os filtres"
         else -> "Press 'Reset' to attempt to show the filters"
     }
 
@@ -276,11 +277,6 @@ abstract class AnimeStream(
     }
 
     // ============================== Episodes ==============================
-    override fun episodeListParse(response: Response): List<SEpisode> {
-        val doc = response.asJsoup()
-        return doc.select(episodeListSelector()).map(::episodeFromElement)
-    }
-
     override fun episodeListSelector() = "div.eplister > ul > li > a"
 
     protected open val episodePrefix = when (lang) {
@@ -302,15 +298,23 @@ abstract class AnimeStream(
     }
 
     // ============================ Video Links =============================
-    override fun videoListSelector() = "select.mirror > option[data-index], ul.mirror a[data-em]"
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val response = client.newCall(GET(hoster.internalData, headers)).execute()
+        return videoListParse(response, hoster)
+    }
 
-    override fun videoListParse(response: Response): List<Video> {
-        val items = response.asJsoup().select(videoListSelector())
-        return items.parallelCatchingFlatMapBlocking { element ->
-            val name = element.text()
-            val url = getHosterUrl(element)
-            getVideoList(url, name)
-        }
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> {
+        val url = hoster.internalData
+        val name = hoster.hosterName
+        return getVideoList(url, name)
+    }
+
+    protected open fun hosterListSelector(): String = "select.mirror > option[data-index], ul.mirror a[data-em]"
+
+    protected open fun hosterFromElement(element: Element): Hoster {
+        val name = element.text()
+        val url = getHosterUrl(element)
+        return Hoster(hosterName = name, internalData = url)
     }
 
     protected open fun getHosterUrl(element: Element): String {
@@ -351,9 +355,12 @@ abstract class AnimeStream(
         return emptyList()
     }
 
-    override fun videoFromElement(element: Element) = throw UnsupportedOperationException()
+    protected open fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
 
-    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
+    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun seasonListSelector(): String = throw UnsupportedOperationException()
+    override fun seasonFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
     // ============================== Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -369,6 +376,7 @@ abstract class AnimeStream(
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
                 preferences.edit().putString(key, entry).commit()
+                true
             }
         }
 
@@ -376,10 +384,10 @@ abstract class AnimeStream(
     }
 
     // ============================= Utilities ==============================
-    override fun List<Video>.sort(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val quality = preferences.getString(videoSortPrefKey, videoSortPrefDefault)!!
         return sortedWith(
-            compareBy { it.quality.contains(quality, true) },
+            compareBy { it.videoTitle.contains(quality, true) },
         ).reversed()
     }
 

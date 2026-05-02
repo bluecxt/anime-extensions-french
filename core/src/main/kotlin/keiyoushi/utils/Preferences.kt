@@ -88,26 +88,19 @@ class PreferenceDelegate<T>(
     val default: T,
 ) : ReadWriteProperty<Any?, T> {
     @Suppress("UNCHECKED_CAST")
-    override fun getValue(thisRef: Any?, property: KProperty<*>): T {
-        /*
-         * The synchronized(this) is not necessary here and may actually cause performance issues.
-         * The getValue method only performs read operations on SharedPreferences, which are already thread-safe in Android.
-         */
-        // KMK: return synchronized(this) { try {
-        return try {
-            when (default) {
-                is String -> preferences.getString(key, default) as T
-                is Int -> preferences.getInt(key, default) as T
-                is Long -> preferences.getLong(key, default) as T
-                is Float -> preferences.getFloat(key, default) as T
-                is Boolean -> preferences.getBoolean(key, default) as T
-                is Set<*> -> preferences.getStringSet(key, default as Set<String>) as T
-                null -> preferences.all[key] as T
-                else -> throw IllegalArgumentException("Unsupported type: ${default.javaClass}")
-            }
-        } catch (_: ClassCastException) {
-            default
+    override fun getValue(thisRef: Any?, property: KProperty<*>): T = try {
+        when (default) {
+            is String -> preferences.getString(key, default) as T
+            is Int -> preferences.getInt(key, default) as T
+            is Long -> preferences.getLong(key, default) as T
+            is Float -> preferences.getFloat(key, default) as T
+            is Boolean -> preferences.getBoolean(key, default) as T
+            is Set<*> -> preferences.getStringSet(key, default as Set<String>) as T
+            null -> preferences.all[key] as T
+            else -> throw IllegalArgumentException("Unsupported type: ${default.javaClass}")
         }
+    } catch (_: ClassCastException) {
+        default
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -227,20 +220,6 @@ fun PreferenceScreen.getEditTextPreference(
 
 /**
  * Add an [EditTextPreference] preference to the screen
- *
- * @param key Preference key
- * @param default Default value for preference
- * @param title Preference title
- * @param summary Preference summary
- * @param getSummary Lambda to get summary based on text value
- * @param dialogMessage Preference dialog message
- * @param inputType Keyboard input type
- * @param validate Validate preference value before applying
- * @param validationMessage Validation message if text isn't valid, based on text value
- * @param restartRequired Show restart required toast on preference change
- * @param onChange Run block on changed listener for validation, must return *true/false*
- * to determine if the preference change should be accepted
- * @param onComplete Run block on completion with text value as parameter
  */
 fun PreferenceScreen.addEditTextPreference(
     key: String,
@@ -276,17 +255,6 @@ fun PreferenceScreen.addEditTextPreference(
 
 /**
  * Get a [ListPreference] preference
- *
- * @param key Preference key
- * @param default Default value for preference
- * @param title Preference title
- * @param summary Preference summary
- * @param entries Preference entries
- * @param entryValues Preference entry values
- * @param restartRequired Show restart required toast on preference change
- * @param onChange Run block on changed listener for validation, must return *true/false*
- * to determine if the preference change should be accepted
- * @param onComplete Run block on completion with text value as parameter
  */
 fun PreferenceScreen.getListPreference(
     key: String,
@@ -323,17 +291,6 @@ fun PreferenceScreen.getListPreference(
 
 /**
  * Add a [ListPreference] preference to the screen
- *
- * @param key Preference key
- * @param default Default value for preference
- * @param title Preference title
- * @param summary Preference summary
- * @param entries Preference entries
- * @param entryValues Preference entry values
- * @param restartRequired Show restart required toast on preference change
- * @param onChange Run block on changed listener for validation, must return *true/false*
- * to determine if the preference change should be accepted
- * @param onComplete Run block on completion with text value as parameter
  */
 fun PreferenceScreen.addListPreference(
     key: String,
@@ -363,17 +320,6 @@ fun PreferenceScreen.addListPreference(
 
 /**
  * Get a [MultiSelectListPreference] preference
- *
- * @param key Preference key
- * @param default Default value for preference
- * @param title Preference title
- * @param summary Preference summary
- * @param entries Preference entries
- * @param entryValues Preference entry values
- * @param restartRequired Show restart required toast on preference change
- * @param onChange Run block on changed listener for validation, must return *true/false*
- * to determine if the preference change should be accepted
- * @param onComplete Run block on completion with text value as parameter
  */
 fun PreferenceScreen.getSetPreference(
     key: String,
@@ -411,17 +357,6 @@ fun PreferenceScreen.getSetPreference(
 
 /**
  * Add a [MultiSelectListPreference] preference to the screen
- *
- * @param key Preference key
- * @param default Default value for preference
- * @param title Preference title
- * @param summary Preference summary
- * @param entries Preference entries
- * @param entryValues Preference entry values
- * @param restartRequired Show restart required toast on preference change
- * @param onChange Run block on changed listener for validation, must return *true/false*
- * to determine if the preference change should be accepted
- * @param onComplete Run block on completion with text value as parameter
  */
 fun PreferenceScreen.addSetPreference(
     key: String,
@@ -451,15 +386,6 @@ fun PreferenceScreen.addSetPreference(
 
 /**
  * Get a [SwitchPreferenceCompat] preference
- *
- * @param key Preference key
- * @param default Default value for preference
- * @param title Preference title
- * @param summary Preference summary
- * @param restartRequired Show restart required toast on preference change
- * @param onChange Run block on changed listener for validation, must return *true/false*
- * to determine if the preference change should be accepted
- * @param onComplete Run block on completion with text value as parameter
  */
 fun PreferenceScreen.getSwitchPreference(
     key: String,
@@ -492,15 +418,6 @@ fun PreferenceScreen.getSwitchPreference(
 
 /**
  * Add a [SwitchPreferenceCompat] preference to the screen
- *
- * @param key Preference key
- * @param default Default value for preference
- * @param title Preference title
- * @param summary Preference summary
- * @param restartRequired Show restart required toast on preference change
- * @param onChange Run block on changed listener for validation, must return *true/false*
- * to determine if the preference change should be accepted
- * @param onComplete Run block on completion with text value as parameter
  */
 fun PreferenceScreen.addSwitchPreference(
     key: String,

@@ -158,7 +158,7 @@ abstract class ZoroTheme(
         }
     }
 
-    override fun relatedAnimeListParse(response: Response): List<SAnime> {
+    protected open fun relatedAnimeListParse(response: Response): List<SAnime> {
         val relatedAnimeSelector = ".block_area_sidebar .block_area-header:contains(Related Anime) + .block_area-content ul > li"
 
         val document = response.asJsoup()
@@ -215,7 +215,7 @@ abstract class ZoroTheme(
 
     // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode): Request {
+    protected open fun videoListRequest(episode: SEpisode): Request {
         val id = episode.url.substringAfterLast("?ep=")
         return GET("$baseUrl/ajax$ajaxRoute/episode/servers?episodeId=$id", apiHeaders(baseUrl + episode.url))
     }
@@ -258,11 +258,16 @@ abstract class ZoroTheme(
 
     abstract fun extractVideo(server: VideoData): List<Video>
 
-    override fun videoListSelector() = throw UnsupportedOperationException()
+    protected open fun videoListSelector() = throw UnsupportedOperationException()
 
-    override fun videoFromElement(element: Element) = throw UnsupportedOperationException()
+    protected open fun videoFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
+    protected open fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    protected open fun hosterListSelector() = throw UnsupportedOperationException()
+    protected open fun hosterFromElement(element: Element): eu.kanade.tachiyomi.animesource.model.Hoster = throw UnsupportedOperationException()
+    override fun seasonListSelector() = throw UnsupportedOperationException()
+    override fun seasonFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
@@ -297,15 +302,15 @@ abstract class ZoroTheme(
         return this
     }
 
-    override fun List<Video>.sort(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val quality = preferences.prefQuality
         val type = preferences.prefType
         val server = preferences.prefServer
 
         return this.sortedWith(
-            compareByDescending<Video> { it.quality.contains(quality) }
-                .thenByDescending { it.quality.contains(server, true) }
-                .thenByDescending { it.quality.contains(type, true) },
+            compareByDescending<Video> { it.videoTitle.contains(quality) }
+                .thenByDescending { it.videoTitle.contains(server, true) }
+                .thenByDescending { it.videoTitle.contains(type, true) },
         )
     }
 

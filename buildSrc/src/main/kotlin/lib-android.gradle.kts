@@ -6,6 +6,15 @@ plugins {
 android {
     compileSdk = AndroidConfig.compileSdk
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        jvmToolchain(17)
+    }
+
     defaultConfig {
         minSdk = AndroidConfig.minSdk
     }

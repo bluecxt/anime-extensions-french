@@ -62,33 +62,33 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
 
         if (linkList.isNullOrBlank() || linkList == "{}") {
             if (!fhdLink.isNullOrBlank()) {
-                videos.add(Video(fhdLink, "${prefix}lycoris.cafe - 1080p", fhdLink))
+                videos.add(Video(videoUrl = fhdLink, videoTitle = "${prefix}lycoris.cafe - 1080p"))
             }
             if (!hdLink.isNullOrBlank()) {
-                videos.add(Video(hdLink, "${prefix}lycoris.cafe - 720p", hdLink))
+                videos.add(Video(videoUrl = hdLink, videoTitle = "${prefix}lycoris.cafe - 720p"))
             }
             if (!sdLink.isNullOrBlank()) {
-                videos.add(Video(sdLink, "${prefix}lycoris.cafe - 480p", sdLink))
+                videos.add(Video(videoUrl = sdLink, videoTitle = "${prefix}lycoris.cafe - 480p"))
             }
         } else {
             val videoLinks = linkList.parseAs<VideoLinksApi>()
 
             videoLinks.FHD?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 1080p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 1080p"))
             } ?: fhdLink?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 1080p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 1080p"))
             }
 
             videoLinks.HD?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 720p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 720p"))
             } ?: hdLink?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 720p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 720p"))
             }
 
             videoLinks.SD?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 480p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 480p"))
             } ?: sdLink?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 480p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 480p"))
             }
         }
         return videos

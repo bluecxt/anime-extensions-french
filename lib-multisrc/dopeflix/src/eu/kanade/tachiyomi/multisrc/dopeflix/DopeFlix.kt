@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimeUpdateStrategy
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
@@ -187,9 +188,9 @@ abstract class DopeFlix(
     /* Both latest Movies & TV Shows are on same home page */
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/home/", docHeaders, cacheControl)
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
@@ -221,7 +222,7 @@ abstract class DopeFlix(
 
     override fun searchAnimeSelector() = filmSelector
 
-    override fun relatedAnimeListSelector() = filmSelector
+    fun relatedAnimeListSelector() = filmSelector
 
     // ============================== Filters ===============================
 
@@ -313,11 +314,11 @@ abstract class DopeFlix(
         val seasonRequest = GET("$baseUrl/ajax/season/list/$id", apiHeaders(baseUrl + anime.url))
         return client.newCall(seasonRequest).awaitSuccess().use { response ->
             response.asJsoup().select(".ss-item")
-                .parallelFlatMap(::seasonFromElement).reversed()
+                .parallelFlatMap(::getSeasonEpisodes).reversed()
         }
     }
 
-    protected open suspend fun seasonFromElement(element: Element): List<SEpisode> = runCatching {
+    protected open suspend fun getSeasonEpisodes(element: Element): List<SEpisode> = runCatching {
         val season = element.elementSiblingIndex() + 1
         val seasonId = element.attr("data-id")
         client.newCall(GET("$baseUrl/ajax/season/episodes/$seasonId", apiHeaders()))
@@ -354,43 +355,40 @@ abstract class DopeFlix(
 
     // ============================ Video Links =============================
 
-    override fun videoListSelector() = "a.link-item"
+    fun videoListSelector() = "a.link-item"
 
-    override fun videoListRequest(episode: SEpisode): Request = GET("$baseUrl${episode.url}", apiHeaders("$baseUrl${episode.url}"))
-
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        client.newCall(videoListRequest(episode)).awaitSuccess().use { response ->
-
-            val hosterSelection = preferences.hostToggle
-
-            val serversDoc = response.asJsoup()
-
-            val embedLinks = serversDoc.select(videoListSelector()).parallelMapNotNull { elm ->
-                val id = elm.attr("data-linkid")
-                    .ifEmpty { elm.attr("data-id") }
-                val name = elm.select("span").text()
-
-                if (hosterSelection.none { it.equals(name, true) }) return@parallelMapNotNull null
-
-                val link = client.newCall(
-                    GET("$baseUrl/ajax/episode/sources/$id", apiHeaders("$baseUrl${episode.url}")),
-                ).await().parseAs<SourcesResponse>().link
-                    ?: return@parallelMapNotNull null
-
-                VideoData(link, name)
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val data = hoster.internalData
+        // Note: DopeFlix hoster system is a bit complex, keeping original logic adapted to Hoster
+        return extractVideo(VideoData(data, hoster.hosterName))
+            .map { video ->
+                Video(
+                    videoUrl = video.videoUrl,
+                    videoTitle = video.videoTitle,
+                    headers = video.headers,
+                    subtitleTracks = subLangOrder(video.subtitleTracks),
+                    audioTracks = subLangOrder(video.audioTracks),
+                )
             }
+    }
 
-            return embedLinks.parallelCatchingFlatMap(::extractVideo)
-                .map { video ->
-                    Video(
-                        url = video.url,
-                        quality = video.quality,
-                        videoUrl = video.videoUrl,
-                        headers = video.headers,
-                        subtitleTracks = subLangOrder(video.subtitleTracks),
-                        audioTracks = subLangOrder(video.audioTracks),
-                    )
-                }
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val response = client.newCall(GET("$baseUrl${episode.url}", apiHeaders("$baseUrl${episode.url}"))).awaitSuccess()
+        val serversDoc = response.asJsoup()
+        val hosterSelection = preferences.hostToggle
+
+        return serversDoc.select(videoListSelector()).parallelMapNotNull { elm ->
+            val id = elm.attr("data-linkid").ifEmpty { elm.attr("data-id") }
+            val name = elm.select("span").text()
+
+            if (hosterSelection.none { it.equals(name, true) }) return@parallelMapNotNull null
+
+            val link = client.newCall(
+                GET("$baseUrl/ajax/episode/sources/$id", apiHeaders("$baseUrl${episode.url}")),
+            ).await().parseAs<SourcesResponse>().link
+                ?: return@parallelMapNotNull null
+
+            Hoster(hosterName = name, internalData = link)
         }
     }
 
@@ -401,19 +399,24 @@ abstract class DopeFlix(
         else -> emptyList()
     }
 
-    override fun videoFromElement(element: Element) = throw UnsupportedOperationException()
+    protected open fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
 
-    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
+    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun List<Video>.sort(): List<Video> {
+    protected open fun hosterListSelector(): String = throw UnsupportedOperationException()
+    protected open fun hosterFromElement(element: Element): Hoster = throw UnsupportedOperationException()
+    override fun seasonListSelector(): String = throw UnsupportedOperationException()
+    override fun seasonFromElement(element: Element): SAnime = throw UnsupportedOperationException()
+
+    override fun List<Video>.sortVideos(): List<Video> {
         val quality = preferences.prefQuality
         val server = preferences.prefServer
         val qualitiesList = PREF_QUALITY_LIST.reversed()
 
         return sortedWith(
-            compareByDescending<Video> { it.quality.contains(quality) }
-                .thenByDescending { video -> qualitiesList.indexOfLast { video.quality.contains(it) } }
-                .thenByDescending { it.quality.contains(server, true) },
+            compareByDescending<Video> { it.videoTitle.contains(quality) }
+                .thenByDescending { video -> qualitiesList.indexOfLast { video.videoTitle.contains(it) } }
+                .thenByDescending { it.videoTitle.contains(server, true) },
         )
     }
 

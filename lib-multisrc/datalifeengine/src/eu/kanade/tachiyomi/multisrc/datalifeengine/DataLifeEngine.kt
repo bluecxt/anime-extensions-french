@@ -6,6 +6,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -44,7 +45,7 @@ abstract class DataLifeEngine(
 
     override fun popularAnimeSelector(): String = "div#dle-content > div.mov"
 
-    override fun popularAnimeNextPageSelector(): String = "span.navigation > span:not(.nav_ext) + a"
+    override fun popularAnimeNextPageSelector(): String? = "span.navigation > span:not(.nav_ext) + a"
 
     override fun popularAnimeFromElement(element: Element): SAnime = SAnime.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("href").toHttpUrl().encodedPath)
@@ -61,7 +62,7 @@ abstract class DataLifeEngine(
     // =============================== Latest ===============================
 
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -85,7 +86,7 @@ abstract class DataLifeEngine(
     }
 
     override fun searchAnimeSelector(): String = popularAnimeSelector()
-    override fun searchAnimeNextPageSelector(): String = popularAnimeNextPageSelector()
+    override fun searchAnimeNextPageSelector(): String? = popularAnimeNextPageSelector()
     override fun searchAnimeFromElement(element: Element): SAnime = popularAnimeFromElement(element)
 
     // =========================== Anime Details ============================
@@ -123,16 +124,19 @@ abstract class DataLifeEngine(
 
     override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
 
+    override fun seasonListSelector(): String = throw UnsupportedOperationException()
+    override fun seasonFromElement(element: Element): SAnime = throw UnsupportedOperationException()
+    protected open fun hosterListSelector(): String = throw UnsupportedOperationException()
+    protected open fun hosterFromElement(element: Element): Hoster = throw UnsupportedOperationException()
+
     // ============================ Video Links =============================
 
-    override fun videoListSelector(): String = throw UnsupportedOperationException()
-
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        val response = client.newCall(GET(baseUrl + episode.url, headers)).execute()
-        return videoListParse(response)
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val response = client.newCall(GET(hoster.internalData, headers)).execute()
+        return videoListParse(response, hoster)
     }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> {
         val document = response.asJsoup()
         val videoList = mutableListOf<Video>()
 
@@ -145,17 +149,11 @@ abstract class DataLifeEngine(
     }
 
     private fun extractVideosFromUrl(url: String): List<Video> {
-        val qualityRegex = Regex("""(\d{3,4}p)""")
-        val sizeRegex = Regex("""\(\d+(\.\d+)?\s*[KMG]B\)""")
-
-        fun cleanQuality(name: String): String = name.replace(qualityRegex, "").replace(sizeRegex, "").replace("-", "").trim()
-
-        // Extraction logic would go here, simplified for this example
+        // Extraction logic would go here
         return emptyList()
     }
 
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
-    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Settings ==============================
 
