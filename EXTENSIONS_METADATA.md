@@ -140,13 +140,13 @@ TODO: add the missing infos with anilist API "https://anilist.co/graphiql"
 
 ## SouthTV
 - [x] **Title**: [Provider: Self]
-- [x] **Author**: [Provider: Self]
-- [x] **Artist**: [Provider: Self]
-- [x] **Description**: [Provider: Self]
-- [x] **Genre**: [Provider: Self]
-- [x] **Status**: [Provider: Self]
-- [x] **Release Date**: [Provider: Self]
-- [x] **Thumbnail**: [Provider: Self]
+- [x] **Author**: [Provider: TMDB]
+- [x] **Artist**: [Provider: TMDB]
+- [x] **Description**: [Provider: TMDB]
+- [x] **Genre**: [Provider: TMDB]
+- [x] **Status**: [Provider: TMDB]
+- [x] **Release Date**: [Provider: TMDB]
+- [x] **Thumbnail**: [Provider: TMDB]
 - [x] **Episode Thumbnail**: [Provider: TMDB]
 - [x] **Episode Summary**: [Provider: TMDB]
 
