@@ -1,32 +1,26 @@
 package eu.kanade.tachiyomi.animeextension.fr.waveanime
 
-import android.app.Application
-import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
-class WaveAnime :
-    AnimeHttpSource(),
-    ConfigurableAnimeSource {
+class WaveAnime : Source() {
 
     override val name = "WaveAnime"
 
@@ -36,22 +30,13 @@ class WaveAnime :
 
     override val lang = "fr"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    override val json: Json by injectLazy()
 
     companion object {
         private const val PREF_URL_KEY = "preferred_baseUrl"
         private const val PREF_URL_DEFAULT = "https://waveanime.fr"
-
-        private const val PREF_LANG_KEY = "preferred_lang"
-        private val LANG_ENTRIES = arrayOf("VOSTFR", "VF")
-        private val LANG_VALUES = arrayOf("VOSTFR", "VF")
-        private const val PREF_LANG_DEFAULT = "VOSTFR"
 
         private const val PREF_QUALITY_KEY = "preferred_quality"
         private const val PREF_QUALITY_TITLE = "Qualité préférée"
@@ -68,18 +53,7 @@ class WaveAnime :
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
-            }
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_LANG_KEY
-            title = "Préférence des voix"
-            entries = LANG_ENTRIES
-            entryValues = LANG_VALUES
-            setDefaultValue(PREF_LANG_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_LANG_KEY, newValue as String).commit()
+                true
             }
         }.also(screen::addPreference)
 
@@ -92,6 +66,7 @@ class WaveAnime :
             summary = "%s"
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putString(PREF_QUALITY_KEY, newValue as String).commit()
+                true
             }
         }.also(screen::addPreference)
     }
@@ -102,10 +77,13 @@ class WaveAnime :
         val subtitles: Map<String, Int?>,
     )
 
-    // ============================== Popular ===============================
-    override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/catalog")
+    // =============================== Latest ===============================
+    override suspend fun getLatestUpdates(page: Int): AnimesPage {
+        val response = client.newCall(GET("$baseUrl/catalog")).execute()
+        return parseAnimePage(response)
+    }
 
-    override fun popularAnimeParse(response: Response): AnimesPage {
+    private fun parseAnimePage(response: Response): AnimesPage {
         val document = response.asJsoup()
         val items = document.select("div.component.serie-card").map { element ->
             val link = element.selectFirst("a")!!
@@ -119,75 +97,102 @@ class WaveAnime :
         return AnimesPage(items, false)
     }
 
-    // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException()
+    // ============================== Popular ===============================
+
+    override suspend fun getPopularAnime(page: Int): AnimesPage {
+        val response = client.newCall(GET("$baseUrl")).execute()
+        return parsePopularPage(response)
+    }
+
+    private fun parsePopularPage(response: Response): AnimesPage {
+        val document = response.asJsoup()
+        val items = document.select("div.component.serie-card").map { element ->
+            val link = element.selectFirst("a")!!
+            SAnime.create().apply {
+                setUrlWithoutDomain(link.attr("href"))
+                title = element.attr("title")
+                thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
+            }
+        }.distinctBy { it.url }
+
+        return AnimesPage(items, false)
+    }
 
     // =============================== Search ===============================
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val url = "$baseUrl/catalog".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .build()
-        return GET(url, headers)
+        val response = client.newCall(GET(url, headers)).execute()
+        return parseAnimePage(response)
     }
-
-    override fun searchAnimeParse(response: Response): AnimesPage = popularAnimeParse(response)
 
     // =========================== Anime Details ============================
-    override fun animeDetailsParse(response: Response): SAnime {
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
         val document = response.asJsoup()
-        return SAnime.create().apply {
-            val info = document.selectFirst("div.serie-info")
-            val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
-            title = info?.selectFirst("h1")?.text() ?: ""
-            val releaseDate = document.selectFirst("div.row:contains(Date de sortie)>span.value")?.text()
-            description = buildString {
-                append("Date de sortie : $releaseDate\n\n")
-                append("format $format\n")
-                append(document.selectFirst(".serie-details > p")?.text() ?: "")
-            }
-            genre = document.select(".genres span").joinToString { it.text() }
-            status = SAnime.COMPLETED
-            author = document.select("div.metadata .item:contains(Studio) .value").text()
-            thumbnail_url = document.selectFirst(".poster img")?.attr("abs:src")
-        }
-    }
 
-    private fun parseStatus(status: String): Int = when {
-        status.contains("En cours", true) -> SAnime.ONGOING
-        status.contains("Terminé", true) -> SAnime.COMPLETED
-        else -> SAnime.UNKNOWN
+        val info = document.selectFirst("div.serie-info")
+        val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
+        val mainTitle = info?.selectFirst("h1")?.text() ?: anime.title
+        val releaseDate = document.selectFirst("div.row:contains(Date de sortie)>span.value")?.text()
+
+        anime.title = mainTitle
+        anime.description = buildString {
+            if (releaseDate != null) append("Date de sortie : $releaseDate\n\n")
+            if (format != null) append("format $format\n")
+            append(document.selectFirst(".serie-details > p")?.text() ?: "")
+        }
+        anime.genre = document.select(".genres span").joinToString { it.text() }
+        anime.status = SAnime.COMPLETED
+        anime.author = document.select("div.metadata .item:contains(Studio) .value").text()
+        anime.thumbnail_url = document.selectFirst(".poster img")?.attr("abs:src")
+
+        // TMDB Metadata
+        val tmdbMetadata = fetchTmdbMetadata(mainTitle)
+        tmdbMetadata?.summary?.let { anime.description = it }
+
+        return anime
     }
 
     // ============================== Episodes ==============================
-    override fun episodeListParse(response: Response): List<SEpisode> {
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
         val document = response.asJsoup()
         val episodes = mutableListOf<SEpisode>()
         val seasonGrids = document.select("div.component.episode-card-grid")
-        val seasonCount = seasonGrids.size
+
+        val tmdbMetadata = fetchTmdbMetadata(anime.title)
 
         seasonGrids.forEach { seasonGrid ->
-            val seasonNum = seasonGrid.attr("data-season")
+            val seasonNumStr = seasonGrid.attr("data-season")
+
             seasonGrid.select("div.component.episode-card").forEach { element ->
+                val epActualNumStr = element.selectFirst("h5")?.text()?.substringAfter("E")?.trim() ?: "0"
+                val epActualNum = epActualNumStr.toIntOrNull() ?: 0
+                val epName = element.selectFirst("h4")?.text() ?: ""
+
                 episodes.add(
                     SEpisode.create().apply {
                         val link = element.selectFirst("a")!!.attr("href")
                         setUrlWithoutDomain(link)
-                        val epName = element.selectFirst("h4")?.text() ?: ""
-                        val epNumStr = element.selectFirst("h5")?.text() ?: ""
-                        val epActualNum = epNumStr.substringAfter("E").trim()
 
-                        name = buildString {
-                            if (seasonCount > 1) {
-                                append("Season $seasonNum ")
-                            }
-                            append("Episode $epActualNum")
-                            if (epName.isNotBlank()) {
-                                append(" - $epName")
-                            }
+                        // Metadata from TMDB
+                        val epMeta = tmdbMetadata?.episodeSummaries?.get(epActualNum)
+                        val tmdbName = epMeta?.first
+
+                        // GEMINI.md Rules
+                        name = "Episode $epActualNumStr" + if (epName.contains("Sans nom", true)) {
+                            " - $tmdbName"
+                        } else {
+                            " - $epName"
                         }
 
-                        episode_number = epActualNum.toFloatOrNull() ?: 0f
+                        episode_number = epActualNumStr.toFloatOrNull() ?: 0f
+                        scanlator = "Season $seasonNumStr"
+
+                        preview_url = epMeta?.second
+                        summary = epMeta?.third
                     },
                 )
             }
@@ -201,13 +206,16 @@ class WaveAnime :
     }
 
     // ============================ Video Links =============================
-    override fun videoListParse(response: Response): List<Video> {
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "WavePlayer (DASH)", internalData = episode.url))
+
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val episodeUrl = hoster.internalData
+        val response = client.newCall(GET(baseUrl + episodeUrl, headers)).execute()
         val document = response.asJsoup()
         val html = document.toString()
 
-        val episodeId = response.request.url.queryParameter("v")
-            ?: response.request.url.encodedPathSegments.lastOrNull()
-            ?: return emptyList()
+        val episodeId = episodeUrl.substringAfter("?v=").substringBefore("&")
+            .takeIf { it != episodeUrl } ?: episodeUrl.substringAfterLast("/")
 
         val playbackPath = Regex("""/playback/([^/]+)/master\.mpd""").find(html)?.value
             ?: return emptyList()
@@ -232,9 +240,7 @@ class WaveAnime :
                     }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (_: Exception) {}
 
         // Parse MPD to get qualities
         val videoList = mutableListOf<Video>()
@@ -261,17 +267,17 @@ class WaveAnime :
             }.distinct().toList()
 
             if (qualities.isEmpty()) {
-                videoList.add(Video(videoUrl, cleanQuality("${prefix}DASH"), videoUrl, subtitleTracks = tracks))
+                videoList.add(Video(videoUrl = videoUrl, videoTitle = cleanQuality("${prefix}DASH"), subtitleTracks = tracks))
             } else {
                 qualities.forEach { label ->
-                    videoList.add(Video(videoUrl, cleanQuality("$prefix$label"), videoUrl, subtitleTracks = tracks))
+                    videoList.add(Video(videoUrl = videoUrl, videoTitle = cleanQuality("$prefix$label"), subtitleTracks = tracks))
                 }
             }
         } catch (_: Exception) {
-            videoList.add(Video(videoUrl, cleanQuality("${prefix}DASH"), videoUrl, subtitleTracks = tracks))
+            videoList.add(Video(videoUrl = videoUrl, videoTitle = cleanQuality("${prefix}DASH"), subtitleTracks = tracks))
         }
 
-        return videoList
+        return videoList.sortVideos()
     }
 
     private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
@@ -287,28 +293,22 @@ class WaveAnime :
             .removeSuffix("-")
             .trim()
 
-        val servers = listOf("WavePlayer")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-        }
+        cleaned = cleaned.replace(Regex("(?i)WavePlayer\\s*-\\s*WavePlayer", RegexOption.IGNORE_CASE), "WavePlayer")
         return cleaned.replace(qualityExtraSpaceRegex, " ").replace(" - - ", " - ").trim()
     }
 
-    override fun List<Video>.sort(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
-
         val sortedList = this.sortedWith(
             compareByDescending {
-                qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                qualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             },
         )
-
         if (quality == "Highest") return sortedList
-
         return sortedList.sortedWith(
-            compareByDescending<Video> { it.quality.contains(quality) }
+            compareByDescending<Video> { it.videoTitle.contains(quality) }
                 .thenByDescending {
-                    qualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    qualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
         )
     }
