@@ -80,15 +80,15 @@ TODO: add the missing infos with anilist API "https://anilist.co/graphiql"
 
 ## AnimoFlix
 - [x] **Title**: [Provider: Self]
-- [ ] **Author**: [Provider: Self]
-- [ ] **Artist**: [Provider: Self]
+- [x] **Author**: [Provider: TMDB]
+- [x] **Artist**: [Provider: TMDB]
 - [x] **Description**: [Provider: Self]
 - [x] **Genre**: [Provider: Self]
-- [x] **Status**: [Provider: Self]
-- [ ] **Release Date**: [Provider: Self]
+- [x] **Status**: [Provider: TMDB]
+- [x] **Release Date**: [Provider: TMDB]
 - [x] **Thumbnail**: [Provider: Self]
-- [ ] **Episode Thumbnail**: [Provider: TMDB]
-- [ ] **Episode Summary**: [Provider: TMDB]
+- [x] **Episode Thumbnail**: [Provider: TMDB]
+- [x] **Episode Summary**: [Provider: TMDB]
 
 ## FrAnime
 - [x] **Title**: [Provider: Self]
