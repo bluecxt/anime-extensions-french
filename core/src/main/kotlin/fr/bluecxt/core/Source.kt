@@ -25,8 +25,8 @@ data class TmdbMetadata(
     val posterUrl: String? = null,
     val episodeThumbUrl: String? = null,
     val summary: String? = null,
-    // Map<EpNumber, Pair<Thumb, Summary>>
-    val episodeSummaries: Map<Int, Pair<String?, String?>> = emptyMap(),
+    // Map<EpNumber, Triple<Title, Thumb, Summary>>
+    val episodeSummaries: Map<Int, Triple<String?, String?, String?>> = emptyMap(),
 )
 
 /**
@@ -111,23 +111,67 @@ abstract class Source :
 
             if (mediaType == "movie") {
                 val backdrop = bestMatch.optString("backdrop_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
-                TmdbMetadata(posterUrl = poster, episodeThumbUrl = backdrop, summary = mainSummary, episodeSummaries = mapOf(1 to (backdrop to mainSummary)))
+                val movieTitle = bestMatch.optString("title").ifBlank { bestMatch.optString("name") }
+                TmdbMetadata(posterUrl = poster, episodeThumbUrl = backdrop, summary = mainSummary, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
             } else {
-                // TV Series - Fetch season data
-                val seasonUrl = "$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=fr-FR"
-                val seasonResponse = client.newCall(GET(seasonUrl)).execute().use { it.body.string() }
-                val seasonJson = JSONObject(seasonResponse)
-                val episodesJson = seasonJson.optJSONArray("episodes") ?: return TmdbMetadata(posterUrl = poster, summary = mainSummary)
+                // TV Series - Fetch season data in French first
+                val frSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=fr-FR")).execute().use { it.body.string() }
+                val frSeasonJson = JSONObject(frSeasonBody)
+                val frEpisodes = frSeasonJson.optJSONArray("episodes") ?: return TmdbMetadata(posterUrl = poster, summary = mainSummary)
 
-                val epMap = mutableMapOf<Int, Pair<String?, String?>>()
-                for (i in 0 until episodesJson.length()) {
-                    val ep = episodesJson.getJSONObject(i)
-                    val thumb = ep.optString("still_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
-                    val epSummary = ep.optString("overview").takeIf { it.isNotBlank() }
-                    epMap[ep.getInt("episode_number")] = thumb to epSummary
+                // Check if we need English fallback for titles or summaries
+                var needsEnglishFallback = false
+                val genericRegexCheck = Regex("(?i)^(Episode|Épisode)\\s*\\d+$")
+                for (i in 0 until frEpisodes.length()) {
+                    val ep = frEpisodes.getJSONObject(i)
+                    val name = ep.optString("name").trim()
+                    val overview = ep.optString("overview").trim()
+                    if (name.isBlank() || name.matches(genericRegexCheck) || overview.isBlank()) {
+                        needsEnglishFallback = true
+                        break
+                    }
                 }
 
-                val seasonSummary = seasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
+                val enEpisodes = if (needsEnglishFallback) {
+                    val enSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=en-US")).execute().use { it.body.string() }
+                    JSONObject(enSeasonBody).optJSONArray("episodes")
+                } else {
+                    null
+                }
+
+                val epMap = mutableMapOf<Int, Triple<String?, String?, String?>>()
+                val genericRegex = Regex("(?i)^(Episode|Épisode)\\s*\\d+$")
+
+                for (i in 0 until frEpisodes.length()) {
+                    val frEp = frEpisodes.getJSONObject(i)
+                    val epNumber = frEp.getInt("episode_number")
+                    val frName = frEp.optString("name").trim()
+                    val frSummary = frEp.optString("overview").trim()
+                    val thumb = frEp.optString("still_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
+
+                    var finalName = frName.takeIf { it.isNotBlank() && !it.matches(genericRegex) }
+                    var finalSummary = frSummary.takeIf { it.isNotBlank() }
+
+                    if ((finalName == null || finalSummary == null) && enEpisodes != null) {
+                        for (j in 0 until enEpisodes.length()) {
+                            val enEp = enEpisodes.getJSONObject(j)
+                            if (enEp.getInt("episode_number") == epNumber) {
+                                if (finalName == null) {
+                                    val enName = enEp.optString("name").trim()
+                                    finalName = enName.takeIf { it.isNotBlank() && !it.matches(Regex("(?i)^Episode\\s*\\d+$")) }
+                                }
+                                if (finalSummary == null) {
+                                    finalSummary = enEp.optString("overview").trim().takeIf { it.isNotBlank() }
+                                }
+                                break
+                            }
+                        }
+                    }
+
+                    epMap[epNumber] = Triple(finalName, thumb, finalSummary)
+                }
+
+                val seasonSummary = frSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
                 TmdbMetadata(posterUrl = poster, summary = seasonSummary, episodeSummaries = epMap)
             }
         } catch (_: Exception) {
