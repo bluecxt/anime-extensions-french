@@ -151,6 +151,10 @@ class WaveAnime : Source() {
         // TMDB Metadata
         val tmdbMetadata = fetchTmdbMetadata(mainTitle)
         tmdbMetadata?.summary?.let { anime.description = it }
+        tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
+        tmdbMetadata?.author?.let { anime.author = it }
+        tmdbMetadata?.artist?.let { anime.artist = it }
+        tmdbMetadata?.status?.let { anime.status = it }
 
         return anime
     }
