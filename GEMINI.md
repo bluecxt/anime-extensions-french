@@ -3,9 +3,8 @@
 Ce document définit les standards obligatoires pour toutes les extensions Aniyomi du dépôt francophone bluecxt.
 
 ## 1. Formatage des Épisodes
-- **Terminologie Anglaise :** Utiliser exclusivement des termes anglais sans accents : `Episode`, `Season`, `OAV`, `ONA`, `Special`, `Film`.
-- **Structure Nom :** `Season X Episode Y - [Titre]` ou `Episode Y - [Titre]`.
-- **Saison Unique :** Si l'animé ne possède qu'une seule saison, omettre `Season X`.
+- **Terminologie Anglaise :** Utiliser exclusivement des termes anglais sans accents : `Episode`, `OAV`, `ONA`, `Special`, `Film`.
+- **Structure Nom :** `Episode Y - [Titre]` ou `Episode Y - [Titre]`.
 - **Pas de Redondance :** Si le titre fourni par le site contient déjà le numéro de l'épisode, ne pas répéter `Episode X` au début.
 
 ## 2. Libellés des Sources Vidéo
@@ -22,5 +21,6 @@ Ce document définit les standards obligatoires pour toutes les extensions Aniyo
 - **Résolution :** À langue identique, trier par résolution décroissante (ex: `1080p` > `720p` > `480p`).
 - **Parsing de Qualité :** Utiliser une Regex pour extraire le nombre de pixels (ex: `(\d+)p`) afin de garantir un tri numérique fiable.
 
----
-*Ces règles sont fondamentales et doivent être respectées lors de toute modification ou création d'extension.*
+## 4. Métadonnées (TMDB)
+- **Date de Sortie :** Toujours utiliser le libellé exact `Date de sortie :` (au début de la description) pour garantir la cohérence entre les sources.
+- **Studios/Créateurs :** Utiliser les champs `Artist` (pour les studios) et `Author` (pour les créateurs/mangakas) fournis par le moteur TMDB.

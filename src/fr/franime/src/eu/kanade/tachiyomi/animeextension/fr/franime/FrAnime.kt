@@ -164,8 +164,14 @@ class FrAnime : Source() {
         val searchTitle = animeData?.title?.takeIf { it.isNotBlank() } ?: animeData?.originalTitle ?: anime.title
         val tmdbMetadata = fetchTmdbMetadata(searchTitle)
 
-        tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.summary?.let { anime.description = it }
+
+        // Prepend release date to description
+        tmdbMetadata?.releaseDate?.let { date ->
+            anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
+        }
+
+        tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
 
         return anime
     }

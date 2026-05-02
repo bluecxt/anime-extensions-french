@@ -29,6 +29,7 @@ data class TmdbMetadata(
     val author: String? = null,
     val artist: String? = null,
     val status: Int = 0, // SAnime.UNKNOWN
+    val releaseDate: String? = null,
     // Map<EpNumber, Triple<Title, Thumb, Summary>>
     val episodeSummaries: Map<Int, Triple<String?, String?, String?>> = emptyMap(),
 )
@@ -131,10 +132,13 @@ abstract class Source :
             // Extract Status
             val tmdbStatus = detailJson.optString("status")
             val status = when (tmdbStatus) {
-                "Ended", "Canceled" -> SAnime.COMPLETED
+                "Ended", "Canceled", "Released" -> SAnime.COMPLETED
                 "Returning Series", "In Production", "Pilot" -> SAnime.ONGOING
                 else -> SAnime.UNKNOWN
             }
+
+            // Extract Release Date
+            val releaseDate = detailJson.optString("first_air_date").ifBlank { detailJson.optString("release_date") }.takeIf { it.isNotBlank() }
 
             // Extract Author (Creators for TV, Directors for Movies, fallback to Crew)
             val authorList = mutableListOf<String>()
@@ -161,12 +165,12 @@ abstract class Source :
             if (mediaType == "movie") {
                 val backdrop = detailJson.optString("backdrop_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
                 val movieTitle = detailJson.optString("title").ifBlank { detailJson.optString("name") }
-                TmdbMetadata(posterUrl = poster, episodeThumbUrl = backdrop, summary = mainSummary, author = author, artist = artist, status = status, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
+                TmdbMetadata(posterUrl = poster, episodeThumbUrl = backdrop, summary = mainSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
             } else {
                 // TV Series - Fetch season data in French first
                 val frSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=fr-FR")).execute().use { it.body.string() }
                 val frSeasonJson = JSONObject(frSeasonBody)
-                val frEpisodes = frSeasonJson.optJSONArray("episodes") ?: return TmdbMetadata(posterUrl = poster, summary = mainSummary, author = author, artist = artist, status = status)
+                val frEpisodes = frSeasonJson.optJSONArray("episodes") ?: return TmdbMetadata(posterUrl = poster, summary = mainSummary, author = author, artist = artist, status = status, releaseDate = releaseDate)
 
                 // Check if we need English fallback for titles or summaries
                 var needsEnglishFallback = false
@@ -221,7 +225,7 @@ abstract class Source :
                 }
 
                 val seasonSummary = frSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
-                TmdbMetadata(posterUrl = poster, summary = seasonSummary, author = author, artist = artist, status = status, episodeSummaries = epMap)
+                TmdbMetadata(posterUrl = poster, summary = seasonSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, episodeSummaries = epMap)
             }
         } catch (_: Exception) {
             null

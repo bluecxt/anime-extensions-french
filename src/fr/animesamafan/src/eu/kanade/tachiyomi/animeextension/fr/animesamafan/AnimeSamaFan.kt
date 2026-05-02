@@ -145,6 +145,12 @@ class AnimeSamaFan : Source() {
         // Fetch HD Metadata and Status from TMDB
         val tmdbMetadata = fetchTmdbMetadata(anime.title)
         tmdbMetadata?.summary?.let { anime.description = it }
+
+        // Prepend release date to description
+        tmdbMetadata?.releaseDate?.let { date ->
+            anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
+        }
+
         tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
