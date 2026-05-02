@@ -9,6 +9,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.getPreferencesLazy
@@ -25,6 +26,9 @@ data class TmdbMetadata(
     val posterUrl: String? = null,
     val episodeThumbUrl: String? = null,
     val summary: String? = null,
+    val author: String? = null,
+    val artist: String? = null,
+    val status: Int = 0, // SAnime.UNKNOWN
     // Map<EpNumber, Triple<Title, Thumb, Summary>>
     val episodeSummaries: Map<Int, Triple<String?, String?, String?>> = emptyMap(),
 )
@@ -106,18 +110,63 @@ abstract class Source :
 
             val id = bestMatch.getInt("id")
             val mediaType = bestMatch.optString("media_type")
-            val poster = bestMatch.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
-            val mainSummary = bestMatch.optString("overview").takeIf { it.isNotBlank() }
+
+            // Fetch full details to get author/artist/studios
+            val detailUrl = "$tmdbBaseUrl/$mediaType/$id?api_key=$tmdbApiKey&language=fr-FR&append_to_response=credits"
+            val detailResponse = client.newCall(GET(detailUrl)).execute().use { it.body.string() }
+            val detailJson = JSONObject(detailResponse)
+
+            val poster = detailJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
+            val mainSummary = detailJson.optString("overview").takeIf { it.isNotBlank() }
+
+            // Extract Artist (Production Companies / Studios)
+            val artist = detailJson.optJSONArray("production_companies")?.let { companies ->
+                val list = mutableListOf<String>()
+                for (i in 0 until companies.length()) {
+                    list.add(companies.getJSONObject(i).getString("name"))
+                }
+                list.joinToString(", ").takeIf { it.isNotBlank() }
+            }
+
+            // Extract Status
+            val tmdbStatus = detailJson.optString("status")
+            val status = when (tmdbStatus) {
+                "Ended", "Canceled" -> SAnime.COMPLETED
+                "Returning Series", "In Production", "Pilot" -> SAnime.ONGOING
+                else -> SAnime.UNKNOWN
+            }
+
+            // Extract Author (Creators for TV, Directors for Movies, fallback to Crew)
+            val authorList = mutableListOf<String>()
+
+            // 1. Try created_by (TV Series)
+            detailJson.optJSONArray("created_by")?.let { creators ->
+                for (i in 0 until creators.length()) {
+                    authorList.add(creators.getJSONObject(i).getString("name"))
+                }
+            }
+
+            // 2. Try credits/crew (Mangaka, Directors, etc.)
+            detailJson.optJSONObject("credits")?.optJSONArray("crew")?.let { crew ->
+                for (i in 0 until crew.length()) {
+                    val member = crew.getJSONObject(i)
+                    val job = member.optString("job")
+                    if (job in listOf("Director", "Series Director", "Comic Book", "Novel", "Original Story", "Author", "Series Composition", "Writer")) {
+                        authorList.add(member.getString("name"))
+                    }
+                }
+            }
+            val author = authorList.distinct().joinToString(", ").takeIf { it.isNotBlank() }
 
             if (mediaType == "movie") {
-                val backdrop = bestMatch.optString("backdrop_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
-                val movieTitle = bestMatch.optString("title").ifBlank { bestMatch.optString("name") }
-                TmdbMetadata(posterUrl = poster, episodeThumbUrl = backdrop, summary = mainSummary, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
+                val backdrop = detailJson.optString("backdrop_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
+                val movieTitle = detailJson.optString("title").ifBlank { detailJson.optString("name") }
+                TmdbMetadata(posterUrl = poster, episodeThumbUrl = backdrop, summary = mainSummary, author = author, artist = artist, status = status, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
             } else {
                 // TV Series - Fetch season data in French first
                 val frSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=fr-FR")).execute().use { it.body.string() }
                 val frSeasonJson = JSONObject(frSeasonBody)
-                val frEpisodes = frSeasonJson.optJSONArray("episodes") ?: return TmdbMetadata(posterUrl = poster, summary = mainSummary)
+                val frEpisodes = frSeasonJson.optJSONArray("episodes") ?: return TmdbMetadata(posterUrl = poster, summary = mainSummary, author = author, artist = artist, status = status)
 
                 // Check if we need English fallback for titles or summaries
                 var needsEnglishFallback = false
@@ -172,7 +221,7 @@ abstract class Source :
                 }
 
                 val seasonSummary = frSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
-                TmdbMetadata(posterUrl = poster, summary = seasonSummary, episodeSummaries = epMap)
+                TmdbMetadata(posterUrl = poster, summary = seasonSummary, author = author, artist = artist, status = status, episodeSummaries = epMap)
             }
         } catch (_: Exception) {
             null
