@@ -209,12 +209,14 @@ class FrAnime : Source() {
                     val epMeta = tmdbMetadata?.episodeSummaries?.get(epNumber)
                     val tmdbName = epMeta?.first
 
-                    // GEMINI.md Naming Rules
-                    name = when {
-                        format == "FILM" -> if (season.episodes.size > 1) "Film $epNumber" else "Film"
+                    // GEMINI.md Naming Rules: [S1] Episode Y - [Titre]
+                    val sPrefix = if (animeData.seasons.size > 1) "[S$seasonNum] " else ""
+                    val sType = if (format == "FILM") "[Movie] " else sPrefix
+
+                    val baseName = when {
+                        format == "FILM" -> if (season.episodes.size > 1) "Episode $epNumber" else ""
 
                         epTitle.contains("Episode", true) -> {
-                            // If site title is generic 'Episode X', try to use TMDB title
                             if (tmdbName != null) "Episode $epNumber - $tmdbName" else epTitle
                         }
 
@@ -224,6 +226,8 @@ class FrAnime : Source() {
 
                         else -> "Episode $epNumber - $epTitle"
                     }
+
+                    name = ("$sType$baseName").trim().ifEmpty { "Movie" }
 
                     episode_number = globalEpisodeNumber++
                     scanlator = "Season $seasonNum"

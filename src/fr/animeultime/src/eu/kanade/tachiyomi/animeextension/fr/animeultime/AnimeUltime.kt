@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.animeextension.fr.animeultime
 
-import android.app.Application
-import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
@@ -18,6 +15,7 @@ import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -28,22 +26,16 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONObject
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
-class AnimeUltime :
-    ParsedAnimeHttpSource(),
-    ConfigurableAnimeSource {
+class AnimeUltime : Source() {
 
     override val name = "Anime-Ultime"
     override val baseUrl by lazy { preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!! }
     override val lang = "fr"
     override val supportsLatest = false
     override val client: OkHttpClient = network.client
-    private val json = Json { ignoreUnknownKeys = true }
-    private val preferences: SharedPreferences by lazy { Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000) }
+    override val json: Json by injectLazy()
 
     private val userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:149.0) Gecko/20100101 Firefox/149.0"
 
@@ -52,33 +44,31 @@ class AnimeUltime :
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
-    override fun popularAnimeRequest(page: Int): Request = GET(baseUrl, headers)
-    override fun popularAnimeSelector(): String = "div.slides li"
-    override fun popularAnimeFromElement(element: Element): SAnime = SAnime.create().apply {
-        val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.attr("abs:href"))
-        title = element.selectFirst(".box-text p")?.text() ?: ""
-        thumbnail_url = element.selectFirst(".imgCtn img")?.attr("abs:src")?.replace("_thindex", "")
+    override suspend fun getPopularAnime(page: Int): AnimesPage {
+        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val document = response.asJsoup()
+        val items = document.select("div.slides li").map { element ->
+            SAnime.create().apply {
+                val link = element.selectFirst("a")!!
+                setUrlWithoutDomain(link.attr("abs:href"))
+                title = element.selectFirst(".box-text p")?.text() ?: ""
+                thumbnail_url = element.selectFirst(".imgCtn img")?.attr("abs:src")?.replace("_thindex", "")
+            }
+        }
+        return AnimesPage(items, false)
     }
-    override fun popularAnimeNextPageSelector(): String? = null
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector(): String? = null
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val body = FormBody.Builder().add("search", query).build()
         val ajaxHeaders = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
             .build()
-        return POST("$baseUrl/MenuSearch.html", ajaxHeaders, body)
-    }
-
-    override fun searchAnimeParse(response: Response): AnimesPage {
+        val response = client.newCall(POST("$baseUrl/MenuSearch.html", ajaxHeaders, body)).execute()
         val responseBody = response.body.string()
         if (responseBody.isBlank() || responseBody == "[]") return AnimesPage(emptyList(), false)
         val searchData = json.decodeFromString<List<SearchResponse>>(responseBody)
@@ -92,36 +82,45 @@ class AnimeUltime :
         return AnimesPage(animes, false)
     }
 
-    override fun searchAnimeSelector(): String = throw UnsupportedOperationException()
-    override fun searchAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
-    override fun searchAnimeNextPageSelector(): String? = null
-
     @Serializable
     data class SearchResponse(val title: String, val imgUrl: String, val url: String)
 
     // =========================== Anime Details ============================
-    override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
+        val document = response.asJsoup()
+
         val h1 = document.selectFirst("h1")
-        title = h1?.ownText()?.substringBefore(" vostfr")?.substringBefore(" vf")?.trim() ?: ""
+        val mainTitle = h1?.ownText()?.substringBefore(" vostfr")?.substringBefore(" vf")?.trim() ?: ""
         val synopsis = document.selectFirst("div[data-target=synopsis] p")?.text()
         val releaseDate = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Année de production)")?.text()?.substringAfter(":")?.trim()
 
-        description = buildString {
+        anime.title = mainTitle
+        anime.description = buildString {
             if (releaseDate != null && releaseDate.isNotBlank()) append("Date de sortie : $releaseDate\n\n")
             append(synopsis ?: "")
         }
-        thumbnail_url = document.selectFirst("div.main img")?.attr("abs:src")?.replace("_thindex", "")
-        genre = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Genre)")?.text()?.substringAfter(":")?.trim()?.replace(" | ", ", ")
-        artist = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Studio)")?.text()?.substringAfter(":")?.trim()
-        status = SAnime.UNKNOWN
+        anime.thumbnail_url = document.selectFirst("div.main img")?.attr("abs:src")?.replace("_thindex", "")
+        anime.genre = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Genre)")?.text()?.substringAfter(":")?.trim()?.replace(" | ", ", ")
+        anime.artist = document.selectFirst("div[data-target=info] ul")?.selectFirst("li:contains(Studio)")?.text()?.substringAfter(":")?.trim()
+        anime.status = SAnime.UNKNOWN
+
+        // TMDB Metadata
+        val tmdbMetadata = fetchTmdbMetadata(mainTitle)
+        tmdbMetadata?.summary?.let { anime.description = it }
+
+        return anime
     }
 
     // ============================== Episodes ==============================
-    override fun episodeListParse(response: Response): List<SEpisode> {
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
         val document = response.asJsoup()
         val animeTitle = document.selectFirst("h1")?.text() ?: ""
-        val seasonNum = seasonRegex.find(animeTitle)?.groupValues?.get(1)
-        val sPrefix = if (seasonNum != null && !animeTitle.contains("Saison $seasonNum", true) && !animeTitle.contains("Season $seasonNum", true)) "Season $seasonNum " else ""
+        val seasonNumStr = seasonRegex.find(animeTitle)?.groupValues?.get(1) ?: "1"
+        val seasonNum = seasonNumStr.toIntOrNull() ?: 1
+
+        val tmdbMetadata = fetchTmdbMetadata(animeTitle.substringBefore(" [Saison"), seasonNum)
 
         val episodesMap = mutableMapOf<String, MutableList<Pair<String, String>>>()
         val epOrder = mutableListOf<String>()
@@ -131,13 +130,17 @@ class AnimeUltime :
             val fansub = element.selectFirst(".fansub label")?.text()?.trim()?.ifBlank { "Unknown" } ?: "Unknown"
             val link = element.selectFirst("a")?.attr("abs:href") ?: return@forEach
 
-            val cleanNum = rawNum.replace("Épisode", "Episode", true)
-                .replace("OAV", "Episode OAV", true)
-                .replace("ONA", "Episode ONA", true)
-                .replace("Special", "Episode Special", true)
-                .replace("Spécial", "Episode Special", true)
+            val sPrefix = if (seasonNum > 1) "[S$seasonNum] " else ""
+            val sType = when {
+                rawNum.contains("OAV", true) || rawNum.contains("OVA", true) -> "[OVA] "
+                rawNum.contains("ONA", true) -> "[ONA] "
+                rawNum.contains("Special", true) || rawNum.contains("Spécial", true) -> "[Special] "
+                rawNum.contains("Film", true) || rawNum.contains("Movie", true) -> "[Movie] "
+                else -> sPrefix
+            }
 
-            val epName = sPrefix + cleanNum
+            val epNumStr = digitRegex.find(rawNum)?.value ?: "1"
+            val epName = "${sType}Episode $epNumStr"
             if (!episodesMap.containsKey(epName)) {
                 episodesMap[epName] = mutableListOf()
                 epOrder.add(epName)
@@ -147,17 +150,21 @@ class AnimeUltime :
 
         return epOrder.map { name ->
             val infoList = episodesMap[name]!!
+            val epNum = digitRegex.find(name)?.value?.toIntOrNull() ?: 1
+
             SEpisode.create().apply {
                 this.name = name
-                // Store multiple links in the URL as JSON
                 this.url = json.encodeToString(infoList.map { mapOf("url" to it.first, "fansub" to it.second) })
-                this.episode_number = digitRegex.find(name)?.value?.toFloatOrNull() ?: 1f
+                this.episode_number = epNum.toFloat()
+                this.scanlator = "Season $seasonNum"
+
+                // TMDB Metadata
+                val epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
+                this.preview_url = epMeta?.second
+                this.summary = epMeta?.third
             }
         }.reversed()
     }
-
-    override fun episodeListSelector(): String = throw UnsupportedOperationException()
-    override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
 
     // ============================ Video Links =============================
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
@@ -165,98 +172,94 @@ class AnimeUltime :
     private val doodExtractor by lazy { DoodExtractor(client) }
     private val voeExtractor by lazy { VoeExtractor(client, headers) }
 
-    override fun videoListSelector(): String = throw UnsupportedOperationException()
-    override fun videoListParse(response: Response): List<Video> = emptyList()
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
-    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val infoList = json.decodeFromString<List<Map<String, String>>>(episode.url)
+        val hosters = mutableListOf<Hoster>()
 
-    override fun List<Video>.sort(): List<Video> = this.sortedWith(
-        compareBy {
-            qualityRegex.find(it.quality)?.groupValues?.get(
-                1,
-            )?.toIntOrNull() ?: 0
-        },
-    ).reversed()
-
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        val infoList = try {
-            json.decodeFromString<List<Map<String, String>>>(episode.url)
-        } catch (_: Exception) {
-            return emptyList()
-        }
-
-        val allVideos = mutableListOf<Video>()
         infoList.forEach { item ->
             val url = item["url"] ?: return@forEach
             val fansub = item["fansub"] ?: "Unknown"
 
-            val pageHeaders = headersBuilder().add("Referer", baseUrl).build()
-            val response = client.newCall(GET(url, pageHeaders)).execute()
+            val response = client.newCall(GET(url, headers)).execute()
             val document = response.asJsoup()
             val h1 = document.selectFirst("h1")?.text() ?: ""
             val lang = if (h1.lowercase().contains(" vf")) "VF" else "VOSTFR"
 
+            // 1. Internal Player
             val playerElement = document.selectFirst(".AUVideoPlayer")
             if (playerElement != null) {
                 val targetNum = digitRegex.find(episode.name)?.value ?: ""
-
-                // On cherche l'ID réel de l'épisode via Regex dans la page
                 val idfile = document.select("a[data-idfile]").firstOrNull {
-                    val text = it.text().lowercase()
-                    Regex("""\b(0?$targetNum)\b""").containsMatchIn(text)
+                    Regex("""\b(0?$targetNum)\b""").containsMatchIn(it.text().lowercase())
                 }?.attr("data-idfile")
                     ?: dataIdFileRegex.findAll(document.html()).map { it.groupValues[1] }.firstOrNull { it != playerElement.attr("data-focus") }
-                    ?: playerElement.attr("data-file").takeIf { it.isNotEmpty() }
                     ?: playerElement.attr("data-focus")
 
-                if (idfile.isNotEmpty()) {
-                    val apiHeaders = headersBuilder()
-                        .add("Referer", url)
-                        .add("X-Requested-With", "XMLHttpRequest")
-                        .build()
-                    val body = FormBody.Builder().add("idfile", idfile).build()
-                    try {
-                        val videoResponse = client.newCall(POST("$baseUrl/VideoPlayer.html", apiHeaders, body)).execute()
-                        val videoData = JSONObject(videoResponse.body.string())
-                        val keys = videoData.keys()
-                        while (keys.hasNext()) {
-                            val quality = keys.next()
-                            val element = videoData.optJSONObject(quality) ?: continue
-                            if (element.has("mp4")) {
-                                val mp4Url = element.getJSONObject("mp4").getString("url")
-                                if (mp4Url.isNotBlank()) {
-                                    allVideos.add(Video(mp4Url, "($lang) $fansub $quality", mp4Url))
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {}
+                if (!idfile.isNullOrEmpty()) {
+                    hosters.add(Hoster(hosterName = "($lang) $fansub (Internal)", internalData = "internal|$idfile|$lang|$fansub|$url"))
                 }
             }
 
+            // 2. External Iframes
             document.select("iframe").forEach { iframe ->
                 val iframeUrl = iframe.attr("abs:src")
-                allVideos.addAll(extractVideosFromUrl(iframeUrl, lang, fansub))
+                val server = when {
+                    iframeUrl.contains("sibnet.ru") -> "Sibnet"
+                    iframeUrl.contains("vidmoly") -> "Vidmoly"
+                    iframeUrl.contains("dood") || iframeUrl.contains("d0000d") -> "Doodstream"
+                    iframeUrl.contains("voe.sx") -> "Voe"
+                    else -> "Serveur"
+                }
+                hosters.add(Hoster(hosterName = "($lang) $fansub ($server)", internalData = "external|$iframeUrl|$lang|$fansub|$server"))
             }
         }
-        return allVideos.map { Video(it.url, cleanQuality(it.quality), it.videoUrl, it.headers) }.sort()
+        return hosters
     }
 
-    private fun extractVideosFromUrl(url: String, lang: String, fansub: String): List<Video> {
-        val server = when {
-            url.contains("sibnet.ru") -> "Sibnet"
-            url.contains("vidmoly") -> "Vidmoly"
-            url.contains("dood") || url.contains("d0000d") -> "Doodstream"
-            url.contains("voe.sx") -> "Voe"
-            else -> "Serveur"
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val data = hoster.internalData.split("|")
+        val type = data[0]
+        val videoList = mutableListOf<Video>()
+
+        if (type == "internal") {
+            val idfile = data[1]
+            val lang = data[2]
+            val fansub = data[3]
+            val referer = data[4]
+            val apiHeaders = headersBuilder().add("Referer", referer).add("X-Requested-With", "XMLHttpRequest").build()
+            val body = FormBody.Builder().add("idfile", idfile).build()
+            try {
+                val videoResponse = client.newCall(POST("$baseUrl/VideoPlayer.html", apiHeaders, body)).execute()
+                val videoData = JSONObject(videoResponse.body.string())
+                val keys = videoData.keys()
+                while (keys.hasNext()) {
+                    val quality = keys.next()
+                    val element = videoData.optJSONObject(quality) ?: continue
+                    if (element.has("mp4")) {
+                        val mp4Url = element.getJSONObject("mp4").getString("url")
+                        videoList.add(Video(videoUrl = mp4Url, videoTitle = "($lang) $fansub - $quality", headers = headers))
+                    }
+                }
+            } catch (_: Exception) {}
+        } else {
+            val iframeUrl = data[1]
+            val lang = data[2]
+            val fansub = data[3]
+            val server = data[4]
+            val prefix = "($lang) $fansub $server - "
+            val videos = when (server) {
+                "Sibnet" -> sibnetExtractor.videosFromUrl(iframeUrl, prefix)
+                "Vidmoly" -> vidmolyExtractor.videosFromUrl(iframeUrl, prefix)
+                "Doodstream" -> doodExtractor.videosFromUrl(iframeUrl, prefix)
+                "Voe" -> voeExtractor.videosFromUrl(iframeUrl, prefix)
+                else -> emptyList()
+            }
+            videoList.addAll(videos)
         }
-        val prefix = "($lang) $fansub $server - "
-        return when (server) {
-            "Sibnet" -> sibnetExtractor.videosFromUrl(url, prefix)
-            "Vidmoly" -> vidmolyExtractor.videosFromUrl(url, prefix)
-            "Doodstream" -> doodExtractor.videosFromUrl(url, prefix)
-            "Voe" -> voeExtractor.videosFromUrl(url, prefix)
-            else -> emptyList()
-        }
+
+        return videoList.map {
+            Video(videoUrl = it.videoUrl, videoTitle = cleanQuality(it.videoTitle), headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
+        }.sortVideos()
     }
 
     private fun cleanQuality(quality: String): String {
@@ -266,6 +269,10 @@ class AnimeUltime :
         }
         return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
     }
+
+    override fun List<Video>.sortVideos(): List<Video> = this.sortedWith(
+        compareBy { qualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0 },
+    ).reversed()
 
     private val seasonRegex = Regex("""\[Saison\s*(\d+)]""")
     private val digitRegex = Regex("""\d+""")
@@ -279,7 +286,7 @@ class AnimeUltime :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = PREF_URL_KEY
-            title = "Base URL"
+            title = "URL de base"
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->

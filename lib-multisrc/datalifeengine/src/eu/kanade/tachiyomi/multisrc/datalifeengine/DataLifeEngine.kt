@@ -153,7 +153,7 @@ abstract class DataLifeEngine(
         return emptyList()
     }
 
-    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Settings ==============================
 

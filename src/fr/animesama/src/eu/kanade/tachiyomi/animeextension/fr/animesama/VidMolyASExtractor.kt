@@ -74,9 +74,9 @@ class VidMolyASExtractor(private val client: OkHttpClient, private val baseHeade
                 playlistUtils.extractFromHls(
                     m3u8Url,
                     referer = "$host/",
-                    videoNameGen = { quality: String -> "${prefix}VidMoly - $quality" },
                     masterHeaders = headers.newBuilder().set("Referer", "$host/").build(),
                     videoHeaders = headers.newBuilder().set("Referer", "$host/").build(),
+                    videoNameGen = { quality: String -> "${prefix}VidMoly - $quality" },
                 )
             } catch (e: Exception) {
                 emptyList()

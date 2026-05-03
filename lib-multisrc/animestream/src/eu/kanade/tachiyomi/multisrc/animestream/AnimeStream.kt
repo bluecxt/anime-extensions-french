@@ -357,7 +357,7 @@ abstract class AnimeStream(
 
     protected open fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
 
-    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun seasonListSelector(): String = throw UnsupportedOperationException()
     override fun seasonFromElement(element: Element): SAnime = throw UnsupportedOperationException()

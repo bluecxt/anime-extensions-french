@@ -307,7 +307,7 @@ abstract class WcoTheme :
         emptyList()
     }
 
-    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
     protected open fun hosterListSelector() = throw UnsupportedOperationException()
     protected open fun hosterFromElement(element: Element): Hoster = throw UnsupportedOperationException()
     override fun seasonListSelector() = throw UnsupportedOperationException()

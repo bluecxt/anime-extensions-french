@@ -184,6 +184,7 @@ class AnimeSamaFan : Source() {
         val url = document.location()
         val seasonMatch = seasonRegex.find(url)
         val sNum = seasonMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val totalSeasons = document.select(".seasons-grid a.season-card").size.let { if (it == 0) 1 else it }
 
         // Fetch specific season metadata from TMDB
         val tmdbMetadata = fetchTmdbMetadata(animeTitle, sNum)
@@ -204,12 +205,15 @@ class AnimeSamaFan : Source() {
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
                 val tmdbName = epMeta?.first
 
-                // GEMINI.md Naming Rules + Use TMDB name if site name is empty or generic
-                name = if (epTitle.matches(Regex("(?i)^Episode\\s*\\d+$")) || epTitle.isBlank()) {
+                // GEMINI.md Naming Rules: [S1] Episode Y - [Titre]
+                val formattedName = if (epTitle.matches(Regex("(?i)^Episode\\s*\\d+$")) || epTitle.isBlank()) {
                     if (tmdbName != null) "Episode $epNumStr - $tmdbName" else "Episode $epNumStr"
                 } else {
                     if (epTitle.contains("Episode", true)) epTitle else "Episode $epNumStr - $epTitle"
                 }
+
+                val sPrefix = if (totalSeasons > 1) "[S$sNum] " else ""
+                name = "$sPrefix$formattedName"
 
                 this.episode_number = epNumStr.toFloatOrNull() ?: 0f
                 this.scanlator = "Season $sNum (${availableLangs.joinToString(", ")})"

@@ -172,10 +172,10 @@ class WaveAnime : Source() {
         val episodes = mutableListOf<SEpisode>()
         val seasonGrids = document.select("div.component.episode-card-grid")
 
-        val tmdbMetadata = fetchTmdbMetadata(anime.title)
-
         seasonGrids.forEach { seasonGrid ->
             val seasonNumStr = seasonGrid.attr("data-season")
+            val seasonNum = seasonNumStr.toIntOrNull() ?: 1
+            val tmdbMetadata = fetchTmdbMetadata(anime.title, seasonNum)
 
             seasonGrid.select("div.component.episode-card").forEach { element ->
                 val epActualNumStr = element.selectFirst("h5")?.text()?.substringAfter("E")?.trim() ?: "0"
@@ -191,12 +191,14 @@ class WaveAnime : Source() {
                         val epMeta = tmdbMetadata?.episodeSummaries?.get(epActualNum)
                         val tmdbName = epMeta?.first
 
-                        // GEMINI.md Rules
-                        name = "Episode $epActualNumStr" + if (epName.contains("Sans nom", true)) {
-                            " - $tmdbName"
+                        // GEMINI.md Rules: [S1] Episode Y - [Titre]
+                        val sPrefix = if (seasonGrids.size > 1) "[S$seasonNum] " else ""
+                        val baseName = "Episode $epActualNumStr" + if (epName.contains("Sans nom", true)) {
+                            if (tmdbName != null) " - $tmdbName" else ""
                         } else {
                             " - $epName"
                         }
+                        name = "$sPrefix$baseName"
 
                         episode_number = epActualNumStr.toFloatOrNull() ?: 0f
                         scanlator = "Season $seasonNumStr"

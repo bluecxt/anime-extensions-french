@@ -115,7 +115,8 @@ class SouthTV : Source() {
                     episodes.add(
                         SEpisode.create().apply {
                             val epTitle = epMeta?.first
-                            name = "Episode $i" + (if (epTitle != null) " - $epTitle" else "")
+                            val baseName = "Episode $i" + (if (epTitle != null) " - $epTitle" else "")
+                            name = "[S$seasonNum] $baseName"
                             url = "south_park#s=$seasonNum&e=$i"
                             episode_number = (episodeCountSoFar + i).toFloat()
                             scanlator = "Season $seasonNum"

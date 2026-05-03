@@ -148,7 +148,7 @@ abstract class DooPlay(
 
     protected open fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
 
-    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     protected open fun hosterListSelector(): String = throw UnsupportedOperationException()
     protected open fun hosterFromElement(element: Element): Hoster = throw UnsupportedOperationException()

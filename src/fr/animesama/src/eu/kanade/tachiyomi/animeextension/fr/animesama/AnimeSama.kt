@@ -4,13 +4,12 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
@@ -18,7 +17,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelCatchingFlatMap
 import eu.kanade.tachiyomi.util.parallelFlatMapBlocking
-import keiyoushi.utils.getPreferencesLazy
+import fr.bluecxt.core.Source
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -27,9 +26,7 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class AnimeSama :
-    AnimeHttpSource(),
-    ConfigurableAnimeSource {
+class AnimeSama : Source() {
 
     override val name = "Anime-Sama"
 
@@ -46,9 +43,7 @@ class AnimeSama :
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
 
-    private val json: Json by injectLazy()
-
-    private val preferences by getPreferencesLazy()
+    override val json: Json by injectLazy()
 
     // ============================== Popular ===============================
     override fun popularAnimeParse(response: Response): AnimesPage {
@@ -104,20 +99,23 @@ class AnimeSama :
     }
 
     // =========================== Anime Details ============================
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime
-
-    override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        // Fetch HD Metadata from TMDB (Description and secondary posters)
+        val tmdbMetadata = fetchTmdbMetadata(anime.title)
+        tmdbMetadata?.summary?.let { anime.description = it }
+        // Note: keeping site thumbnail as per user preference in similar cases,
+        // unless TMDB is a perfect match (done in fr.bluecxt.core.Source logic if requested)
+        return anime
+    }
 
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val animeUrl = "$baseUrl${anime.url.substringBeforeLast("/")}"
         val movie = anime.url.split("#").getOrElse(1) { "" }.toIntOrNull()
         val players = VOICES_VALUES.map { fetchPlayers("$animeUrl/$it") }
-        val episodes = playersToEpisodes(players)
+        val episodes = playersToEpisodes(players, anime.title)
         return if (movie == null) episodes.reversed() else listOf(episodes[movie])
     }
-
-    override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
 
     // ============================ Video Links =============================
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
@@ -125,11 +123,13 @@ class AnimeSama :
     private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
     private val vidmolyExtractor by lazy { VidMolyASExtractor(client, headers) }
 
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val playerUrls = json.decodeFromString<List<List<String>>>(episode.url)
-        val videos = playerUrls.flatMapIndexed { i, it ->
+        val hosters = mutableListOf<Hoster>()
+
+        playerUrls.forEachIndexed { i, it ->
             val lang = VOICES_VALUES[i].uppercase()
-            it.parallelCatchingFlatMap { playerUrl ->
+            it.forEach { playerUrl ->
                 val server = when {
                     playerUrl.contains("sibnet.ru") -> "Sibnet"
                     playerUrl.contains("vk.") -> "VK"
@@ -137,31 +137,39 @@ class AnimeSama :
                     playerUrl.contains("vidmoly.") -> "VidMoly"
                     else -> "Serveur"
                 }
-                val prefix = "($lang) $server - "
-                with(playerUrl) {
-                    when {
-                        contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-                        contains("vk.") -> vkExtractor.videosFromUrl(playerUrl, prefix)
-                        contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
-                        contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
-                        else -> emptyList()
-                    }
-                }
+                hosters.add(Hoster(hosterName = "($lang) $server", internalData = "$playerUrl|$lang"))
             }
         }
+        return hosters
+    }
+
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val data = hoster.internalData.split("|")
+        val playerUrl = data[0]
+        val lang = data[1]
+        val server = hoster.hosterName.substringAfter(") ")
+        val prefix = "($lang) $server - "
+
+        val videos = when {
+            playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
+            playerUrl.contains("vk.") -> vkExtractor.videosFromUrl(playerUrl, prefix)
+            playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
+            playerUrl.contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
+            else -> emptyList()
+        }
+
         return videos.map { video ->
             val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder()
                 .set("User-Agent", headers["User-Agent"]!!)
                 .build()
             Video(
-                url = video.url,
-                quality = cleanQuality(video.quality),
                 videoUrl = video.videoUrl,
+                videoTitle = cleanQuality(video.videoTitle),
                 headers = updatedHeaders,
                 subtitleTracks = video.subtitleTracks,
                 audioTracks = video.audioTracks,
             )
-        }.sort()
+        }.sortVideos()
     }
 
     private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
@@ -188,18 +196,18 @@ class AnimeSama :
     }
 
     // ============================ Utils =============================
-    override fun List<Video>.sort(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
         val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
         val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
 
         return this.sortedWith(
-            compareByDescending<Video> { it.quality.contains("($voices", true) }
-                .thenByDescending { it.quality.contains(quality) }
+            compareByDescending<Video> { it.videoTitle.contains("($voices", true) }
+                .thenByDescending { it.videoTitle.contains(quality) }
                 .thenByDescending {
-                    pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 }
-                .thenByDescending { it.quality.contains(player, true) },
+                .thenByDescending { it.videoTitle.contains(player, true) },
         )
     }
 
@@ -253,13 +261,34 @@ class AnimeSama :
         }.toList()
     }
 
-    private fun playersToEpisodes(list: List<List<List<String>>>): List<SEpisode> = List(list.fold(0) { acc, it -> maxOf(acc, it.size) }) { episodeNumber ->
-        val players = list.map { it.getOrElse(episodeNumber) { emptyList() } }
-        SEpisode.create().apply {
-            name = "Episode ${episodeNumber + 1}"
-            url = json.encodeToString(players)
-            episode_number = (episodeNumber + 1).toFloat()
-            scanlator = players.mapIndexedNotNull { i, it -> if (it.isNotEmpty()) VOICES_VALUES[i] else null }.joinToString().uppercase()
+    private suspend fun playersToEpisodes(list: List<List<List<String>>>, animeTitle: String): List<SEpisode> {
+        val maxEpisodes = list.fold(0) { acc, it -> maxOf(acc, it.size) }
+
+        // Use season from URL to fetch correct TMDB metadata
+        val tmdbMetadata = fetchTmdbMetadata(animeTitle)
+
+        // Extract season number from title for nomenclature
+        val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
+        val sNumMatch = sNumRegex.find(animeTitle)
+        val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
+
+        return List(maxEpisodes) { episodeNumber ->
+            val players = list.map { it.getOrElse(episodeNumber) { emptyList() } }
+            SEpisode.create().apply {
+                val epNum = episodeNumber + 1
+                val epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
+                val tmdbName = epMeta?.first
+                val baseName = if (tmdbName != null) "Episode $epNum - $tmdbName" else "Episode $epNum"
+                name = "$sPrefix$baseName"
+                url = json.encodeToString(players)
+                episode_number = epNum.toFloat()
+                scanlator = players.mapIndexedNotNull { i, it -> if (it.isNotEmpty()) VOICES_VALUES[i] else null }.joinToString().uppercase()
+
+                // Metadata from TMDB
+                preview_url = epMeta?.second
+                summary = epMeta?.third
+            }
         }
     }
 
@@ -373,4 +402,3 @@ class AnimeSama :
         private const val PREF_PLAYER_DEFAULT = "sibnet"
     }
 }
-// Force build update

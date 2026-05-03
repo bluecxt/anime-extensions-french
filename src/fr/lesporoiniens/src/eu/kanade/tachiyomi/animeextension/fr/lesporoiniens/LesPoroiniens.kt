@@ -1,15 +1,17 @@
 package eu.kanade.tachiyomi.animeextension.fr.lesporoiniens
 
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.lib.googledriveextractor.GoogleDriveExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.Source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -22,19 +24,23 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONObject
 import uy.kohesive.injekt.injectLazy
+import java.net.URLEncoder
 import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LesPoroiniens : AnimeHttpSource() {
+class LesPoroiniens : Source() {
 
     override val name = "Les Poroïniens"
     override val baseUrl = "https://lesporoiniens.org"
     override val lang = "fr"
     override val supportsLatest = false
 
-    private val json: Json by injectLazy()
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {}
+
+    override val json: Json by injectLazy()
 
     private val gdriveExtractor by lazy { GoogleDriveExtractor(client, Headers.Builder().add("User-Agent", "Mozilla/5.0").build()) }
     private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
@@ -77,27 +83,21 @@ class LesPoroiniens : AnimeHttpSource() {
         return AnimesPage(animes, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Non utilisé")
-    override fun latestUpdatesParse(response: Response): AnimesPage = throw Exception("Non utilisé")
-
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = popularAnimeRequest(page)
-    override fun searchAnimeParse(response: Response): AnimesPage {
-        val query = response.request.url.queryParameter("query")?.lowercase() ?: ""
-        val page = popularAnimeParse(response)
-        if (query.isBlank()) return page
-        return AnimesPage(page.animes.filter { it.title.lowercase().contains(query) }, false)
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        val pageData = client.newCall(popularAnimeRequest(page)).execute().use { popularAnimeParse(it) }
+        if (query.isBlank()) return pageData
+        return AnimesPage(pageData.animes.filter { it.title.contains(query, ignoreCase = true) }, false)
     }
 
     // --- Détails ---
-    override fun animeDetailsRequest(anime: SAnime): Request = GET("$baseUrl${anime.url}")
-
-    override fun animeDetailsParse(response: Response): SAnime {
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        val response = client.newCall(GET("$baseUrl${anime.url}")).execute()
         val document = response.asJsoup()
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: throw Exception("Données introuvables")
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val animeInfo = obj["anime"]?.jsonArray?.firstOrNull()?.jsonObject
 
-        return SAnime.create().apply {
+        return anime.apply {
             title = obj["title"]?.jsonPrimitive?.content ?: ""
             description = (animeInfo?.get("description") ?: obj["description"])?.jsonPrimitive?.content?.removeHtml()
             genre = obj["tags"]?.jsonArray?.joinToString { it.jsonPrimitive.content }
@@ -107,56 +107,112 @@ class LesPoroiniens : AnimeHttpSource() {
         }
     }
 
-    override fun episodeListParse(response: Response): List<SEpisode> {
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val response = client.newCall(GET("$baseUrl${anime.url}")).execute()
         val document = response.asJsoup()
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: return emptyList()
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val episodes = mutableListOf<SEpisode>()
 
+        val seriesTitle = obj["title"]?.jsonPrimitive?.content ?: ""
+        val tmdbId = fetchTmdbId(seriesTitle)
+        val tmdbData = tmdbId?.let { fetchTmdbSeasonData(it, 1) }
+
         obj["episodes"]?.jsonArray?.forEach { epElement ->
             val ep = epElement.jsonObject
-            val num = ep["indice_ep"]?.jsonPrimitive?.content ?: "0"
+            val numStr = ep["indice_ep"]?.jsonPrimitive?.content ?: "0"
+            val num = numStr.toDoubleOrNull()?.toInt() ?: 0
             val title = ep["title_ep"]?.jsonPrimitive?.content ?: ""
 
             episodes.add(
                 SEpisode.create().apply {
-                    episode_number = num.toFloatOrNull() ?: 0f
+                    episode_number = numStr.toFloatOrNull() ?: 0f
 
                     val cleanTitle = title.replace("Épisode", "Episode", true)
-                    val displayNum = num.replace(".", ",")
-                    val prefix = when {
-                        cleanTitle.contains("OAV", true) -> "Episode OAV $displayNum"
-                        cleanTitle.contains("ONA", true) -> "Episode ONA $displayNum"
-                        cleanTitle.contains("Special", true) || cleanTitle.contains("Spécial", true) -> "Episode Special $displayNum"
-                        cleanTitle.contains("Film", true) -> if ((obj["episodes"]?.jsonArray?.size ?: 0) > 1) "Film $displayNum" else "Film"
-                        else -> "Episode $displayNum"
+                    val displayNum = numStr.replace(".", ",")
+                    val sPrefix = when {
+                        cleanTitle.contains("OAV", true) || cleanTitle.contains("OVA", true) -> "[OVA] "
+                        cleanTitle.contains("ONA", true) -> "[ONA] "
+                        cleanTitle.contains("Special", true) || cleanTitle.contains("Spécial", true) -> "[Special] "
+                        cleanTitle.contains("Film", true) || cleanTitle.contains("Movie", true) -> "[Movie] "
+                        else -> ""
                     }
                     val epTitle = ep["title_ep"]?.jsonPrimitive?.content ?: ""
-                    name = if (epTitle.isNotBlank() && !epTitle.contains("Épisode", true) && !epTitle.contains("Episode", true)) {
-                        "$prefix : $epTitle"
+                    val baseName = if (epTitle.isNotBlank() && !epTitle.contains("Épisode", true) && !epTitle.contains("Episode", true)) {
+                        "Episode $displayNum - $epTitle"
                     } else {
-                        prefix
+                        "Episode $displayNum"
                     }
+                    name = "$sPrefix$baseName"
 
                     url = "/video?type=${ep["type"]?.jsonPrimitive?.content}&id=${ep["id"]?.jsonPrimitive?.content}"
                     date_upload = parseDate(ep["date_ep"]?.jsonPrimitive?.content)
+
+                    // Metadata from TMDB
+                    val epMeta = tmdbData?.get(num)
+                    preview_url = epMeta?.second
+                    summary = epMeta?.third
                 },
             )
         }
         return episodes.sortedByDescending { it.episode_number }
     }
 
+    private fun fetchTmdbId(title: String): Int? {
+        val url = "https://api.themoviedb.org/3/search/tv?api_key=24621da8ae19dce721e59eff2ab479bb&query=${URLEncoder.encode(title, "UTF-8")}&language=fr-FR"
+        return try {
+            client.newCall(GET(url)).execute().use { response ->
+                val json = JSONObject(response.body.string())
+                val results = json.getJSONArray("results")
+                if (results.length() > 0) results.getJSONObject(0).getInt("id") else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun fetchTmdbSeasonData(tmdbId: Int, season: Int): Map<Int, Triple<String?, String?, String?>> {
+        val url = "https://api.themoviedb.org/3/tv/$tmdbId/season/$season?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
+        return try {
+            client.newCall(GET(url)).execute().use { response ->
+                val json = JSONObject(response.body.string())
+                val episodesJson = json.getJSONArray("episodes")
+                val map = mutableMapOf<Int, Triple<String?, String?, String?>>()
+                for (i in 0 until episodesJson.length()) {
+                    val ep = episodesJson.getJSONObject(i)
+                    val epName = ep.optString("name").takeIf { it.isNotBlank() }
+                    val thumb = ep.optString("still_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
+                    val summary = ep.optString("overview").takeIf { it.isNotBlank() }
+                    map[ep.getInt("episode_number")] = Triple(epName, thumb, summary)
+                }
+                map
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
     // --- Vidéos ---
-    override fun videoListParse(response: Response): List<Video> {
-        val url = response.request.url
-        val type = url.queryParameter("type") ?: return emptyList()
-        val id = url.queryParameter("id") ?: return emptyList()
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val type = episode.url.substringAfter("type=").substringBefore("&")
+        val hosterName = when (type) {
+            "gdrive" -> "Google Drive"
+            "vidmoly" -> "Vidmoly"
+            else -> type.replaceFirstChar { it.uppercase() }
+        }
+        return listOf(Hoster(hosterName = hosterName, internalData = episode.url))
+    }
+
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val url = hoster.internalData
+        val type = url.substringAfter("type=").substringBefore("&")
+        val id = url.substringAfter("id=")
 
         return when (type) {
             "gdrive" -> {
                 gdriveExtractor.videosFromUrl(id, "(VOSTFR) Google Drive -")
                     .map { video ->
-                        Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
+                        Video(videoUrl = video.videoUrl, videoTitle = cleanQuality(video.videoTitle), headers = video.headers, subtitleTracks = video.subtitleTracks, audioTracks = video.audioTracks)
                     }
             }
 
@@ -164,7 +220,7 @@ class LesPoroiniens : AnimeHttpSource() {
                 val vidmolyUrl = "https://vidmoly.to/embed-$id.html"
                 vidmolyExtractor.videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly -")
                     .map { video ->
-                        Video(video.url, cleanQuality(video.quality), video.videoUrl, video.headers, video.subtitleTracks, video.audioTracks)
+                        Video(videoUrl = video.videoUrl, videoTitle = cleanQuality(video.videoTitle), headers = video.headers, subtitleTracks = video.subtitleTracks, audioTracks = video.audioTracks)
                     }
             }
 

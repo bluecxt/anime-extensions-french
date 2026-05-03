@@ -29,7 +29,7 @@ class VidstreamExtractor(private val client: OkHttpClient) {
                     m3u8Url.contains("720") -> "UltraCDN 720p"
                     else -> "UltraCDN HD"
                 }
-                videos.add(Video(m3u8Url, quality, m3u8Url, headers))
+                videos.add(Video(videoUrl = m3u8Url, videoTitle = quality, headers = headers))
             }
 
             // 2. Check for hidden iframes or other players in the unified player
@@ -41,9 +41,9 @@ class VidstreamExtractor(private val client: OkHttpClient) {
                         // Recursively try to get videos from the iframe if it's a known host
                         // For now we just add it as a source
                         if (iframeUrl.contains("sibnet")) {
-                            videos.add(Video(iframeUrl, "Sibnet (via Unified)", iframeUrl, headers))
+                            videos.add(Video(videoUrl = iframeUrl, videoTitle = "Sibnet (via Unified)", headers = headers))
                         } else if (iframeUrl.contains("vidmoly")) {
-                            videos.add(Video(iframeUrl, "Vidmoly (via Unified)", iframeUrl, headers))
+                            videos.add(Video(videoUrl = iframeUrl, videoTitle = "Vidmoly (via Unified)", headers = headers))
                         }
                     }
                 }

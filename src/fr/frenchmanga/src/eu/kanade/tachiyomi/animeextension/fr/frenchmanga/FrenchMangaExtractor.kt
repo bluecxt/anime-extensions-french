@@ -64,7 +64,7 @@ class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl
                                     if (directLinkMatcher.find()) {
                                         val directUrl = directLinkMatcher.group(1).replace("\\/", "/")
                                         val quality = if (directUrl.contains("1080")) "1080p" else "720p"
-                                        videos.add(Video(directUrl, "$prefix $quality", directUrl, videoHeaders))
+                                        videos.add(Video(videoUrl = directUrl, videoTitle = "$prefix $quality", headers = videoHeaders))
                                     }
                                 }
                             }
@@ -79,7 +79,7 @@ class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl
                 extractAllVideoUrls(html).forEach { videoUrl ->
                     if (!isSuspicious(videoUrl) && videoUrl.startsWith("http")) {
                         val quality = if (videoUrl.contains("1080")) "1080p" else "720p"
-                        videos.add(Video(videoUrl, "$prefix $quality", videoUrl, videoHeaders))
+                        videos.add(Video(videoUrl = videoUrl, videoTitle = "$prefix $quality", headers = videoHeaders))
                     }
                 }
             }

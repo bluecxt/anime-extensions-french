@@ -227,7 +227,7 @@ abstract class PelisPlus :
     override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
 
     protected open fun videoListSelector(): String = throw UnsupportedOperationException()
-    protected open fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun videoUrlParse(response: Response): String = throw UnsupportedOperationException()
     protected open fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
 
     protected open fun hosterListSelector(): String = throw UnsupportedOperationException()

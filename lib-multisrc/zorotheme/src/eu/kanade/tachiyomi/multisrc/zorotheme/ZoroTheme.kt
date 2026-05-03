@@ -262,7 +262,7 @@ abstract class ZoroTheme(
 
     protected open fun videoFromElement(element: Element) = throw UnsupportedOperationException()
 
-    protected open fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
 
     protected open fun hosterListSelector() = throw UnsupportedOperationException()
     protected open fun hosterFromElement(element: Element): eu.kanade.tachiyomi.animesource.model.Hoster = throw UnsupportedOperationException()
