@@ -18,6 +18,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -113,43 +114,93 @@ class LesPoroiniens : Source() {
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: return emptyList()
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val episodes = mutableListOf<SEpisode>()
+        val episodeJsonList = obj["episodes"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+
+        fun JsonObject.getSeasonNumber(): Int {
+            val raw = listOf("saison_ep", "season_ep", "saison", "season")
+                .firstNotNullOfOrNull { key -> this[key]?.jsonPrimitive?.contentOrNull }
+                ?.trim()
+                .orEmpty()
+            return raw.toIntOrNull() ?: 1
+        }
+        val seasonNumbers = episodeJsonList.map { it.getSeasonNumber() }
+        val hasSeasonDiversity = seasonNumbers.distinct().size > 1
+        val hasSeasonResetSignal = episodeJsonList.zipWithNext().any { (prev, curr) ->
+            val prevSeason = prev.getSeasonNumber()
+            val currSeason = curr.getSeasonNumber()
+            val prevNum = prev["indice_ep"]?.jsonPrimitive?.content?.replace(",", ".")?.toFloatOrNull() ?: -1f
+            val currNum = curr["indice_ep"]?.jsonPrimitive?.content?.replace(",", ".")?.toFloatOrNull() ?: -1f
+            currSeason > prevSeason && currNum > 0f && prevNum > 0f && currNum <= prevNum
+        }
+        val hasMultipleSeasons = hasSeasonDiversity && hasSeasonResetSignal
 
         val seriesTitle = obj["title"]?.jsonPrimitive?.content ?: ""
         val tmdbId = fetchTmdbId(seriesTitle)
-        val tmdbData = tmdbId?.let { fetchTmdbSeasonData(it, 1) }
+        val tmdbSeason1 = tmdbId?.let { fetchTmdbSeasonData(it, 1) }.orEmpty()
+        val tmdbSeason0 = tmdbId?.let { fetchTmdbSeasonData(it, 0) }.orEmpty()
 
-        obj["episodes"]?.jsonArray?.forEach { epElement ->
-            val ep = epElement.jsonObject
+        val adjustedEpisodeNumbers = run {
+            var offset = 0
+            episodeJsonList.map { ep ->
+                val normalized = ep["indice_ep"]?.jsonPrimitive?.content
+                    ?.replace(",", ".")
+                    ?.toFloatOrNull() ?: 0f
+                val isHalf = ((normalized * 10).toInt() % 10) == 5
+                if (isHalf) {
+                    val adjusted = kotlin.math.floor(normalized.toDouble()).toInt() + 1 + offset
+                    offset += 1
+                    adjusted.toFloat()
+                } else {
+                    normalized + offset
+                }
+            }
+        }
+        fun detectSpecialPrefix(title: String): String = when {
+            title.contains("OAV", true) || title.contains("OVA", true) -> "[OVA] "
+            title.contains("ONA", true) -> "[ONA] "
+            title.contains("Special", true) || title.contains("Spécial", true) -> "[Special] "
+            title.contains("Film", true) || title.contains("Movie", true) -> "[Movie] "
+            else -> ""
+        }
+        val hasAnySpecial = episodeJsonList.any { ep ->
+            val t = ep["title_ep"]?.jsonPrimitive?.content.orEmpty()
+            detectSpecialPrefix(t).isNotBlank()
+        }
+
+        var specialSeason0Counter = 0
+        episodeJsonList.forEachIndexed { idx, ep ->
             val numStr = ep["indice_ep"]?.jsonPrimitive?.content ?: "0"
-            val num = numStr.toDoubleOrNull()?.toInt() ?: 0
-            val title = ep["title_ep"]?.jsonPrimitive?.content ?: ""
+            val normalizedNum = numStr.replace(",", ".").toFloatOrNull() ?: 0f
+            val adjustedNum = adjustedEpisodeNumbers[idx]
+            val originalTmdbEpisodeNum = normalizedNum.toInt()
+            val isHalfEpisode = ((normalizedNum * 10).toInt() % 10) == 5
+            val tmdbSeason0EpisodeNum = if (isHalfEpisode) {
+                specialSeason0Counter += 1
+                specialSeason0Counter
+            } else {
+                0
+            }
+            val seasonNum = ep.getSeasonNumber()
 
             episodes.add(
                 SEpisode.create().apply {
-                    episode_number = numStr.toFloatOrNull() ?: 0f
-
-                    val cleanTitle = title.replace("Épisode", "Episode", true)
-                    val displayNum = numStr.replace(".", ",")
-                    val sPrefix = when {
-                        cleanTitle.contains("OAV", true) || cleanTitle.contains("OVA", true) -> "[OVA] "
-                        cleanTitle.contains("ONA", true) -> "[ONA] "
-                        cleanTitle.contains("Special", true) || cleanTitle.contains("Spécial", true) -> "[Special] "
-                        cleanTitle.contains("Film", true) || cleanTitle.contains("Movie", true) -> "[Movie] "
-                        else -> ""
-                    }
+                    episode_number = adjustedNum
+                    val displayNum = normalizedNum.toString().removeSuffix(".0")
                     val epTitle = ep["title_ep"]?.jsonPrimitive?.content ?: ""
-                    val baseName = if (epTitle.isNotBlank() && !epTitle.contains("Épisode", true) && !epTitle.contains("Episode", true)) {
-                        "Episode $displayNum - $epTitle"
+                    val cleanedEpTitle = epTitle.replace("Épisode", "", true).replace("Episode", "", true).trim()
+                    val specialPrefix = detectSpecialPrefix(cleanedEpTitle)
+                    val seasonPrefix = if (specialPrefix.isBlank() && hasAnySpecial) "[S1] " else ""
+                    name = if (cleanedEpTitle.isNotBlank()) {
+                        "${seasonPrefix}${specialPrefix}Episode $displayNum - $cleanedEpTitle"
                     } else {
-                        "Episode $displayNum"
+                        "${seasonPrefix}${specialPrefix}Episode $displayNum"
                     }
-                    name = "$sPrefix$baseName"
 
                     url = "/video?type=${ep["type"]?.jsonPrimitive?.content}&id=${ep["id"]?.jsonPrimitive?.content}"
                     date_upload = parseDate(ep["date_ep"]?.jsonPrimitive?.content)
 
                     // Metadata from TMDB
-                    val epMeta = tmdbData?.get(num)
+                    val epMeta = if (isHalfEpisode) tmdbSeason0[tmdbSeason0EpisodeNum] else tmdbSeason1[originalTmdbEpisodeNum]
                     preview_url = epMeta?.second
                     summary = epMeta?.third
                 },
