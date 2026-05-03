@@ -6,8 +6,8 @@
 -[x] animoflix
 -[x] franime
 -[ ] frenchanime
--[ ] frenchmanga
--[ ] lesporoiniens
+-[x] frenchmanga
+-[w] lesporoiniens
 -[x] southtv
 -[ ] voiranime
 -[x] waveanime

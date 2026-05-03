@@ -136,7 +136,7 @@ open class FrenchManga(
                 url = json.encodeToString(AnimeUrl(listOf(id)))
                 thumbnail_url = document.selectFirst(".fposter img")?.attr("abs:src")
             }
-            return AnimesPage(listOf(anime), false)
+            return AnimesPage(listOf(anime).filter(::isValidSearchAnime), false)
         }
         val formBody = okhttp3.FormBody.Builder()
             .add("query", query)
@@ -162,7 +162,16 @@ open class FrenchManga(
                 thumbnail_url = element.selectFirst(".search-poster img")?.attr("abs:src")
             }
         }
-        return AnimesPage(unifyAnimes(animes), false)
+        return AnimesPage(unifyAnimes(animes).filter(::isValidSearchAnime), false)
+    }
+
+    private fun isValidSearchAnime(anime: SAnime): Boolean {
+        val t = anime.title.trim()
+        val u = anime.url.trim()
+        if (t.isBlank() || u.isBlank()) return false
+        val low = t.lowercase()
+        if (low == "unknown" || low == "unknown title" || low == "inconnu") return false
+        return true
     }
 
     // =========================== Anime Details ============================
