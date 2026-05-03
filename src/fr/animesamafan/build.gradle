@@ -15,5 +15,6 @@ dependencies {
     implementation(project(':lib:streamtapeextractor'))
     implementation(project(':lib:doodextractor'))
     implementation(project(':lib:vidoextractor'))
+    implementation(project(':lib:vidmolyextractor'))
     implementation(project(':lib:voeextractor'))
 }

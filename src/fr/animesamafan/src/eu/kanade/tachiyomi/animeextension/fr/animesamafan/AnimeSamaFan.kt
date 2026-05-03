@@ -300,19 +300,49 @@ class AnimeSamaFan : Source() {
 
         val totalSeasons = seasonLinks.size.takeIf { it > 0 } ?: 1
 
-        val episodes = mutableListOf<SEpisode>()
-
-        episodes.addAll(parseEpisodesFromDocument(rootDoc, anime.title, totalSeasons))
-
+        // Collect one document per season (to compute offsets safely)
+        val seasonDocuments = mutableListOf<Document>()
+        seasonDocuments.add(rootDoc)
         seasonLinks
             .filter { it != rootDoc.location() }
             .forEach { sUrl ->
                 try {
-                    val sDoc = client.newCall(GET(sUrl, headers)).execute().asJsoup()
-                    episodes.addAll(parseEpisodesFromDocument(sDoc, anime.title, totalSeasons))
+                    seasonDocuments.add(client.newCall(GET(sUrl, headers)).execute().asJsoup())
                 } catch (_: Exception) {
                 }
             }
+
+        data class SeasonContext(
+            val seasonNum: Int,
+            val document: Document,
+            val episodeCount: Int,
+        )
+
+        fun seasonNumFromUrl(url: String): Int = seasonRegex.find(url)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+        val contexts = seasonDocuments
+            .map { doc ->
+                val sNum = seasonNumFromUrl(doc.location())
+                SeasonContext(sNum, doc, doc.select("a.episode-card").size)
+            }
+            .groupBy { it.seasonNum }
+            .map { (_, list) -> list.maxBy { it.episodeCount } }
+            .sortedBy { it.seasonNum }
+
+        // Compute cumulative episode offsets per season.
+        // This is used when TMDB merges multiple site seasons into a single TMDB season (usually season 1).
+        val episodeOffsetBySeason = mutableMapOf<Int, Int>()
+        var cumulative = 0
+        contexts.forEach { ctx ->
+            episodeOffsetBySeason[ctx.seasonNum] = cumulative
+            cumulative += ctx.episodeCount
+        }
+
+        val episodes = mutableListOf<SEpisode>()
+        contexts.forEach { ctx ->
+            val offset = episodeOffsetBySeason[ctx.seasonNum] ?: 0
+            episodes.addAll(parseEpisodesFromDocument(ctx.document, anime.title, totalSeasons, offset))
+        }
 
         return episodes.distinctBy { it.url }.sortedByDescending { it.episode_number }
     }
@@ -348,6 +378,7 @@ class AnimeSamaFan : Source() {
         document: Document,
         animeTitle: String,
         totalSeasons: Int,
+        absoluteEpisodeOffset: Int,
     ): List<SEpisode> {
         val url = document.location()
         val seasonMatch = seasonRegex.find(url)
@@ -356,6 +387,7 @@ class AnimeSamaFan : Source() {
 
         // Fetch specific season metadata from TMDB
         val tmdbMetadata = fetchTmdbMetadata(animeTitle, sNum)
+        var tmdbSeason1Metadata: fr.bluecxt.core.TmdbMetadata? = null
 
         val episodeCards = document.select("a.episode-card")
 
@@ -401,7 +433,18 @@ class AnimeSamaFan : Source() {
                 val epNum = epNumStr.toIntOrNull() ?: 0
 
                 // Metadata from TMDB
+                // Some titles have seasons split on the site but merged on TMDB (e.g. site S2 E1 == TMDB S1 E13).
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
+                    ?: run {
+                        if (sNum > 1 && absoluteEpisodeOffset > 0) {
+                            if (tmdbSeason1Metadata == null) {
+                                tmdbSeason1Metadata = fetchTmdbMetadata(animeTitle, 1)
+                            }
+                            tmdbSeason1Metadata?.episodeSummaries?.get(epNum + absoluteEpisodeOffset)
+                        } else {
+                            null
+                        }
+                    }
                 val tmdbName = epMeta?.first
 
                 // GEMINI.md Naming Rules: [S1] Episode Y - [Titre]
