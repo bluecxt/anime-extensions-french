@@ -1,0 +1,13 @@
+-[ ] adkami
+-[ ] animesama
+-[x] animesamafan
+-[ ] animesultra
+-[ ] animeultime
+-[x] animoflix
+-[x] franime
+-[ ] frenchanime
+-[ ] frenchmanga
+-[ ] lesporoiniens
+-[x] southtv
+-[ ] voiranime
+-[x] waveanime
