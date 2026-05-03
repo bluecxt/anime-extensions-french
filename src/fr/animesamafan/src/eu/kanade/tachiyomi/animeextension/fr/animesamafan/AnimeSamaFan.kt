@@ -18,9 +18,11 @@ import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import kotlinx.serialization.json.Json
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -47,6 +49,7 @@ class AnimeSamaFan : Source() {
     private val seasonRegex = Regex("""saison-(\d+)""")
     private val epNumRegex = Regex("[^0-9.]")
     private val pQualityRegex = Regex("""(\d+)p""")
+    private val ignoredSpecialRegex = Regex("""(?i)(émission spéciale avant diffusion|commentaires vidéo|video comments|behind the scenes|recap|résumé|trailer|bande[- ]annonce|pv)""")
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -122,6 +125,11 @@ class AnimeSamaFan : Source() {
             return parseSearchPage(response.asJsoup())
         }
 
+        if (query.isNotBlank()) {
+            val response = client.newCall(ajaxSearchRequest(query)).execute()
+            return parseAjaxSearchPage(response.asJsoup())
+        }
+
         val searchFilters = AnimeSamaFanCatalogueFilters.getSearchFilters(filters)
         val response = client.newCall(
             catalogueRequest(
@@ -135,6 +143,32 @@ class AnimeSamaFan : Source() {
         ).execute()
 
         return parseAnimePage(response.asJsoup(), page)
+    }
+
+    private fun ajaxSearchRequest(query: String): Request {
+        val body = FormBody.Builder()
+            .add("query", query)
+            .build()
+
+        val ajaxHeaders = headers.newBuilder()
+            .add("Accept", "text/html, */*; q=0.01")
+            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+            .add("Origin", baseUrl)
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        return POST("$baseUrl/template-php/defaut/fetch.php", ajaxHeaders, body)
+    }
+
+    private fun parseAjaxSearchPage(document: Document): AnimesPage {
+        val items = document.select("a.asn-search-result").map { element ->
+            SAnime.create().apply {
+                title = element.selectFirst(".asn-search-result-title")?.text()?.trim().orEmpty()
+                thumbnail_url = element.selectFirst(".asn-search-result-img")?.attr("abs:src")
+                url = fixUrl(element.attr("href")).replace(baseUrl, "")
+            }
+        }
+        return AnimesPage(items, false)
     }
 
     private fun parseSearchPage(document: Document): AnimesPage {
@@ -388,6 +422,13 @@ class AnimeSamaFan : Source() {
         // Fetch specific season metadata from TMDB
         val tmdbMetadata = fetchTmdbMetadata(animeTitle, sNum)
         var tmdbSeason1Metadata: fr.bluecxt.core.TmdbMetadata? = null
+        val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
+        val tmdbSpecialEpisodes = fetchTmdbMetadata(animeTitle, 0)
+            ?.episodeSummaries
+            ?.toSortedMap()
+            ?.values
+            ?.filterNot { isIgnoredSpecial(it.first) }
+            .orEmpty()
 
         val episodeCards = document.select("a.episode-card")
 
@@ -428,9 +469,12 @@ class AnimeSamaFan : Source() {
 
             SEpisode.create().apply {
                 this.url = card.attr("abs:href")
-                val epTitle = card.selectFirst("h3.episode-title")?.text()?.replace("Épisode", "Episode", true) ?: "Episode"
+                val epTitleRaw = card.selectFirst("h3.episode-title")?.text()?.trim().orEmpty()
+                val epTitle = epTitleRaw.replace("Épisode", "Episode", true).ifBlank { "Episode" }
                 val epNumStr = (card.selectFirst(".episode-number")?.text() ?: "0").replace(epNumRegex, "")
                 val epNum = epNumStr.toIntOrNull() ?: 0
+                val isSpecialEpisode = tmdbSeasonEpisodeCount > 0 && epNum > tmdbSeasonEpisodeCount
+                val specialIndex = (epNum - tmdbSeasonEpisodeCount - 1).coerceAtLeast(0)
 
                 // Metadata from TMDB
                 // Some titles have seasons split on the site but merged on TMDB (e.g. site S2 E1 == TMDB S1 E13).
@@ -441,6 +485,8 @@ class AnimeSamaFan : Source() {
                                 tmdbSeason1Metadata = fetchTmdbMetadata(animeTitle, 1)
                             }
                             tmdbSeason1Metadata?.episodeSummaries?.get(epNum + absoluteEpisodeOffset)
+                        } else if (isSpecialEpisode) {
+                            tmdbSpecialEpisodes.getOrNull(specialIndex)
                         } else {
                             null
                         }
@@ -465,6 +511,11 @@ class AnimeSamaFan : Source() {
                 this.summary = epMeta?.third
             }
         }
+    }
+
+    private fun isIgnoredSpecial(name: String?): Boolean {
+        val normalized = name?.trim().orEmpty()
+        return normalized.isNotBlank() && ignoredSpecialRegex.containsMatchIn(normalized)
     }
 
     // ================== Video (Extracteurs) ==================
