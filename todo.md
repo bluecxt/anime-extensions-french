@@ -5,7 +5,7 @@
 -[ ] animeultime
 -[x] animoflix
 -[x] franime
--[ ] frenchanime
+-[x] frenchanime
 -[x] frenchmanga
 -[w] lesporoiniens
 -[x] southtv
