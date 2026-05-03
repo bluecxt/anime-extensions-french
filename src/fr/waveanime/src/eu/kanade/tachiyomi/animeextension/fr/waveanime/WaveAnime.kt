@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.TmdbMetadata
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -148,8 +149,11 @@ class WaveAnime : Source() {
         anime.author = document.select("div.metadata .item:contains(Studio) .value").text()
         anime.thumbnail_url = document.selectFirst(".poster img")?.attr("abs:src")
 
-        // TMDB Metadata
-        val tmdbMetadata = fetchTmdbMetadata(mainTitle)
+        // Map site format to TMDB types
+        val tmdbType = tmdbTypeFromFormat(format)
+
+        // TMDB Metadata with type precision
+        val tmdbMetadata = fetchTmdbMetadata(mainTitle, type = tmdbType)
         tmdbMetadata?.summary?.let { anime.description = it }
 
         // Prepend release date to description
@@ -165,17 +169,30 @@ class WaveAnime : Source() {
         return anime
     }
 
+    private fun tmdbTypeFromFormat(format: String?): String? = when (format?.uppercase()) {
+        "FILM" -> "movie"
+        "TV", "ONA", "OAV", "SPECIAL" -> "tv"
+        else -> null
+    }
+
+    private suspend fun fetchTmdbMetadataWithType(
+        title: String,
+        season: Int = 1,
+        format: String?,
+    ): TmdbMetadata? = fetchTmdbMetadata(title, season, type = tmdbTypeFromFormat(format))
+
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
         val document = response.asJsoup()
+        val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
         val episodes = mutableListOf<SEpisode>()
         val seasonGrids = document.select("div.component.episode-card-grid")
 
         seasonGrids.forEach { seasonGrid ->
             val seasonNumStr = seasonGrid.attr("data-season")
             val seasonNum = seasonNumStr.toIntOrNull() ?: 1
-            val tmdbMetadata = fetchTmdbMetadata(anime.title, seasonNum)
+            val tmdbMetadata = fetchTmdbMetadataWithType(anime.title, seasonNum, format)
 
             seasonGrid.select("div.component.episode-card").forEach { element ->
                 val epActualNumStr = element.selectFirst("h5")?.text()?.substringAfter("E")?.trim() ?: "0"
