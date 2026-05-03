@@ -1,13 +1,13 @@
--[ ] adkami
--[ ] animesama
+-[ ] adkami il faut supprimer tmdb
+-[ ] animesama tmdb ne sais pas lire Saison X il faut ajouter une petite function
 -[x] animesamafan
--[ ] animesultra
--[ ] animeultime
+-[x] animesultra
+-[ ] animeultime rendre tmdb plus fiable
 -[x] animoflix
 -[x] franime
 -[x] frenchanime
 -[x] frenchmanga
 -[w] lesporoiniens
 -[x] southtv
--[ ] voiranime
+-[ ] voiranime ajouter tmdb
 -[x] waveanime
