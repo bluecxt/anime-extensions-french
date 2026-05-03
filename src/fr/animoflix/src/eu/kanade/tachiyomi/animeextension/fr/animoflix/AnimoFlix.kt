@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -28,7 +29,8 @@ import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
+import org.json.JSONObject
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -49,7 +51,7 @@ class AnimoFlix : Source() {
 
     companion object {
         private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://animoflix.com"
+        private const val PREF_URL_DEFAULT = "https://animoflix.to"
 
         private const val PREF_VOICES_KEY = "preferred_voices"
         private const val PREF_VOICES_TITLE = "Préférence des voix"
@@ -133,6 +135,11 @@ class AnimoFlix : Source() {
         }
     }
 
+    private fun fixUrl(url: String): String {
+        if (url.startsWith("http", true)) return url
+        return if (url.startsWith("/")) "$baseUrl$url" else "$baseUrl/$url"
+    }
+
     private fun getCleanTitle(title: String): String = title.replace(cleanTitleRegex, "").trim()
 
     private suspend fun getBestTmdbMetadata(fullTitle: String, url: String, sNum: Double): TmdbMetadata? {
@@ -146,60 +153,214 @@ class AnimoFlix : Source() {
         }
     }
 
-    // ================== Catalogue ==================
-    override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/", headers)).execute()
-        val document = response.asJsoup()
-        val animes = document.select("#sliderContainerTop .card-base-simple, #sliderContainer1 .card-base-simple").map {
-            SAnime.create().apply {
-                val link = it.selectFirst("a")!!
-                url = link.attr("href").substringBefore(baseUrl).let { if (it.startsWith("/")) it else "/$it" }
-                title = it.selectFirst(".card-title, h3, .anime-title")?.text() ?: ""
-                thumbnail_url = it.selectFirst("img")?.attr("abs:src")
-                season_number = parseSeasonNumber(title)
+    // ================== Catalogue (/catalogue/) ==================
+
+    override fun getFilterList() = AnimoFlixCatalogueFilters.FILTER_LIST
+
+    private fun catalogueRequest(
+        page: Int,
+        query: String = "",
+        genre: String = "",
+        status: String = "",
+        lang: String = "",
+        type: String = "",
+        sort: String = "recent",
+        letter: String = "",
+    ): Request {
+        val q = query.trim()
+        val g = genre.trim()
+        val st = status.trim()
+        val lg = lang.trim()
+        val tp = type.trim()
+        val so = sort.trim()
+        val lt = letter.trim()
+
+        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder()
+            .addQueryParameter("ajax", "1")
+            .addQueryParameter("page", page.toString())
+            .apply {
+                if (q.isNotBlank()) addQueryParameter("search", q)
+                if (g.isNotBlank()) addQueryParameter("genre", g)
+                if (st.isNotBlank()) addQueryParameter("status", st)
+                if (lg.isNotBlank()) addQueryParameter("lang", lg)
+                if (tp.isNotBlank()) addQueryParameter("type", tp)
+                if (so.isNotBlank()) addQueryParameter("sort", so)
+                if (lt.isNotBlank()) addQueryParameter("letter", lt)
             }
-        }.distinctBy { it.url }
-        return AnimesPage(animes, false)
+            .build()
+
+        return GET(url.toString(), headers)
+    }
+
+    private fun parseCatalogueAjaxResponse(response: Response, page: Int): AnimesPage {
+        val body = response.body.string()
+        val jsonObj = JSONObject(body)
+
+        val cardsHtml = jsonObj.optString("animeCards")
+        val paginationHtml = jsonObj.optString("pagination")
+
+        val cardsDoc = Jsoup.parseBodyFragment(cardsHtml, baseUrl)
+        val items = cardsDoc.select(".anime-card-pro a[href]")
+            .mapNotNull { a ->
+                val href = a.attr("href").trim()
+                if (href.isBlank()) return@mapNotNull null
+
+                val absUrl = fixUrl(href)
+                val path = try {
+                    absUrl.toHttpUrl().encodedPath
+                } catch (_: Exception) {
+                    href
+                }
+
+                val title = a.selectFirst(".card-title-pro")?.text()?.trim().orEmpty()
+                val thumb = a.selectFirst("img.card-image-pro")?.attr("abs:src")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: a.selectFirst("img.card-image-pro")?.attr("src")
+
+                SAnime.create().apply {
+                    this.url = path
+                    this.title = title
+                    this.thumbnail_url = thumb
+                }
+            }
+            .distinctBy { it.url }
+
+        val paginationDoc = Jsoup.parseBodyFragment(paginationHtml, baseUrl)
+        val pages = paginationDoc.select(".pagination-pro a[data-page]")
+            .mapNotNull { it.attr("data-page").toIntOrNull() }
+        val hasNextPage = pages.any { it > page }
+
+        return AnimesPage(items, hasNextPage)
+    }
+
+    override suspend fun getPopularAnime(page: Int): AnimesPage {
+        // Site behavior: when "sort" is omitted (or invalid), it behaves like a "views"/popular sort.
+        val response = client.newCall(catalogueRequest(page = page, sort = "")).execute()
+        return parseCatalogueAjaxResponse(response, page)
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/", headers)).execute()
-        val document = response.asJsoup()
-        val animes = document.select("#sliderContainerVostfr .card-base, #sliderContainerVf .card-base").map {
-            SAnime.create().apply {
-                val link = it.selectFirst("a")!!
-                var animeUrl = link.attr("abs:href").substringBefore("/vostfr/").substringBefore("/vf/")
-                if (!animeUrl.endsWith("/")) animeUrl += "/"
-                url = animeUrl.toHttpUrl().encodedPath
-                title = it.selectFirst(".card-title, h3, .anime-title")?.text() ?: ""
-                thumbnail_url = it.selectFirst("img")?.attr("abs:src")
-                season_number = parseSeasonNumber(title)
-            }
-        }.distinctBy { it.url }
-        return AnimesPage(animes, false)
+        val response = client.newCall(catalogueRequest(page = page, sort = "recent")).execute()
+        return parseCatalogueAjaxResponse(response, page)
     }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/search-autocomplete.php?q=$query", headers)).execute()
-        val jsonStr = response.body.string()
-        if (jsonStr.isBlank()) return AnimesPage(emptyList(), false)
-        return try {
-            val jsonArray = JSONArray(jsonStr)
-            val animes = mutableListOf<SAnime>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                animes.add(
-                    SAnime.create().apply {
-                        title = obj.getString("title")
-                        url = "/anime/${obj.getString("slug")}/"
-                        thumbnail_url = "$baseUrl/covers/${obj.getString("cover")}"
-                        season_number = parseSeasonNumber(title)
-                    },
-                )
+        val f = AnimoFlixCatalogueFilters.getSearchFilters(filters)
+        val response = client.newCall(
+            catalogueRequest(
+                page = page,
+                query = query,
+                genre = f.genre,
+                status = f.status,
+                lang = f.lang,
+                type = f.type,
+                sort = f.sort,
+                letter = f.letter,
+            ),
+        ).execute()
+        return parseCatalogueAjaxResponse(response, page)
+    }
+
+    private object AnimoFlixCatalogueFilters {
+        // Note: the site uses literal strings for genre (e.g. "Action").
+        // This is a curated list; we can expand it if you want the full site list.
+        private val GENRE_OPTIONS = arrayOf(
+            "Tous les genres" to "",
+            "Action" to "Action",
+            "Aventure" to "Aventure",
+            "Comédie" to "Comédie",
+            "Drame" to "Drame",
+            "Fantastique" to "Fantastique",
+            "Fantasy" to "Fantasy",
+            "Horreur" to "Horreur",
+            "Mystère" to "Mystère",
+            "Romance" to "Romance",
+            "Science-Fiction" to "Science-Fiction",
+            "Slice of Life" to "Slice of Life",
+            "Sport" to "Sport",
+            "Thriller" to "Thriller",
+            "Isekai" to "Isekai",
+            "Ecchi" to "Ecchi",
+            "Harem" to "Harem",
+            "Mecha" to "Mecha",
+            "Magie" to "Magie",
+            "Super pouvoirs" to "Super pouvoirs",
+        )
+
+        private val STATUS_OPTIONS = arrayOf(
+            "Tous les statuts" to "",
+            "En cours" to "ongoing",
+            "Terminé" to "completed",
+        )
+
+        private val LANG_OPTIONS = arrayOf(
+            "Toutes" to "",
+            "VF" to "VF",
+            "VOSTFR" to "VOSTFR",
+        )
+
+        private val TYPE_OPTIONS = arrayOf(
+            "Tous les types" to "",
+            "Série" to "serie",
+            "Film" to "film",
+            "OAV" to "oav",
+            "Scans" to "scans",
+            "Anime + Scans" to "both",
+        )
+
+        private val SORT_OPTIONS = arrayOf(
+            "Populaire" to "",
+            "Plus récents" to "recent",
+            "A → Z" to "az",
+        )
+
+        private val LETTER_OPTIONS = (listOf("Toutes" to "") + ('A'..'Z').map { it.toString() to it.toString() }).toTypedArray()
+
+        class GenreFilter : AnimeFilter.Select<String>("Genre", GENRE_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class StatusFilter : AnimeFilter.Select<String>("Statut", STATUS_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class LangFilter : AnimeFilter.Select<String>("Langue", LANG_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class TypeFilter : AnimeFilter.Select<String>("Type", TYPE_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class SortFilter : AnimeFilter.Select<String>("Trier par", SORT_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class LetterFilter : AnimeFilter.Select<String>("Lettre", LETTER_OPTIONS.map { it.first }.toTypedArray(), 0)
+
+        val FILTER_LIST get() = AnimeFilterList(
+            GenreFilter(),
+            StatusFilter(),
+            LangFilter(),
+            TypeFilter(),
+            SortFilter(),
+            LetterFilter(),
+        )
+
+        data class SearchFilters(
+            val genre: String,
+            val status: String,
+            val lang: String,
+            val type: String,
+            val sort: String,
+            val letter: String,
+        )
+
+        fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
+            if (filters.isEmpty()) {
+                return SearchFilters(genre = "", status = "", lang = "", type = "", sort = "recent", letter = "")
             }
-            AnimesPage(animes, false)
-        } catch (e: Exception) {
-            AnimesPage(emptyList(), false)
+
+            val genreIndex = filters.filterIsInstance<GenreFilter>().firstOrNull()?.state ?: 0
+            val statusIndex = filters.filterIsInstance<StatusFilter>().firstOrNull()?.state ?: 0
+            val langIndex = filters.filterIsInstance<LangFilter>().firstOrNull()?.state ?: 0
+            val typeIndex = filters.filterIsInstance<TypeFilter>().firstOrNull()?.state ?: 0
+            val sortIndex = filters.filterIsInstance<SortFilter>().firstOrNull()?.state ?: 0
+            val letterIndex = filters.filterIsInstance<LetterFilter>().firstOrNull()?.state ?: 0
+
+            return SearchFilters(
+                genre = GENRE_OPTIONS.getOrNull(genreIndex)?.second ?: "",
+                status = STATUS_OPTIONS.getOrNull(statusIndex)?.second ?: "",
+                lang = LANG_OPTIONS.getOrNull(langIndex)?.second ?: "",
+                type = TYPE_OPTIONS.getOrNull(typeIndex)?.second ?: "",
+                sort = SORT_OPTIONS.getOrNull(sortIndex)?.second ?: "recent",
+                letter = LETTER_OPTIONS.getOrNull(letterIndex)?.second ?: "",
+            )
         }
     }
 
@@ -225,8 +386,9 @@ class AnimoFlix : Source() {
         }
         anime.thumbnail_url = document.selectFirst("img.poster-image")?.attr("abs:src") ?: document.selectFirst("meta[property=og:image]")?.attr("content")
 
-        // Specialized TMDB Metadata fetching
-        val tmdbMetadata = getBestTmdbMetadata(fullTitle, anime.url, anime.season_number)
+        // TMDB Metadata with type precision
+        val tmdbType = if (anime.season_number == -2.0) "movie" else "tv"
+        val tmdbMetadata = fetchTmdbMetadata(getCleanTitle(fullTitle), type = tmdbType)
 
         tmdbMetadata?.summary?.let { anime.description = it }
         tmdbMetadata?.releaseDate?.let { date ->
