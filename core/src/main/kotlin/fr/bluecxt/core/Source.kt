@@ -95,18 +95,19 @@ abstract class Source :
 
     /**
      * Fetches metadata from TMDB using a smart two-step search.
+     * If type is provided ('movie' or 'tv'), searches exclusively in that category.
      */
-    suspend fun fetchTmdbMetadata(title: String, season: Int = 1): TmdbMetadata? {
+    suspend fun fetchTmdbMetadata(title: String, season: Int = 1, type: String? = null): TmdbMetadata? {
         if (title.isBlank()) return null
 
         // Step 1: Try searching with the full title (most accurate)
-        val firstAttempt = performTmdbSearch(title, season)
+        val firstAttempt = performTmdbSearch(title, season, type)
         if (firstAttempt != null) return firstAttempt
 
         // Step 2: If failed, try with sanitized title (removes arcs/subtitles)
         val cleanTitle = sanitizeTitle(title)
         if (cleanTitle != title) {
-            return performTmdbSearch(cleanTitle, season)
+            return performTmdbSearch(cleanTitle, season, type)
         }
 
         return null
@@ -122,29 +123,45 @@ abstract class Source :
         null
     }
 
-    private suspend fun performTmdbSearch(query: String, season: Int): TmdbMetadata? {
-        val searchUrl = "$tmdbBaseUrl/search/multi?api_key=$tmdbApiKey&query=${URLEncoder.encode(query, "UTF-8")}&language=fr-FR"
+    private suspend fun performTmdbSearch(query: String, season: Int, type: String? = null): TmdbMetadata? {
+        val searchPath = when (type?.lowercase()) {
+            "movie", "film" -> "search/movie"
+            "tv", "series", "série" -> "search/tv"
+            else -> "search/multi"
+        }
+        val searchUrl = "$tmdbBaseUrl/$searchPath?api_key=$tmdbApiKey&query=${URLEncoder.encode(query, "UTF-8")}&language=fr-FR"
 
         return try {
             val response = client.newCall(GET(searchUrl)).execute().use { it.body.string() }
             val results = JSONObject(response).getJSONArray("results")
             if (results.length() == 0) return null
 
-            // Find best match (Prefer TV if available, then Movie)
+            // Find best match
             var bestMatch: JSONObject? = null
-            for (i in 0 until results.length()) {
-                val res = results.getJSONObject(i)
-                if (res.optString("media_type") == "tv") {
-                    bestMatch = res
-                    break
-                }
+            val targetType = when (type?.lowercase()) {
+                "movie", "film" -> "movie"
+                "tv", "series", "série" -> "tv"
+                else -> null
             }
-            if (bestMatch == null) {
+
+            if (targetType != null) {
+                bestMatch = results.getJSONObject(0)
+            } else {
+                // Multi-search priority logic (TV first)
                 for (i in 0 until results.length()) {
                     val res = results.getJSONObject(i)
-                    if (res.optString("media_type") == "movie") {
+                    if (res.optString("media_type") == "tv") {
                         bestMatch = res
                         break
+                    }
+                }
+                if (bestMatch == null) {
+                    for (i in 0 until results.length()) {
+                        val res = results.getJSONObject(i)
+                        if (res.optString("media_type") == "movie") {
+                            bestMatch = res
+                            break
+                        }
                     }
                 }
             }
@@ -152,7 +169,7 @@ abstract class Source :
             if (bestMatch == null) return null
 
             val id = bestMatch.getInt("id")
-            val mediaType = bestMatch.optString("media_type")
+            val mediaType = targetType ?: bestMatch.optString("media_type")
 
             constructMetadata(id, mediaType, season)
         } catch (_: Exception) {
