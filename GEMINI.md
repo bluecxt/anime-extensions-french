@@ -3,8 +3,10 @@
 Ce document définit les standards obligatoires pour toutes les extensions Aniyomi du dépôt francophone bluecxt.
 
 ## 1. Formatage des Épisodes
-- **Terminologie Anglaise :** Utiliser exclusivement des termes anglais sans accents : `Episode`, `OAV`, `ONA`, `Special`, `Film`.
-- **Structure Nom :** `Episode Y - [Titre]` ou `Episode Y - [Titre]`.
+- **Terminologie Anglaise :** Utiliser les mots-clés reconnus par AniZen entre crochets : `[S1]` (pour Season 1), `[Movie]`, `[OVA]`, `[ONA]`, `[Special]`.
+- **Structure Nom :** `[S1] Episode Y - [Titre]` ou `Episode Y - [Titre]`.
+- **Contenu Spécial :** Toujours préfixer par `[Movie]`, `[OVA]` ou `[Special]` (ex: `[Movie] Episode 1 - [Titre]`) pour forcer le groupement spécial d'AniZen.
+- **Saison Unique :** Si l'animé ne possède qu'une seule saison, omettre le préfixe `[S1]`.
 - **Pas de Redondance :** Si le titre fourni par le site contient déjà le numéro de l'épisode, ne pas répéter `Episode X` au début.
 
 ## 2. Libellés des Sources Vidéo
