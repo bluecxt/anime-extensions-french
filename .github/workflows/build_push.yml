@@ -139,7 +139,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python ./.github/scripts/move-built-apks.py
-          INSPECTOR_LINK="$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -n 1)"
+          INSPECTOR_LINK="$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/aniyomiorg/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -n 1)"
 
           if [ -z "$INSPECTOR_LINK" ] || [ "$INSPECTOR_LINK" = "null" ]; then
             echo "Error: Could not find Inspector.jar download link. Check GitHub API rate limits."
