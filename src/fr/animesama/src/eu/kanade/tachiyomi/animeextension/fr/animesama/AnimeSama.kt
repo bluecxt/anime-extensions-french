@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelCatchingFlatMap
 import eu.kanade.tachiyomi.util.parallelFlatMapBlocking
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.TmdbMetadata
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -101,7 +102,7 @@ class AnimeSama : Source() {
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         // Fetch HD Metadata from TMDB (Description and secondary posters)
-        val tmdbMetadata = fetchTmdbMetadata(anime.title)
+        val tmdbMetadata = fetchSmartTmdbMetadata(anime.title)
         tmdbMetadata?.summary?.let { anime.description = it }
         // Note: keeping site thumbnail as per user preference in similar cases,
         // unless TMDB is a perfect match (done in fr.bluecxt.core.Source logic if requested)
@@ -113,11 +114,44 @@ class AnimeSama : Source() {
         val animeUrl = "$baseUrl${anime.url.substringBeforeLast("/")}"
         val movie = anime.url.split("#").getOrElse(1) { "" }.toIntOrNull()
         val players = VOICES_VALUES.map { fetchPlayers("$animeUrl/$it") }
-        val episodes = playersToEpisodes(players, anime.title)
+        val episodes = playersToEpisodes(players, anime.title, anime.url)
         return if (movie == null) episodes.reversed() else listOf(episodes[movie])
     }
 
+    private suspend fun fetchSmartTmdbMetadata(title: String): TmdbMetadata? {
+        if (title.isBlank()) return null
+
+        val seasonRegex = Regex("""(?i)(.*?)\s+(?:Saison|Season)\s*(\d+)""")
+        val oavRegex = Regex("""(?i)(.*?)\s+(?:OAV|OVA|Special)""")
+        val movieRegex = Regex("""(?i)(.*?)\s+(?:FILM|MOVIE)""")
+
+        return when {
+            seasonRegex.containsMatchIn(title) -> {
+                val match = seasonRegex.find(title)!!
+                val cleanTitle = match.groupValues[1].trim()
+                val season = match.groupValues[2].toIntOrNull() ?: 1
+                fetchTmdbMetadata(cleanTitle, season, "tv")
+            }
+
+            oavRegex.containsMatchIn(title) -> {
+                val match = oavRegex.find(title)!!
+                val cleanTitle = match.groupValues[1].trim()
+                val meta = fetchTmdbMetadata(cleanTitle, 0, "tv")
+                meta?.let { filterSmartMetadata(it, isSpecialSeason = true) }
+            }
+
+            movieRegex.containsMatchIn(title) -> {
+                val match = movieRegex.find(title)!!
+                val cleanTitle = match.groupValues[1].trim()
+                fetchTmdbMetadata(cleanTitle, 1, "movie")
+            }
+
+            else -> fetchTmdbMetadata(title)
+        }
+    }
+
     // ============================ Video Links =============================
+
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
     private val vkExtractor by lazy { VkExtractor(client, headers) }
     private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
@@ -261,26 +295,85 @@ class AnimeSama : Source() {
         }.toList()
     }
 
-    private suspend fun playersToEpisodes(list: List<List<List<String>>>, animeTitle: String): List<SEpisode> {
+    private suspend fun playersToEpisodes(list: List<List<List<String>>>, animeTitle: String, animeUrlPath: String): List<SEpisode> {
         val maxEpisodes = list.fold(0) { acc, it -> maxOf(acc, it.size) }
 
-        // Use season from URL to fetch correct TMDB metadata
-        val tmdbMetadata = fetchTmdbMetadata(animeTitle)
-
-        // Extract season number from title for nomenclature
+        // Extract nomenclature info from title
         val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
         val sNumMatch = sNumRegex.find(animeTitle)
-        val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
+        val isOav = animeTitle.contains("OAV", true) || animeTitle.contains("OVA", true) || animeTitle.contains("Special", true)
+        val isMovie = animeTitle.contains("FILM", true) || animeTitle.contains("MOVIE", true)
+
+        val sNum = if (isOav) 0 else sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+        // Fetch primary metadata
+        val tmdbMetadata = fetchSmartTmdbMetadata(animeTitle)
+        val tmdbEpCount = tmdbMetadata?.episodeSummaries?.size ?: 0
+
+        val hasOavs = maxEpisodes > tmdbEpCount
+        val sPrefix = when {
+            isMovie -> "[Movie] "
+
+            isOav -> "[OAV] "
+
+            sNumMatch != null -> {
+                if (sNum == 1 && !hasOavs) "" else "[S$sNum] "
+            }
+
+            else -> ""
+        }
+
+        val baseTitle = animeTitle.replace(sNumRegex, "").trim()
+
+        // Calculate OAV offset from previous seasons
+        var oavOffset = 0
+        if (sNum > 1) {
+            val baseDir = animeUrlPath.substringBeforeLast("/", "").substringBeforeLast("/", "")
+            for (i in 1 until sNum) {
+                val prevAsCount = countEpisodesInSeason("$baseDir/saison$i")
+                if (prevAsCount > 0) {
+                    val prevTmdbMeta = fetchTmdbMetadata(baseTitle, i, "tv")
+                    val prevTmdbCount = prevTmdbMeta?.episodeSummaries?.size ?: 0
+                    if (prevAsCount > prevTmdbCount) {
+                        oavOffset += (prevAsCount - prevTmdbCount)
+                    }
+                }
+            }
+        }
+
+        // Handle overflow metadata (S0) if we are in a regular season
+        val s0Metadata = if (sNum > 0 && maxEpisodes > tmdbEpCount) {
+            fetchTmdbMetadata(baseTitle, 0, "tv")?.let { filterSmartMetadata(it, isSpecialSeason = true) }
+        } else {
+            null
+        }
 
         return List(maxEpisodes) { episodeNumber ->
+            val epNum = episodeNumber + 1
             val players = list.map { it.getOrElse(episodeNumber) { emptyList() } }
+
+            var epMeta = if (isMovie) {
+                tmdbMetadata?.episodeSummaries?.get(1)
+            } else {
+                tmdbMetadata?.episodeSummaries?.get(epNum)
+            }
+
+            var finalPrefix = sPrefix
+
+            // Overflow to OAVs mapping
+            if (sNum > 0 && epNum > tmdbEpCount && s0Metadata != null) {
+                val s0EpNum = (epNum - tmdbEpCount) + oavOffset
+                val s0Meta = s0Metadata.episodeSummaries[s0EpNum]
+                if (s0Meta != null) {
+                    epMeta = s0Meta
+                    finalPrefix = "[OAV] "
+                }
+            }
+
             SEpisode.create().apply {
-                val epNum = episodeNumber + 1
-                val epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
                 val tmdbName = epMeta?.first
                 val baseName = if (tmdbName != null) "Episode $epNum - $tmdbName" else "Episode $epNum"
-                name = "$sPrefix$baseName"
+                name = "$finalPrefix$baseName"
                 url = json.encodeToString(players)
                 episode_number = epNum.toFloat()
                 scanlator = players.mapIndexedNotNull { i, it -> if (it.isNotEmpty()) VOICES_VALUES[i] else null }.joinToString().uppercase()
@@ -289,6 +382,21 @@ class AnimeSama : Source() {
                 preview_url = epMeta?.second
                 summary = epMeta?.third
             }
+        }
+    }
+
+    private fun countEpisodesInSeason(seasonPath: String): Int {
+        return try {
+            val docUrl = "$baseUrl$seasonPath/vostfr/episodes.js"
+            val js = client.newCall(GET(docUrl)).execute().use {
+                if (!it.isSuccessful) return 0
+                it.body.string()
+            }
+            // Simple regex to find the size of the first array (eps1)
+            val match = Regex("""eps1\s*=\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(js)
+            match?.groupValues?.get(1)?.split(",")?.size ?: 0
+        } catch (_: Exception) {
+            0
         }
     }
 
