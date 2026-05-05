@@ -49,7 +49,6 @@ class AnimeSamaFan : Source() {
     private val seasonRegex = Regex("""saison-(\d+)""")
     private val epNumRegex = Regex("[^0-9.]")
     private val pQualityRegex = Regex("""(\d+)p""")
-    private val ignoredSpecialRegex = Regex("""(?i)(émission spéciale avant diffusion|commentaires vidéo|video comments|behind the scenes|recap|résumé|trailer|bande[- ]annonce|pv)""")
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -424,10 +423,11 @@ class AnimeSamaFan : Source() {
         var tmdbSeason1Metadata: fr.bluecxt.core.TmdbMetadata? = null
         val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
         val tmdbSpecialEpisodes = fetchTmdbMetadata(animeTitle, 0)
+            ?.let { filterSmartMetadata(it, isSpecialSeason = true) }
             ?.episodeSummaries
             ?.toSortedMap()
             ?.values
-            ?.filterNot { isIgnoredSpecial(it.first) }
+            ?.toList()
             .orEmpty()
 
         val episodeCards = document.select("a.episode-card")
@@ -511,11 +511,6 @@ class AnimeSamaFan : Source() {
                 this.summary = epMeta?.third
             }
         }
-    }
-
-    private fun isIgnoredSpecial(name: String?): Boolean {
-        val normalized = name?.trim().orEmpty()
-        return normalized.isNotBlank() && ignoredSpecialRegex.containsMatchIn(normalized)
     }
 
     // ================== Video (Extracteurs) ==================

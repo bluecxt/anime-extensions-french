@@ -1,6 +1,6 @@
 -[ ] adkami il faut supprimer tmdb
--[ ] animesama tmdb ne sais pas lire Saison X il faut ajouter une petite function
--[x] animesamafan
+-[x] animesama
+-[ ] animesamafan il faut ajouter l'overflow intersaison (voir animesama)
 -[x] animesultra
 -[ ] animeultime rendre tmdb plus fiable
 -[x] animoflix
