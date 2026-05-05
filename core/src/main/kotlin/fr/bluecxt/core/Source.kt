@@ -114,6 +114,28 @@ abstract class Source :
     }
 
     /**
+     * Filters TMDB metadata to remove non-fiction content (PVs, recaps, interviews, etc.).
+     * Re-aligns episode numbers after filtering.
+     */
+    fun filterSmartMetadata(meta: TmdbMetadata, isSpecialSeason: Boolean = false): TmdbMetadata {
+        val ignoredRegex = Regex("""(?i)(émission spéciale avant diffusion|commentaires vidéo|video comments|behind the scenes|recap|résumé|trailer|bande[- ]annonce|pv|making[- ]of)""")
+
+        val filteredSummaries = meta.episodeSummaries.values
+            .filter { triple ->
+                val (title, _, summary) = triple
+                val isIgnoredTitle = title?.let { ignoredRegex.containsMatchIn(it) } ?: false
+                val hasNoSummary = summary.isNullOrBlank()
+
+                // Rule: Ignore if title matches blacklist OR (if Season 0 and has no summary)
+                !(isIgnoredTitle || (isSpecialSeason && hasNoSummary))
+            }
+            .mapIndexed { index, triple -> (index + 1) to triple }
+            .toMap()
+
+        return meta.copy(episodeSummaries = filteredSummaries)
+    }
+
+    /**
      * Fetches metadata from TMDB directly by ID.
      */
     suspend fun fetchTmdbMetadataById(id: Int, type: String, season: Int = 1): TmdbMetadata? = try {
