@@ -116,10 +116,6 @@ class ADKami : Source() {
         anime.thumbnail_url = document.selectFirst("#row-nav-episode img")?.attr("abs:src")
             ?: document.selectFirst(".fiche-info img")?.attr("abs:src")
 
-        // TMDB Description Fallback
-        val tmdbMetadata = fetchTmdbMetadata(anime.title)
-        tmdbMetadata?.summary?.let { anime.description = it }
-
         return anime
     }
 
@@ -130,9 +126,6 @@ class ADKami : Source() {
         val episodes = mutableListOf<SEpisode>()
         var currentSeason = 1
         val seasonCount = document.select("#row-nav-episode ul li.saison").size
-
-        val animeTitle = document.selectFirst(".fiche-info h1")?.text() ?: anime.title
-        val tmdbMetadata = fetchTmdbMetadata(animeTitle)
 
         val elements = document.select("#row-nav-episode ul li")
         if (elements.isNotEmpty()) {
@@ -154,7 +147,6 @@ class ADKami : Source() {
                 val parts = rawName.split(Regex("\\s+")).filter { it.isNotBlank() }
                 val typeStr = parts.getOrNull(0)?.uppercase() ?: ""
                 val numStr = parts.getOrNull(1)?.trimStart('0')?.ifEmpty { "0" } ?: "1"
-                val num = numStr.toIntOrNull() ?: 1
 
                 val sPrefix = if (seasonCount > 1) "[S$currentSeason] " else ""
                 val sType = when (typeStr) {
@@ -171,11 +163,6 @@ class ADKami : Source() {
                         episode_number = numStr.toFloatOrNull() ?: 1f
                         scanlator = "Season $currentSeason ($lang)"
                         setUrlWithoutDomain(a.attr("abs:href") + "?lang=$lang")
-
-                        // TMDB Metadata
-                        val epMeta = tmdbMetadata?.episodeSummaries?.get(num)
-                        preview_url = epMeta?.second
-                        summary = epMeta?.third
                     },
                 )
             }
@@ -184,11 +171,6 @@ class ADKami : Source() {
                 name = "Episode 1"
                 episode_number = 1f
                 url = anime.url + "?lang=VOSTFR"
-
-                tmdbMetadata?.episodeSummaries?.get(1)?.let {
-                    preview_url = it.first
-                    summary = it.second
-                }
             }
             episodes.add(sEp)
         }
@@ -203,8 +185,6 @@ class ADKami : Source() {
                 episode_number = first.episode_number
                 url = combinedUrl
                 scanlator = "Season ${first.scanlator?.substringBefore(" (") ?: "1"} ($combinedLangs)"
-                preview_url = first.preview_url
-                summary = first.summary
             }
         }
 
