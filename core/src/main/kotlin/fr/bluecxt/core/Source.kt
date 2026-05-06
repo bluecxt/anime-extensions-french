@@ -64,6 +64,10 @@ abstract class Source :
     private val tmdbApiKey = "24621da8ae19dce721e59eff2ab479bb"
     private val tmdbBaseUrl = "https://api.themoviedb.org/3"
 
+    companion object {
+        private val tmdbCache = mutableMapOf<String, TmdbMetadata?>()
+    }
+
     /**
      * Sanitizes a title for better TMDB search results.
      */
@@ -99,17 +103,25 @@ abstract class Source :
      */
     suspend fun fetchTmdbMetadata(title: String, season: Int = 1, type: String? = null): TmdbMetadata? {
         if (title.isBlank()) return null
+        val cacheKey = "$title-$season-$type"
+        if (tmdbCache.containsKey(cacheKey)) return tmdbCache[cacheKey]
 
         // Step 1: Try searching with the full title (most accurate)
         val firstAttempt = performTmdbSearch(title, season, type)
-        if (firstAttempt != null) return firstAttempt
+        if (firstAttempt != null) {
+            tmdbCache[cacheKey] = firstAttempt
+            return firstAttempt
+        }
 
         // Step 2: If failed, try with sanitized title (removes arcs/subtitles)
         val cleanTitle = sanitizeTitle(title)
         if (cleanTitle != title) {
-            return performTmdbSearch(cleanTitle, season, type)
+            val secondAttempt = performTmdbSearch(cleanTitle, season, type)
+            tmdbCache[cacheKey] = secondAttempt
+            return secondAttempt
         }
 
+        tmdbCache[cacheKey] = null
         return null
     }
 
@@ -158,7 +170,7 @@ abstract class Source :
             val results = JSONObject(response).getJSONArray("results")
             if (results.length() == 0) return null
 
-            // Find best match
+            // Find best match based on popularity/votes to avoid spin-offs/specials appearing first
             var bestMatch: JSONObject? = null
             val targetType = when (type?.lowercase()) {
                 "movie", "film" -> "movie"
@@ -167,31 +179,44 @@ abstract class Source :
             }
 
             if (targetType != null) {
-                bestMatch = results.getJSONObject(0)
-            } else {
-                // Multi-search priority logic (TV first)
+                var maxVotes = -1
                 for (i in 0 until results.length()) {
                     val res = results.getJSONObject(i)
-                    if (res.optString("media_type") == "tv") {
+                    val votes = res.optInt("vote_count", 0)
+                    if (votes > maxVotes) {
+                        maxVotes = votes
                         bestMatch = res
-                        break
                     }
                 }
-                if (bestMatch == null) {
-                    for (i in 0 until results.length()) {
-                        val res = results.getJSONObject(i)
-                        if (res.optString("media_type") == "movie") {
-                            bestMatch = res
-                            break
+            } else {
+                var maxTvVotes = -1
+                var bestTv: JSONObject? = null
+                var maxOverallVotes = -1
+                var bestOverall: JSONObject? = null
+
+                for (i in 0 until results.length()) {
+                    val res = results.getJSONObject(i)
+                    val votes = res.optInt("vote_count", 0)
+                    val mType = res.optString("media_type", "tv") // Default to tv if search/tv
+
+                    if (mType == "tv") {
+                        if (votes > maxTvVotes) {
+                            maxTvVotes = votes
+                            bestTv = res
                         }
                     }
+                    if (votes > maxOverallVotes) {
+                        maxOverallVotes = votes
+                        bestOverall = res
+                    }
                 }
+                bestMatch = bestTv ?: bestOverall
             }
 
             if (bestMatch == null) return null
 
             val id = bestMatch.getInt("id")
-            val mediaType = targetType ?: bestMatch.optString("media_type")
+            val mediaType = bestMatch.optString("media_type", targetType ?: "tv")
 
             constructMetadata(id, mediaType, season)
         } catch (_: Exception) {
