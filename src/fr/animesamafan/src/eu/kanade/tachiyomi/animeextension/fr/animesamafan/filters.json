@@ -1,0 +1,38 @@
+{
+  "LANGUAGES": [
+    ["Toutes les langues", ""],
+    ["VF", "VF"],
+    ["VOSTFR", "VOSTFR"]
+  ],
+  "TYPES": [
+    ["Tous les types", ""],
+    ["Série", "Series"],
+    ["Film", "Film"]
+  ],
+  "GENRES": [
+    ["Tous les genres", ""],
+    ["Action", "9"],
+    ["Animes", "1"],
+    ["Aventure", "13"],
+    ["Comédie", "11"],
+    ["Crime", "15"],
+    ["Drame", "12"],
+    ["Famille", "16"],
+    ["Fantastique", "14"],
+    ["Films", "2"],
+    ["Guerre", "17"],
+    ["Horreur", "22"],
+    ["Mystère", "18"],
+    ["Romance", "20"],
+    ["Scans", "50"],
+    ["Science-Fiction", "19"],
+    ["Thriller", "21"],
+    ["Top Animes", "3"],
+    ["Voirdrama", "48"]
+  ],
+  "SORT": [
+    ["Plus récents", "recent"],
+    ["A → Z", "az"],
+    ["Les plus vus", "views"]
+  ]
+}

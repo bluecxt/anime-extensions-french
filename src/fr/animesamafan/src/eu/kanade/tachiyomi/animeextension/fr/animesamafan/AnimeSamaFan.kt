@@ -196,53 +196,25 @@ class AnimeSamaFan : Source() {
     }
 
     private object AnimeSamaFanCatalogueFilters {
-        private val LANGUAGE_OPTIONS = arrayOf(
-            "Toutes les langues" to "",
-            "VF" to "VF",
-            "VOSTFR" to "VOSTFR",
-        )
+        private val filterData by lazy {
+            val jsonStream = AnimeSamaFan::class.java.getResourceAsStream("filters.json")
+            val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
+            try {
+                Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        }
 
-        private val TYPE_OPTIONS = arrayOf(
-            "Tous les types" to "",
-            "Série" to "Series",
-            "Film" to "Film",
-        )
+        private fun getOptions(key: String): List<Pair<String, String>> = filterData[key]?.map { it[0] to it[1] } ?: emptyList()
 
-        private val GENRE_OPTIONS = arrayOf(
-            "Tous les genres" to "",
-            "Action" to "9",
-            "Animes" to "1",
-            "Aventure" to "13",
-            "Comédie" to "11",
-            "Crime" to "15",
-            "Drame" to "12",
-            "Famille" to "16",
-            "Fantastique" to "14",
-            "Films" to "2",
-            "Guerre" to "17",
-            "Horreur" to "22",
-            "Mystère" to "18",
-            "Romance" to "20",
-            "Scans" to "50",
-            "Science-Fiction" to "19",
-            "Thriller" to "21",
-            "Top Animes" to "3",
-            "Voirdrama" to "48",
-        )
+        class LangueFilter : AnimeFilter.Select<String>("Langue", getOptions("LANGUAGES").map { it.first }.toTypedArray(), 0)
 
-        private val SORT_OPTIONS = arrayOf(
-            "Plus récents" to "recent",
-            "A → Z" to "az",
-            "Les plus vus" to "views",
-        )
+        class TypeFilter : AnimeFilter.Select<String>("Type", getOptions("TYPES").map { it.first }.toTypedArray(), 0)
 
-        class LangueFilter : AnimeFilter.Select<String>("Langue", LANGUAGE_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class GenreFilter : AnimeFilter.Select<String>("Genre", getOptions("GENRES").map { it.first }.toTypedArray(), 0)
 
-        class TypeFilter : AnimeFilter.Select<String>("Type", TYPE_OPTIONS.map { it.first }.toTypedArray(), 0)
-
-        class GenreFilter : AnimeFilter.Select<String>("Genre", GENRE_OPTIONS.map { it.first }.toTypedArray(), 0)
-
-        class SortFilter : AnimeFilter.Select<String>("Trier par", SORT_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class SortFilter : AnimeFilter.Select<String>("Trier par", getOptions("SORT").map { it.first }.toTypedArray(), 0)
 
         val FILTER_LIST get() = AnimeFilterList(
             LangueFilter(),
@@ -269,10 +241,10 @@ class AnimeSamaFan : Source() {
             val sortIndex = filters.filterIsInstance<SortFilter>().firstOrNull()?.state ?: 0
 
             return SearchFilters(
-                langue = LANGUAGE_OPTIONS.getOrNull(langueIndex)?.second ?: "",
-                type = TYPE_OPTIONS.getOrNull(typeIndex)?.second ?: "",
-                genre = GENRE_OPTIONS.getOrNull(genreIndex)?.second ?: "",
-                sort = SORT_OPTIONS.getOrNull(sortIndex)?.second ?: "recent",
+                langue = getOptions("LANGUAGES").getOrNull(langueIndex)?.second ?: "",
+                type = getOptions("TYPES").getOrNull(typeIndex)?.second ?: "",
+                genre = getOptions("GENRES").getOrNull(genreIndex)?.second ?: "",
+                sort = getOptions("SORT").getOrNull(sortIndex)?.second ?: "recent",
             )
         }
     }
@@ -319,7 +291,7 @@ class AnimeSamaFan : Source() {
                 )
 
             if (normalizedLooksValid) {
-                normalizedDoc!!
+                normalizedDoc
             } else {
                 initialDoc
             }
@@ -365,16 +337,42 @@ class AnimeSamaFan : Source() {
         // Compute cumulative episode offsets per season.
         // This is used when TMDB merges multiple site seasons into a single TMDB season (usually season 1).
         val episodeOffsetBySeason = mutableMapOf<Int, Int>()
-        var cumulative = 0
+        val oavOffsetBySeason = mutableMapOf<Int, Int>()
+        var siteOffsetAccumulator = 0
+        var oavOffsetAccumulator = 0
+
+        val baseTitle = anime.title.replace(Regex("""(?i)\s*(?:Saison|Season)\s*\d+.*"""), "").trim()
+        val seenTmdbSeasons = mutableSetOf<Int>()
+
         contexts.forEach { ctx ->
-            episodeOffsetBySeason[ctx.seasonNum] = cumulative
-            cumulative += ctx.episodeCount
+            episodeOffsetBySeason[ctx.seasonNum] = siteOffsetAccumulator
+            oavOffsetBySeason[ctx.seasonNum] = oavOffsetAccumulator
+
+            val count = ctx.episodeCount
+            val sNum = ctx.seasonNum
+
+            if (seenTmdbSeasons.contains(sNum)) {
+                oavOffsetAccumulator += count
+            } else {
+                seenTmdbSeasons.add(sNum)
+                val tmdbMeta = kotlinx.coroutines.runBlocking { fetchTmdbMetadata(baseTitle, sNum, "tv") }
+                val tmdbCount = tmdbMeta?.episodeSummaries?.size ?: 0
+                if (tmdbCount > 0) {
+                    siteOffsetAccumulator += kotlin.math.min(count, tmdbCount)
+                    if (count > tmdbCount) {
+                        oavOffsetAccumulator += (count - tmdbCount)
+                    }
+                } else {
+                    siteOffsetAccumulator += count
+                }
+            }
         }
 
         val episodes = mutableListOf<SEpisode>()
         contexts.forEach { ctx ->
-            val offset = episodeOffsetBySeason[ctx.seasonNum] ?: 0
-            episodes.addAll(parseEpisodesFromDocument(ctx.document, anime.title, totalSeasons, offset))
+            val sOffset = episodeOffsetBySeason[ctx.seasonNum] ?: 0
+            val oOffset = oavOffsetBySeason[ctx.seasonNum] ?: 0
+            episodes.addAll(parseEpisodesFromDocument(ctx.document, baseTitle, totalSeasons, sOffset, oOffset))
         }
 
         return episodes.distinctBy { it.url }.sortedByDescending { it.episode_number }
@@ -411,24 +409,21 @@ class AnimeSamaFan : Source() {
         document: Document,
         animeTitle: String,
         totalSeasons: Int,
-        absoluteEpisodeOffset: Int,
+        siteOffset: Int,
+        oavOffset: Int,
     ): List<SEpisode> {
         val url = document.location()
         val seasonMatch = seasonRegex.find(url)
         val sNum = seasonMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        Log.d("AnimeSamaFan", "Parsing episodes for season $sNum (Total seasons: $totalSeasons)")
+        Log.d("AnimeSamaFan", "Parsing episodes for season $sNum (Total seasons: $totalSeasons, Offset: $siteOffset, OAV: $oavOffset)")
 
         // Fetch specific season metadata from TMDB
         val tmdbMetadata = fetchTmdbMetadata(animeTitle, sNum)
         var tmdbSeason1Metadata: fr.bluecxt.core.TmdbMetadata? = null
         val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
-        val tmdbSpecialEpisodes = fetchTmdbMetadata(animeTitle, 0)
-            ?.let { filterSmartMetadata(it, isSpecialSeason = true) }
-            ?.episodeSummaries
-            ?.toSortedMap()
-            ?.values
-            ?.toList()
-            .orEmpty()
+
+        // Lazy load S0 metadata
+        var tmdbS0Metadata: fr.bluecxt.core.TmdbMetadata? = null
 
         val episodeCards = document.select("a.episode-card")
 
@@ -473,24 +468,28 @@ class AnimeSamaFan : Source() {
                 val epTitle = epTitleRaw.replace("Épisode", "Episode", true).ifBlank { "Episode" }
                 val epNumStr = (card.selectFirst(".episode-number")?.text() ?: "0").replace(epNumRegex, "")
                 val epNum = epNumStr.toIntOrNull() ?: 0
-                val isSpecialEpisode = tmdbSeasonEpisodeCount > 0 && epNum > tmdbSeasonEpisodeCount
-                val specialIndex = (epNum - tmdbSeasonEpisodeCount - 1).coerceAtLeast(0)
 
                 // Metadata from TMDB
-                // Some titles have seasons split on the site but merged on TMDB (e.g. site S2 E1 == TMDB S1 E13).
-                val epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
-                    ?: run {
-                        if (sNum > 1 && absoluteEpisodeOffset > 0) {
-                            if (tmdbSeason1Metadata == null) {
-                                tmdbSeason1Metadata = fetchTmdbMetadata(animeTitle, 1)
-                            }
-                            tmdbSeason1Metadata?.episodeSummaries?.get(epNum + absoluteEpisodeOffset)
-                        } else if (isSpecialEpisode) {
-                            tmdbSpecialEpisodes.getOrNull(specialIndex)
-                        } else {
-                            null
-                        }
+                // 1. Regular Mapping
+                var epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
+
+                // 2. Absolute Mapping (Reverse Overflow)
+                if (epMeta == null && sNum > 1 && siteOffset > 0) {
+                    if (tmdbSeason1Metadata == null) {
+                        tmdbSeason1Metadata = fetchTmdbMetadata(animeTitle, 1)
                     }
+                    epMeta = tmdbSeason1Metadata?.episodeSummaries?.get(epNum + siteOffset)
+                }
+
+                // 3. Overflow Mapping (S0)
+                if (epMeta == null && sNum > 0 && (tmdbSeasonEpisodeCount == 0 || epNum > tmdbSeasonEpisodeCount)) {
+                    if (tmdbS0Metadata == null) {
+                        tmdbS0Metadata = fetchTmdbMetadata(animeTitle, 0)?.let { filterSmartMetadata(it, isSpecialSeason = true) }
+                    }
+                    val s0EpNum = (if (tmdbSeasonEpisodeCount > 0) epNum - tmdbSeasonEpisodeCount else epNum) + oavOffset
+                    epMeta = tmdbS0Metadata?.episodeSummaries?.get(s0EpNum)
+                }
+
                 val tmdbName = epMeta?.first
 
                 // GEMINI.md Naming Rules: [S1] Episode Y - [Titre]
