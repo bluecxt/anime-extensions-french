@@ -41,6 +41,8 @@ android {
             kotlin.directories.add("src")
             res.directories.clear()
             res.directories.add("res")
+            resources.directories.clear()
+            resources.directories.add("src")
             assets.directories.clear()
             assets.directories.add("assets")
         }
