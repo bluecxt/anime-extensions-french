@@ -26,6 +26,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -262,65 +263,27 @@ class AnimoFlix : Source() {
     }
 
     private object AnimoFlixCatalogueFilters {
-        // Note: the site uses literal strings for genre (e.g. "Action").
-        // This is a curated list; we can expand it if you want the full site list.
-        private val GENRE_OPTIONS = arrayOf(
-            "Tous les genres" to "",
-            "Action" to "Action",
-            "Aventure" to "Aventure",
-            "Comédie" to "Comédie",
-            "Drame" to "Drame",
-            "Fantastique" to "Fantastique",
-            "Fantasy" to "Fantasy",
-            "Horreur" to "Horreur",
-            "Mystère" to "Mystère",
-            "Romance" to "Romance",
-            "Science-Fiction" to "Science-Fiction",
-            "Slice of Life" to "Slice of Life",
-            "Sport" to "Sport",
-            "Thriller" to "Thriller",
-            "Isekai" to "Isekai",
-            "Ecchi" to "Ecchi",
-            "Harem" to "Harem",
-            "Mecha" to "Mecha",
-            "Magie" to "Magie",
-            "Super pouvoirs" to "Super pouvoirs",
-        )
-
-        private val STATUS_OPTIONS = arrayOf(
-            "Tous les statuts" to "",
-            "En cours" to "ongoing",
-            "Terminé" to "completed",
-        )
-
-        private val LANG_OPTIONS = arrayOf(
-            "Toutes" to "",
-            "VF" to "VF",
-            "VOSTFR" to "VOSTFR",
-        )
-
-        private val TYPE_OPTIONS = arrayOf(
-            "Tous les types" to "",
-            "Série" to "serie",
-            "Film" to "film",
-            "OAV" to "oav",
-            "Scans" to "scans",
-            "Anime + Scans" to "both",
-        )
-
-        private val SORT_OPTIONS = arrayOf(
-            "Populaire" to "",
-            "Plus récents" to "recent",
-            "A → Z" to "az",
-        )
+        private val filterData by lazy {
+            val jsonStream = AnimoFlix::class.java.getResourceAsStream("filters.json")
+            val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
+            try {
+                Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        }
+        private fun getOptions(key: String): List<Pair<String, String>> {
+            val list = filterData[key] ?: return emptyList()
+            return list.map { it[0] to it[1] }
+        }
 
         private val LETTER_OPTIONS = (listOf("Toutes" to "") + ('A'..'Z').map { it.toString() to it.toString() }).toTypedArray()
 
-        class GenreFilter : AnimeFilter.Select<String>("Genre", GENRE_OPTIONS.map { it.first }.toTypedArray(), 0)
-        class StatusFilter : AnimeFilter.Select<String>("Statut", STATUS_OPTIONS.map { it.first }.toTypedArray(), 0)
-        class LangFilter : AnimeFilter.Select<String>("Langue", LANG_OPTIONS.map { it.first }.toTypedArray(), 0)
-        class TypeFilter : AnimeFilter.Select<String>("Type", TYPE_OPTIONS.map { it.first }.toTypedArray(), 0)
-        class SortFilter : AnimeFilter.Select<String>("Trier par", SORT_OPTIONS.map { it.first }.toTypedArray(), 0)
+        class GenreFilter : AnimeFilter.Select<String>("Genre", getOptions("GENRES").map { it.first }.toTypedArray(), 0)
+        class StatusFilter : AnimeFilter.Select<String>("Statut", getOptions("STATUS").map { it.first }.toTypedArray(), 0)
+        class LangFilter : AnimeFilter.Select<String>("Langue", getOptions("LANG").map { it.first }.toTypedArray(), 0)
+        class TypeFilter : AnimeFilter.Select<String>("Type", getOptions("TYPES").map { it.first }.toTypedArray(), 0)
+        class SortFilter : AnimeFilter.Select<String>("Trier par", getOptions("SORT").map { it.first }.toTypedArray(), 0)
         class LetterFilter : AnimeFilter.Select<String>("Lettre", LETTER_OPTIONS.map { it.first }.toTypedArray(), 0)
 
         val FILTER_LIST get() = AnimeFilterList(
@@ -354,11 +317,11 @@ class AnimoFlix : Source() {
             val letterIndex = filters.filterIsInstance<LetterFilter>().firstOrNull()?.state ?: 0
 
             return SearchFilters(
-                genre = GENRE_OPTIONS.getOrNull(genreIndex)?.second ?: "",
-                status = STATUS_OPTIONS.getOrNull(statusIndex)?.second ?: "",
-                lang = LANG_OPTIONS.getOrNull(langIndex)?.second ?: "",
-                type = TYPE_OPTIONS.getOrNull(typeIndex)?.second ?: "",
-                sort = SORT_OPTIONS.getOrNull(sortIndex)?.second ?: "recent",
+                genre = getOptions("GENRES").getOrNull(genreIndex)?.second ?: "",
+                status = getOptions("STATUS").getOrNull(statusIndex)?.second ?: "",
+                lang = getOptions("LANG").getOrNull(langIndex)?.second ?: "",
+                type = getOptions("TYPES").getOrNull(typeIndex)?.second ?: "",
+                sort = getOptions("SORT").getOrNull(sortIndex)?.second ?: "",
                 letter = LETTER_OPTIONS.getOrNull(letterIndex)?.second ?: "",
             )
         }

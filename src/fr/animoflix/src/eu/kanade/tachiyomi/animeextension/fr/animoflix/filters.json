@@ -1,0 +1,47 @@
+{
+  "GENRES": [
+    ["Tous les genres", ""],
+    ["Action", "Action"],
+    ["Aventure", "Aventure"],
+    ["Comédie", "Comédie"],
+    ["Drame", "Drame"],
+    ["Fantastique", "Fantastique"],
+    ["Fantasy", "Fantasy"],
+    ["Horreur", "Horreur"],
+    ["Mystère", "Mystère"],
+    ["Romance", "Romance"],
+    ["Science-Fiction", "Science-Fiction"],
+    ["Slice of Life", "Slice of Life"],
+    ["Sport", "Sport"],
+    ["Thriller", "Thriller"],
+    ["Isekai", "Isekai"],
+    ["Ecchi", "Ecchi"],
+    ["Harem", "Harem"],
+    ["Mecha", "Mecha"],
+    ["Magie", "Magie"],
+    ["Super pouvoirs", "Super pouvoirs"]
+  ],
+  "STATUS": [
+    ["Tous les statuts", ""],
+    ["En cours", "ongoing"],
+    ["Terminé", "completed"]
+  ],
+  "LANG": [
+    ["Toutes", ""],
+    ["VF", "VF"],
+    ["VOSTFR", "VOSTFR"]
+  ],
+  "TYPES": [
+    ["Tous les types", ""],
+    ["Série", "serie"],
+    ["Film", "film"],
+    ["OAV", "oav"],
+    ["Scans", "scans"],
+    ["Anime + Scans", "both"]
+  ],
+  "SORT": [
+    ["Populaire", ""],
+    ["Plus récents", "recent"],
+    ["A → Z", "az"]
+  ]
+}
