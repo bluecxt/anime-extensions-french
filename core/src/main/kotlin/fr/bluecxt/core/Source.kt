@@ -66,6 +66,17 @@ abstract class Source :
 
     companion object {
         private val tmdbCache = mutableMapOf<String, TmdbMetadata?>()
+
+        private val ignoredRegex by lazy {
+            val terms = try {
+                val jsonStream = Source::class.java.getResourceAsStream("/tmdb_ignored.json")
+                val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "[]"
+                kotlinx.serialization.json.Json.decodeFromString<List<String>>(jsonString)
+            } catch (_: Exception) {
+                emptyList<String>()
+            }
+            Regex("(?i)(" + terms.joinToString("|").ifEmpty { "NOMATCH" } + ")")
+        }
     }
 
     /**
@@ -130,8 +141,6 @@ abstract class Source :
      * Re-aligns episode numbers after filtering.
      */
     fun filterSmartMetadata(meta: TmdbMetadata, isSpecialSeason: Boolean = false): TmdbMetadata {
-        val ignoredRegex = Regex("""(?i)(émission spéciale avant diffusion|commentaires vidéo|video comments|behind the scenes|recap|résumé|trailer|bande[- ]annonce|pv|making[- ]of)""")
-
         val filteredSummaries = meta.episodeSummaries.values
             .filter { triple ->
                 val (title, _, summary) = triple
