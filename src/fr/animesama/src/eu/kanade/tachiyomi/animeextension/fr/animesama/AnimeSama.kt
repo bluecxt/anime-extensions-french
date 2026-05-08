@@ -231,6 +231,16 @@ class AnimeSama : Source() {
     }
 
     // ============================ Utils =============================
+    override fun List<Hoster>.sortHosters(): List<Hoster> {
+        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+
+        return this.sortedWith(
+            compareByDescending<Hoster> { it.hosterName.contains("($voices", true) }
+                .thenByDescending { it.hosterName.contains(player, true) },
+        )
+    }
+
     override fun List<Video>.sortVideos(): List<Video> {
         val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
         val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
