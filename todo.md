@@ -1,13 +1,13 @@
--[ ] adkami il faut supprimer tmdb
+-[ ] adkami
 -[x] animesama
--[ ] animesamafan il faut ajouter l'overflow intersaison (voir animesama)
+-[x] animesamafan
 -[x] animesultra
 -[ ] animeultime rendre tmdb plus fiable
 -[x] animoflix
 -[x] franime
 -[x] frenchanime
 -[x] frenchmanga
--[w] lesporoiniens
+-[x] lesporoiniens
 -[x] southtv
 -[ ] voiranime ajouter tmdb
 -[x] waveanime
