@@ -42,7 +42,7 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 | :--- | :--- | :--- |:---------------|:--------|
 | **Anime-Sama** | ✅ | Plus grosse source pour les sorties d'animes récents. | VOSTFR, VF, VA | Non     |
 | **Anime-Sama (FAN)** | ✅ | Version alternative rapide, utile en secours à Anime-Sama. | VOSTFR, VF     | Non     |
-| **ADKami** | ✅ | Catalogue massif incluant une large section Hentai. | VOSTFR, RAW    | **Oui** |
+| **ADKami** | ✅ | Catalogue massif incluant une large section Hentai. | VOSTFR, VOSTA, RAW | **Oui** |
 | **AnimoFlix** | ✅ | Seule source proposant également des cartoons. | VOSTFR, VF     | Non     |
 | **Anime-Ultime** | ❌ | Haute qualité de Fantrad sur des titres peu diffusés. | VOSTFR, RAW    | **Oui** |
 | **FrAnime** | ✅ | Plus grosse source de films et d'animes. | VOSTFR, VF     | **Oui** |
