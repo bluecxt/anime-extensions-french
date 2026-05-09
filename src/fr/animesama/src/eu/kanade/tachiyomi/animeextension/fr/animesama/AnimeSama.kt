@@ -102,11 +102,16 @@ class AnimeSama : Source() {
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        // Fetch HD Metadata from TMDB (Description and secondary posters)
         val tmdbMetadata = fetchSmartTmdbMetadata(anime.title)
+
         tmdbMetadata?.summary?.let { anime.description = it }
-        // Note: keeping site thumbnail as per user preference in similar cases,
-        // unless TMDB is a perfect match (done in fr.bluecxt.core.Source logic if requested)
+        tmdbMetadata?.releaseDate?.let { date ->
+            anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
+        }
+        tmdbMetadata?.author?.let { anime.author = it }
+        tmdbMetadata?.artist?.let { anime.artist = it }
+        tmdbMetadata?.status?.let { anime.status = it }
+
         return anime
     }
 
@@ -207,7 +212,7 @@ class AnimeSama : Source() {
         }.sortVideos()
     }
 
-    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
+    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)(?:/s)?")
     private val qualitySizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
     private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|VK|VidMoly):default")
     private val pQualityRegex = Regex("""(\d+)p""")
@@ -232,27 +237,27 @@ class AnimeSama : Source() {
 
     // ============================ Utils =============================
     override fun List<Hoster>.sortHosters(): List<Hoster> {
-        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!.uppercase()
         val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
 
         return this.sortedWith(
-            compareByDescending<Hoster> { it.hosterName.contains("($voices", true) }
+            compareByDescending<Hoster> { it.hosterName.contains("($voices)", true) }
                 .thenByDescending { it.hosterName.contains(player, true) },
         )
     }
 
     override fun List<Video>.sortVideos(): List<Video> {
-        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!.uppercase()
         val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
         val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
 
         return this.sortedWith(
-            compareByDescending<Video> { it.videoTitle.contains("($voices", true) }
+            compareByDescending<Video> { it.videoTitle.contains("($voices)", true) }
+                .thenByDescending { it.videoTitle.contains(player, true) }
                 .thenByDescending { it.videoTitle.contains(quality) }
                 .thenByDescending {
                     pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                }
-                .thenByDescending { it.videoTitle.contains(player, true) },
+                },
         )
     }
 

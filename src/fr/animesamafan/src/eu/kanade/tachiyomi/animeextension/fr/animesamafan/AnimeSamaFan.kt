@@ -604,16 +604,27 @@ class AnimeSamaFan : Source() {
         return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
     }
 
+    override fun List<Hoster>.sortHosters(): List<Hoster> {
+        val prefVoice = preferences.getString("preferred_voices", "VOSTFR")!!
+        val player = preferences.getString("preferred_server", "sibnet")!!
+
+        return this.sortedWith(
+            compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) }
+                .thenByDescending { it.hosterName.contains(player, true) },
+        )
+    }
+
     override fun List<Video>.sortVideos(): List<Video> {
         val prefVoice = preferences.getString("preferred_voices", "VOSTFR")!!
+        val player = preferences.getString("preferred_server", "sibnet")!!
+
         return this.sortedWith(
-            compareBy(
-                { it.videoTitle.contains(prefVoice, true) },
-                {
+            compareByDescending<Video> { it.videoTitle.contains("($prefVoice)", true) }
+                .thenByDescending { it.videoTitle.contains(player, true) }
+                .thenByDescending {
                     pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
-            ),
-        ).reversed()
+        )
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

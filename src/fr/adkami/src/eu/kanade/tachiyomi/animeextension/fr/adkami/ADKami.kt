@@ -472,24 +472,43 @@ class ADKami : Source() {
     private fun cleanQuality(quality: String): String {
         val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon", "Voe", "Doodstream", "Dood", "Luluvid", "Streamtape", "Lulustream", "Vidoza")
         var res = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)(?:/s)?"), "").replace(Regex("\\s*\\(\\d+x\\d+\\)"), "").replace(Regex("(?i):?default|mirror"), "").trim()
-        val langMatch = Regex("\\((VOSTFR|VF|VA|RAW)\\)").find(res)
+        val langMatch = Regex("\\((VOSTFR|VF|VA|VOSTA|RAW)\\)").find(res)
         val lang = langMatch?.value ?: "(VOSTFR)"
         res = res.replace(lang, "").trim()
         val server = servers.firstOrNull { res.contains(it, ignoreCase = true) } ?: ""
         res = res.replace(Regex("(?i)$server"), "").trim()
         var q = res.replace(Regex("^[:\\-\\s]+"), "").trim()
         if (q.equals(server, true) || q.equals("MP4", true) || q.equals("Original", true)) q = ""
+        
+        // Harmonization: Remove server name repetition
         return when {
             q.isEmpty() -> "$lang $server".trim()
             else -> "$lang $server - $q".trim()
         }.replace(Regex("\\s+"), " ").trim()
     }
 
-    override fun List<Video>.sortVideos(): List<Video> = this.sortedWith(
-        compareBy {
-            Regex("""(\d+)p""").find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        },
-    ).reversed()
+    override fun List<Hoster>.sortHosters(): List<Hoster> {
+        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+
+        return this.sortedWith(
+            compareByDescending<Hoster> { it.hosterName.contains("($voices)", true) }
+                .thenByDescending { it.hosterName.contains(player, true) },
+        )
+    }
+
+    override fun List<Video>.sortVideos(): List<Video> {
+        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+
+        return this.sortedWith(
+            compareByDescending<Video> { it.videoTitle.contains("($voices)", true) }
+                .thenByDescending { it.videoTitle.contains(player, true) }
+                .thenByDescending {
+                    Regex("""(\d+)p""").find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                },
+        )
+    }
 
     // ============================ Helpers =============================
     private fun parseAnimesPage(response: Response, selector: String = ".hentai-block-new > div:nth-child(2) > div.h-card, div.video-item-list, body > div.h-card"): AnimesPage {
@@ -549,11 +568,35 @@ class ADKami : Source() {
                 true
             }
         }.also(screen::addPreference)
+
+        androidx.preference.ListPreference(screen.context).apply {
+            key = PREF_VOICES_KEY
+            title = "Priorité de langue"
+            entries = arrayOf("VOSTFR", "VF", "VOSTA", "RAW")
+            entryValues = arrayOf("VOSTFR", "VF", "VOSTA", "RAW")
+            setDefaultValue(PREF_VOICES_DEFAULT)
+            summary = "%s"
+        }.also(screen::addPreference)
+
+        androidx.preference.ListPreference(screen.context).apply {
+            key = PREF_PLAYER_KEY
+            title = "Serveur préféré"
+            entries = arrayOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Voe", "Doodstream")
+            entryValues = arrayOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Voe", "Doodstream")
+            setDefaultValue(PREF_PLAYER_DEFAULT)
+            summary = "%s"
+        }.also(screen::addPreference)
     }
 
     companion object {
         const val PREFIX_SEARCH = "id:"
         private const val PREF_URL_KEY = "preferred_baseUrl_v5"
         private const val PREF_URL_DEFAULT = "https://hentai.adkami.com"
+
+        private const val PREF_VOICES_KEY = "preferred_voices"
+        private const val PREF_VOICES_DEFAULT = "VOSTFR"
+
+        private const val PREF_PLAYER_KEY = "preferred_player"
+        private const val PREF_PLAYER_DEFAULT = "Vidmoly"
     }
 }

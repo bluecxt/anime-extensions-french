@@ -32,12 +32,12 @@ TODO: add the missing infos with anilist API "https://anilist.co/graphiql"
 
 ## Anime-Sama
 - [x] **Title**: [Provider: Self]
-- [ ] **Author**: [Provider: TMDB]
-- [ ] **Artist**: [Provider: TMDB]
+- [x] **Author**: [Provider: TMDB]
+- [x] **Artist**: [Provider: TMDB]
 - [x] **Description**: [Provider: TMDB]
 - [x] **Genre**: [Provider: Self]
-- [ ] **Status**: [Provider: TMDB]
-- [ ] **Release Date**: [Provider: TMDB]
+- [x] **Status**: [Provider: TMDB]
+- [x] **Release Date**: [Provider: TMDB]
 - [x] **Thumbnail**: [Provider: Self/TMDB]
 - [x] **Episode Thumbnail**: [Provider: TMDB]
 - [x] **Episode Summary**: [Provider: TMDB]
