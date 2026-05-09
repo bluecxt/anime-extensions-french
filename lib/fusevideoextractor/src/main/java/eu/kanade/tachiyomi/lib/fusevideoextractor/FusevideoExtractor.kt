@@ -22,7 +22,7 @@ class FusevideoExtractor(private val client: OkHttpClient, private val headers: 
             val dataUrl = document.selectFirst("script[src~=f/u/u/u/u]")?.attr("src")!!
             val dataDoc = client.newCall(GET(dataUrl, newHeaders)).execute().body.string()
             val encoded = Regex("atob\\(\"(.*?)\"\\)").find(dataDoc)?.groupValues?.get(1)!!
-            val data = Base64.decode(encoded, Base64.DEFAULT).toString(Charsets.UTF_8)
+            val data = Base64.decode(encoded, Base64.DEFAULT).toString(java.nio.charset.StandardCharsets.UTF_8)
             val jsonData = data.split("|||")[1].replace("\\", "")
             val videoUrl = Regex("\"(https://.*?/m/.*)\"").find(jsonData)?.groupValues?.get(1)!!
             PlaylistUtils(client, newHeaders).extractFromHls(videoUrl, videoNameGen = { "${prefix}Fusevideo - $it" })

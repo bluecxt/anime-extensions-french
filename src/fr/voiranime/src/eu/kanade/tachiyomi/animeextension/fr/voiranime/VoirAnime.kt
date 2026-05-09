@@ -203,7 +203,7 @@ class VoirAnime : Source() {
             if (encodedData.isBlank()) return@mapNotNull null
 
             val decodedHtml = try {
-                Base64.decode(encodedData, Base64.DEFAULT).toString(Charsets.UTF_8)
+                Base64.decode(encodedData, Base64.DEFAULT).toString(java.nio.charset.StandardCharsets.UTF_8)
             } catch (_: Exception) {
                 ""
             }

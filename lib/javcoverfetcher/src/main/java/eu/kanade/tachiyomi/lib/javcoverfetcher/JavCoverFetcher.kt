@@ -67,7 +67,7 @@ object JavCoverFetcher {
         var document = response.asJsoup()
 
         // possibly multiple results or none
-        if (response.request.url.pathSegments.contains("vl_searchbyid.php")) {
+        if (document.baseUri().contains("vl_searchbyid.php")) {
             val targetUrl = document.selectFirst(".videos a[href*=\"?v=\"]")?.attr("abs:href")
                 ?: return null
 

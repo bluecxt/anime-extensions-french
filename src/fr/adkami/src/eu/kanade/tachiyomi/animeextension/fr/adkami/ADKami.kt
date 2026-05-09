@@ -542,7 +542,7 @@ class ADKami : Source() {
         val part = encodedUrl.substringAfter("embed/", "")
         if (part.isBlank()) return null
         return try {
-            val e = String(Base64.decode(part, Base64.DEFAULT), Charsets.ISO_8859_1)
+            val e = String(Base64.decode(part, Base64.DEFAULT), java.nio.charset.StandardCharsets.ISO_8859_1)
             var t = ""
             val n = "ETEfazefzeaZa13MnZEe"
             var i = 0

@@ -97,6 +97,6 @@ class VoeExtractor(private val client: OkHttpClient, private val headers: Header
 
     private fun base64Decode(input: String): String {
         val decodedBytes = Base64.decode(input, Base64.DEFAULT)
-        return String(decodedBytes, Charsets.ISO_8859_1)
+        return String(decodedBytes, java.nio.charset.StandardCharsets.ISO_8859_1)
     }
 }

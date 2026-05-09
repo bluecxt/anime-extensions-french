@@ -113,7 +113,7 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
 
         return try {
             val base64Decoded = Base64.decode(decoded, Base64.DEFAULT)
-            base64Decoded.toString(Charsets.UTF_8)
+            base64Decoded.toString(java.nio.charset.StandardCharsets.UTF_8)
         } catch (e: Exception) {
             null
         }
@@ -125,7 +125,7 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
         if (isSecondary) {
             val convertedText = episodeId.toByteArray(Charset.forName("UTF-8")).toString(Charset.forName("ISO-8859-1"))
             val unicodeEscape = decodePythonEscape(convertedText)
-            val finalText = unicodeEscape.toByteArray(Charsets.ISO_8859_1).toString(Charsets.UTF_8)
+            val finalText = unicodeEscape.toByteArray(java.nio.charset.StandardCharsets.ISO_8859_1).toString(java.nio.charset.StandardCharsets.UTF_8)
 
             url = GETLNKURL.toHttpUrl().newBuilder()
                 .addQueryParameter("link", finalText)

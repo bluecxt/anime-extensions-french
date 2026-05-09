@@ -108,7 +108,7 @@ class FrenchAnime : Source() {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
         val document = response.asJsoup()
         val episodeList = mutableListOf<SEpisode>()
-        val lang = if (response.request.url.toString().contains("-vf")) "VF" else "VOSTFR"
+        val lang = if (document.baseUri().contains("-vf")) "VF" else "VOSTFR"
 
         val epsData = document.selectFirst("div.eps")?.text() ?: return emptyList()
 

@@ -17,7 +17,7 @@ class DoodExtractor(private val client: OkHttpClient) {
     ): Video? {
         return runCatching {
             val response = client.newCall(GET(url)).execute()
-            val newUrl = if (redirect) response.request.url.toString() else url
+            val newUrl = if (redirect) response.header("Location") ?: response.header("Content-Location") ?: url else url
 
             val doodHost = getBaseUrl(newUrl)
             val content = response.body.string()

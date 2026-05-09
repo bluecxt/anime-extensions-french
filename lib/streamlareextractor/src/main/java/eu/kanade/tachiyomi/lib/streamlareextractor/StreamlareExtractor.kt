@@ -42,7 +42,7 @@ class StreamlareExtractor(private val client: OkHttpClient) {
                 val apiUrl = it.substringAfter("\"file\":\"").substringBefore("\",")
                     .replace("\\", "")
                 val response = client.newCall(POST(apiUrl)).execute()
-                val videoUrl = response.request.url.toString()
+                val videoUrl = response.header("Location") ?: response.header("Content-Location") ?: url
                 Video(videoUrl = videoUrl, videoTitle = buildQuality(quality, prefix, suffix))
             }
         }

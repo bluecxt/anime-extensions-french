@@ -50,7 +50,7 @@ class AnimeSama : Source() {
     // ============================== Popular ===============================
     override fun popularAnimeParse(response: Response): AnimesPage {
         val doc = response.asJsoup()
-        val page = response.request.url.fragment?.toIntOrNull() ?: 1
+        val page = response.header("X-Page")?.toIntOrNull() ?: 1
         val chunks = doc.select("#containerPepites > div a").chunked(5)
         val seasons = chunks.getOrNull(page - 1)?.flatMap {
             val animeUrl = "$baseUrl${it.attr("href")}"
@@ -59,7 +59,7 @@ class AnimeSama : Source() {
         return AnimesPage(seasons, page < chunks.size)
     }
 
-    override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/#$page")
+    override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/#$page", headers.newBuilder().add("X-Page", page.toString()).build())
 
     // =============================== Latest ===============================
     override fun latestUpdatesParse(response: Response): AnimesPage {
@@ -87,7 +87,7 @@ class AnimeSama : Source() {
         params.genres.forEach { url.addQueryParameter("genre[]", it) }
         url.addQueryParameter("search", query)
         url.addQueryParameter("page", "$page")
-        return GET(url.build(), headers)
+        return GET(url.build(), headers.newBuilder().add("X-Page", page.toString()).build())
     }
 
     override fun searchAnimeParse(response: Response): AnimesPage {
@@ -95,7 +95,7 @@ class AnimeSama : Source() {
         val anime = document.select("#list_catalog > div a").parallelFlatMapBlocking {
             fetchAnimeSeasons(it.attr("href"))
         }
-        val page = response.request.url.queryParameterValues("page").firstOrNull()
+        val page = response.header("X-Page") ?: "1"
         val hasNextPage = document.select("#list_pagination a:last-child").text() != page
         return AnimesPage(anime, hasNextPage)
     }
@@ -271,7 +271,7 @@ class AnimeSama : Source() {
 
     private fun fetchAnimeSeasons(response: Response): List<SAnime> {
         val animeDoc = response.asJsoup()
-        val animeUrl = response.request.url
+        val animeUrl = animeDoc.baseUri().toHttpUrl()
         val animeName = animeDoc.getElementById("titreOeuvre")?.text() ?: ""
 
         val scripts = animeDoc.select("h2 + p + div > script, h2 + div > script").toString()

@@ -48,7 +48,7 @@ object CryptoAES {
             val saltBytes = Arrays.copyOfRange(ctBytes, SALT_SIZE, IV_SIZE)
             val cipherTextBytes = Arrays.copyOfRange(ctBytes, IV_SIZE, ctBytes.size)
             val md5 = MessageDigest.getInstance("MD5")
-            val keyAndIV = generateKeyAndIV(KEY_SIZE, IV_SIZE, 1, saltBytes, password.toByteArray(Charsets.UTF_8), md5)
+            val keyAndIV = generateKeyAndIV(KEY_SIZE, IV_SIZE, 1, saltBytes, password.toByteArray(java.nio.charset.StandardCharsets.UTF_8), md5)
             decryptAES(
                 cipherTextBytes,
                 keyAndIV?.get(0) ?: ByteArray(KEY_SIZE),
@@ -68,7 +68,7 @@ object CryptoAES {
                 IV_SIZE,
                 1,
                 salt.decodeHex(),
-                password.toByteArray(Charsets.UTF_8),
+                password.toByteArray(java.nio.charset.StandardCharsets.UTF_8),
                 md5,
             )
             decryptAES(
@@ -127,7 +127,7 @@ object CryptoAES {
             } catch (e: Throwable) { Cipher.getInstance(HASH_CIPHER_FALLBACK) }
             val keyS = SecretKeySpec(keyBytes, AES)
             cipher.init(Cipher.DECRYPT_MODE, keyS, IvParameterSpec(ivBytes))
-            cipher.doFinal(cipherTextBytes).toString(Charsets.UTF_8)
+            cipher.doFinal(cipherTextBytes).toString(java.nio.charset.StandardCharsets.UTF_8)
         } catch (e: Exception) {
             ""
         }
@@ -222,7 +222,7 @@ object CryptoAES {
             val iv = encryptedData.copyOfRange(0, 16)
             val cipherText = encryptedData.copyOfRange(16, encryptedData.size)
 
-            val keyBytes = secretKey.toByteArray(Charsets.UTF_8)
+            val keyBytes = secretKey.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
             val secretKeySpec = SecretKeySpec(keyBytes, AES)
             val ivSpec = IvParameterSpec(iv)
 
@@ -230,7 +230,7 @@ object CryptoAES {
             cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivSpec)
 
             val decryptedBytes = cipher.doFinal(cipherText)
-            String(decryptedBytes, Charsets.UTF_8)
+            String(decryptedBytes, java.nio.charset.StandardCharsets.UTF_8)
         } catch (ex: Exception) {
             Log.e("CryptoAES", "Decryption error: ${ex.message}")
             null
@@ -240,7 +240,7 @@ object CryptoAES {
     @SuppressLint("GetInstance")
     private fun decryptUtf8(encryptedBase64: String, secretKey: String): String? {
         return try {
-            val keyBytes = secretKey.toByteArray(Charsets.UTF_8)
+            val keyBytes = secretKey.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
             val encryptedBytes = Base64.decode(encryptedBase64, Base64.DEFAULT)
 
             val secretKeySpec = SecretKeySpec(keyBytes, AES)
@@ -249,7 +249,7 @@ object CryptoAES {
             cipher.init(Cipher.DECRYPT_MODE, secretKeySpec)
 
             val decryptedBytes = cipher.doFinal(encryptedBytes)
-            String(decryptedBytes, Charsets.UTF_8)
+            String(decryptedBytes, java.nio.charset.StandardCharsets.UTF_8)
         } catch (ex: Exception) {
             Log.e("CryptoAES", "Decryption error: ${ex.message}")
             null
