@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -21,7 +22,6 @@ import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
-import eu.kanade.tachiyomi.util.parallelCatchingFlatMap
 import fr.bluecxt.core.Source
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -30,6 +30,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
@@ -56,43 +57,179 @@ class ADKami : Source() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/hentai-streaming?page=$page", headers)).execute()
-        val document = response.asJsoup()
-        val animes = document.select("div#hentai-block-populaire div.h-card, div.video-item-list").map {
-            animeFromElement(it)
-        }
-        return AnimesPage(animes, document.select("a[rel=next]").isNotEmpty())
+        val response = client.newCall(GET("$baseUrl/video?t=4&order=3&page=$page", headers)).execute()
+        return parseAnimesPage(response)
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/hentai-streaming?page=$page", headers)).execute()
-        val document = response.asJsoup()
-        val animes = document.select("div.hentai-block-new div.h-card").map { element ->
-            val anime = animeFromElement(element)
-            anime.url = cleanUrl(anime.url)
-            anime
-        }
-        return AnimesPage(animes, false)
+        return parseAnimesPage(response)
     }
 
     // =============================== Search ===============================
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        if (query.startsWith(PREFIX_SEARCH)) {
+            val id = query.removePrefix(PREFIX_SEARCH)
+            val response = client.newCall(GET("$baseUrl/hentai/$id", headers)).execute()
+            val document = response.asJsoup()
+            val anime = SAnime.create().apply {
+                title = document.selectFirst(".fiche-info h1")?.text() ?: ""
+                setUrlWithoutDomain(document.location())
+                thumbnail_url = document.selectFirst(".fiche-info img")?.attr("abs:src")
+            }
+            return AnimesPage(listOf(anime), false)
+        }
+
+        val searchFilters = ADKamiCatalogueFilters.getSearchFilters(filters)
+
+        // Random mode
+        if (searchFilters.randomOnly) {
+            val response = client.newCall(GET("$baseUrl/hentai-streaming", headers)).execute()
+            return parseAnimesPage(response, "div.hentai-random-block:nth-child(2) > div.h-card")
+        }
+
+        // Simple search uses the AJAX API as requested
+        if (query.isNotBlank() && searchFilters.isDefault()) {
+            val body = okhttp3.FormBody.Builder()
+                .add("query", query)
+                .build()
+
+            val ajaxHeaders = headersBuilder()
+                .add("Accept", "*/*")
+                .add("Accept-Language", "fr,fr-FR;q=0.9")
+                .add("X-Requested-With", "XMLHttpRequest")
+                .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                .add("Origin", baseUrl)
+                .add("Referer", "$baseUrl/hentai-streaming")
+                .build()
+
+            val response = client.newCall(
+                okhttp3.Request.Builder()
+                    .url("$baseUrl/api/search/hentai")
+                    .post(body)
+                    .headers(ajaxHeaders)
+                    .build(),
+            ).execute()
+
+            return parseAnimesPage(response)
+        }
+
+        // Advanced search uses the browse page
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("video")
-            .addQueryParameter("type", "4")
+            .addQueryParameter("t", "4")
             .addQueryParameter("search", query)
+            .addQueryParameter("order", searchFilters.order)
+            .addQueryParameter("s", searchFilters.status)
+            .addQueryParameter("p", searchFilters.pays)
+            .addQueryParameter("e", searchFilters.episode)
+            .addQueryParameter("q", searchFilters.quality)
+            .addQueryParameter("n", searchFilters.noteMin)
+            .addQueryParameter("n2", searchFilters.noteMax)
             .addQueryParameter("page", page.toString())
-            .build()
-        val response = client.newCall(GET(url, headers)).execute()
-        val document = response.asJsoup()
-        val animes = document.select("div.video-item-list").map {
-            animeFromElement(it)
+
+        if (searchFilters.vfOnly) {
+            url.addQueryParameter("v", "1")
         }
-        return AnimesPage(animes, document.select("a[rel=next]").isNotEmpty())
+
+        searchFilters.genres.forEach { genreId ->
+            url.addQueryParameter("genres[]", genreId)
+        }
+
+        val response = client.newCall(GET(url.build(), headers)).execute()
+        return parseAnimesPage(response)
     }
 
-    override fun getFilterList() = AnimeFilterList()
+    override fun getFilterList() = ADKamiCatalogueFilters.FILTER_LIST
+
+    private object ADKamiCatalogueFilters {
+        private val filterData by lazy {
+            val jsonStream = ADKami::class.java.getResourceAsStream("filters.json")
+            val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
+            try {
+                Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        }
+
+        private fun getOptions(key: String): List<Pair<String, String>> {
+            val list = filterData[key] ?: return emptyList()
+            return list.map { it[0] to it[1] }
+        }
+
+        class OrderFilter : AnimeFilter.Select<String>("Trier par", getOptions("ORDER").map { it.first }.toTypedArray().ifEmpty { arrayOf("Popularité") }, 0)
+        class StatusFilter : AnimeFilter.Select<String>("Statut", getOptions("STATUS").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tout") }, 0)
+        class PaysFilter : AnimeFilter.Select<String>("Pays", getOptions("PAYS").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tous") }, 0)
+        class EpisodeFilter : AnimeFilter.Select<String>("Nombre d'épisodes", getOptions("EPISODES").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tous") }, 0)
+        class QualityFilter : AnimeFilter.Select<String>("Qualité", getOptions("QUALITY").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tout") }, 0)
+        class NoteMinFilter : AnimeFilter.Select<String>("Note Min", getOptions("NOTE_MIN").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tous") }, 0)
+        class NoteMaxFilter : AnimeFilter.Select<String>("Note Max", getOptions("NOTE_MAX").map { it.first }.toTypedArray().ifEmpty { arrayOf("10") }, 0)
+        class GenresFilter : CheckBoxFilterList("Genres", getOptions("GENRES").map { CheckBoxVal(it.first, false) })
+        class VfFilter : AnimeFilter.CheckBox("VF uniquement", false)
+        class RandomFilter : AnimeFilter.CheckBox("Aléatoire", false)
+
+        val FILTER_LIST get() = AnimeFilterList(
+            OrderFilter(),
+            StatusFilter(),
+            PaysFilter(),
+            EpisodeFilter(),
+            QualityFilter(),
+            NoteMinFilter(),
+            NoteMaxFilter(),
+            GenresFilter(),
+            VfFilter(),
+            RandomFilter(),
+        )
+
+        data class SearchFilters(
+            val order: String = "3",
+            val status: String = "",
+            val pays: String = "",
+            val episode: String = "",
+            val quality: String = "",
+            val noteMin: String = "",
+            val noteMax: String = "10",
+            val vfOnly: Boolean = false,
+            val randomOnly: Boolean = false,
+            val genres: List<String> = emptyList(),
+        ) {
+            fun isDefault() = order == "3" && status == "" && pays == "" && episode == "" &&
+                quality == "" && noteMin == "" && noteMax == "10" && !vfOnly && !randomOnly && genres.isEmpty()
+        }
+
+        fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
+            if (filters.isEmpty()) return SearchFilters()
+
+            return SearchFilters(
+                order = getOptions("ORDER").getOrNull(filters.filterIsInstance<OrderFilter>().firstOrNull()?.state ?: 0)?.second ?: "3",
+                status = getOptions("STATUS").getOrNull(filters.filterIsInstance<StatusFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
+                pays = getOptions("PAYS").getOrNull(filters.filterIsInstance<PaysFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
+                episode = getOptions("EPISODES").getOrNull(filters.filterIsInstance<EpisodeFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
+                quality = getOptions("QUALITY").getOrNull(filters.filterIsInstance<QualityFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
+                noteMin = getOptions("NOTE_MIN").getOrNull(filters.filterIsInstance<NoteMinFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
+                noteMax = getOptions("NOTE_MAX").getOrNull(filters.filterIsInstance<NoteMaxFilter>().firstOrNull()?.state ?: 0)?.second ?: "10",
+                vfOnly = filters.filterIsInstance<VfFilter>().firstOrNull()?.state ?: false,
+                randomOnly = filters.filterIsInstance<RandomFilter>().firstOrNull()?.state ?: false,
+                genres = filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
+            )
+        }
+
+        private inline fun <reified R> AnimeFilterList.parseCheckbox(
+            options: List<Pair<String, String>>,
+        ): List<String> = (this.filterIsInstance<R>().firstOrNull() as? CheckBoxFilterList)?.state
+            ?.mapNotNull { checkbox ->
+                if (checkbox.state) {
+                    options.find { it.first == checkbox.name }!!.second
+                } else {
+                    null
+                }
+            } ?: emptyList()
+
+        open class CheckBoxFilterList(name: String, values: List<CheckBoxVal>) : AnimeFilter.Group<CheckBoxVal>(name, values)
+        class CheckBoxVal(name: String, state: Boolean = false) : AnimeFilter.CheckBox(name, state)
+    }
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
@@ -116,6 +253,25 @@ class ADKami : Source() {
         anime.thumbnail_url = document.selectFirst("#row-nav-episode img")?.attr("abs:src")
             ?: document.selectFirst(".fiche-info img")?.attr("abs:src")
 
+        anime.background_url = document.selectFirst("div.blocshadow > div.col-12 > img")?.attr("abs:src")
+
+        // Site Metadata Extraction
+        val infoRows = document.select("div.fiche-info > div.row > p")
+
+        anime.author = infoRows.find { it.text().contains("Auteur", true) }
+            ?.text()?.substringAfter(":")?.trim()
+
+        anime.artist = infoRows.find { it.text().contains("Studio", true) }
+            ?.text()?.substringAfter(":")?.trim()
+
+        val dateText = infoRows.find {
+            it.text().contains("Date", true) || it.text().contains("Sortie", true) || it.text().contains("Diffusion", true)
+        }?.text()?.substringAfter(":")?.trim()
+
+        if (!dateText.isNullOrBlank()) {
+            anime.description = "Date de sortie : $dateText\n\n${anime.description ?: ""}"
+        }
+
         return anime
     }
 
@@ -124,22 +280,18 @@ class ADKami : Source() {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
         val document = response.asJsoup()
         val episodes = mutableListOf<SEpisode>()
-        var currentSeason = 1
-        val seasonCount = document.select("#row-nav-episode ul li.saison").size
 
         val elements = document.select("#row-nav-episode ul li")
         if (elements.isNotEmpty()) {
             elements.forEach { el ->
-                if (el.hasClass("saison")) {
-                    currentSeason = el.text().filter { it.isDigit() }.toIntOrNull() ?: currentSeason
-                    return@forEach
-                }
+                if (el.hasClass("saison")) return@forEach
 
                 val a = el.selectFirst("a") ?: return@forEach
                 val rawName = a.text().trim()
                 val lang = when {
                     rawName.contains("vostfr", true) -> "VOSTFR"
                     rawName.contains("vf", true) -> "VF"
+                    rawName.contains("vosta", true) || rawName.contains("en", true) -> "VOSTA"
                     rawName.contains("raw", true) -> "RAW"
                     else -> "VOSTFR"
                 }
@@ -148,20 +300,24 @@ class ADKami : Source() {
                 val typeStr = parts.getOrNull(0)?.uppercase() ?: ""
                 val numStr = parts.getOrNull(1)?.trimStart('0')?.ifEmpty { "0" } ?: "1"
 
-                val sPrefix = if (seasonCount > 1) "[S$currentSeason] " else ""
-                val sType = when (typeStr) {
-                    "OAV", "OVA" -> "[OVA] "
-                    "ONA" -> "[ONA] "
-                    "SPECIAL", "SPÉCIAL" -> "[Special] "
-                    "FILM", "MOVIE" -> "[Movie] "
-                    else -> sPrefix
+                val isOav = rawName.contains("OAV", true) || rawName.contains("OVA", true)
+                val isSpecial = rawName.contains("Special", true) || rawName.contains("Spécial", true) || typeStr == "SPECIAL"
+                val isMovie = rawName.contains("Film", true) || rawName.contains("Movie", true) || typeStr == "FILM"
+                val isOna = typeStr == "ONA" || rawName.contains("ONA", true)
+
+                val sType = when {
+                    isOav -> "[OAV] "
+                    isMovie -> "[Movie] "
+                    isSpecial -> "[Special] "
+                    isOna -> "[ONA] "
+                    else -> ""
                 }
 
                 episodes.add(
                     SEpisode.create().apply {
                         name = "${sType}Episode $numStr"
                         episode_number = numStr.toFloatOrNull() ?: 1f
-                        scanlator = "Season $currentSeason ($lang)"
+                        scanlator = lang
                         setUrlWithoutDomain(a.attr("abs:href") + "?lang=$lang")
                     },
                 )
@@ -175,16 +331,18 @@ class ADKami : Source() {
             episodes.add(sEp)
         }
 
+        val hasSpecialContent = episodes.any { it.name.startsWith("[") }
+
         val mergedEpisodes = episodes.groupBy { it.name }.map { entry ->
             val first = entry.value.first()
             val combinedUrl = entry.value.map { it.url }.distinct().joinToString("|")
-            val combinedLangs = entry.value.map { it.scanlator?.substringAfter("(")?.substringBefore(")") ?: "VOSTFR" }.distinct().joinToString(", ")
+            val combinedLangs = entry.value.map { it.scanlator ?: "VOSTFR" }.distinct().joinToString(", ")
 
             SEpisode.create().apply {
-                name = entry.key
+                name = if (hasSpecialContent && !entry.key.startsWith("[")) "[S1] ${entry.key}" else entry.key
                 episode_number = first.episode_number
                 url = combinedUrl
-                scanlator = "Season ${first.scanlator?.substringBefore(" (") ?: "1"} ($combinedLangs)"
+                scanlator = combinedLangs
             }
         }
 
@@ -334,16 +492,23 @@ class ADKami : Source() {
     ).reversed()
 
     // ============================ Helpers =============================
-    private fun animeFromElement(element: Element): SAnime {
-        val anime = SAnime.create()
-        val link = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return anime
-        anime.setUrlWithoutDomain(link.attr("abs:href"))
-        anime.title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
-        element.selectFirst(".visual img, img")?.let { img ->
-            val dataOriginal = img.attr("abs:data-original")
-            anime.thumbnail_url = if (dataOriginal.isNotBlank()) dataOriginal else img.attr("abs:src")
+    private fun parseAnimesPage(response: Response, selector: String = ".hentai-block-new > div:nth-child(2) > div.h-card, div.video-item-list, body > div.h-card"): AnimesPage {
+        val document = response.asJsoup()
+        val animes = document.select(selector).map { element: Element ->
+            SAnime.create().apply {
+                val link = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return@map this
+                setUrlWithoutDomain(link.attr("abs:href"))
+                title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
+                element.selectFirst(".visual img, img")?.let { img ->
+                    val dataOriginal = img.attr("abs:data-original")
+                    thumbnail_url = (if (dataOriginal.isNotBlank()) dataOriginal else img.attr("abs:src")).replace("mini", "cover")
+                }
+                url = cleanUrl(url)
+            }
         }
-        return anime
+        val hasNextPage = document.select("div.pagination a:contains(Suivant), div.pagination a:has(button):not(.actuel), a[rel=next]").isNotEmpty()
+
+        return AnimesPage(animes, hasNextPage)
     }
 
     private fun cleanUrl(url: String): String {
@@ -379,8 +544,8 @@ class ADKami : Source() {
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { preference, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                (preference as EditTextPreference).summary = newValue as String
+                preferences.edit().putString(PREF_URL_KEY, newValue.toString()).apply()
+                (preference as EditTextPreference).summary = newValue.toString()
                 true
             }
         }.also(screen::addPreference)

@@ -1,0 +1,64 @@
+{
+  "ORDER": [
+    ["Popularité", "3"],
+    ["Note", "1"],
+    ["Nombre de votants", "2"],
+    ["Alphabétique", "0"]
+  ],
+  "STATUS": [
+    ["Tout", ""],
+    ["En cours", "1"],
+    ["Terminée", "2"],
+    ["Abandonnée", "3"]
+  ],
+  "PAYS": [
+    ["Tous", ""],
+    ["Inconnue", "0"],
+    ["Japon", "1"],
+    ["Chine", "2"],
+    ["Corée", "3"],
+    ["France", "4"],
+    ["Etats-unis", "5"],
+    ["Taïwan", "6"],
+    ["Thaïlande", "7"]
+  ],
+  "EPISODES": [
+    ["Tous", ""],
+    ["Peu [1, 13]", "1"],
+    ["Normal [14, 26]", "2"],
+    ["Beaucoup [27, +∞[", "3"]
+  ],
+  "QUALITY": [
+    ["Tout", ""],
+    ["Non censuré (NC)", "1"],
+    ["Blu-ray (BD)", "2"]
+  ],
+  "NOTE_MIN": [
+    ["Tous", ""],
+    ["10", "10"],
+    ["9", "9"],
+    ["8", "8"],
+    ["7", "7"],
+    ["6", "6"],
+    ["5", "5"],
+    ["4", "4"],
+    ["3", "3"],
+    ["2", "2"],
+    ["1", "1"]
+  ],
+  "NOTE_MAX": [
+    ["10", "10"],
+    ["9", "9"],
+    ["8", "8"],
+    ["7", "7"],
+    ["6", "6"],
+    ["5", "5"],
+    ["4", "4"],
+    ["3", "3"],
+    ["2", "2"],
+    ["1", "1"]
+  ],
+  "GENRES": [
+    ["Action", "1"], ["Amitié", "3"], ["Aventure", "2"], ["Combat", "4"], ["Comédie", "5"], ["Contes & Récits", "6"], ["Cyber & Mecha", "7"], ["Dark Fantasy", "8"], ["Drame", "9"], ["Ecchi", "10"], ["Educatif", "11"], ["Énigme & Policier", "12"], ["Épique & Héroique", "13"], ["Espace & Sci-Fiction", "14"], ["Familial & Jeunesse", "15"], ["Fantastique & Mythe", "16"], ["Fantasy", "30"], ["Gastronomie", "39"], ["Gender Bender", "61"], ["Harem", "32"], ["Historique", "18"], ["Horreur", "19"], ["Idols", "38"], ["Inceste", "36"], ["Magical Girl", "20"], ["Mature", "26"], ["Moe", "25"], ["Monster Girl", "71"], ["Musical", "21"], ["Mystère", "31"], ["Psychologique", "22"], ["Romance", "34"], ["School Life", "29"], ["Sport", "23"], ["Surnaturel", "33"], ["Survival Game", "40"], ["Thriller", "35"], ["Tokusatsu", "41"], ["Tranche de vie", "24"], ["Triangle Amoureux", "37"], ["Yaoi", "27"], ["Yuri", "28"], ["Hentai", "17"], ["Gyaru", "70"], ["Isekai", "42"], ["Magie", "43"], ["Ahegao", "45"], ["Anal", "46"], ["BDSM", "44"], ["Blow Job", "63"], ["Creampie", "68"], ["Foot Job", "47"], ["Futanari", "48"], ["Gang Bang", "58"], ["Giga seins", "59"], ["Gros seins", "53"], ["Hand Job", "66"], ["Infirmière / Nurse", "51"], ["Loli", "62"], ["Maid", "49"], ["Masturbation", "50"], ["Milf", "69"], ["NTR", "55"], ["Paizuri", "64"], ["Petits seins", "54"], ["Public Sex", "67"], ["Rape", "52"], ["Shota", "72"], ["Tentacle", "60"], ["Uncensored", "56"], ["Vanilla", "57"], ["Virgin", "65"]
+  ]
+}
