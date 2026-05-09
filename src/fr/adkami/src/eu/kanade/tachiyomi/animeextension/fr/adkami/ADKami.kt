@@ -479,7 +479,7 @@ class ADKami : Source() {
         res = res.replace(Regex("(?i)$server"), "").trim()
         var q = res.replace(Regex("^[:\\-\\s]+"), "").trim()
         if (q.equals(server, true) || q.equals("MP4", true) || q.equals("Original", true)) q = ""
-        
+
         // Harmonization: Remove server name repetition
         return when {
             q.isEmpty() -> "$lang $server".trim()
