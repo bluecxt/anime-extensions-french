@@ -60,6 +60,28 @@ class AnimeSamaFan : Source() {
     // ================== Utils ==================
     private fun fixUrl(url: String): String = if (url.startsWith("http")) url else "$baseUrl$url"
 
+    private fun setFetchTypeSafe(anime: SAnime, type: eu.kanade.tachiyomi.animesource.model.FetchType) {
+        try {
+            val methods = anime.javaClass.methods
+            val setter = methods.find { it.name == "setFetch_type" }
+            if (setter != null) {
+                val appFetchTypeClass = setter.parameterTypes[0]
+                val enumValue = appFetchTypeClass.enumConstants.find { it.toString() == type.name }
+                setter.invoke(anime, enumValue)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun setSeasonNumberSafe(anime: SAnime, season: Double) {
+        try {
+            val methods = anime.javaClass.methods
+            val setter = methods.find { it.name == "setSeason_number" }
+            if (setter != null) {
+                setter.invoke(anime, season)
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun parseAnimePage(document: Document, fallbackPage: Int): AnimesPage {
         val items = document.select(".anime-grid a.card-base").map { element ->
             SAnime.create().apply {
@@ -254,17 +276,57 @@ class AnimeSamaFan : Source() {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
         val document = response.asJsoup()
 
-        anime.title = document.selectFirst("h1.anime-title")?.text() ?: anime.title
-        anime.description = document.selectFirst(".synopsis-content p")?.text()
-        anime.genre = document.select(".genre-link").joinToString { it.text() }
+        val docTitle = document.selectFirst("h1.anime-title")?.text()?.trim()
+            ?: document.selectFirst("h1.season-title")?.text()?.trim()
 
-        // Fetch HD Metadata and Status from TMDB
-        val tmdbMetadata = fetchTmdbMetadata(anime.title)
-        tmdbMetadata?.summary?.let { anime.description = it }
+        var pageTitle = docTitle ?: anime.title
 
-        // Prepend release date to description
+        // Extract ID from URL for cache/logic
+        val animeId = anime.url.substringAfter("/anime/").substringBefore("/")
+
+        // If title is just "Saison X", try to get the real name from the URL slug
+        if (pageTitle.matches(Regex("(?i)^Saison\\s*\\d+$")) || pageTitle.length < 3) {
+            val slug = animeId.replace(Regex("^\\d+-"), "").replace("-", " ").trim()
+            if (slug.isNotBlank() && slug != "anime") pageTitle = slug
+        }
+
+        // Extract season number from URL and fix aberrant numbers (e.g. 32 -> 3)
+        var sNum = seasonRegex.find(anime.url)?.groupValues?.get(1)?.toIntOrNull()
+            ?: anime.url.substringBefore(".html").substringAfterLast("-").toIntOrNull()
+            ?: 1
+
+        if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
+
+        val cleanTitle = sanitizeTitle(pageTitle)
+
+        // Set title and season number
+        val isAlreadySeason = anime.url.contains("saison-", ignoreCase = true) || (sNum > 1 && document.selectFirst(".seasons-grid") == null)
+        anime.title = if (isAlreadySeason && !pageTitle.contains("Saison", true)) "$pageTitle - Saison $sNum" else pageTitle
+        setSeasonNumberSafe(anime, sNum.toDouble())
+
+        // Baseline description from site
+        val siteDescription = document.selectFirst(".synopsis-content p")?.text()
+        if (!siteDescription.isNullOrBlank()) anime.description = siteDescription
+
+        // Determine target TMDB Season with continuation fallback
+        var tmdbMetadata = fetchTmdbMetadata(cleanTitle, sNum)
+        if (sNum > 1 && (tmdbMetadata == null || tmdbMetadata.episodeSummaries.size < 2)) {
+            tmdbMetadata = fetchTmdbMetadata(cleanTitle, sNum - 1)
+        }
+
+        // Use TMDB summary only if it's specific (different from S1 or if we are on S1)
+        if (tmdbMetadata?.summary != null) {
+            val s1Meta = if (sNum == 1) tmdbMetadata else fetchTmdbMetadata(cleanTitle, 1)
+            if (sNum == 1 || tmdbMetadata.summary != s1Meta?.summary) {
+                anime.description = tmdbMetadata.summary
+            }
+        }
+
+        // Prepend release date
         tmdbMetadata?.releaseDate?.let { date ->
-            anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
+            if (anime.description?.contains(date) == false) {
+                anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
+            }
         }
 
         tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
@@ -272,12 +334,134 @@ class AnimeSamaFan : Source() {
         tmdbMetadata?.artist?.let { anime.artist = it }
         tmdbMetadata?.status?.let { anime.status = it }
 
+        // AniZen: If seasons grid is present with more than 1 season, set fetch type to Seasons
+        // BUT only if we are not already on a specific season page to avoid infinite loops
+        val seasonCards = document.select(".seasons-grid a.season-card")
+        val hasMultipleSeasons = seasonCards.size > 1
+
+        if (hasMultipleSeasons && !isAlreadySeason) {
+            setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+        } else {
+            setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+        }
+
         return anime
+    }
+
+    // ================== Seasons ==================
+    override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val document = response.asJsoup()
+        val baseTitle = sanitizeTitle(anime.title)
+
+        val seasonCards = document.select(".seasons-grid a.season-card")
+        val siteSeasons = seasonCards.map { element ->
+            val sHref = element.attr("href")
+            var sNum = seasonRegex.find(sHref)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
+            val title = element.selectFirst(".season-title")?.text() ?: element.text().trim()
+            Triple(title, element.attr("abs:href").replace(baseUrl, ""), sNum)
+        }
+
+        return siteSeasons.map { (sTitle, sUrl, siteSNum) ->
+            SAnime.create().apply {
+                title = sTitle
+                url = sUrl
+
+                // Poster fetching for grid
+                val tmdbMeta = kotlinx.coroutines.runBlocking { fetchTmdbMetadata(baseTitle, siteSNum) }
+                val isContinuation = siteSNum > 1 && (tmdbMeta == null || tmdbMeta.episodeSummaries.size < 2)
+                val finalMeta = if (isContinuation) kotlinx.coroutines.runBlocking { fetchTmdbMetadata(baseTitle, siteSNum - 1) } else tmdbMeta
+
+                thumbnail_url = finalMeta?.posterUrl ?: anime.thumbnail_url
+                setFetchTypeSafe(this, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+                setSeasonNumberSafe(this, siteSNum.toDouble())
+                initialized = false
+            }
+        }
     }
 
     // ================== Episodes ==================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val initialPath = anime.url
+        Log.d("AnimeSamaFan", "getEpisodeList for: $initialPath")
+
+        // AniZen Hierarchical Mode
+        if (initialPath.contains("saison-", ignoreCase = true)) {
+            val doc = client.newCall(GET("$baseUrl$initialPath", headers)).execute().asJsoup()
+            val pageTitle = doc.selectFirst("h1.season-title")?.text()
+                ?: doc.selectFirst("h1.anime-title")?.text()
+                ?: anime.title
+
+            val baseTitle = sanitizeTitle(pageTitle)
+
+            // 1. Find season tabs to calculate offset dynamically
+            val tabs = doc.select(".tabs-container a.tab")
+            val seasonLinks = tabs.map { it.attr("abs:href").replace(baseUrl, "") }.distinct()
+            val currentIdx = seasonLinks.indexOfFirst { it == initialPath }
+
+            var siteOffsetAccumulator = 0
+            var oavOffsetAccumulator = 0
+            var lastTmdbSNum = -1
+            var finalTargetSNum = 1
+            var finalOffset = 0
+            var finalOavOffset = 0
+
+            // Analyze current and previous seasons from tabs
+            val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(initialPath)
+
+            for (sUrl in seasonsToAnalyze) {
+                var sNum = seasonRegex.find(sUrl)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: sUrl.substringBefore(".html").substringAfterLast("-").toIntOrNull()
+                    ?: 1
+                if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
+
+                // Determine TMDB Season
+                var tmdbS = sNum
+                val meta = fetchTmdbMetadata(baseTitle, tmdbS)
+                val tmdbCount = meta?.episodeSummaries?.size ?: 0
+
+                if (sNum > 1 && (meta == null || tmdbCount < 2)) {
+                    tmdbS = sNum - 1
+                }
+
+                if (tmdbS != lastTmdbSNum) {
+                    siteOffsetAccumulator = 0
+                    oavOffsetAccumulator = 0
+                    lastTmdbSNum = tmdbS
+                }
+
+                if (sUrl == initialPath) {
+                    finalTargetSNum = tmdbS
+                    finalOffset = siteOffsetAccumulator
+                    finalOavOffset = oavOffsetAccumulator
+                    break
+                }
+
+                // Fetch previous season to count episodes and surplus (OAVs)
+                val sDoc = tryGetDocument("$baseUrl$sUrl")
+                val siteCount = sDoc?.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")?.size ?: 0
+
+                val currentTmdbMeta = fetchTmdbMetadata(baseTitle, tmdbS)
+                val currentTmdbCount = currentTmdbMeta?.episodeSummaries?.size ?: 0
+
+                if (currentTmdbCount > 0) {
+                    val remainingInTmdb = maxOf(0, currentTmdbCount - siteOffsetAccumulator)
+                    siteOffsetAccumulator += minOf(siteCount, remainingInTmdb)
+                    if (siteCount > remainingInTmdb) {
+                        oavOffsetAccumulator += (siteCount - remainingInTmdb)
+                    }
+                } else {
+                    siteOffsetAccumulator += siteCount
+                }
+            }
+            Log.d("AnimeSamaFan", "Final Mapping: TMDB S=$finalTargetSNum, Offset=$finalOffset, OAV Offset=$finalOavOffset")
+
+            return parseEpisodesFromDocument(doc, baseTitle, 1, finalOffset, finalOavOffset, finalTargetSNum)
+                .sortedByDescending { it.episode_number }
+        }
+
+        // Aniyomi Classic Mode
         val normalizedPath = normalizeSingleSeasonUrlPath(initialPath)
 
         val initialDoc = client.newCall(GET("$baseUrl$initialPath", headers)).execute().asJsoup()
@@ -411,89 +595,87 @@ class AnimeSamaFan : Source() {
         totalSeasons: Int,
         siteOffset: Int,
         oavOffset: Int,
+        tmdbSNumOverride: Int? = null,
     ): List<SEpisode> {
         val url = document.location()
         val seasonMatch = seasonRegex.find(url)
-        val sNum = seasonMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        Log.d("AnimeSamaFan", "Parsing episodes for season $sNum (Total seasons: $totalSeasons, Offset: $siteOffset, OAV: $oavOffset)")
+        val sNum = tmdbSNumOverride ?: seasonMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
 
-        // Fetch specific season metadata from TMDB
-        val tmdbMetadata = fetchTmdbMetadata(animeTitle, sNum)
+        // Fetch primary metadata with fallback for empty seasons
+        var tmdbMetadata = fetchTmdbMetadata(animeTitle, sNum)
+        if (sNum > 1 && (tmdbMetadata == null || (tmdbMetadata.episodeSummaries.size < 2))) {
+            val fallback = fetchTmdbMetadata(animeTitle, sNum - 1)
+            if (fallback != null && fallback.episodeSummaries.size > 5) {
+                tmdbMetadata = fallback
+            }
+        }
+
         var tmdbSeason1Metadata: fr.bluecxt.core.TmdbMetadata? = null
         val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
 
         // Lazy load S0 metadata
         var tmdbS0Metadata: fr.bluecxt.core.TmdbMetadata? = null
 
-        val episodeCards = document.select("a.episode-card")
+        val episodeCards = document.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")
+        Log.d("AnimeSamaFan", "Parsing episodes from $url, found ${episodeCards.size} cards")
 
-        // Movie pages can have the player directly on the anime page with no episode list.
-        val embeddedPlayerUrl = extractEmbeddedPlayerUrl(document)
+        if (episodeCards.isEmpty()) {
+            // Movie pages can have the player directly on the anime page with no episode list.
+            val embeddedPlayerUrl = extractEmbeddedPlayerUrl(document)
+            val hasKnownPlayerIframe = document.select("iframe")
+                .flatMap { listOf(it.attr("abs:src"), it.attr("abs:data-src")) }
+                .any { src -> src.isNotBlank() && getServerName(src) != null }
 
-        val hasKnownPlayerIframe = document.select("iframe")
-            .flatMap { iframe ->
-                listOf(
-                    iframe.attr("abs:src"),
-                    iframe.attr("abs:data-src"),
-                    iframe.attr("abs:data-lazy-src"),
+            if (hasKnownPlayerIframe || embeddedPlayerUrl != null) {
+                return listOf(
+                    SEpisode.create().apply {
+                        this.url = url
+                        name = "Épisode 1"
+                        episode_number = 1f
+                        scanlator = "VOSTFR, VF"
+                    },
                 )
             }
-            .map { it.trim() }
-            .any { src -> src.isNotBlank() && getServerName(src) != null }
-
-        val hasSeasonsGrid = document.selectFirst(".seasons-grid") != null
-        val ogType = document.selectFirst("meta[property=og:type]")?.attr("content")?.trim().orEmpty()
-        val isMovieOgType = ogType.equals("video.movie", ignoreCase = true)
-
-        if (episodeCards.isEmpty() && !hasSeasonsGrid && (hasKnownPlayerIframe || embeddedPlayerUrl != null || isMovieOgType)) {
-            return listOf(
-                SEpisode.create().apply {
-                    this.url = url
-                    name = "[Movie] Episode 1"
-                    episode_number = 1f
-                    scanlator = "VOSTFR, VF"
-                },
-            )
         }
 
         return episodeCards.map { card ->
+            val epUrl = card.attr("abs:href")
             val availableLangs = mutableListOf<String>()
             val langs = card.attr("data-langs").uppercase()
             if (langs.contains("VOSTFR")) availableLangs.add("VOSTFR")
             if (langs.contains("VF")) availableLangs.add("VF")
 
             SEpisode.create().apply {
-                this.url = card.attr("abs:href")
-                val epTitleRaw = card.selectFirst("h3.episode-title")?.text()?.trim().orEmpty()
+                this.url = epUrl
+                val epTitleRaw = card.selectFirst("h3.episode-title")?.text()
+                    ?: card.selectFirst(".episode-title")?.text()
+                    ?: card.text().trim()
+
                 val epTitle = epTitleRaw.replace("Épisode", "Episode", true).ifBlank { "Episode" }
-                val epNumStr = (card.selectFirst(".episode-number")?.text() ?: "0").replace(epNumRegex, "")
+
+                // Extract episode number from text or URL
+                val epNumStr = (
+                    card.selectFirst(".episode-number")?.text()
+                        ?: epNumRegex.replace(epTitle, "")
+                        ?: epNumRegex.replace(epUrl.substringAfterLast("/"), "")
+                        ?: "0"
+                    ).replace(epNumRegex, "")
+
                 val epNum = epNumStr.toIntOrNull() ?: 0
 
-                // Metadata from TMDB
-                // 1. Regular Mapping
-                var epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
+                // Metadata from TMDB - Apply offset directly to primary metadata
+                val absEpNum = epNum + siteOffset
+                var epMeta = tmdbMetadata?.episodeSummaries?.get(absEpNum)
 
-                // 2. Absolute Mapping (Reverse Overflow)
-                if (epMeta == null && sNum > 1 && siteOffset > 0) {
-                    if (tmdbSeason1Metadata == null) {
-                        tmdbSeason1Metadata = fetchTmdbMetadata(animeTitle, 1)
-                    }
-                    epMeta = tmdbSeason1Metadata?.episodeSummaries?.get(epNum + siteOffset)
-                }
-
-                // 3. Overflow Mapping (S0)
-                if (epMeta == null && sNum > 0 && (tmdbSeasonEpisodeCount == 0 || epNum > tmdbSeasonEpisodeCount)) {
-                    if (tmdbS0Metadata == null) {
-                        tmdbS0Metadata = fetchTmdbMetadata(animeTitle, 0)?.let { filterSmartMetadata(it, isSpecialSeason = true) }
-                    }
-                    val s0EpNum = (if (tmdbSeasonEpisodeCount > 0) epNum - tmdbSeasonEpisodeCount else epNum) + oavOffset
+                // If not found and we are beyond the season count, try Season 0 (Specials)
+                if (epMeta == null && tmdbSeasonEpisodeCount > 0 && absEpNum > tmdbSeasonEpisodeCount) {
+                    if (tmdbS0Metadata == null) tmdbS0Metadata = fetchTmdbMetadata(animeTitle, 0)?.let { filterSmartMetadata(it, isSpecialSeason = true) }
+                    val s0EpNum = (absEpNum - tmdbSeasonEpisodeCount) + oavOffset
                     epMeta = tmdbS0Metadata?.episodeSummaries?.get(s0EpNum)
                 }
 
                 val tmdbName = epMeta?.first
-
-                // GEMINI.md Naming Rules: [S1] Episode Y - [Titre]
-                val formattedName = if (epTitle.matches(Regex("(?i)^Episode\\s*\\d+$")) || epTitle.isBlank()) {
+                val formattedName = if (epTitle.contains(Regex("(?i)Episode\\s*\\d+")) || epTitle.isBlank() || epTitle.length < 3) {
                     if (tmdbName != null) "Episode $epNumStr - $tmdbName" else "Episode $epNumStr"
                 } else {
                     if (epTitle.contains("Episode", true)) epTitle else "Episode $epNumStr - $epTitle"
@@ -501,11 +683,8 @@ class AnimeSamaFan : Source() {
 
                 val sPrefix = if (totalSeasons > 1) "[S$sNum] " else ""
                 name = "$sPrefix$formattedName"
-
-                this.episode_number = epNumStr.toFloatOrNull() ?: 0f
-                this.scanlator = availableLangs.joinToString(", ")
-
-                // Directly use TMDB metadata
+                this.episode_number = epNum.toFloat()
+                this.scanlator = availableLangs.joinToString(", ").ifBlank { "VOSTFR" }
                 this.preview_url = epMeta?.second
                 this.summary = epMeta?.third
             }

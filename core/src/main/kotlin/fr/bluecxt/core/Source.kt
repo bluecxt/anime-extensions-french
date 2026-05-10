@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
@@ -82,10 +83,20 @@ abstract class Source :
     /**
      * Sanitizes a title for better TMDB search results.
      */
-    private fun sanitizeTitle(title: String): String = title.replace(Regex("(?i)\\(TV\\)|\\(Films?s?\\)|\\(OAVs?\\)|\\(ONAs?\\)|\\(Specials?\\)|VF|VOSTFR"), "")
+    protected open fun sanitizeTitle(title: String): String = title
+        .replace(Regex("(?i)\\(TV\\)|\\(Films?s?\\)|\\(OAVs?\\)|\\(ONAs?\\)|\\(Specials?\\)|VF|VOSTFR"), "")
+        .replace(Regex("(?i)\\s*(?:Saison|Season|Part(?:ie)?)\\s*\\d+.*"), "") // Remove season/part info
         .replace(Regex("-.*$"), "") // Remove everything after a dash (arcs, subtitles)
+        .replace(Regex("\\s+\\d+$"), "") // Remove trailing digits (e.g. Mushoku Tensei 3 -> Mushoku Tensei)
         .trim()
         .replace(Regex("\\s+"), " ")
+
+    private fun isTitleSimilar(q1: String, q2: String): Boolean {
+        val s1 = q1.lowercase().replace(Regex("[^a-z0-9]"), "")
+        val s2 = q2.lowercase().replace(Regex("[^a-z0-9]"), "")
+        if (s1.isBlank() || s2.isBlank()) return false
+        return s1.contains(s2) || s2.contains(s1)
+    }
 
     /**
      * Fetches metadata from TMDB specifically for a movie.
@@ -117,21 +128,29 @@ abstract class Source :
         val cacheKey = "$title-$season-$type"
         if (tmdbCache.containsKey(cacheKey)) return tmdbCache[cacheKey]
 
+        Log.d("TMDB", "Searching for: '$title' (Season: $season, Type: $type)")
+
         // Step 1: Try searching with the full title (most accurate)
         val firstAttempt = performTmdbSearch(title, season, type)
         if (firstAttempt != null) {
+            Log.d("TMDB", "Found match on first attempt for '$title'")
             tmdbCache[cacheKey] = firstAttempt
             return firstAttempt
         }
 
-        // Step 2: If failed, try with sanitized title (removes arcs/subtitles)
+        // Step 2: If failed, try with sanitized title
         val cleanTitle = sanitizeTitle(title)
-        if (cleanTitle != title) {
+        if (cleanTitle != title && cleanTitle.isNotBlank()) {
+            Log.d("TMDB", "Attempting with sanitized title: '$cleanTitle'")
             val secondAttempt = performTmdbSearch(cleanTitle, season, type)
-            tmdbCache[cacheKey] = secondAttempt
-            return secondAttempt
+            if (secondAttempt != null) {
+                Log.d("TMDB", "Found match with sanitized title '$cleanTitle'")
+                tmdbCache[cacheKey] = secondAttempt
+                return secondAttempt
+            }
         }
 
+        Log.d("TMDB", "No match found for '$title'")
         tmdbCache[cacheKey] = null
         return null
     }
@@ -224,8 +243,16 @@ abstract class Source :
 
             if (bestMatch == null) return null
 
+            val resultTitle = bestMatch.optString("name").ifBlank { bestMatch.optString("title") }
+            if (resultTitle.isNotBlank() && !isTitleSimilar(query, resultTitle)) {
+                Log.d("Source", "TMDB Rejecting '$resultTitle' for query '$query' (Not similar enough)")
+                return null
+            }
+
             val id = bestMatch.getInt("id")
             val mediaType = bestMatch.optString("media_type", targetType ?: "tv")
+            val name = bestMatch.optString("name").ifBlank { bestMatch.optString("title") }
+            Log.d("TMDB", "Match Found: ID=$id, Name='$name', Type=$mediaType")
 
             constructMetadata(id, mediaType, season)
         } catch (_: Exception) {
@@ -240,7 +267,7 @@ abstract class Source :
             val detailResponse = client.newCall(GET(detailUrl)).execute().use { it.body.string() }
             val detailJson = JSONObject(detailResponse)
 
-            val poster = detailJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
+            val mainPoster = detailJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
             val mainSummary = detailJson.optString("overview").takeIf { it.isNotBlank() }
 
             // Extract Artist (Studios)
@@ -292,7 +319,7 @@ abstract class Source :
             if (mediaType == "movie") {
                 val backdrop = detailJson.optString("backdrop_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
                 val movieTitle = detailJson.optString("title").ifBlank { detailJson.optString("name") }
-                TmdbMetadata(posterUrl = poster, episodeThumbUrl = backdrop, summary = mainSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
+                TmdbMetadata(posterUrl = mainPoster, episodeThumbUrl = backdrop, summary = mainSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
             } else {
                 // TV Series - Fetch season data (FR first)
                 val frSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=fr-FR")).execute().use { it.body.string() }
@@ -382,7 +409,9 @@ abstract class Source :
                 }
 
                 val seasonSummary = frSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
-                TmdbMetadata(posterUrl = poster, summary = seasonSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = epMap)
+                val seasonPoster = frSeasonJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" } ?: mainPoster
+                Log.d("TMDB", "Final Poster URL for Season $season: $seasonPoster")
+                TmdbMetadata(posterUrl = seasonPoster, summary = seasonSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = epMap)
             }
         } catch (_: Exception) {
             null
