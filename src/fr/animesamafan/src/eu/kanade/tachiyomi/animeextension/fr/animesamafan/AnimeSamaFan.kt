@@ -259,11 +259,22 @@ class AnimeSamaFan : Source() {
         val siteDescription = document.selectFirst(".synopsis-content p")?.text()
         if (!siteDescription.isNullOrBlank()) anime.description = siteDescription
 
+        // Genres from site
+        val siteGenres = document.select(".synopsis-content .anime-genres .genre-link")
+            .map { it.text().trim() }
+            .filter { it.isNotBlank() && !it.equals("Animes", true) }
+        if (siteGenres.isNotEmpty()) {
+            anime.genre = siteGenres.joinToString(", ")
+        }
+
         // Determine target TMDB Season with continuation fallback
         var tmdbMetadata = fetchTmdbMetadata(cleanTitle, sNum)
         if (sNum > 1 && (tmdbMetadata == null || tmdbMetadata.episodeSummaries.size < 2)) {
             tmdbMetadata = fetchTmdbMetadata(cleanTitle, sNum - 1)
         }
+
+        // TMDB Fallbacks
+        if (anime.genre.isNullOrBlank()) tmdbMetadata?.genre?.let { anime.genre = it }
 
         // Use TMDB summary only if it's specific (different from S1 or if we are on S1)
         if (tmdbMetadata?.summary != null) {

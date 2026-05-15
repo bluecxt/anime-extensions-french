@@ -47,7 +47,7 @@ TODO: add the missing infos with anilist API "https://anilist.co/graphiql"
 - [x] **Author**: [Provider: TMDB]
 - [x] **Artist**: [Provider: TMDB]
 - [x] **Description**: [Provider: TMDB]
-- [x] **Genre**: [Provider: Self]
+- [x] **Genre**: [Provider: Self/TMDB]
 - [x] **Status**: [Provider: TMDB]
 - [x] **Release Date**: [Provider: TMDB]
 - [x] **Thumbnail**: [Provider: TMDB]
