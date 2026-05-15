@@ -92,11 +92,23 @@ abstract class Source :
         .replace(Regex("\\s+"), " ")
 
     private fun isTitleSimilar(q1: String, q2: String): Boolean {
-        // Keep letters and digits from any script
-        val s1 = q1.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
-        val s2 = q2.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
-        if (s1.isBlank() || s2.isBlank()) return false
-        return s1.contains(s2) || s2.contains(s1)
+        // Normalization: lowercase and keep only letters/digits
+        val s1 = q1.lowercase().replace(Regex("[^\\p{L}\\p{N}\\s]"), "")
+        val s2 = q2.lowercase().replace(Regex("[^\\p{L}\\p{N}\\s]"), "")
+
+        val flat1 = s1.replace(" ", "")
+        val flat2 = s2.replace(" ", "")
+
+        if (flat1.isBlank() || flat2.isBlank()) return false
+
+        // Direct containment (handles most cases)
+        if (flat1.contains(flat2) || flat2.contains(flat1)) return true
+
+        // Word-based matching for translated titles (e.g. "Awajima Hyakkei" vs "A Hundred Scenes of Awajima")
+        val words1 = s1.split(" ").filter { it.length > 3 }
+        val words2 = s2.split(" ").filter { it.length > 3 }
+
+        return words1.any { w1 -> words2.any { w2 -> w1 == w2 } }
     }
 
     /**
@@ -247,10 +259,29 @@ abstract class Source :
             val resultTitle = bestMatch.optString("name").ifBlank { bestMatch.optString("title") }
             val resultOriginalTitle = bestMatch.optString("original_name").ifBlank { bestMatch.optString("original_title") }
 
-            val isSimilar = isTitleSimilar(query, resultTitle) || (resultOriginalTitle.isNotBlank() && isTitleSimilar(query, resultOriginalTitle))
+            var isSimilar = isTitleSimilar(query, resultTitle) || (resultOriginalTitle.isNotBlank() && isTitleSimilar(query, resultOriginalTitle))
 
             if (!isSimilar) {
-                Log.d("Source", "TMDB Rejecting '$resultTitle' ($resultOriginalTitle) for query '$query' (Not similar enough)")
+                // Try fetching alternative titles for better Romanized matching
+                val bestId = bestMatch.getInt("id")
+                val mType = bestMatch.optString("media_type", targetType ?: "tv")
+                val altUrl = "$tmdbBaseUrl/$mType/$bestId/alternative_titles?api_key=$tmdbApiKey"
+                try {
+                    val altRes = client.newCall(GET(altUrl)).execute().use { it.body.string() }
+                    val altArray = JSONObject(altRes).getJSONArray("results")
+                    for (i in 0 until altArray.length()) {
+                        val alt = altArray.getJSONObject(i).optString("title")
+                        if (isTitleSimilar(query, alt)) {
+                            isSimilar = true
+                            break
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+
+            if (!isSimilar) {
+                Log.d("Source", "TMDB Rejecting '$resultTitle' ($resultOriginalTitle) for query '$query' (Not similar enough even in alt titles)")
                 return null
             }
 
@@ -326,6 +357,8 @@ abstract class Source :
                 val movieTitle = detailJson.optString("title").ifBlank { detailJson.optString("name") }
                 TmdbMetadata(posterUrl = mainPoster, episodeThumbUrl = backdrop, summary = mainSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)))
             } else {
+                val originalLang = detailJson.optString("original_language", "ja")
+
                 // TV Series - Fetch season data (FR first)
                 val frSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=fr-FR")).execute().use { it.body.string() }
                 val frSeasonJson = JSONObject(frSeasonBody)
@@ -354,9 +387,34 @@ abstract class Source :
                     null
                 }
 
+                // Check for Original language fallback (e.g. ja-JP)
+                var needsOriginal = enEpisodes != null && enEpisodes.length() > 0
+                if (needsOriginal) {
+                    needsOriginal = false
+                    for (i in 0 until enEpisodes!!.length()) {
+                        val ep = enEpisodes.getJSONObject(i)
+                        val name = ep.optString("name")
+                        if (name.isBlank() || name.matches(genericRegex) || ep.optString("overview").isBlank()) {
+                            needsOriginal = true
+                            break
+                        }
+                    }
+                }
+
+                val origEpisodes = if (needsOriginal && originalLang != "en" && originalLang != "fr") {
+                    try {
+                        val origSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=$originalLang")).execute().use { it.body.string() }
+                        JSONObject(origSeasonBody).optJSONArray("episodes")
+                    } catch (_: Exception) {
+                        null
+                    }
+                } else {
+                    null
+                }
+
                 val epMap = mutableMapOf<Int, Triple<String?, String?, String?>>()
 
-                fun fillMap(source: JSONArray?, isEnglish: Boolean) {
+                fun fillMap(source: JSONArray?, priority: Int) {
                     if (source == null) return
                     for (i in 0 until source.length()) {
                         val ep = source.getJSONObject(i)
@@ -365,17 +423,15 @@ abstract class Source :
                         val summary = ep.optString("overview").trim().takeIf { it.isNotBlank() }
                         val thumb = ep.optString("still_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
 
-                        if (isEnglish) {
-                            val existing = epMap[num]
-                            epMap[num] = Triple(existing?.first ?: name, existing?.second ?: thumb, existing?.third ?: summary)
-                        } else {
-                            epMap[num] = Triple(name, thumb, summary)
-                        }
+                        val existing = epMap[num]
+                        // Only replace if existing name/summary is null
+                        epMap[num] = Triple(existing?.first ?: name, existing?.second ?: thumb, existing?.third ?: summary)
                     }
                 }
 
-                fillMap(frEpisodes, false)
-                fillMap(enEpisodes, true)
+                fillMap(frEpisodes, 0)
+                fillMap(enEpisodes, 1)
+                fillMap(origEpisodes, 2)
 
                 // Robust Season Fallback (for sites that group seasons differently)
                 if (season > 0) {

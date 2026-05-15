@@ -33,7 +33,9 @@ fun loadIndividualExtension(lang: String, name: String) {
 fun File.eachDir(block: (File) -> Unit) {
     val files = listFiles() ?: return
     for (file in files) {
-        if (file.isDirectory && file.name != ".gradle" && file.name != "build") {
+        val isIgnored = File(file, ".ignore").exists()
+
+        if (file.isDirectory && !isIgnored && file.name != ".gradle" && file.name != "build") {
             block(file)
         }
     }

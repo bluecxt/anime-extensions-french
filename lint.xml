@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <issue id="NewerVersionAvailable" severity="ignore" />
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+    <issue id="GradleDependency" severity="ignore" /> <!-- La nouvelle exception -->
+    
+    <issue id="Aligned16KB" severity="ignore" />
+
+    <issue id="DataExtractionRules" severity="ignore" />
+    <issue id="UnusedResources" severity="ignore" />
+    <issue id="IconDipSize" severity="ignore" />
+    <issue id="IconDuplicatesConfig" severity="ignore" />
+</lint>

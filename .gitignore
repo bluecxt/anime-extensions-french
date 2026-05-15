@@ -40,3 +40,4 @@ coverage.xml
 cover/
 
 __pycache__/
+signingkey.jks
