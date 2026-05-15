@@ -78,7 +78,7 @@ class AnimeSamaFan : Source() {
             val setter = methods.find { it.name == "setFetch_type" }
             if (setter != null) {
                 val appFetchTypeClass = setter.parameterTypes[0]
-                val enumValue = appFetchTypeClass.enumConstants.find { it.toString() == type.name }
+                val enumValue = appFetchTypeClass.enumConstants?.find { it.toString() == type.name }
                 setter.invoke(anime, enumValue)
             }
         } catch (_: Exception) {}
@@ -311,6 +311,14 @@ class AnimeSamaFan : Source() {
     }
 
     // ================== Seasons ==================
+    private fun getSeasonNumber(url: String): Int {
+        var sNum = seasonRegex.find(url)?.groupValues?.get(1)?.toIntOrNull()
+            ?: url.substringBefore(".html").substringAfterLast("-").toIntOrNull()
+            ?: 1
+        if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
+        return sNum
+    }
+
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
         val document = response.asJsoup()
@@ -319,13 +327,12 @@ class AnimeSamaFan : Source() {
         val seasonCards = document.select(".seasons-grid a.season-card")
         val siteSeasons = seasonCards.map { element ->
             val sHref = element.attr("href")
-            var sNum = seasonRegex.find(sHref)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-            if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
+            val sNum = getSeasonNumber(sHref)
             val title = element.selectFirst(".season-title")?.text() ?: element.text().trim()
             Triple(title, fixUrl(sHref), sNum)
         }
 
-        return siteSeasons.map { (sTitle, sUrl, siteSNum) ->
+        return siteSeasons.mapIndexed { index, (sTitle, sUrl, siteSNum) ->
             SAnime.create().apply {
                 title = sTitle
                 url = sUrl
@@ -338,6 +345,7 @@ class AnimeSamaFan : Source() {
                 thumbnail_url = finalMeta?.posterUrl ?: anime.thumbnail_url
                 setFetchTypeSafe(this, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
                 setSeasonNumberSafe(this, siteSNum.toDouble())
+                status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else (finalMeta?.status ?: anime.status)
                 initialized = false
             }
         }
@@ -348,194 +356,92 @@ class AnimeSamaFan : Source() {
         val initialPath = anime.url
         Log.d("AnimeSamaFan", "getEpisodeList: initialPath='$initialPath'")
 
-        // AniZen Hierarchical Mode
-        if (initialPath.contains("saison-", ignoreCase = true)) {
-            val doc = client.newCall(GET("$baseUrl$initialPath", headers)).execute().asJsoup()
-            val pageTitle = doc.selectFirst("h1.season-title")?.text()
-                ?: doc.selectFirst("h1.anime-title")?.text()
-                ?: anime.title
+        val initialDoc = client.newCall(GET("$baseUrl$initialPath", headers)).execute().asJsoup()
 
-            val baseTitle = sanitizeTitle(pageTitle)
+        // If it's a hub page with no episodes but has a seasons grid, follow the first one
+        // (Avoids aggregation but ensures we find episodes for single-season animes)
+        val episodeCards = initialDoc.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")
+        val gridCards = initialDoc.select(".seasons-grid a.season-card")
 
-            // 1. Find season tabs to calculate offset dynamically
-            val tabs = doc.select(".tabs-container a.tab")
-            val seasonLinks = tabs.map { fixUrl(it.attr("href")) }.distinct()
-            Log.d("AnimeSamaFan", "Season tabs found: $seasonLinks")
+        val (doc, path) = if (episodeCards.isEmpty() && gridCards.isNotEmpty()) {
+            val firstUrl = fixUrl(gridCards.first()!!.attr("href"))
+            client.newCall(GET("$baseUrl$firstUrl", headers)).execute().asJsoup() to firstUrl
+        } else {
+            initialDoc to initialPath
+        }
 
-            val currentIdx = seasonLinks.indexOfFirst { it == initialPath }
-            Log.d("AnimeSamaFan", "Current season index in tabs: $currentIdx")
+        val pageTitle = doc.selectFirst("h1.season-title")?.text()
+            ?: doc.selectFirst("h1.anime-title")?.text()
+            ?: anime.title
 
-            var siteOffsetAccumulator = 0
-            var oavOffsetAccumulator = 0
-            var lastTmdbSNum = -1
-            var finalTargetSNum = 1
-            var finalOffset = 0
-            var finalOavOffset = 0
+        val baseTitle = sanitizeTitle(pageTitle)
+        val siteSNum = getSeasonNumber(path)
 
-            // Analyze current and previous seasons from tabs
-            val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(initialPath)
-
-            for (sUrl in seasonsToAnalyze) {
-                Log.d("AnimeSamaFan", "Analyzing season: $sUrl")
-                var sNum = seasonRegex.find(sUrl)?.groupValues?.get(1)?.toIntOrNull()
-                    ?: sUrl.substringBefore(".html").substringAfterLast("-").toIntOrNull()
-                    ?: 1
-                if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
-
-                // Determine TMDB Season
-                var tmdbS = sNum
-                val meta = fetchTmdbMetadata(baseTitle, tmdbS)
-                val tmdbCount = meta?.episodeSummaries?.size ?: 0
-                Log.d("AnimeSamaFan", "Season $sNum maps to TMDB $tmdbS (Count: $tmdbCount)")
-
-                if (sNum > 1 && (meta == null || tmdbCount < 2)) {
-                    tmdbS = sNum - 1
-                    Log.d("AnimeSamaFan", "Continuation detected, falling back to TMDB $tmdbS")
-                }
-
-                if (tmdbS != lastTmdbSNum) {
-                    siteOffsetAccumulator = 0
-                    oavOffsetAccumulator = 0
-                    lastTmdbSNum = tmdbS
-                }
-
-                if (sUrl == initialPath) {
-                    finalTargetSNum = tmdbS
-                    finalOffset = siteOffsetAccumulator
-                    finalOavOffset = oavOffsetAccumulator
-                    break
-                }
-
-                // Fetch previous season to count episodes and surplus (OAVs)
-                val sDoc = tryGetDocument("$baseUrl$sUrl")
-                val siteCount = sDoc?.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")?.size ?: 0
-
-                val currentTmdbMeta = fetchTmdbMetadata(baseTitle, tmdbS)
-                val currentTmdbCount = currentTmdbMeta?.episodeSummaries?.size ?: 0
-
-                if (currentTmdbCount > 0) {
-                    val remainingInTmdb = maxOf(0, currentTmdbCount - siteOffsetAccumulator)
-                    siteOffsetAccumulator += minOf(siteCount, remainingInTmdb)
-                    if (siteCount > remainingInTmdb) {
-                        oavOffsetAccumulator += (siteCount - remainingInTmdb)
-                    }
-                } else {
-                    siteOffsetAccumulator += siteCount
-                }
-                Log.d("AnimeSamaFan", "Season $sUrl finished: siteCount=$siteCount, Accumulators: site=$siteOffsetAccumulator, oav=$oavOffsetAccumulator")
-            }
-            Log.d("AnimeSamaFan", "Final Mapping: TMDB S=$finalTargetSNum, Offset=$finalOffset, OAV Offset=$finalOavOffset")
-
-            return parseEpisodesFromDocument(doc, baseTitle, 1, finalOffset, finalOavOffset, finalTargetSNum)
+        // 1. Find season tabs to calculate offset dynamically (Hierarchical Mode)
+        val tabs = doc.select(".tabs-container a.tab")
+        if (tabs.isEmpty()) {
+            return parseEpisodesFromDocument(doc, baseTitle, 1, 0, 0, siteSNum)
                 .sortedByDescending { it.episode_number }
         }
 
-        // Aniyomi Classic Mode
-        val normalizedPath = normalizeSingleSeasonUrlPath(initialPath)
+        val seasonLinks = tabs.map { fixUrl(it.attr("href")) }.distinct()
+        val currentIdx = seasonLinks.indexOfFirst { it == path }
 
-        val initialDoc = client.newCall(GET("$baseUrl$initialPath", headers)).execute().asJsoup()
-
-        val rootDoc = if (normalizedPath != initialPath) {
-            val normalizedDoc = tryGetDocument("$baseUrl$normalizedPath")
-            val normalizedLooksValid = normalizedDoc != null && (
-                normalizedDoc.select("a.episode-card").isNotEmpty() ||
-                    normalizedDoc.selectFirst(".seasons-grid") != null ||
-                    normalizedDoc.select("iframe").isNotEmpty()
-                )
-
-            if (normalizedLooksValid) {
-                normalizedDoc
-            } else {
-                initialDoc
-            }
-        } else {
-            initialDoc
-        }
-
-        val seasonLinks = rootDoc.select(".seasons-grid a.season-card")
-            .mapNotNull { fixUrl(it.attr("href")).takeIf { href -> href.isNotBlank() } }
-            .distinct()
-
-        val totalSeasons = seasonLinks.size.takeIf { it > 0 } ?: 1
-
-        // Collect one document per season (to compute offsets safely)
-        val seasonDocuments = mutableListOf<Document>()
-        seasonDocuments.add(rootDoc)
-        seasonLinks
-            .filter { it != fixUrl(rootDoc.location()) }
-            .forEach { sUrl ->
-                try {
-                    seasonDocuments.add(client.newCall(GET("$baseUrl$sUrl", headers)).execute().asJsoup())
-                } catch (_: Exception) {
-                }
-            }
-
-        data class SeasonContext(
-            val seasonNum: Int,
-            val document: Document,
-            val episodeCount: Int,
-        )
-
-        fun seasonNumFromUrl(url: String): Int = seasonRegex.find(url)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-
-        val contexts = seasonDocuments
-            .map { doc ->
-                val sNum = seasonNumFromUrl(doc.location())
-                SeasonContext(sNum, doc, doc.select("a.episode-card").size)
-            }
-            .groupBy { it.seasonNum }
-            .map { (_, list) -> list.maxBy { it.episodeCount } }
-            .sortedBy { it.seasonNum }
-
-        // Compute cumulative episode offsets per season.
-        // This is used when TMDB merges multiple site seasons into a single TMDB season (usually season 1).
-        val episodeOffsetBySeason = mutableMapOf<Int, Int>()
-        val oavOffsetBySeason = mutableMapOf<Int, Int>()
         var siteOffsetAccumulator = 0
         var oavOffsetAccumulator = 0
+        var lastTmdbSNum = -1
+        var finalTargetSNum = siteSNum
+        var finalOffset = 0
+        var finalOavOffset = 0
 
-        val baseTitle = anime.title.replace(Regex("""(?i)\s*(?:Saison|Season)\s*\d+.*"""), "").trim()
-        val seenTmdbSeasons = mutableSetOf<Int>()
+        // Analyze previous tabs to calculate correct offsets for the current tab
+        val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(path)
 
-        contexts.forEach { ctx ->
-            episodeOffsetBySeason[ctx.seasonNum] = siteOffsetAccumulator
-            oavOffsetBySeason[ctx.seasonNum] = oavOffsetAccumulator
+        for (sUrl in seasonsToAnalyze) {
+            val sNum = getSeasonNumber(sUrl)
 
-            val count = ctx.episodeCount
-            val sNum = ctx.seasonNum
+            // Determine TMDB Season
+            var tmdbS = sNum
+            val meta = fetchTmdbMetadata(baseTitle, tmdbS)
+            val tmdbCount = meta?.episodeSummaries?.size ?: 0
 
-            if (seenTmdbSeasons.contains(sNum)) {
-                oavOffsetAccumulator += count
-            } else {
-                seenTmdbSeasons.add(sNum)
-                val tmdbMeta = kotlinx.coroutines.runBlocking { fetchTmdbMetadata(baseTitle, sNum, "tv") }
-                val tmdbCount = tmdbMeta?.episodeSummaries?.size ?: 0
-                if (tmdbCount > 0) {
-                    siteOffsetAccumulator += kotlin.math.min(count, tmdbCount)
-                    if (count > tmdbCount) {
-                        oavOffsetAccumulator += (count - tmdbCount)
-                    }
-                } else {
-                    siteOffsetAccumulator += count
+            if (sNum > 1 && (meta == null || tmdbCount < 2)) {
+                tmdbS = sNum - 1
+            }
+
+            if (tmdbS != lastTmdbSNum) {
+                siteOffsetAccumulator = 0
+                oavOffsetAccumulator = 0
+                lastTmdbSNum = tmdbS
+            }
+
+            if (sUrl == path) {
+                finalTargetSNum = tmdbS
+                finalOffset = siteOffsetAccumulator
+                finalOavOffset = oavOffsetAccumulator
+                break
+            }
+
+            // Fetch previous season to count episodes and surplus (OAVs)
+            val sDoc = tryGetDocument("$baseUrl$sUrl")
+            val siteCount = sDoc?.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")?.size ?: 0
+
+            val currentTmdbMeta = fetchTmdbMetadata(baseTitle, tmdbS)
+            val currentTmdbCount = currentTmdbMeta?.episodeSummaries?.size ?: 0
+
+            if (currentTmdbCount > 0) {
+                val remainingInTmdb = maxOf(0, currentTmdbCount - siteOffsetAccumulator)
+                siteOffsetAccumulator += minOf(siteCount, remainingInTmdb)
+                if (siteCount > remainingInTmdb) {
+                    oavOffsetAccumulator += (siteCount - remainingInTmdb)
                 }
+            } else {
+                siteOffsetAccumulator += siteCount
             }
         }
 
-        val episodes = mutableListOf<SEpisode>()
-        contexts.forEach { ctx ->
-            val sOffset = episodeOffsetBySeason[ctx.seasonNum] ?: 0
-            val oOffset = oavOffsetBySeason[ctx.seasonNum] ?: 0
-            episodes.addAll(parseEpisodesFromDocument(ctx.document, baseTitle, totalSeasons, sOffset, oOffset))
-        }
-
-        return episodes.distinctBy { it.url }.sortedByDescending { it.episode_number }
-    }
-
-    private fun normalizeSingleSeasonUrlPath(path: String): String {
-        // Some animes with a single season are linked as /anime/<id-slug>/saison-1.html.
-        // The canonical page (and the player for movies) is often /anime/<id-slug>.html.
-        return path.replace(Regex("/saison-1\\.html$"), ".html")
-            .replace(Regex("/saison-1$"), "")
+        return parseEpisodesFromDocument(doc, baseTitle, seasonLinks.size, finalOffset, finalOavOffset, finalTargetSNum)
+            .sortedByDescending { it.episode_number }
     }
 
     private fun extractEmbeddedPlayerUrl(document: Document): String? {
@@ -604,7 +510,7 @@ class AnimeSamaFan : Source() {
                 return listOf(
                     SEpisode.create().apply {
                         this.url = fixUrl(url)
-                        name = "Épisode 1"
+                        name = "[Movie] Film"
                         episode_number = 1f
                         scanlator = "VOSTFR, VF"
                     },
@@ -653,7 +559,18 @@ class AnimeSamaFan : Source() {
                     if (epTitle.contains("Episode", true)) epTitle else "Episode $epNumStr - $epTitle"
                 }
 
-                val sPrefix = if (totalSeasons > 1) "[S$sNum] " else ""
+                val sPrefix = when {
+                    url.contains("film", true) || url.contains("movie", true) || animeTitle.contains("FILM", true) || animeTitle.contains("MOVIE", true) -> "[Movie] "
+
+                    url.contains("oav", true) || url.contains("special", true) || animeTitle.contains("OAV", true) || animeTitle.contains("Special", true) -> "[Special] "
+
+                    sNum > 1 -> "[S$sNum] "
+
+                    totalSeasons > 1 && sNum == 1 -> ""
+
+                    // Omit [S1] even if multiple seasons exist
+                    else -> ""
+                }
                 name = "$sPrefix$formattedName"
                 this.episode_number = epNum.toFloat()
                 this.scanlator = availableLangs.joinToString(", ").ifBlank { "VOSTFR" }
