@@ -366,7 +366,7 @@ abstract class Source :
 
                 // Check for English fallback
                 var needsEnglish = frEpisodes.length() == 0
-                val genericRegex = Regex("(?i)^(Episode|Épisode)\\s*\\d+$")
+                val genericRegex = Regex("(?i)^(Episode|Épisode)\\s*\\d+$|^第\\d+[話回]$|^\\d+$")
                 for (i in 0 until frEpisodes.length()) {
                     val ep = frEpisodes.getJSONObject(i)
                     val name = ep.optString("name")
