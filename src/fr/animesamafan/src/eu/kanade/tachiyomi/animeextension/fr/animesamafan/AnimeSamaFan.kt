@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesamafan
 
 import android.util.Log
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
@@ -32,8 +33,12 @@ import uy.kohesive.injekt.injectLazy
 
 class AnimeSamaFan : Source() {
     override val name = "Anime-Sama-Fan"
-    override val baseUrl = "https://anime-sama.fan"
+    override val baseUrl by lazy {
+        val url = preferences.getString("base_url", "https://animesama.co")!!
+        if (url.startsWith("http")) url else "https://$url"
+    }
     override val lang = "fr"
+
     override val supportsLatest = false
 
     override val json: Json by injectLazy()
@@ -110,17 +115,14 @@ class AnimeSamaFan : Source() {
     private fun catalogueRequest(
         page: Int,
         query: String = "",
-        langue: String = "",
         type: String = "",
         genre: String = "",
-        sort: String = "recent",
     ): Request {
         val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             query.takeIf { it.isNotBlank() }?.let { addQueryParameter("search", it) }
             type.takeIf { it.isNotBlank() }?.let { addQueryParameter("type", it) }
             genre.takeIf { it.isNotBlank() }?.let { addQueryParameter("genre", it) }
-            sort.takeIf { it.isNotBlank() }?.let { addQueryParameter("sort", it) }
         }.build()
 
         return GET(url.toString(), headers)
@@ -129,12 +131,12 @@ class AnimeSamaFan : Source() {
     override fun getFilterList() = AnimeSamaFanCatalogueFilters.FILTER_LIST
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(catalogueRequest(page = page, sort = "views")).execute()
+        val response = client.newCall(catalogueRequest(page = page)).execute()
         return parseAnimePage(response.asJsoup(), page)
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(catalogueRequest(page = page, sort = "recent")).execute()
+        val response = client.newCall(catalogueRequest(page = page)).execute()
         return parseAnimePage(response.asJsoup(), page)
     }
 
@@ -152,7 +154,6 @@ class AnimeSamaFan : Source() {
                 query = query,
                 type = searchFilters.type,
                 genre = searchFilters.genre,
-                sort = searchFilters.sort,
             ),
         ).execute()
 
@@ -189,33 +190,27 @@ class AnimeSamaFan : Source() {
 
         class GenreFilter : AnimeFilter.Select<String>("Genre", getOptions("GENRES").map { it.first }.toTypedArray(), 0)
 
-        class SortFilter : AnimeFilter.Select<String>("Trier par", getOptions("SORT").map { it.first }.toTypedArray(), 0)
-
         val FILTER_LIST get() = AnimeFilterList(
             TypeFilter(),
             GenreFilter(),
-            SortFilter(),
         )
 
         data class SearchFilters(
             val type: String,
             val genre: String,
-            val sort: String,
         )
 
         fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
             if (filters.isEmpty()) {
-                return SearchFilters(type = "", genre = "", sort = "recent")
+                return SearchFilters(type = "", genre = "")
             }
 
             val typeIndex = filters.filterIsInstance<TypeFilter>().firstOrNull()?.state ?: 0
             val genreIndex = filters.filterIsInstance<GenreFilter>().firstOrNull()?.state ?: 0
-            val sortIndex = filters.filterIsInstance<SortFilter>().firstOrNull()?.state ?: 0
 
             return SearchFilters(
                 type = getOptions("TYPES").getOrNull(typeIndex)?.second ?: "",
                 genre = getOptions("GENRES").getOrNull(genreIndex)?.second ?: "",
-                sort = getOptions("SORT").getOrNull(sortIndex)?.second ?: "recent",
             )
         }
     }
@@ -754,6 +749,12 @@ class AnimeSamaFan : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val baseUrlPref = EditTextPreference(screen.context).apply {
+            key = "base_url"
+            title = "Base URL"
+            summary = "Changer l'URL de base de l'extension (actuelle: $baseUrl)"
+            setDefaultValue("https://animesama.co")
+        }
         val voicesPref = ListPreference(screen.context).apply {
             key = "preferred_voices"
             title = "Préférence des voix"
@@ -770,6 +771,7 @@ class AnimeSamaFan : Source() {
             setDefaultValue("sibnet")
             summary = "%s"
         }
+        screen.addPreference(baseUrlPref)
         screen.addPreference(voicesPref)
         screen.addPreference(serverPref)
     }
