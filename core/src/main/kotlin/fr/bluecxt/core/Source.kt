@@ -86,14 +86,15 @@ abstract class Source :
     protected open fun sanitizeTitle(title: String): String = title
         .replace(Regex("(?i)\\(TV\\)|\\(Films?s?\\)|\\(OAVs?\\)|\\(ONAs?\\)|\\(Specials?\\)|VF|VOSTFR"), "")
         .replace(Regex("(?i)\\s*(?:Saison|Season|Part(?:ie)?)\\s*\\d+.*"), "") // Remove season/part info
-        .replace(Regex("-.*$"), "") // Remove everything after a dash (arcs, subtitles)
-        .replace(Regex("\\s+\\d+$"), "") // Remove trailing digits (e.g. Mushoku Tensei 3 -> Mushoku Tensei)
+        .replace(Regex("\\s+-\\s+.*$"), "") // Only remove after " - " (space dash space) to avoid removing "-kun"
+        .replace(Regex("\\s+\\d+$"), "") // Remove trailing digits
         .trim()
         .replace(Regex("\\s+"), " ")
 
     private fun isTitleSimilar(q1: String, q2: String): Boolean {
-        val s1 = q1.lowercase().replace(Regex("[^a-z0-9]"), "")
-        val s2 = q2.lowercase().replace(Regex("[^a-z0-9]"), "")
+        // Keep letters and digits from any script
+        val s1 = q1.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+        val s2 = q2.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
         if (s1.isBlank() || s2.isBlank()) return false
         return s1.contains(s2) || s2.contains(s1)
     }
@@ -244,8 +245,12 @@ abstract class Source :
             if (bestMatch == null) return null
 
             val resultTitle = bestMatch.optString("name").ifBlank { bestMatch.optString("title") }
-            if (resultTitle.isNotBlank() && !isTitleSimilar(query, resultTitle)) {
-                Log.d("Source", "TMDB Rejecting '$resultTitle' for query '$query' (Not similar enough)")
+            val resultOriginalTitle = bestMatch.optString("original_name").ifBlank { bestMatch.optString("original_title") }
+
+            val isSimilar = isTitleSimilar(query, resultTitle) || (resultOriginalTitle.isNotBlank() && isTitleSimilar(query, resultOriginalTitle))
+
+            if (!isSimilar) {
+                Log.d("Source", "TMDB Rejecting '$resultTitle' ($resultOriginalTitle) for query '$query' (Not similar enough)")
                 return null
             }
 

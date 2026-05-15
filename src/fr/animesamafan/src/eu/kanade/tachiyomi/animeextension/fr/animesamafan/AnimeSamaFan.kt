@@ -35,7 +35,10 @@ class AnimeSamaFan : Source() {
     override val name = "Anime-Sama-Fan"
     override val baseUrl by lazy {
         val url = preferences.getString("base_url", "https://animesama.co")!!
-        if (url.startsWith("http")) url else "https://$url"
+            .removeSuffix("/")
+        val finalUrl = if (url.startsWith("http")) url else "https://$url"
+        Log.d("AnimeSamaFan", "Base URL: $finalUrl")
+        finalUrl
     }
     override val lang = "fr"
 
@@ -63,7 +66,11 @@ class AnimeSamaFan : Source() {
         )
 
     // ================== Utils ==================
-    private fun fixUrl(url: String): String = if (url.startsWith("http")) url else "$baseUrl$url"
+    private fun fixUrl(url: String): String = if (url.startsWith("http")) {
+        url.replace(Regex("^https?://[^/]+"), "")
+    } else {
+        if (url.startsWith("/")) url else "/$url"
+    }
 
     private fun setFetchTypeSafe(anime: SAnime, type: eu.kanade.tachiyomi.animesource.model.FetchType) {
         try {
@@ -92,7 +99,7 @@ class AnimeSamaFan : Source() {
             SAnime.create().apply {
                 title = element.selectFirst(".card-title")?.text()?.trim().orEmpty()
                 thumbnail_url = element.selectFirst("img.card-image")?.attr("abs:src")
-                url = element.selectFirst("a")?.attr("href")?.replace(baseUrl, "") ?: ""
+                url = fixUrl(element.selectFirst("a")?.attr("href") ?: "")
             }
         }
 
@@ -168,7 +175,7 @@ class AnimeSamaFan : Source() {
             title = titleElement?.text()?.replace("VOSTFR", "", true)?.replace("VF", "", true)?.trim() ?: "Unknown Title"
             thumbnail_url = document.selectFirst(".anime-cover img")?.attr("abs:src")
                 ?: document.selectFirst("meta[property=og:image]")?.attr("content")
-            url = document.location().replace(baseUrl, "")
+            url = fixUrl(document.location())
         }
         return AnimesPage(listOf(anime), false)
     }
@@ -304,7 +311,7 @@ class AnimeSamaFan : Source() {
             var sNum = seasonRegex.find(sHref)?.groupValues?.get(1)?.toIntOrNull() ?: 1
             if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
             val title = element.selectFirst(".season-title")?.text() ?: element.text().trim()
-            Triple(title, element.attr("abs:href").replace(baseUrl, ""), sNum)
+            Triple(title, fixUrl(sHref), sNum)
         }
 
         return siteSeasons.map { (sTitle, sUrl, siteSNum) ->
@@ -328,7 +335,7 @@ class AnimeSamaFan : Source() {
     // ================== Episodes ==================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val initialPath = anime.url
-        Log.d("AnimeSamaFan", "getEpisodeList for: $initialPath")
+        Log.d("AnimeSamaFan", "getEpisodeList: initialPath='$initialPath'")
 
         // AniZen Hierarchical Mode
         if (initialPath.contains("saison-", ignoreCase = true)) {
@@ -341,8 +348,11 @@ class AnimeSamaFan : Source() {
 
             // 1. Find season tabs to calculate offset dynamically
             val tabs = doc.select(".tabs-container a.tab")
-            val seasonLinks = tabs.map { it.attr("abs:href").replace(baseUrl, "") }.distinct()
+            val seasonLinks = tabs.map { fixUrl(it.attr("href")) }.distinct()
+            Log.d("AnimeSamaFan", "Season tabs found: $seasonLinks")
+
             val currentIdx = seasonLinks.indexOfFirst { it == initialPath }
+            Log.d("AnimeSamaFan", "Current season index in tabs: $currentIdx")
 
             var siteOffsetAccumulator = 0
             var oavOffsetAccumulator = 0
@@ -355,6 +365,7 @@ class AnimeSamaFan : Source() {
             val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(initialPath)
 
             for (sUrl in seasonsToAnalyze) {
+                Log.d("AnimeSamaFan", "Analyzing season: $sUrl")
                 var sNum = seasonRegex.find(sUrl)?.groupValues?.get(1)?.toIntOrNull()
                     ?: sUrl.substringBefore(".html").substringAfterLast("-").toIntOrNull()
                     ?: 1
@@ -364,9 +375,11 @@ class AnimeSamaFan : Source() {
                 var tmdbS = sNum
                 val meta = fetchTmdbMetadata(baseTitle, tmdbS)
                 val tmdbCount = meta?.episodeSummaries?.size ?: 0
+                Log.d("AnimeSamaFan", "Season $sNum maps to TMDB $tmdbS (Count: $tmdbCount)")
 
                 if (sNum > 1 && (meta == null || tmdbCount < 2)) {
                     tmdbS = sNum - 1
+                    Log.d("AnimeSamaFan", "Continuation detected, falling back to TMDB $tmdbS")
                 }
 
                 if (tmdbS != lastTmdbSNum) {
@@ -398,6 +411,7 @@ class AnimeSamaFan : Source() {
                 } else {
                     siteOffsetAccumulator += siteCount
                 }
+                Log.d("AnimeSamaFan", "Season $sUrl finished: siteCount=$siteCount, Accumulators: site=$siteOffsetAccumulator, oav=$oavOffsetAccumulator")
             }
             Log.d("AnimeSamaFan", "Final Mapping: TMDB S=$finalTargetSNum, Offset=$finalOffset, OAV Offset=$finalOavOffset")
 
@@ -428,7 +442,7 @@ class AnimeSamaFan : Source() {
         }
 
         val seasonLinks = rootDoc.select(".seasons-grid a.season-card")
-            .mapNotNull { it.attr("abs:href").takeIf { href -> href.isNotBlank() } }
+            .mapNotNull { fixUrl(it.attr("href")).takeIf { href -> href.isNotBlank() } }
             .distinct()
 
         val totalSeasons = seasonLinks.size.takeIf { it > 0 } ?: 1
@@ -437,10 +451,10 @@ class AnimeSamaFan : Source() {
         val seasonDocuments = mutableListOf<Document>()
         seasonDocuments.add(rootDoc)
         seasonLinks
-            .filter { it != rootDoc.location() }
+            .filter { it != fixUrl(rootDoc.location()) }
             .forEach { sUrl ->
                 try {
-                    seasonDocuments.add(client.newCall(GET(sUrl, headers)).execute().asJsoup())
+                    seasonDocuments.add(client.newCall(GET("$baseUrl$sUrl", headers)).execute().asJsoup())
                 } catch (_: Exception) {
                 }
             }
@@ -524,11 +538,16 @@ class AnimeSamaFan : Source() {
     }
 
     private fun tryGetDocument(url: String): Document? {
+        Log.d("AnimeSamaFan", "tryGetDocument: url='$url'")
         return try {
             val response = client.newCall(GET(url, headers)).execute()
-            if (!response.isSuccessful) return null
+            if (!response.isSuccessful) {
+                Log.d("AnimeSamaFan", "tryGetDocument failed: code=${response.code}")
+                return null
+            }
             response.asJsoup()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.d("AnimeSamaFan", "tryGetDocument exception: ${e.message}")
             null
         }
     }
@@ -561,7 +580,7 @@ class AnimeSamaFan : Source() {
         var tmdbS0Metadata: fr.bluecxt.core.TmdbMetadata? = null
 
         val episodeCards = document.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")
-        Log.d("AnimeSamaFan", "Parsing episodes from $url, found ${episodeCards.size} cards")
+        Log.d("AnimeSamaFan", "parseEpisodesFromDocument cards found: ${episodeCards.size}")
 
         if (episodeCards.isEmpty()) {
             // Movie pages can have the player directly on the anime page with no episode list.
@@ -573,7 +592,7 @@ class AnimeSamaFan : Source() {
             if (hasKnownPlayerIframe || embeddedPlayerUrl != null) {
                 return listOf(
                     SEpisode.create().apply {
-                        this.url = url
+                        this.url = fixUrl(url)
                         name = "Épisode 1"
                         episode_number = 1f
                         scanlator = "VOSTFR, VF"
@@ -583,7 +602,7 @@ class AnimeSamaFan : Source() {
         }
 
         return episodeCards.map { card ->
-            val epUrl = card.attr("abs:href")
+            val epUrl = fixUrl(card.attr("href"))
             val availableLangs = mutableListOf<String>()
             val langs = card.attr("data-langs").uppercase()
             if (langs.contains("VOSTFR")) availableLangs.add("VOSTFR")
@@ -646,7 +665,7 @@ class AnimeSamaFan : Source() {
                 } else {
                     "${episode.url}?lang=${lang.lowercase()}"
                 }
-                val doc = client.newCall(GET(urlWithLang, headers)).execute().asJsoup()
+                val doc = client.newCall(GET("$baseUrl$urlWithLang", headers)).execute().asJsoup()
 
                 val iframes = doc.select("iframe")
                 if (iframes.isNotEmpty()) {
