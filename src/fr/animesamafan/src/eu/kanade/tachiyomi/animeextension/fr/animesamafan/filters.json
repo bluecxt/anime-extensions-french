@@ -1,9 +1,4 @@
 {
-  "LANGUAGES": [
-    ["Toutes les langues", ""],
-    ["VF", "VF"],
-    ["VOSTFR", "VOSTFR"]
-  ],
   "TYPES": [
     ["Tous les types", ""],
     ["Série", "Series"],

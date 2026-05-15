@@ -34,7 +34,7 @@ class AnimeSamaFan : Source() {
     override val name = "Anime-Sama-Fan"
     override val baseUrl = "https://anime-sama.fan"
     override val lang = "fr"
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     override val json: Json by injectLazy()
 
@@ -83,11 +83,11 @@ class AnimeSamaFan : Source() {
     }
 
     private fun parseAnimePage(document: Document, fallbackPage: Int): AnimesPage {
-        val items = document.select(".anime-grid a.card-base").map { element ->
+        val items = document.select("div.catalog-card").map { element ->
             SAnime.create().apply {
                 title = element.selectFirst(".card-title")?.text()?.trim().orEmpty()
                 thumbnail_url = element.selectFirst("img.card-image")?.attr("abs:src")
-                url = fixUrl(element.attr("href")).replace(baseUrl, "")
+                url = element.selectFirst("a")?.attr("href")?.replace(baseUrl, "") ?: ""
             }
         }
 
@@ -115,14 +115,13 @@ class AnimeSamaFan : Source() {
         genre: String = "",
         sort: String = "recent",
     ): Request {
-        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("search", query)
-            .addQueryParameter("langue", langue)
-            .addQueryParameter("type", type)
-            .addQueryParameter("genre", genre)
-            .addQueryParameter("sort", sort)
-            .build()
+        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            query.takeIf { it.isNotBlank() }?.let { addQueryParameter("search", it) }
+            type.takeIf { it.isNotBlank() }?.let { addQueryParameter("type", it) }
+            genre.takeIf { it.isNotBlank() }?.let { addQueryParameter("genre", it) }
+            sort.takeIf { it.isNotBlank() }?.let { addQueryParameter("sort", it) }
+        }.build()
 
         return GET(url.toString(), headers)
     }
@@ -146,17 +145,11 @@ class AnimeSamaFan : Source() {
             return parseSearchPage(response.asJsoup())
         }
 
-        if (query.isNotBlank()) {
-            val response = client.newCall(ajaxSearchRequest(query)).execute()
-            return parseAjaxSearchPage(response.asJsoup())
-        }
-
         val searchFilters = AnimeSamaFanCatalogueFilters.getSearchFilters(filters)
         val response = client.newCall(
             catalogueRequest(
                 page = page,
                 query = query,
-                langue = searchFilters.langue,
                 type = searchFilters.type,
                 genre = searchFilters.genre,
                 sort = searchFilters.sort,
@@ -166,55 +159,17 @@ class AnimeSamaFan : Source() {
         return parseAnimePage(response.asJsoup(), page)
     }
 
-    private fun ajaxSearchRequest(query: String): Request {
-        val body = FormBody.Builder()
-            .add("query", query)
-            .build()
-
-        val ajaxHeaders = headers.newBuilder()
-            .add("Accept", "text/html, */*; q=0.01")
-            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            .add("Origin", baseUrl)
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        return POST("$baseUrl/template-php/defaut/fetch.php", ajaxHeaders, body)
-    }
-
-    private fun parseAjaxSearchPage(document: Document): AnimesPage {
-        val items = document.select("a.asn-search-result").map { element ->
-            SAnime.create().apply {
-                title = element.selectFirst(".asn-search-result-title")?.text()?.trim().orEmpty()
-                thumbnail_url = element.selectFirst(".asn-search-result-img")?.attr("abs:src")
-                url = fixUrl(element.attr("href")).replace(baseUrl, "")
-            }
-        }
-        return AnimesPage(items, false)
-    }
-
     private fun parseSearchPage(document: Document): AnimesPage {
         val titleElement = document.selectFirst("h1.anime-title") ?: document.selectFirst("h1")
         val isAnimePage = document.selectFirst(".anime-cover, .synopsis-content, .seasons-grid") != null
 
-        if (isAnimePage && titleElement != null) {
-            val anime = SAnime.create().apply {
-                title = titleElement.text().replace("VOSTFR", "", true).replace("VF", "", true).trim()
-                thumbnail_url = document.selectFirst(".anime-cover img")?.attr("abs:src")
-                    ?: document.selectFirst("meta[property=og:image]")?.attr("content")
-                url = document.location().replace(baseUrl, "")
-            }
-            return AnimesPage(listOf(anime), false)
+        val anime = SAnime.create().apply {
+            title = titleElement?.text()?.replace("VOSTFR", "", true)?.replace("VF", "", true)?.trim() ?: "Unknown Title"
+            thumbnail_url = document.selectFirst(".anime-cover img")?.attr("abs:src")
+                ?: document.selectFirst("meta[property=og:image]")?.attr("content")
+            url = document.location().replace(baseUrl, "")
         }
-
-        // Legacy AJAX search results (kept for compatibility)
-        val items = document.select("a.asn-search-result").map { element ->
-            SAnime.create().apply {
-                title = element.selectFirst(".asn-search-result-title")?.text() ?: ""
-                thumbnail_url = element.selectFirst(".asn-search-result-img")?.attr("abs:src")
-                url = fixUrl(element.attr("href")).replace(baseUrl, "")
-            }
-        }
-        return AnimesPage(items, false)
+        return AnimesPage(listOf(anime), false)
     }
 
     private object AnimeSamaFanCatalogueFilters {
@@ -230,8 +185,6 @@ class AnimeSamaFan : Source() {
 
         private fun getOptions(key: String): List<Pair<String, String>> = filterData[key]?.map { it[0] to it[1] } ?: emptyList()
 
-        class LangueFilter : AnimeFilter.Select<String>("Langue", getOptions("LANGUAGES").map { it.first }.toTypedArray(), 0)
-
         class TypeFilter : AnimeFilter.Select<String>("Type", getOptions("TYPES").map { it.first }.toTypedArray(), 0)
 
         class GenreFilter : AnimeFilter.Select<String>("Genre", getOptions("GENRES").map { it.first }.toTypedArray(), 0)
@@ -239,14 +192,12 @@ class AnimeSamaFan : Source() {
         class SortFilter : AnimeFilter.Select<String>("Trier par", getOptions("SORT").map { it.first }.toTypedArray(), 0)
 
         val FILTER_LIST get() = AnimeFilterList(
-            LangueFilter(),
             TypeFilter(),
             GenreFilter(),
             SortFilter(),
         )
 
         data class SearchFilters(
-            val langue: String,
             val type: String,
             val genre: String,
             val sort: String,
@@ -254,16 +205,14 @@ class AnimeSamaFan : Source() {
 
         fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
             if (filters.isEmpty()) {
-                return SearchFilters(langue = "", type = "", genre = "", sort = "recent")
+                return SearchFilters(type = "", genre = "", sort = "recent")
             }
 
-            val langueIndex = filters.filterIsInstance<LangueFilter>().firstOrNull()?.state ?: 0
             val typeIndex = filters.filterIsInstance<TypeFilter>().firstOrNull()?.state ?: 0
             val genreIndex = filters.filterIsInstance<GenreFilter>().firstOrNull()?.state ?: 0
             val sortIndex = filters.filterIsInstance<SortFilter>().firstOrNull()?.state ?: 0
 
             return SearchFilters(
-                langue = getOptions("LANGUAGES").getOrNull(langueIndex)?.second ?: "",
                 type = getOptions("TYPES").getOrNull(typeIndex)?.second ?: "",
                 genre = getOptions("GENRES").getOrNull(genreIndex)?.second ?: "",
                 sort = getOptions("SORT").getOrNull(sortIndex)?.second ?: "recent",
@@ -657,8 +606,6 @@ class AnimeSamaFan : Source() {
                 val epNumStr = (
                     card.selectFirst(".episode-number")?.text()
                         ?: epNumRegex.replace(epTitle, "")
-                        ?: epNumRegex.replace(epUrl.substringAfterLast("/"), "")
-                        ?: "0"
                     ).replace(epNumRegex, "")
 
                 val epNum = epNumStr.toIntOrNull() ?: 0
