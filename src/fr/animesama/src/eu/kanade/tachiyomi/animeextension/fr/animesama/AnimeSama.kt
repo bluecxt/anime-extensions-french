@@ -126,7 +126,8 @@ class AnimeSama : Source() {
     private fun parseCatalogue(document: org.jsoup.nodes.Document, page: String): AnimesPage {
         val animes = document.select("#list_catalog div.catalog-card").mapNotNull {
             val type = it.select(".info-row:has(.info-label:contains(Types)) .info-value").text()
-            if (type.contains("Scans", true) && !type.contains("Anime", true)) return@mapNotNull null
+            val isVideo = type.contains("Anime", true) || type.contains("Film", true) || type.contains("Autres", true)
+            if (!isVideo) return@mapNotNull null
 
             val a = it.selectFirst("a") ?: return@mapNotNull null
             SAnime.create().apply {
