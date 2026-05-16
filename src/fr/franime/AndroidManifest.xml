@@ -9,16 +9,15 @@
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="franime.fr"
-                    android:pathPattern="/anime/..*"
-                    android:scheme="https" />
+                <data android:scheme="https" />
+                <data android:host="franime.fr" />
+                <data android:pathPattern="/anime/..*" />
             </intent-filter>
         </activity>
     </application>

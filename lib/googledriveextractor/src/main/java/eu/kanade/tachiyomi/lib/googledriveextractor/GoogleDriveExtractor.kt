@@ -35,7 +35,7 @@ class GoogleDriveExtractor(private val client: OkHttpClient, private val headers
 
         val document = docResp.asJsoup()
 
-        val itemSize = document.selectFirst("span.uc-name-size")
+        val itemSize: String = document.selectFirst("span.uc-name-size")
             ?.let { " ${it.ownText().trim()} " }
             ?: ""
 

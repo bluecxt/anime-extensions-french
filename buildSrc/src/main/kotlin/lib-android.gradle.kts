@@ -24,7 +24,17 @@ android {
     androidResources.enable = false
 }
 
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
+    }
+}
+
 dependencies {
+    compileOnly("org.jetbrains:annotations:24.1.0")
+    compileOnly("com.google.code.findbugs:jsr305:3.0.2")
+    compileOnly("androidx.annotation:annotation:1.9.1")
+    compileOnly("org.jspecify:jspecify:1.0.0")
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
     implementation(project(":core"))
 }

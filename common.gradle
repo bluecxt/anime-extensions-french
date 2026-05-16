@@ -129,6 +129,10 @@ kotlin {
 dependencies {
     if (theme != null) implementation(theme) // Overrides core launcher icons
     implementation(project(":core"))
+    compileOnly("org.jetbrains:annotations:24.1.0")
+    compileOnly("com.google.code.findbugs:jsr305:3.0.2")
+    compileOnly("androidx.annotation:annotation:1.9.1")
+    compileOnly("org.jspecify:jspecify:1.0.0")
     compileOnly(libs.bundles.common)
 
 }

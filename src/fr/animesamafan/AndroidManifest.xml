@@ -6,45 +6,18 @@
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="animesama.fan"
-                    android:pathPrefix="/anime/"
-                    android:scheme="http" />
-                <data
-                    android:host="animesama.fan"
-                    android:pathPrefix="/anime/"
-                    android:scheme="https" />
-                <data
-                    android:host="animesama.fan"
-                    android:pathPrefix="/episode/"
-                    android:scheme="http" />
-                <data
-                    android:host="animesama.fan"
-                    android:pathPrefix="/episode/"
-                    android:scheme="https" />
-
-                <data
-                    android:host="anime-samaa.com"
-                    android:pathPrefix="/anime/"
-                    android:scheme="http" />
-                <data
-                    android:host="anime-samaa.com"
-                    android:pathPrefix="/anime/"
-                    android:scheme="https" />
-                <data
-                    android:host="anime-samaa.com"
-                    android:pathPrefix="/episode/"
-                    android:scheme="http" />
-                <data
-                    android:host="anime-samaa.com"
-                    android:pathPrefix="/episode/"
-                    android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="animesama.fan" />
+                <data android:host="anime-samaa.com" />
+                <data android:pathPrefix="/anime/" />
+                <data android:pathPrefix="/episode/" />
             </intent-filter>
         </activity>
     </application>

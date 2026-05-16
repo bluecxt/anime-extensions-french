@@ -24,16 +24,16 @@ class JsUnpacker(packedJS: String?) {
      * @return the javascript unpacked or null.
      */
     fun unpack(): String? {
-        val js = packedJS
+        val js = packedJS ?: return null
         try {
             var p =
                 Pattern.compile("""\}\s*\('(.*)',\s*(.*?),\s*(\d+),\s*'(.*?)'\.split\('\|'\)""", Pattern.DOTALL)
             var m = p.matcher(js)
             if (m.find() && m.groupCount() == 4) {
-                val payload = m.group(1).replace("\\'", "'")
-                val radixStr = m.group(2)
-                val countStr = m.group(3)
-                val symtab = m.group(4).split("\\|".toRegex()).toTypedArray()
+                val payload = m.group(1)!!.replace("\\'", "'")
+                val radixStr = m.group(2)!!
+                val countStr = m.group(3)!!
+                val symtab = m.group(4)!!.split("\\|".toRegex()).toTypedArray()
                 var radix = 36
                 var count = 0
                 try {
@@ -53,7 +53,7 @@ class JsUnpacker(packedJS: String?) {
                 val decoded = StringBuilder(payload)
                 var replaceOffset = 0
                 while (m.find()) {
-                    val word = m.group(0)
+                    val word = m.group(0)!!
                     val x = unbase.unbase(word)
                     var value: String? = null
                     if (x < symtab.size && x >= 0) {

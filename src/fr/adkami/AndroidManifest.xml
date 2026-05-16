@@ -9,24 +9,18 @@
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="www.adkami.com"
-                    android:pathPattern="/anime/..*"
-                    android:scheme="https" />
-                <data
-                    android:host="adkami.com"
-                    android:pathPattern="/anime/..*"
-                    android:scheme="https" />
-                <data
-                    android:host="hentai.adkami.com"
-                    android:pathPattern="/hentai/..*"
-                    android:scheme="https" />
+                <data android:scheme="https" />
+                <data android:host="www.adkami.com" />
+                <data android:host="adkami.com" />
+                <data android:host="hentai.adkami.com" />
+                <data android:pathPattern="/anime/..*" />
+                <data android:pathPattern="/hentai/..*" />
             </intent-filter>
         </activity>
     </application>

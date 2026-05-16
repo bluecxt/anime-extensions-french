@@ -6,20 +6,16 @@
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="voiranime.io"
-                    android:pathPrefix="/"
-                    android:scheme="http" />
-                <data
-                    android:host="voiranime.io"
-                    android:pathPrefix="/"
-                    android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="voiranime.io" />
+                <data android:pathPrefix="/" />
             </intent-filter>
         </activity>
     </application>

@@ -80,7 +80,7 @@ class AnimoFlix : Source() {
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)
@@ -93,7 +93,7 @@ class AnimoFlix : Source() {
             setDefaultValue(PREF_VOICES_DEFAULT)
             summary = "%s"
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)
@@ -106,7 +106,7 @@ class AnimoFlix : Source() {
             setDefaultValue(PREF_SERVER_DEFAULT)
             summary = "%s"
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_SERVER_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_SERVER_KEY, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)

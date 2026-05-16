@@ -94,7 +94,7 @@ class FrAnime : Source() {
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)
@@ -110,7 +110,7 @@ class FrAnime : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
+                preferences.edit().putString(key, entry).apply()
                 true
             }
         }

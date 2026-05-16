@@ -20,7 +20,7 @@ class GdrivePlayerExtractor(private val client: OkHttpClient) {
         val body = client.newCall(GET(newUrl, headers = headers)).execute()
             .body.string()
 
-        val subtitleList = Jsoup.parse(body).selectFirst("div:contains(\\.srt)")
+        val subtitleList: List<Track> = Jsoup.parse(body).selectFirst("div:contains(\\.srt)")
             ?.let { element ->
                 val subUrl = "https://gdriveplayer.to/?subtitle=" + element.text()
                 listOf(Track(subUrl, "Subtitles"))

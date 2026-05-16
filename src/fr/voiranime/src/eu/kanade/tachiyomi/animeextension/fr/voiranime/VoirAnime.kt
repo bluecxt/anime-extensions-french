@@ -269,7 +269,7 @@ class VoirAnime : Source() {
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).commit()
+                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)

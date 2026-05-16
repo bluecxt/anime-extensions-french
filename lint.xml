@@ -10,4 +10,7 @@
     <issue id="UnusedResources" severity="ignore" />
     <issue id="IconDipSize" severity="ignore" />
     <issue id="IconDuplicatesConfig" severity="ignore" />
+
+    <issue id="UnusedAttribute" severity="ignore" />
+    <issue id="IconLauncherShape" severity="ignore" />
 </lint>

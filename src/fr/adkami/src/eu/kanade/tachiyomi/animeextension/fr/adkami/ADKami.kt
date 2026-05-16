@@ -515,7 +515,7 @@ class ADKami : Source() {
         val document = response.asJsoup()
         val animes = document.select(selector).map { element: Element ->
             SAnime.create().apply {
-                val link = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return@map this
+                val link: Element = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return@map this
                 setUrlWithoutDomain(link.attr("abs:href"))
                 title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
                 element.selectFirst(".visual img, img")?.let { img ->
