@@ -179,22 +179,13 @@ class AnimeSama : Source() {
         val seriesTitle = hubDoc.getElementById("titreOeuvre")?.text() ?: ""
         val absoluteFullTitle = doc.getElementById("titreOeuvre")?.text() ?: anime.title
 
+        // Extract title from URL fragment if available (set in fetchAnimeSeasons)
+        val originalTitleFromUrl = anime.url.substringAfter("|", "").takeIf { it.isNotBlank() }
+        val titleToSearch = originalTitleFromUrl ?: absoluteFullTitle
+
         val tmdbMetadata = when {
             sNumFromUrl != null -> fetchTmdbMetadata(seriesTitle, sNumFromUrl.toInt(), "tv")
-
-            isMoviePage && isSubPage -> {
-                val cleanSeriesTitle = seriesTitle
-                    .substringBefore(" - Saison")
-                    .substringBefore(" Saison")
-                    .substringBefore(" - Film")
-                    .substringBefore(" Film")
-                    .substringBefore(" - OAV")
-                    .substringBefore(" OAV")
-                    .trim()
-                fetchSmartTmdbMetadata(cleanSeriesTitle)
-            }
-
-            else -> fetchSmartTmdbMetadata(absoluteFullTitle)
+            else -> fetchSmartTmdbMetadata(titleToSearch)
         }
 
         // REPO_RULES: Optimize long titles for grid view
