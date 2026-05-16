@@ -126,7 +126,8 @@ class AnimeSama : Source() {
     private fun parseCatalogue(document: org.jsoup.nodes.Document, page: String): AnimesPage {
         val animes = document.select("div.catalog-card").mapNotNull {
             val typeText = it.select(".info-row:has(.info-label:contains(Types)) .info-value").text()
-            val types = typeText.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() && !t.equals("Scans", true) }
+            val types =
+                typeText.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() && !t.equals("Scans", true) }
             if (types.isEmpty()) return@mapNotNull null
 
             val a = it.selectFirst("a") ?: return@mapNotNull null
@@ -138,7 +139,11 @@ class AnimeSama : Source() {
         }
 
         val lastPageText = document.select("#list_pagination a:last-child").text()
-        val hasNextPage = lastPageText.isNotBlank() && lastPageText != page && (lastPageText.toIntOrNull()?.let { it > page.toInt() } ?: lastPageText.contains(Regex("""(?i)Suivant|Next|»""")))
+        val hasNextPage =
+            lastPageText.isNotBlank() && lastPageText != page && (
+                lastPageText.toIntOrNull()?.let { it > page.toInt() }
+                    ?: lastPageText.contains(Regex("""(?i)Suivant|Next|»"""))
+                )
 
         return AnimesPage(animes, hasNextPage)
     }
@@ -599,14 +604,8 @@ class AnimeSama : Source() {
         val effectiveTitle = originalTitleFromUrl ?: anime.title
 
         // REPO_RULES: Standard terminology for AniZen grouping
-        val isOav = effectiveTitle.contains("OAV", true) || effectiveTitle.contains("OVA", true) || effectiveTitle.contains(
-            "Special",
-            true,
-        ) || animeUrlPath.contains("oav", true) || animeUrlPath.contains("special", true)
-        val isMovie = effectiveTitle.contains("FILM", true) || effectiveTitle.contains("MOVIE", true) || animeUrlPath.contains(
-            "film",
-            true,
-        ) || animeUrlPath.contains("movie", true)
+        val isOav = effectiveTitle.contains("OAV", true) || effectiveTitle.contains("OVA", true) || effectiveTitle.contains("Special", true)
+        val isMovie = effectiveTitle.contains("FILM", true) || effectiveTitle.contains("MOVIE", true) || animeUrlPath.contains("film", true) || animeUrlPath.contains("movie", true)
 
         val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
         val sNumMatch = sNumRegex.find(effectiveTitle)
