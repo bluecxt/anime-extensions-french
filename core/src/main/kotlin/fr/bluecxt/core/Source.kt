@@ -21,6 +21,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
+import java.text.Normalizer
 
 /**
  * Metadata result from TMDB
@@ -92,9 +93,14 @@ abstract class Source :
         .replace(Regex("\\s+"), " ")
 
     private fun isTitleSimilar(q1: String, q2: String): Boolean {
-        // Normalization: lowercase and keep only letters/digits
-        val s1 = q1.lowercase().replace(Regex("[^\\p{L}\\p{N}\\s]"), "")
-        val s2 = q2.lowercase().replace(Regex("[^\\p{L}\\p{N}\\s]"), "")
+        fun normalize(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
+            .replace(Regex("[^\\p{L}\\p{N}\\s]"), "")
+            .replace(Regex("\\p{M}"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        val s1 = normalize(q1)
+        val s2 = normalize(q2)
 
         val flat1 = s1.replace(" ", "")
         val flat2 = s2.replace(" ", "")
@@ -104,11 +110,16 @@ abstract class Source :
         // Direct containment (handles most cases)
         if (flat1.contains(flat2) || flat2.contains(flat1)) return true
 
-        // Word-based matching for translated titles (e.g. "Awajima Hyakkei" vs "A Hundred Scenes of Awajima")
-        val words1 = s1.split(" ").filter { it.length > 3 }
-        val words2 = s2.split(" ").filter { it.length > 3 }
+        // Word-based matching for translated titles
+        val words1 = s1.split(" ").filter { it.length >= 2 }
+        val words2 = s2.split(" ").filter { it.length >= 2 }
 
-        return words1.any { w1 -> words2.any { w2 -> w1 == w2 } }
+        if (words1.isEmpty() || words2.isEmpty()) return false
+
+        val matchingWords = words1.count { w1 -> words2.any { w2 -> w1 == w2 } }
+        val score = matchingWords.toDouble() / maxOf(words1.size, words2.size)
+
+        return score >= 0.5
     }
 
     /**
@@ -141,12 +152,9 @@ abstract class Source :
         val cacheKey = "$title-$season-$type"
         if (tmdbCache.containsKey(cacheKey)) return tmdbCache[cacheKey]
 
-        Log.d("TMDB", "Searching for: '$title' (Season: $season, Type: $type)")
-
         // Step 1: Try searching with the full title (most accurate)
         val firstAttempt = performTmdbSearch(title, season, type)
         if (firstAttempt != null) {
-            Log.d("TMDB", "Found match on first attempt for '$title'")
             tmdbCache[cacheKey] = firstAttempt
             return firstAttempt
         }
@@ -154,16 +162,13 @@ abstract class Source :
         // Step 2: If failed, try with sanitized title
         val cleanTitle = sanitizeTitle(title)
         if (cleanTitle != title && cleanTitle.isNotBlank()) {
-            Log.d("TMDB", "Attempting with sanitized title: '$cleanTitle'")
             val secondAttempt = performTmdbSearch(cleanTitle, season, type)
             if (secondAttempt != null) {
-                Log.d("TMDB", "Found match with sanitized title '$cleanTitle'")
                 tmdbCache[cacheKey] = secondAttempt
                 return secondAttempt
             }
         }
 
-        Log.d("TMDB", "No match found for '$title'")
         tmdbCache[cacheKey] = null
         return null
     }
@@ -198,101 +203,95 @@ abstract class Source :
         null
     }
 
-    private suspend fun performTmdbSearch(query: String, season: Int, type: String? = null): TmdbMetadata? {
+    private suspend fun performTmdbSearch(query: String, season: Int, type: String? = null, lang: String = "fr-FR"): TmdbMetadata? {
         val searchPath = when (type?.lowercase()) {
             "movie", "film" -> "search/movie"
             "tv", "series", "série" -> "search/tv"
             else -> "search/multi"
         }
-        val searchUrl = "$tmdbBaseUrl/$searchPath?api_key=$tmdbApiKey&query=${URLEncoder.encode(query, "UTF-8")}&language=fr-FR"
+        val searchUrl = "$tmdbBaseUrl/$searchPath?api_key=$tmdbApiKey&query=${URLEncoder.encode(query, "UTF-8")}&language=$lang"
 
-        return try {
+        try {
             val response = client.newCall(GET(searchUrl)).execute().use { it.body.string() }
             val results = JSONObject(response).getJSONArray("results")
-            if (results.length() == 0) return null
+            if (results.length() == 0) {
+                return if (lang == "fr-FR") performTmdbSearch(query, season, type, "en-US") else null
+            }
 
-            // Find best match based on popularity/votes to avoid spin-offs/specials appearing first
-            var bestMatch: JSONObject? = null
+            // Separate results into Animation and Other, but only if they are similar
+            var bestAnimationMatch: JSONObject? = null
+            var maxAnimationVotes = -1
+            var bestOtherMatch: JSONObject? = null
+            var maxOtherVotes = -1
+
             val targetType = when (type?.lowercase()) {
                 "movie", "film" -> "movie"
                 "tv", "series", "série" -> "tv"
                 else -> null
             }
 
-            if (targetType != null) {
-                var maxVotes = -1
-                for (i in 0 until results.length()) {
-                    val res = results.getJSONObject(i)
-                    val votes = res.optInt("vote_count", 0)
-                    if (votes > maxVotes) {
-                        maxVotes = votes
-                        bestMatch = res
+            for (i in 0 until results.length()) {
+                val res = results.getJSONObject(i)
+                val mType = res.optString("media_type", targetType ?: "tv")
+                if (mType != "movie" && mType != "tv") continue
+                if (targetType != null && mType != targetType) continue
+
+                val resultTitle = res.optString("name").ifBlank { res.optString("title") }
+                val resultOriginalTitle = res.optString("original_name").ifBlank { res.optString("original_title") }
+
+                var isSimilar = isTitleSimilar(query, resultTitle) || (resultOriginalTitle.isNotBlank() && isTitleSimilar(query, resultOriginalTitle))
+
+                if (!isSimilar) {
+                    // Try fetching alternative titles for better Romanized matching
+                    val bestId = res.getInt("id")
+                    val altUrl = "$tmdbBaseUrl/$mType/$bestId/alternative_titles?api_key=$tmdbApiKey"
+                    try {
+                        val altRes = client.newCall(GET(altUrl)).execute().use { it.body.string() }
+                        val altArray = JSONObject(altRes).getJSONArray("results")
+                        for (j in 0 until altArray.length()) {
+                            val alt = altArray.getJSONObject(j).optString("title")
+                            if (isTitleSimilar(query, alt)) {
+                                isSimilar = true
+                                break
+                            }
+                        }
+                    } catch (_: Exception) {
                     }
                 }
-            } else {
-                var maxTvVotes = -1
-                var bestTv: JSONObject? = null
-                var maxOverallVotes = -1
-                var bestOverall: JSONObject? = null
 
-                for (i in 0 until results.length()) {
-                    val res = results.getJSONObject(i)
-                    val votes = res.optInt("vote_count", 0)
-                    val mType = res.optString("media_type", "tv") // Default to tv if search/tv
+                if (!isSimilar) continue
 
-                    if (mType == "tv") {
-                        if (votes > maxTvVotes) {
-                            maxTvVotes = votes
-                            bestTv = res
-                        }
+                val votes = res.optInt("vote_count", 0)
+                val genreIds = res.optJSONArray("genre_ids")
+                val isAnimation = genreIds?.let { ids ->
+                    (0 until ids.length()).any { ids.getInt(it) == 16 } // 16 = Animation
+                } ?: false
+
+                if (isAnimation) {
+                    if (votes > maxAnimationVotes) {
+                        maxAnimationVotes = votes
+                        bestAnimationMatch = res
                     }
-                    if (votes > maxOverallVotes) {
-                        maxOverallVotes = votes
-                        bestOverall = res
+                } else {
+                    if (votes > maxOtherVotes) {
+                        maxOtherVotes = votes
+                        bestOtherMatch = res
                     }
-                }
-                bestMatch = bestTv ?: bestOverall
-            }
-
-            if (bestMatch == null) return null
-
-            val resultTitle = bestMatch.optString("name").ifBlank { bestMatch.optString("title") }
-            val resultOriginalTitle = bestMatch.optString("original_name").ifBlank { bestMatch.optString("original_title") }
-
-            var isSimilar = isTitleSimilar(query, resultTitle) || (resultOriginalTitle.isNotBlank() && isTitleSimilar(query, resultOriginalTitle))
-
-            if (!isSimilar) {
-                // Try fetching alternative titles for better Romanized matching
-                val bestId = bestMatch.getInt("id")
-                val mType = bestMatch.optString("media_type", targetType ?: "tv")
-                val altUrl = "$tmdbBaseUrl/$mType/$bestId/alternative_titles?api_key=$tmdbApiKey"
-                try {
-                    val altRes = client.newCall(GET(altUrl)).execute().use { it.body.string() }
-                    val altArray = JSONObject(altRes).getJSONArray("results")
-                    for (i in 0 until altArray.length()) {
-                        val alt = altArray.getJSONObject(i).optString("title")
-                        if (isTitleSimilar(query, alt)) {
-                            isSimilar = true
-                            break
-                        }
-                    }
-                } catch (_: Exception) {
                 }
             }
 
-            if (!isSimilar) {
-                Log.d("Source", "TMDB Rejecting '$resultTitle' ($resultOriginalTitle) for query '$query' (Not similar enough even in alt titles)")
-                return null
+            val bestMatch = bestAnimationMatch ?: bestOtherMatch
+            if (bestMatch == null) {
+                return if (lang == "fr-FR") performTmdbSearch(query, season, type, "en-US") else null
             }
 
             val id = bestMatch.getInt("id")
             val mediaType = bestMatch.optString("media_type", targetType ?: "tv")
             val name = bestMatch.optString("name").ifBlank { bestMatch.optString("title") }
-            Log.d("TMDB", "Match Found: ID=$id, Name='$name', Type=$mediaType")
 
-            constructMetadata(id, mediaType, season)
+            return constructMetadata(id, mediaType, season)
         } catch (_: Exception) {
-            null
+            return if (lang == "fr-FR") performTmdbSearch(query, season, type, "en-US") else null
         }
     }
 
@@ -345,7 +344,7 @@ abstract class Source :
             detailJson.optJSONObject("credits")?.optJSONArray("crew")?.let { crew ->
                 for (i in 0 until crew.length()) {
                     val member = crew.getJSONObject(i)
-                    if (member.optString("job") in listOf("Director", "Series Director", "Comic Book", "Novel", "Original Story", "Author", "Series Composition", "Writer")) {
+                    if (member.optString("job") in listOf("Director", "Series Director", "Comic Book", "Novel", "Original Story", "Author", "Series Composition", "Writer", "Original Creator", "Story", "Screenplay", "Original Concept")) {
                         authorList.add(member.getString("name"))
                     }
                 }
@@ -471,8 +470,7 @@ abstract class Source :
 
                 val seasonSummary = frSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
                 val seasonPoster = frSeasonJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" } ?: mainPoster
-                Log.d("TMDB", "Final Poster URL for Season $season: $seasonPoster")
-                TmdbMetadata(posterUrl = seasonPoster, summary = seasonSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = epMap)
+                TmdbMetadata(posterUrl = seasonPoster, episodeThumbUrl = seasonPoster, summary = seasonSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = epMap)
             }
         } catch (_: Exception) {
             null
