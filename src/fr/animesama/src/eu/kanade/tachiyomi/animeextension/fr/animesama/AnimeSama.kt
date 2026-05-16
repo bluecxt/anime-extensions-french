@@ -54,7 +54,7 @@ class AnimeSama : Source() {
 
     // ============================== Popular ===============================
     override fun popularAnimeParse(response: Response): AnimesPage {
-        val page = response.header("X-Page") ?: "1"
+        val page = response.request.header("X-Page") ?: "1"
         return parseCatalogue(response.asJsoup(), page)
     }
 
@@ -119,14 +119,14 @@ class AnimeSama : Source() {
     }
 
     override fun searchAnimeParse(response: Response): AnimesPage {
-        val page = response.header("X-Page") ?: "1"
+        val page = response.request.header("X-Page") ?: "1"
         return parseCatalogue(response.asJsoup(), page)
     }
 
     private fun parseCatalogue(document: org.jsoup.nodes.Document, page: String): AnimesPage {
-        val animes = document.select("#list_catalog div.catalog-card").mapNotNull {
+        val animes = document.select("div.catalog-card").mapNotNull {
             val typeText = it.select(".info-row:has(.info-label:contains(Types)) .info-value").text()
-            val types = typeText.split(",").map { t -> t.trim() }.filter { t -> !t.equals("Scans", true) }
+            val types = typeText.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() && !t.equals("Scans", true) }
             if (types.isEmpty()) return@mapNotNull null
 
             val a = it.selectFirst("a") ?: return@mapNotNull null
@@ -136,7 +136,10 @@ class AnimeSama : Source() {
                 url = a.attr("abs:href").toHttpUrl().encodedPath
             }
         }
-        val hasNextPage = document.select("#list_pagination a:last-child").text() != page
+
+        val lastPageText = document.select("#list_pagination a:last-child").text()
+        val hasNextPage = lastPageText.isNotBlank() && lastPageText != page && (lastPageText.toIntOrNull()?.let { it > page.toInt() } ?: lastPageText.contains(Regex("""(?i)Suivant|Next|»""")))
+
         return AnimesPage(animes, hasNextPage)
     }
 
