@@ -1,4 +1,4 @@
--[ ] adkami
+-[x] adkami
 -[x] animesama
 -[x] animesamafan
 -[x] animesultra
