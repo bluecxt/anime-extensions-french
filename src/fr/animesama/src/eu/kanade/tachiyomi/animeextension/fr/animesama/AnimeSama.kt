@@ -212,8 +212,10 @@ class AnimeSama : Source() {
             anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
         }
 
-        // Always put raw full title at the very top
-        anime.description = "$absoluteFullTitle\n\n${anime.description ?: ""}"
+        // Always put raw full title at the very top if the display title was optimized
+        if (anime.title != titleToSearch) {
+            anime.description = "$titleToSearch\n\n${anime.description ?: ""}"
+        }
 
         anime.author = tmdbMetadata?.author
         anime.artist = tmdbMetadata?.artist
