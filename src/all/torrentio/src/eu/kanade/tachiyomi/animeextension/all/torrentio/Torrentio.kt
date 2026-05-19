@@ -345,7 +345,10 @@ class Torrentio : Source() {
     private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }
         .getOrNull() ?: 0L
 
-    // ============================ Video Links =============================
+    override suspend fun getVideoList(episode: SEpisode): List<Video> {
+        val response = client.newCall(videoListRequest(episode)).awaitSuccess()
+        return videoListParse(response)
+    }
 
     override fun videoListRequest(episode: SEpisode): Request {
         val mainURL = buildString {
@@ -388,7 +391,7 @@ class Torrentio : Source() {
         return GET(mainURL)
     }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override suspend fun videoListParse(response: Response): List<Video> {
         val responseString = response.body.string()
         val streamList = json.decodeFromString<StreamDataTorrent>(responseString)
         val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
@@ -446,13 +449,12 @@ class Torrentio : Source() {
         )
     }
 
-    private fun fetchTrackers(): String {
+    private suspend fun fetchTrackers(): String {
         val request = Request.Builder()
             .url("https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt")
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Unexpected code $response")
+        client.newCall(request).awaitSuccess().use { response ->
             return response.body.string().trim()
         }
     }
