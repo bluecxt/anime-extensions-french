@@ -13,30 +13,19 @@ import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.EpisodeList
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.GetPopularTitlesResponse
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.GetUrlTitleDetailsResponse
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.StreamDataTorrent
-import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
-import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
-import eu.kanade.tachiyomi.animesource.model.AnimesPage
-import eu.kanade.tachiyomi.animesource.model.SAnime
-import eu.kanade.tachiyomi.animesource.model.SEpisode
-import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import keiyoushi.utils.getPreferencesLazy
+import fr.bluecxt.core.Source
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Torrentio :
-    AnimeHttpSource(),
-    ConfigurableAnimeSource {
+class Torrentio : Source() {
 
     override val name = "Torrentio (Torrent / Debrid)"
 
@@ -442,18 +431,18 @@ class Torrentio :
         }.orEmpty()
     }
 
-    // override fun List<Video>.sort(): List<Video> {
-    //     val isDub = preferences.getBoolean(IS_DUB_KEY, IS_DUB_DEFAULT)
-    //     val isEfficient = preferences.getBoolean(IS_EFFICIENT_KEY, IS_EFFICIENT_DEFAULT)
+    override fun List<Video>.sort(): List<Video> {
+        val isDub = preferences.getBoolean(IS_DUB_KEY, IS_DUB_DEFAULT)
+        val isEfficient = preferences.getBoolean(IS_EFFICIENT_KEY, IS_EFFICIENT_DEFAULT)
 
-    //     return sortedWith(
-    //         compareBy(
-    //             { Regex("\\[(.+?) download]").containsMatchIn(it.quality) },
-    //             { isDub && !it.quality.contains("dubbed", true) },
-    //             { isEfficient && !arrayOf("hevc", "265", "av1").any { q -> it.quality.contains(q, true) } },
-    //         ),
-    //     )
-    // }
+        return sortedWith(
+            compareBy(
+                { Regex("\\[(.+?) download]").containsMatchIn(it.quality) },
+                { isDub && !it.quality.contains("dubbed", true) },
+                { isEfficient && !arrayOf("hevc", "265", "av1").any { q -> it.quality.contains(q, true) } },
+            ),
+        )
+    }
 
     private fun fetchTrackers(): String {
         val request = Request.Builder()
