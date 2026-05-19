@@ -37,9 +37,6 @@ class Torrentio : Source() {
 
     private val json: Json by injectLazy()
 
-    private val preferences by getPreferencesLazy()
-
-    private val context = Injekt.get<Application>()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     // ============================== JustWatch API Request ===================
