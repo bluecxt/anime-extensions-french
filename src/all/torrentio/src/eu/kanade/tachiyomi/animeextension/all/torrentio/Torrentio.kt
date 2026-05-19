@@ -13,6 +13,11 @@ import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.EpisodeList
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.GetPopularTitlesResponse
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.GetUrlTitleDetailsResponse
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.StreamDataTorrent
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.Source
@@ -35,9 +40,9 @@ class Torrentio : Source() {
 
     override val supportsLatest = false
 
-    private val json: Json by injectLazy()
+    override val json: Json by injectLazy()
 
-    private val handler by lazy { Handler(Looper.getMainLooper()) }
+    override val handler by lazy { Handler(Looper.getMainLooper()) }
 
     // ============================== JustWatch API Request ===================
     private fun makeGraphQLRequest(query: String, variables: String): Request {
