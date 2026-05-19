@@ -466,7 +466,7 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
+                preferences.edit().putString(key, entry).apply()
             }
         }.also(screen::addPreference)
 
@@ -481,7 +481,7 @@ class Torrentio : Source() {
                 runCatching {
                     val value = (newValue as String).trim().ifBlank { PREF_TOKEN_DEFAULT }
                     Toast.makeText(screen.context, "Restart App to apply new setting.", Toast.LENGTH_LONG).show()
-                    preferences.edit().putString(key, value).commit()
+                    preferences.edit().putString(key, value).apply()
                 }.getOrDefault(false)
             }
         }.also(screen::addPreference)
@@ -496,7 +496,7 @@ class Torrentio : Source() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
+                preferences.edit().putStringSet(key, newValue as Set<String>).apply()
             }
         }.also(screen::addPreference)
 
@@ -510,7 +510,7 @@ class Torrentio : Source() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
+                preferences.edit().putStringSet(key, newValue as Set<String>).apply()
             }
         }.also(screen::addPreference)
 
@@ -524,7 +524,7 @@ class Torrentio : Source() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
+                preferences.edit().putStringSet(key, newValue as Set<String>).apply()
             }
         }.also(screen::addPreference)
 
@@ -541,7 +541,7 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
+                preferences.edit().putString(key, entry).apply()
             }
         }.also(screen::addPreference)
 
@@ -550,7 +550,7 @@ class Torrentio : Source() {
             title = "Show Upcoming Episodes"
             setDefaultValue(UPCOMING_EP_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
+                preferences.edit().putBoolean(key, newValue as Boolean).apply()
             }
         }.also(screen::addPreference)
 
@@ -559,7 +559,7 @@ class Torrentio : Source() {
             title = "Dubbed Video Priority"
             setDefaultValue(IS_DUB_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
+                preferences.edit().putBoolean(key, newValue as Boolean).apply()
             }
         }.also(screen::addPreference)
 
@@ -568,7 +568,7 @@ class Torrentio : Source() {
             title = "Efficient Video Priority"
             setDefaultValue(IS_EFFICIENT_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
+                preferences.edit().putBoolean(key, newValue as Boolean).apply()
             }
             summary = "Codec: (HEVC / x265)  & AV1. High-quality video with less data usage."
         }.also(screen::addPreference)
@@ -588,7 +588,7 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
+                preferences.edit().putString(key, entry).apply()
             }
         }.also(screen::addPreference)
 
@@ -604,7 +604,7 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
+                preferences.edit().putString(key, entry).apply()
             }
         }.also(screen::addPreference)
     }
