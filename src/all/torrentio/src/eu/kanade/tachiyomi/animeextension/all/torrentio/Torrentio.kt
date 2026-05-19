@@ -271,7 +271,7 @@ class Torrentio : Source() {
         """.trimIndent()
 
         val content = runCatching {
-            json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).execute().body.string())
+            json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).awaitSuccess().body.string())
         }.getOrNull()?.data?.urlV2?.node?.content
 
         anime.title = content?.title ?: ""
