@@ -284,6 +284,11 @@ class Torrentio : Source() {
     }
 
     // ============================== Episodes ==============================
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val response = client.newCall(episodeListRequest(anime)).awaitSuccess()
+        return episodeListParse(response)
+    }
+
     override fun episodeListRequest(anime: SAnime): Request {
         val parts = anime.url.split(",")
         val type = parts[1].lowercase()
