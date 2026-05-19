@@ -1,0 +1,63 @@
+{
+  "VERSIONS": [
+    ["Toutes les versions", "/"],
+    ["VF", "/cat-series/series-vf/"],
+    ["VOSTFR", "/cat-series/series-vostfr/"]
+  ],
+  "GENRES": [
+    ["Tous les genres", ""],
+    ["Action", "action-s"],
+    ["Animation", "animation-s"],
+    ["Aventure", "aventure-s"],
+    ["Biopic", "biopic-s"],
+    ["Comédie", "comedie-s"],
+    ["Documentaire", "documentaire-s"],
+    ["Drame", "drame-s"],
+    ["Famille", "famille-s"],
+    ["Fantastique", "fantastique-s"],
+    ["Guerre", "guerre-s"],
+    ["Historique", "historique-s"],
+    ["Horreur", "horreur-s"],
+    ["Judiciaire", "judiciare-s"],
+    ["Musical", "musical-s"],
+    ["Policier", "policier-s"],
+    ["Romance", "romance-s"],
+    ["Science Fiction", "science-fiction-s"],
+    ["Thriller", "thriller-s"],
+    ["Western", "western-s"]
+  ],
+  "YEARS": [
+    ["Toutes les années", ""],
+    ["2025", "2025"],
+    ["2024", "2024"],
+    ["2023", "2023"],
+    ["2022", "2022"],
+    ["2021", "2021"],
+    ["2020", "2020"],
+    ["2019", "2019"],
+    ["2018", "2018"],
+    ["2017", "2017"],
+    ["2016", "2016"]
+  ],
+  "RATINGS": [
+    ["Toutes les notes", ""],
+    ["Étoile 1+", "1"],
+    ["Étoiles 2+", "2"],
+    ["Étoiles 3+", "3"],
+    ["Étoiles 4+", "4"],
+    ["Étoiles 5+", "5"]
+  ],
+  "SORT": [
+    ["Par mis à jour", "editdate"],
+    ["Par date", "date"],
+    ["Par année de sortie", "d.year"],
+    ["Par rating Allocine", "d.rating"],
+    ["Par nom A-Z", "title"],
+    ["Les plus commentés", "comm_num"],
+    ["Les plus vus", "news_read"]
+  ],
+  "ORDER": [
+    ["Descendant", "desc"],
+    ["Ascendant", "asc"]
+  ]
+}

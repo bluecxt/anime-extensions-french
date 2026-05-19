@@ -1,0 +1,24 @@
+ext {
+    extName = 'Papadustream'
+    extClass = '.Papadustream'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:sibnetextractor'))
+    implementation(project(':lib:sendvidextractor'))
+    implementation(project(':lib:streamtapeextractor'))
+    implementation(project(':lib:doodextractor'))
+    implementation(project(':lib:vidoextractor'))
+    implementation(project(':lib:vidmolyextractor'))
+    implementation(project(':lib:voeextractor'))
+    implementation(project(':lib:playlistutils'))
+    implementation(project(':lib:cloudflareinterceptor'))
+    implementation(project(':lib:upstreamextractor'))
+    implementation(project(':lib:filemoonextractor'))
+    implementation(project(':lib:uqloadextractor'))
+    implementation(project(':lib:streamwishextractor'))
+}
