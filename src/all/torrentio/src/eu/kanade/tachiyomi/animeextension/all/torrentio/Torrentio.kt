@@ -39,6 +39,28 @@ class Torrentio : Source() {
 
     override val supportsLatest = false
 
+    private fun setFetchTypeSafe(anime: SAnime, type: eu.kanade.tachiyomi.animesource.model.FetchType) {
+        try {
+            val methods = anime.javaClass.methods
+            val setter = methods.find { it.name == "setFetch_type" }
+            if (setter != null) {
+                val appFetchTypeClass = setter.parameterTypes[0]
+                val enumValue = appFetchTypeClass.enumConstants?.find { it.toString() == type.name }
+                setter.invoke(anime, enumValue)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun setSeasonNumberSafe(anime: SAnime, season: Double) {
+        try {
+            val methods = anime.javaClass.methods
+            val setter = methods.find { it.name == "setSeason_number" }
+            if (setter != null) {
+                setter.invoke(anime, season)
+            }
+        } catch (_: Exception) {}
+    }
+
     // ============================== JustWatch API Request ===================
     private fun makeGraphQLRequest(query: String, variables: String): Request {
         val requestBody = """
@@ -229,9 +251,23 @@ class Torrentio : Source() {
 
     override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
 
-    // override suspend fun getAnimeDetails(anime: SAnime): SAnime = throw UnsupportedOperationException()
+    private var cinemetaCache: Pair<String, EpisodeList>? = null
+
+    private suspend fun fetchCinemeta(imdbId: String, type: String): EpisodeList {
+        val cache = cinemetaCache
+        if (cache != null && cache.first == imdbId) return cache.second
+
+        val responseString = client.newCall(GET("https://cinemeta-live.strem.io/meta/$type/$imdbId.json")).execute().body.string()
+        val episodeList = json.decodeFromString<EpisodeList>(responseString)
+        cinemetaCache = imdbId to episodeList
+        return episodeList
+    }
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        val parts = anime.url.substringBefore("#").split(",")
+        val imdbId = parts[0]
+        val type = parts[1].lowercase()
+
         val query = """
             query GetUrlTitleDetails(${"$"}fullPath: String!, ${"$"}country: Country!, ${"$"}language: Language!) {
               urlV2(fullPath: ${"$"}fullPath) {
@@ -264,7 +300,7 @@ class Torrentio : Source() {
         val language = preferences.getString(PREF_JW_LANG_KEY, PREF_JW_LANG_DEFAULT)
         val variables = """
             {
-              "fullPath": "${anime.url.split(',').last()}",
+              "fullPath": "${parts.last()}",
               "country": "$country",
               "language": "$language"
             }
@@ -280,25 +316,78 @@ class Torrentio : Source() {
         val genresList = content?.genres?.mapNotNull { it.translation }.orEmpty()
         anime.genre = genresList.joinToString()
 
+        if (type == "series" || type == "show") {
+            val cinemeta = fetchCinemeta(imdbId, "series")
+            val seasons = cinemeta.meta?.videos?.mapNotNull { it.season }?.distinct() ?: emptyList()
+
+            val isSeasonUrl = anime.url.contains("#season=")
+            if (seasons.size > 1 && !isSeasonUrl) {
+                setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+            } else {
+                setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+                if (isSeasonUrl) {
+                    val sNum = anime.url.substringAfter("#season=").toIntOrNull() ?: 1
+                    val sSuffix = if (sNum == 0) "Special" else "Season $sNum"
+                    if (!anime.title.contains("Season", true)) {
+                        anime.title = "${anime.title} - $sSuffix"
+                    }
+                    setSeasonNumberSafe(anime, sNum.toDouble())
+                }
+            }
+        } else {
+            setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+        }
+
         return anime
+    }
+
+    // ============================== Seasons ==============================
+
+    override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
+        val parts = anime.url.substringBefore("#").split(",")
+        val imdbId = parts[0]
+        val cinemeta = fetchCinemeta(imdbId, "series")
+
+        val seasons = cinemeta.meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: return emptyList()
+
+        return seasons.map { s ->
+            SAnime.create().apply {
+                url = "${anime.url.substringBefore("#")}#season=$s"
+                val sSuffix = if (s == 0) "Special" else "Season $s"
+                title = "${anime.title} - $sSuffix"
+                thumbnail_url = anime.thumbnail_url
+                initialized = false
+                setFetchTypeSafe(this, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+                setSeasonNumberSafe(this, s.toDouble())
+            }
+        }
     }
 
     // ============================== Episodes ==============================
     override fun episodeListRequest(anime: SAnime): Request {
-        val parts = anime.url.split(",")
+        val parts = anime.url.substringBefore("#").split(",")
         val type = parts[1].lowercase()
         val imdbId = parts[0]
         return GET("https://cinemeta-live.strem.io/meta/$type/$imdbId.json")
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(episodeListRequest(anime)).execute()
-        val responseString = response.body.string()
-        val episodeList = json.decodeFromString<EpisodeList>(responseString)
-
-        val parts = anime.url.split(",")
-        val type = parts[1].lowercase()
+        val parts = anime.url.substringBefore("#").split(",")
         val imdbId = parts[0]
+        val type = parts[1].lowercase()
+
+        val episodeList = if (type == "movie") {
+            val responseString = client.newCall(episodeListRequest(anime)).execute().body.string()
+            json.decodeFromString<EpisodeList>(responseString)
+        } else {
+            fetchCinemeta(imdbId, "series")
+        }
+
+        val targetSeason = if (anime.url.contains("#season=")) {
+            anime.url.substringAfter("#season=").toIntOrNull()
+        } else {
+            null
+        }
 
         // Fetch TMDB Metadata for thumbs and summaries
         val tmdbLang = preferences.getString(PREF_TMDB_LANG_KEY, PREF_TMDB_LANG_DEFAULT)!!
@@ -322,8 +411,13 @@ class Torrentio : Source() {
                 if (mType == "movie") {
                     mapOf(1 to fetchTmdbMetadataById(id, mType, 1, tmdbLang))
                 } else {
-                    val seasons = episodeList.meta?.videos?.mapNotNull { it.season }?.distinct() ?: listOf(1)
-                    seasons.parallelMap { s ->
+                    val seasonsToFetch = if (targetSeason != null) {
+                        listOf(targetSeason)
+                    } else {
+                        episodeList.meta?.videos?.mapNotNull { it.season }?.distinct() ?: listOf(1)
+                    }
+
+                    seasonsToFetch.parallelMap { s ->
                         s to fetchTmdbMetadataById(id, mType, s, tmdbLang)
                     }.toMap()
                 }
@@ -334,44 +428,64 @@ class Torrentio : Source() {
 
         return when (episodeList.meta?.type) {
             "series" -> {
-                episodeList.meta.videos
-                    ?.let { videos ->
+                val allVideos = episodeList.meta.videos
+                    ?.let { vList ->
                         if (preferences.getBoolean(UPCOMING_EP_KEY, UPCOMING_EP_DEFAULT)) {
-                            videos
+                            vList
                         } else {
-                            videos.filter { video -> (video.released?.let { parseDate(it) } ?: 0L) <= System.currentTimeMillis() }
+                            vList.filter { video -> (video.released?.let { parseDate(it) } ?: 0L) <= System.currentTimeMillis() }
                         }
                     }
-                    ?.map { video ->
-                        val sNum = video.season ?: 1
-                        val eNum = video.number ?: 1
-                        SEpisode.create().apply {
-                            episode_number = "$sNum.$eNum".toFloat()
-                            url = "/stream/series/${video.id}.json"
-                            date_upload = video.released?.let { parseDate(it) } ?: 0L
-                            name = "S$sNum:E$eNum - ${video.title}"
-                            scanlator = (video.released?.let { parseDate(it) } ?: 0L)
-                                .takeIf { it > System.currentTimeMillis() }
-                                ?.let { "Upcoming" }
-                                ?: ""
+                    ?.sortedWith(compareBy({ video -> video.season ?: 1 }, { video -> video.number ?: 1 }))
+                    .orEmpty()
 
-                            tmdbSeasonsMeta?.get(sNum)?.let { meta ->
-                                val epMeta = meta.episodeSummaries[eNum]
-                                if (epMeta != null) {
-                                    if (video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))) {
-                                        epMeta.first?.let { name = "S$sNum:E$eNum - $it" }
-                                    }
-                                    preview_url = epMeta.second
-                                    summary = epMeta.third
+                val seasons = allVideos.mapNotNull { it.season }.distinct()
+                val hasMultipleSeasons = seasons.size > 1 || seasons.contains(0)
+
+                val filteredVideos = if (targetSeason != null) {
+                    allVideos.filter { it.season == targetSeason }
+                } else {
+                    allVideos
+                }
+
+                filteredVideos.map { video ->
+                    val sNum = video.season ?: 1
+                    val eNum = video.number ?: 1
+                    SEpisode.create().apply {
+                        episode_number = eNum.toFloat()
+                        url = "/stream/series/${video.id}.json"
+                        date_upload = video.released?.let { parseDate(it) } ?: 0L
+
+                        val sPrefix = when {
+                            sNum == 0 -> "[Special] "
+                            hasMultipleSeasons -> "[S$sNum] "
+                            else -> ""
+                        }
+
+                        val epTitle = if (video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))) {
+                            "Episode $eNum"
+                        } else {
+                            if (video.title.contains("Episode", true)) video.title else "Episode $eNum - ${video.title}"
+                        }
+
+                        name = "$sPrefix$epTitle"
+                        scanlator = (video.released?.let { parseDate(it) } ?: 0L)
+                            .takeIf { it > System.currentTimeMillis() }
+                            ?.let { "Upcoming" }
+                            ?: ""
+
+                        tmdbSeasonsMeta?.get(sNum)?.let { meta ->
+                            val epMeta = meta.episodeSummaries[eNum]
+                            if (epMeta != null) {
+                                if (video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))) {
+                                    epMeta.first?.let { name = "$sPrefix$it" }
                                 }
+                                preview_url = epMeta.second
+                                summary = epMeta.third
                             }
                         }
                     }
-                    ?.sortedWith(
-                        compareBy<SEpisode> { it.name.substringAfter("S").substringBefore(":").toInt() }
-                            .thenBy { it.name.substringAfter("E").substringBefore(" -").toInt() },
-                    )
-                    .orEmpty().reversed()
+                }.reversed()
             }
 
             "movie" -> {
@@ -379,7 +493,7 @@ class Torrentio : Source() {
                     SEpisode.create().apply {
                         episode_number = 1.0F
                         url = "/stream/movie/${episodeList.meta.id}.json"
-                        name = "Movie"
+                        name = "[Movie] Film"
                         tmdbSeasonsMeta?.get(1)?.let { meta ->
                             summary = meta.summary ?: ""
                             preview_url = meta.episodeThumbUrl
