@@ -54,5 +54,7 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 | **SouthTV** | ✅ | L'intégrale de South Park : épisodes VF et tous les films. | VF             | Non     |
 | **WaveAnime** | ✅ | Flux moderne optimisé au format DASH (Haute résolution). | VOSTFR, VF     | Non     |
 | **AnimesUltra** | ✅ | Alternative de secours de haute qualité. | VOSTFR         | Non     |
+| **Torrentio** | ✅ | Moteur de recherche Torrent / Debrid (Cinemeta/JustWatch). | Multi (All)    | Non     |
+| **Torrentio Anime** | ✅ | Version optimisée Anime pour Torrentio (Anilist). | Multi (All)    | Non     |
 
 ---

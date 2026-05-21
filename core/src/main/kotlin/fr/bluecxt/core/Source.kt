@@ -126,15 +126,15 @@ abstract class Source :
      * Fetches metadata from TMDB specifically for a movie.
      * Only returns a result if there's exactly one match to ensure accuracy.
      */
-    suspend fun fetchTmdbMovieMetadata(query: String): TmdbMetadata? {
-        val searchUrl = "$tmdbBaseUrl/search/movie?api_key=$tmdbApiKey&query=${URLEncoder.encode(query, "UTF-8")}&language=fr-FR"
+    suspend fun fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR"): TmdbMetadata? {
+        val searchUrl = "$tmdbBaseUrl/search/movie?api_key=$tmdbApiKey&query=${URLEncoder.encode(query, "UTF-8")}&language=$lang"
         return try {
             val response = client.newCall(GET(searchUrl)).execute().use { it.body.string() }
             val json = JSONObject(response)
             val results = json.getJSONArray("results")
             if (json.getInt("total_results") == 1) {
                 val id = results.getJSONObject(0).getInt("id")
-                constructMetadata(id, "movie", 1)
+                constructMetadata(id, "movie", 1, lang)
             } else {
                 null
             }
@@ -147,13 +147,13 @@ abstract class Source :
      * Fetches metadata from TMDB using a smart two-step search.
      * If type is provided ('movie' or 'tv'), searches exclusively in that category.
      */
-    suspend fun fetchTmdbMetadata(title: String, season: Int = 1, type: String? = null): TmdbMetadata? {
+    suspend fun fetchTmdbMetadata(title: String, season: Int = 1, type: String? = null, lang: String = "fr-FR"): TmdbMetadata? {
         if (title.isBlank()) return null
-        val cacheKey = "$title-$season-$type"
+        val cacheKey = "$title-$season-$type-$lang"
         if (tmdbCache.containsKey(cacheKey)) return tmdbCache[cacheKey]
 
         // Step 1: Try searching with the full title (most accurate)
-        val firstAttempt = performTmdbSearch(title, season, type)
+        val firstAttempt = performTmdbSearch(title, season, type, lang)
         if (firstAttempt != null) {
             tmdbCache[cacheKey] = firstAttempt
             return firstAttempt
@@ -162,7 +162,7 @@ abstract class Source :
         // Step 2: If failed, try with sanitized title
         val cleanTitle = sanitizeTitle(title)
         if (cleanTitle != title && cleanTitle.isNotBlank()) {
-            val secondAttempt = performTmdbSearch(cleanTitle, season, type)
+            val secondAttempt = performTmdbSearch(cleanTitle, season, type, lang)
             if (secondAttempt != null) {
                 tmdbCache[cacheKey] = secondAttempt
                 return secondAttempt
@@ -196,9 +196,9 @@ abstract class Source :
     /**
      * Fetches metadata from TMDB directly by ID.
      */
-    suspend fun fetchTmdbMetadataById(id: Int, type: String, season: Int = 1): TmdbMetadata? = try {
+    suspend fun fetchTmdbMetadataById(id: Int, type: String, season: Int = 1, lang: String = "fr-FR"): TmdbMetadata? = try {
         val typeClean = if (type == "tv" || type == "series") "tv" else "movie"
-        constructMetadata(id, typeClean, season)
+        constructMetadata(id, typeClean, season, lang)
     } catch (_: Exception) {
         null
     }
@@ -215,7 +215,7 @@ abstract class Source :
             val response = client.newCall(GET(searchUrl)).execute().use { it.body.string() }
             val results = JSONObject(response).getJSONArray("results")
             if (results.length() == 0) {
-                return if (lang == "fr-FR") performTmdbSearch(query, season, type, "en-US") else null
+                return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
             }
 
             // Separate results into Animation and Other, but only if they are similar
@@ -282,23 +282,22 @@ abstract class Source :
 
             val bestMatch = bestAnimationMatch ?: bestOtherMatch
             if (bestMatch == null) {
-                return if (lang == "fr-FR") performTmdbSearch(query, season, type, "en-US") else null
+                return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
             }
 
             val id = bestMatch.getInt("id")
             val mediaType = bestMatch.optString("media_type", targetType ?: "tv")
-            val name = bestMatch.optString("name").ifBlank { bestMatch.optString("title") }
 
-            return constructMetadata(id, mediaType, season)
+            return constructMetadata(id, mediaType, season, lang)
         } catch (_: Exception) {
-            return if (lang == "fr-FR") performTmdbSearch(query, season, type, "en-US") else null
+            return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
         }
     }
 
-    private fun constructMetadata(id: Int, mediaType: String, season: Int): TmdbMetadata? {
+    private fun constructMetadata(id: Int, mediaType: String, season: Int, lang: String): TmdbMetadata? {
         return try {
             // Fetch full details to get author/artist/studios/status
-            val detailUrl = "$tmdbBaseUrl/$mediaType/$id?api_key=$tmdbApiKey&language=fr-FR&append_to_response=credits"
+            val detailUrl = "$tmdbBaseUrl/$mediaType/$id?api_key=$tmdbApiKey&language=$lang&append_to_response=credits"
             val detailResponse = client.newCall(GET(detailUrl)).execute().use { it.body.string() }
             val detailJson = JSONObject(detailResponse)
 
@@ -358,24 +357,24 @@ abstract class Source :
             } else {
                 val originalLang = detailJson.optString("original_language", "ja")
 
-                // TV Series - Fetch season data (FR first)
-                val frSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=fr-FR")).execute().use { it.body.string() }
-                val frSeasonJson = JSONObject(frSeasonBody)
-                val frEpisodes = frSeasonJson.optJSONArray("episodes") ?: JSONArray()
+                // TV Series - Fetch season data (Requested language first)
+                val langSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=$lang")).execute().use { it.body.string() }
+                val langSeasonJson = JSONObject(langSeasonBody)
+                val langEpisodes = langSeasonJson.optJSONArray("episodes") ?: JSONArray()
 
-                // Check for English fallback
-                var needsEnglish = frEpisodes.length() == 0
+                // Check for fallback (English if requested was not English, else Japanese/Original)
+                var needsFallback = langEpisodes.length() == 0
                 val genericRegex = Regex("(?i)^(Episode|Épisode)\\s*\\d+$|^第\\d+[話回]$|^\\d+$")
-                for (i in 0 until frEpisodes.length()) {
-                    val ep = frEpisodes.getJSONObject(i)
+                for (i in 0 until langEpisodes.length()) {
+                    val ep = langEpisodes.getJSONObject(i)
                     val name = ep.optString("name")
                     if (name.isBlank() || name.matches(genericRegex) || ep.optString("overview").isBlank()) {
-                        needsEnglish = true
+                        needsFallback = true
                         break
                     }
                 }
 
-                val enEpisodes = if (needsEnglish) {
+                val fallbackEpisodes = if (needsFallback && lang != "en-US") {
                     try {
                         val enSeasonBody = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/$season?api_key=$tmdbApiKey&language=en-US")).execute().use { it.body.string() }
                         JSONObject(enSeasonBody).optJSONArray("episodes")
@@ -387,11 +386,11 @@ abstract class Source :
                 }
 
                 // Check for Original language fallback (e.g. ja-JP)
-                var needsOriginal = enEpisodes != null && enEpisodes.length() > 0
+                var needsOriginal = fallbackEpisodes != null && fallbackEpisodes.length() > 0
                 if (needsOriginal) {
                     needsOriginal = false
-                    for (i in 0 until enEpisodes!!.length()) {
-                        val ep = enEpisodes.getJSONObject(i)
+                    for (i in 0 until fallbackEpisodes!!.length()) {
+                        val ep = fallbackEpisodes.getJSONObject(i)
                         val name = ep.optString("name")
                         if (name.isBlank() || name.matches(genericRegex) || ep.optString("overview").isBlank()) {
                             needsOriginal = true
@@ -413,7 +412,7 @@ abstract class Source :
 
                 val epMap = mutableMapOf<Int, Triple<String?, String?, String?>>()
 
-                fun fillMap(source: JSONArray?, priority: Int) {
+                fun fillMap(source: JSONArray?) {
                     if (source == null) return
                     for (i in 0 until source.length()) {
                         val ep = source.getJSONObject(i)
@@ -428,9 +427,9 @@ abstract class Source :
                     }
                 }
 
-                fillMap(frEpisodes, 0)
-                fillMap(enEpisodes, 1)
-                fillMap(origEpisodes, 2)
+                fillMap(langEpisodes)
+                fillMap(fallbackEpisodes)
+                fillMap(origEpisodes)
 
                 // Robust Season Fallback (for sites that group seasons differently)
                 if (season > 0) {
@@ -447,7 +446,7 @@ abstract class Source :
                     }
                     if (offset > 0) {
                         try {
-                            val s1Body = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/1?api_key=$tmdbApiKey&language=fr-FR")).execute().use { it.body.string() }
+                            val s1Body = client.newCall(GET("$tmdbBaseUrl/tv/$id/season/1?api_key=$tmdbApiKey&language=$lang")).execute().use { it.body.string() }
                             val s1Episodes = JSONObject(s1Body).optJSONArray("episodes")
                             if (s1Episodes != null) {
                                 for (i in 0 until s1Episodes.length()) {
@@ -468,8 +467,8 @@ abstract class Source :
                     }
                 }
 
-                val seasonSummary = frSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
-                val seasonPoster = frSeasonJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" } ?: mainPoster
+                val seasonSummary = langSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
+                val seasonPoster = langSeasonJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" } ?: mainPoster
                 TmdbMetadata(posterUrl = seasonPoster, episodeThumbUrl = seasonPoster, summary = seasonSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = epMap)
             }
         } catch (_: Exception) {

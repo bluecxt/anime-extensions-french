@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.all.torrentio
 
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -15,18 +12,20 @@ import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.GetUrlTitleDetailsRe
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.StreamDataTorrent
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.Source
-import kotlinx.serialization.json.Json
+import fr.bluecxt.core.TmdbMetadata
+import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -39,10 +38,6 @@ class Torrentio : Source() {
     override val lang = "all"
 
     override val supportsLatest = false
-
-    override val json: Json by injectLazy()
-
-    override val handler by lazy { Handler(Looper.getMainLooper()) }
 
     // ============================== JustWatch API Request ===================
     private fun makeGraphQLRequest(query: String, variables: String): Request {
@@ -276,7 +271,7 @@ class Torrentio : Source() {
         """.trimIndent()
 
         val content = runCatching {
-            json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).awaitSuccess().body.string())
+            json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).execute().body.string())
         }.getOrNull()?.data?.urlV2?.node?.content
 
         anime.title = content?.title ?: ""
@@ -289,11 +284,6 @@ class Torrentio : Source() {
     }
 
     // ============================== Episodes ==============================
-    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(episodeListRequest(anime)).awaitSuccess()
-        return episodeListParse(response)
-    }
-
     override fun episodeListRequest(anime: SAnime): Request {
         val parts = anime.url.split(",")
         val type = parts[1].lowercase()
@@ -301,9 +291,47 @@ class Torrentio : Source() {
         return GET("https://cinemeta-live.strem.io/meta/$type/$imdbId.json")
     }
 
-    override fun episodeListParse(response: Response): List<SEpisode> {
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val response = client.newCall(episodeListRequest(anime)).execute()
         val responseString = response.body.string()
         val episodeList = json.decodeFromString<EpisodeList>(responseString)
+
+        val parts = anime.url.split(",")
+        val type = parts[1].lowercase()
+        val imdbId = parts[0]
+
+        // Fetch TMDB Metadata for thumbs and summaries
+        val tmdbLang = preferences.getString(PREF_TMDB_LANG_KEY, PREF_TMDB_LANG_DEFAULT)!!
+        val tmdbSeasonsMeta = if (imdbId.isNotBlank()) {
+            val tmdbIdUrl = "https://api.themoviedb.org/3/find/$imdbId?api_key=24621da8ae19dce721e59eff2ab479bb&external_source=imdb_id"
+            val tmdbIdData = runCatching {
+                val idRes = client.newCall(GET(tmdbIdUrl)).execute().use { it.body.string() }
+                val idJson = org.json.JSONObject(idRes)
+                val movieResults = idJson.optJSONArray("movie_results")
+                val tvResults = idJson.optJSONArray("tv_results")
+                if (movieResults != null && movieResults.length() > 0) {
+                    movieResults.getJSONObject(0).getInt("id") to "movie"
+                } else if (tvResults != null && tvResults.length() > 0) {
+                    tvResults.getJSONObject(0).getInt("id") to "tv"
+                } else {
+                    null
+                }
+            }.getOrNull()
+
+            tmdbIdData?.let { (id, mType) ->
+                if (mType == "movie") {
+                    mapOf(1 to fetchTmdbMetadataById(id, mType, 1, tmdbLang))
+                } else {
+                    val seasons = episodeList.meta?.videos?.mapNotNull { it.season }?.distinct() ?: listOf(1)
+                    seasons.parallelMap { s ->
+                        s to fetchTmdbMetadataById(id, mType, s, tmdbLang)
+                    }.toMap()
+                }
+            }
+        } else {
+            null
+        }
+
         return when (episodeList.meta?.type) {
             "series" -> {
                 episodeList.meta.videos
@@ -315,15 +343,28 @@ class Torrentio : Source() {
                         }
                     }
                     ?.map { video ->
+                        val sNum = video.season ?: 1
+                        val eNum = video.number ?: 1
                         SEpisode.create().apply {
-                            episode_number = "${video.season}.${video.number}".toFloat()
+                            episode_number = "$sNum.$eNum".toFloat()
                             url = "/stream/series/${video.id}.json"
                             date_upload = video.released?.let { parseDate(it) } ?: 0L
-                            name = "S${video.season.toString().trim()}:E${video.number} - ${video.title}"
+                            name = "S$sNum:E$eNum - ${video.title}"
                             scanlator = (video.released?.let { parseDate(it) } ?: 0L)
                                 .takeIf { it > System.currentTimeMillis() }
                                 ?.let { "Upcoming" }
                                 ?: ""
+
+                            tmdbSeasonsMeta?.get(sNum)?.let { meta ->
+                                val epMeta = meta.episodeSummaries[eNum]
+                                if (epMeta != null) {
+                                    if (video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))) {
+                                        epMeta.first?.let { name = "S$sNum:E$eNum - $it" }
+                                    }
+                                    preview_url = epMeta.second
+                                    summary = epMeta.third
+                                }
+                            }
                         }
                     }
                     ?.sortedWith(
@@ -334,12 +375,15 @@ class Torrentio : Source() {
             }
 
             "movie" -> {
-                // Handle movie response
                 listOf(
                     SEpisode.create().apply {
                         episode_number = 1.0F
                         url = "/stream/movie/${episodeList.meta.id}.json"
                         name = "Movie"
+                        tmdbSeasonsMeta?.get(1)?.let { meta ->
+                            summary = meta.summary ?: ""
+                            preview_url = meta.episodeThumbUrl
+                        }
                     },
                 ).reversed()
             }
@@ -347,15 +391,14 @@ class Torrentio : Source() {
             else -> emptyList()
         }
     }
+
+    override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
     private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }
         .getOrNull() ?: 0L
 
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        val response = client.newCall(videoListRequest(episode)).awaitSuccess()
-        return videoListParse(response)
-    }
+    // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode): Request {
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val mainURL = buildString {
             append("$baseUrl/")
 
@@ -393,11 +436,8 @@ class Torrentio : Source() {
             }
             append(episode.url)
         }.removeSuffix("|")
-        return GET(mainURL)
-    }
 
-    override suspend fun videoListParse(response: Response): List<Video> {
-        val responseString = response.body.string()
+        val responseString = client.newCall(GET(mainURL)).execute().body.string()
         val streamList = json.decodeFromString<StreamDataTorrent>(responseString)
         val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
 
@@ -437,29 +477,41 @@ class Torrentio : Source() {
                 } else {
                     stream.url ?: ""
                 }
-            Video(urlOrHash, ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title), urlOrHash)
+            val title = ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title)
+            Hoster(hosterName = title, internalData = urlOrHash)
         }.orEmpty()
     }
 
-    override fun List<Video>.sort(): List<Video> {
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val urlOrHash = hoster.internalData
+        return listOf(
+            Video(
+                videoUrl = urlOrHash,
+                videoTitle = hoster.hosterName,
+            ),
+        ).sortVideos()
+    }
+
+    override fun List<Video>.sortVideos(): List<Video> {
         val isDub = preferences.getBoolean(IS_DUB_KEY, IS_DUB_DEFAULT)
         val isEfficient = preferences.getBoolean(IS_EFFICIENT_KEY, IS_EFFICIENT_DEFAULT)
 
         return sortedWith(
             compareBy(
-                { Regex("\\[(.+?) download]").containsMatchIn(it.quality) },
-                { isDub && !it.quality.contains("dubbed", true) },
-                { isEfficient && !arrayOf("hevc", "265", "av1").any { q -> it.quality.contains(q, true) } },
+                { Regex("\\[(.+?) download]").containsMatchIn(it.videoTitle) },
+                { isDub && !it.videoTitle.contains("dubbed", true) },
+                { isEfficient && !arrayOf("hevc", "265", "av1").any { q -> it.videoTitle.contains(q, true) } },
             ),
         )
     }
 
-    private suspend fun fetchTrackers(): String {
+    private fun fetchTrackers(): String {
         val request = Request.Builder()
             .url("https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt")
             .build()
 
-        client.newCall(request).awaitSuccess().use { response ->
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("Unexpected code $response")
             return response.body.string().trim()
         }
     }
@@ -478,7 +530,7 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).apply()
+                preferences.edit().putString(key, entry).commit()
             }
         }.also(screen::addPreference)
 
@@ -493,7 +545,7 @@ class Torrentio : Source() {
                 runCatching {
                     val value = (newValue as String).trim().ifBlank { PREF_TOKEN_DEFAULT }
                     Toast.makeText(screen.context, "Restart App to apply new setting.", Toast.LENGTH_LONG).show()
-                    preferences.edit().putString(key, value).apply()
+                    preferences.edit().putString(key, value).commit()
                 }.getOrDefault(false)
             }
         }.also(screen::addPreference)
@@ -508,7 +560,7 @@ class Torrentio : Source() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).apply()
+                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
             }
         }.also(screen::addPreference)
 
@@ -522,7 +574,7 @@ class Torrentio : Source() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).apply()
+                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
             }
         }.also(screen::addPreference)
 
@@ -536,7 +588,7 @@ class Torrentio : Source() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).apply()
+                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
             }
         }.also(screen::addPreference)
 
@@ -553,7 +605,7 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).apply()
+                preferences.edit().putString(key, entry).commit()
             }
         }.also(screen::addPreference)
 
@@ -562,7 +614,7 @@ class Torrentio : Source() {
             title = "Show Upcoming Episodes"
             setDefaultValue(UPCOMING_EP_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).apply()
+                preferences.edit().putBoolean(key, newValue as Boolean).commit()
             }
         }.also(screen::addPreference)
 
@@ -571,7 +623,7 @@ class Torrentio : Source() {
             title = "Dubbed Video Priority"
             setDefaultValue(IS_DUB_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).apply()
+                preferences.edit().putBoolean(key, newValue as Boolean).commit()
             }
         }.also(screen::addPreference)
 
@@ -580,7 +632,7 @@ class Torrentio : Source() {
             title = "Efficient Video Priority"
             setDefaultValue(IS_EFFICIENT_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).apply()
+                preferences.edit().putBoolean(key, newValue as Boolean).commit()
             }
             summary = "Codec: (HEVC / x265)  & AV1. High-quality video with less data usage."
         }.also(screen::addPreference)
@@ -600,7 +652,7 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).apply()
+                preferences.edit().putString(key, entry).commit()
             }
         }.also(screen::addPreference)
 
@@ -616,7 +668,24 @@ class Torrentio : Source() {
                 val selected = newValue as String
                 val index = findIndexOfValue(selected)
                 val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).apply()
+                preferences.edit().putString(key, entry).commit()
+            }
+        }.also(screen::addPreference)
+
+        // TMDB Language
+        ListPreference(screen.context).apply {
+            key = PREF_TMDB_LANG_KEY
+            title = "TMDB: Metadata Language (Episodes)"
+            entries = PREF_TMDB_LANG_ENTRIES
+            entryValues = PREF_TMDB_LANG_VALUES
+            setDefaultValue(PREF_TMDB_LANG_DEFAULT)
+            summary = "Language for episode descriptions and thumbnails."
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = findIndexOfValue(selected)
+                val entry = entryValues[index] as String
+                preferences.edit().putString(key, entry).commit()
             }
         }.also(screen::addPreference)
     }
@@ -913,5 +982,11 @@ class Torrentio : Source() {
 
         )
         private const val PREF_JW_LANG_DEFAULT = "en"
+
+        // TMDB Language
+        private const val PREF_TMDB_LANG_KEY = "tmdb_lang"
+        private val PREF_TMDB_LANG_ENTRIES = arrayOf("English", "French")
+        private val PREF_TMDB_LANG_VALUES = arrayOf("en-US", "fr-FR")
+        private const val PREF_TMDB_LANG_DEFAULT = "en-US"
     }
 }

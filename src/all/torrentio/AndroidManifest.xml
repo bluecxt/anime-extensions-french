@@ -6,15 +6,16 @@
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="https" />
-                <data android:host="torrentio.strem.fun" />
-                <data android:pathPattern="/anime/..*" />
+                <data
+                    android:host="torrentio.strem.fun"
+                    android:pathPattern="/anime/..*"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
     </application>

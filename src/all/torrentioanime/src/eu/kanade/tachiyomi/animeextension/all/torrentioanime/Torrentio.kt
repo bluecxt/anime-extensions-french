@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.all.torrentioanime
 
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -14,21 +11,19 @@ import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AnilistMeta
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AnilistMetaLatest
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.DetailsById
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.StreamDataTorrent
-import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.Source
 import keiyoushi.utils.bodyString
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -37,15 +32,10 @@ import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Torrentio :
-    AnimeHttpSource(),
-    ConfigurableAnimeSource {
+class Torrentio : Source() {
 
     override val name = "Torrentio Anime (Torrent / Debrid)"
 
@@ -54,13 +44,6 @@ class Torrentio :
     override val lang = "all"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
-    private val preferences by getPreferencesLazy()
-
-    private val context = Injekt.get<Application>()
-    private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     // ============================== Anilist API Request ===================
     private fun makeGraphQLRequest(query: String, variables: String): Request {
@@ -356,7 +339,7 @@ class Torrentio :
 
     // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode): Request {
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val mainURL = buildString {
             append("$baseUrl/")
 
@@ -394,11 +377,8 @@ class Torrentio :
             }
             append(episode.url)
         }.removeSuffix("|")
-        return GET(mainURL)
-    }
 
-    override fun videoListParse(response: Response): List<Video> {
-        val responseString = response.body.string()
+        val responseString = client.newCall(GET(mainURL)).execute().body.string()
         val streamList = json.decodeFromString<StreamDataTorrent>(responseString)
         val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
 
@@ -438,14 +418,25 @@ class Torrentio :
                 } else {
                     stream.url ?: ""
                 }
-            Video(urlOrHash, ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title), urlOrHash)
+            val title = ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title)
+            Hoster(hosterName = title, internalData = urlOrHash)
         }.orEmpty()
+    }
+
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val urlOrHash = hoster.internalData
+        return listOf(
+            Video(
+                videoUrl = urlOrHash,
+                videoTitle = hoster.hosterName,
+            ),
+        ).sortVideos()
     }
 
     private val codecPreferences
         get() = preferences.getStringSet(PREF_CODEC_KEY, PREF_CODEC_DEFAULT) ?: setOf()
 
-    override fun List<Video>.sort(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val isDub = preferences.getBoolean(IS_DUB_KEY, IS_DUB_DEFAULT)
         val isEfficient = preferences.getBoolean(IS_EFFICIENT_KEY, IS_EFFICIENT_DEFAULT)
 
@@ -455,27 +446,27 @@ class Torrentio :
                 video.detectCodec() in codecPreferences
             }.sortedWith(
                 compareBy(
-                    { Regex("\\[(.+?) download]").containsMatchIn(it.quality) },
-                    { isDub && !it.quality.contains("dubbed", true) },
+                    { Regex("\\[(.+?) download]").containsMatchIn(it.videoTitle) },
+                    { isDub && !it.videoTitle.contains("dubbed", true) },
                 ),
             )
         } else {
             // If no codec preferences, use old sorting logic
             sortedWith(
                 compareBy(
-                    { Regex("\\[(.+?) download]").containsMatchIn(it.quality) },
-                    { isDub && !it.quality.contains("dubbed", true) },
-                    { isEfficient && !arrayOf("hevc", "265", "av1").any { q -> it.quality.contains(q, true) } },
+                    { Regex("\\[(.+?) download]").containsMatchIn(it.videoTitle) },
+                    { isDub && !it.videoTitle.contains("dubbed", true) },
+                    { isEfficient && !arrayOf("hevc", "265", "av1").any { q -> it.videoTitle.contains(q, true) } },
                 ),
             )
         }
     }
 
     private fun Video.detectCodec(): String = when {
-        quality.contains("264", true) -> "x264"
-        quality.contains("265", true) || quality.contains("hevc", true) -> "x265"
-        quality.contains("av1", true) -> "av1"
-        quality.contains("vp9", true) -> "vp9"
+        videoTitle.contains("264", true) -> "x264"
+        videoTitle.contains("265", true) || videoTitle.contains("hevc", true) -> "x265"
+        videoTitle.contains("av1", true) -> "av1"
+        videoTitle.contains("vp9", true) -> "vp9"
         else -> "other"
     }
 
