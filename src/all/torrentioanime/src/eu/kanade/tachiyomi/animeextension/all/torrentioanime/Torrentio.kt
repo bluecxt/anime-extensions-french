@@ -29,7 +29,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
@@ -47,12 +49,10 @@ class Torrentio : Source() {
 
     // ============================== Anilist API Request ===================
     private fun makeGraphQLRequest(query: String, variables: String): Request {
-        val requestBody = FormBody.Builder()
-            .add("query", query)
-            .add("variables", variables)
-            .build()
+        val jsonBody = """{"query": "${query.replace("\n", " ").replace("\"", "\\\"")}", "variables": $variables}"""
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
 
-        return POST("https://graphql.anilist.co", body = requestBody)
+        return POST("https://graphql.anilist.co", body = jsonBody)
     }
 
     private fun parseSearchJson(jsonLine: String?, isLatestQuery: Boolean = false): AnimesPage {
@@ -226,42 +226,43 @@ class Torrentio : Source() {
     override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val variables = """{"id": ${anime.url}}"""
+        val anilistId = anime.url
+        val variables = """{"id": $anilistId}"""
 
         val metaData = runCatching {
             json.decodeFromString<DetailsById>(client.newCall(makeGraphQLRequest(getDetailsQuery(), variables)).awaitSuccess().bodyString())
-        }.getOrNull()?.data?.media
+        }.getOrNull()?.data?.media ?: return anime
 
-        anime.title = metaData?.title?.let { title ->
+        anime.title = metaData.title?.let { title ->
             when (preferences.getString(PREF_TITLE_KEY, "romaji")) {
                 "romaji" -> title.romaji
                 "english" -> (metaData.title.english?.takeIf { it.isNotBlank() } ?: metaData.title.romaji).toString()
                 "native" -> title.native
                 else -> ""
             }
-        } ?: ""
+        } ?: anime.title
 
-        anime.thumbnail_url = metaData?.coverImage?.extraLarge
+        anime.thumbnail_url = metaData.coverImage?.extraLarge ?: anime.thumbnail_url
 
         anime.description = buildString {
-            append(
-                metaData?.description?.let {
+            metaData.description?.let {
+                append(
                     Jsoup.parseBodyFragment(
                         it.replace("<br>\n", "br2n")
                             .replace("<br>", "br2n")
                             .replace("\n", "br2n"),
-                    ).text().replace("br2n", "\n")
-                },
-            )
+                    ).text().replace("br2n", "\n"),
+                )
+            }
             append("\n\n")
-            if (!(metaData?.season == null && metaData?.seasonYear == null)) {
+            if (!(metaData.season == null && metaData.seasonYear == null)) {
                 append("Release: ${ metaData.season ?: ""} ${ metaData.seasonYear ?: ""}")
             }
-            metaData?.format?.let { append("\nType: ${metaData.format}") }
-            metaData?.episodes?.let { append("\nTotal Episode Count: ${metaData.episodes}") }
+            metaData.format?.let { append("\nType: $it") }
+            metaData.episodes?.let { append("\nTotal Episode Count: $it") }
         }.trim()
 
-        anime.status = when (metaData?.status) {
+        anime.status = when (metaData.status) {
             "RELEASING" -> SAnime.ONGOING
             "FINISHED" -> SAnime.COMPLETED
             "HIATUS" -> SAnime.ON_HIATUS
@@ -270,9 +271,9 @@ class Torrentio : Source() {
         }
 
         // Extracting tags, genres, and studios
-        val tagsList = metaData?.tags?.mapNotNull { it.name } ?: emptyList()
-        val genresList = metaData?.genres ?: emptyList()
-        val studiosList = metaData?.studios?.nodes?.mapNotNull { it.name } ?: emptyList()
+        val tagsList = metaData.tags?.mapNotNull { it.name } ?: emptyList()
+        val genresList = metaData.genres ?: emptyList()
+        val studiosList = metaData.studios?.nodes?.mapNotNull { it.name } ?: emptyList()
 
         anime.genre = (tagsList + genresList).toSet().sorted().joinToString()
         anime.author = studiosList.sorted().joinToString()
@@ -283,9 +284,17 @@ class Torrentio : Source() {
     // ============================== Episodes ==============================
     override fun episodeListRequest(anime: SAnime): Request = GET("https://api.ani.zip/mappings?anilist_id=${anime.url}")
 
-    override fun episodeListParse(response: Response): List<SEpisode> {
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val response = client.newCall(episodeListRequest(anime)).execute()
         val responseString = response.body.string()
         val aniZipResponse = json.decodeFromString<AniZipResponse>(responseString)
+
+        val anilistId = anime.url
+        val variables = """{"id": $anilistId}"""
+        val anilistDetails = runCatching {
+            json.decodeFromString<DetailsById>(client.newCall(makeGraphQLRequest(getDetailsQuery(), variables)).awaitSuccess().bodyString())
+        }.getOrNull()?.data?.media
+        val streamingEpisodes = anilistDetails?.streamingEpisodes.orEmpty()
 
         return when (aniZipResponse.mappings?.type) {
             "TV", "ONA", "OVA" -> {
@@ -312,6 +321,14 @@ class Torrentio : Source() {
                             date_upload = episode?.airDate.let(DATE_FORMATTER::tryParse)
                             name = if (title == null) "Episode ${episode?.episode}" else "Episode ${episode.episode}: $title"
                             scanlator = episode?.airDate.let(DATE_FORMATTER::tryParse).takeIf { it > System.currentTimeMillis() }?.let { "Upcoming" } ?: ""
+
+                            // Match thumbnail from Anilist
+                            val alEp = streamingEpisodes.find { al ->
+                                al.title?.contains(Regex("(?i)Episode\\s*${episode?.episode}\\b")) == true ||
+                                    al.title?.startsWith("EP ${episode?.episode} -") == true ||
+                                    al.title?.startsWith("${episode?.episode} -") == true
+                            }
+                            preview_url = alEp?.thumbnail ?: episode?.image
                         }
                     }.orEmpty().reversed()
             }
@@ -329,6 +346,7 @@ class Torrentio : Source() {
                         url = "/stream/movie/kitsu:${aniZipResponse.mappings.kitsuId}.json"
                         name = "Movie"
                         date_upload = dateUpload
+                        preview_url = anilistDetails?.coverImage?.extraLarge
                     },
                 ).reversed()
             }
@@ -336,6 +354,8 @@ class Torrentio : Source() {
             else -> emptyList()
         }
     }
+
+    override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
 
     // ============================ Video Links =============================
 

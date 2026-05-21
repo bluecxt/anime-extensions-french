@@ -135,6 +135,10 @@ query media(%id: Int) {
           name
         }
     }
+    streamingEpisodes {
+        title
+        thumbnail
+    }
   }
 }
 """.toQuery()

@@ -80,6 +80,13 @@ data class AnilistMedia(
     val seasonYear: Int? = null,
     val countryOfOrigin: String? = null,
     val isAdult: Boolean = false,
+    val streamingEpisodes: List<AnilistStreamingEpisode>? = null,
+)
+
+@Serializable
+data class AnilistStreamingEpisode(
+    val title: String? = null,
+    val thumbnail: String? = null,
 )
 
 @Serializable
