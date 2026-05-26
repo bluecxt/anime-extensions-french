@@ -218,6 +218,23 @@ abstract class Source :
         )
     }
 
+    /**
+     * Standardized hoster sorting based on language tags and user preferences.
+     */
+    protected fun List<Hoster>.coreSortHosters(): List<Hoster> {
+        val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val prefServer = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+        val langRegex = Regex("\\((.*?)\\)")
+
+        return this.sortedWith(
+            compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) }
+                .thenBy {
+                    langRegex.find(it.hosterName)?.value ?: "(Unknown)"
+                }
+                .thenByDescending { it.hosterName.contains(prefServer, true) },
+        )
+    }
+
     // ============================ Season Engine =============================
 
     /**
