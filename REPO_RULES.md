@@ -18,17 +18,23 @@ This document defines the mandatory standards for all Aniyomi extensions in the 
     - Remove technical suffixes (`:default`, `default`).
     - Include the fansub team name if available (mandatory for Anime-Ultime).
 
-## 3. Sorting and Prioritization
+## 3. Hoster Grouping (Super Packs)
+- **Consolidation:** Hosters must be grouped by language to avoid long repetitive lists in the initial selection screen.
+- **Naming Convention:** Use the uppercase language tag as the hoster name (e.g., `VOSTFR`, `VF`, `VA`).
+- **Unified List:** When a language group is selected, the extension must aggregate all available server links for that language into a single, perfectly sorted list.
+- **Efficiency:** Extraction for all servers within a group should ideally be performed in parallel to ensure a fast and responsive user experience.
+
+## 4. Sorting and Prioritization
 - **Language:** Sort videos based on the language preference defined in the extension settings.
 - **Resolution:** For the same language, sort by descending resolution (e.g., `1080p` > `720p` > `480p`).
 - **Quality Parsing:** Use a Regex to extract the pixel count (e.g., `(\d+)p`) to ensure reliable numerical sorting.
 
-## 4. Metadata (TMDB)
+## 5. Metadata (TMDB)
 - **Release Date:** Always use the exact French label `Date de sortie :` (at the beginning of the description) to guarantee consistency across sources.
 - **Studios/Creators:** Use the `Artist` field (for studios) and `Author` field (for creators/mangakas) provided by the TMDB engine.
 - **Season Overflow:** If a season on the site contains more episodes than listed on TMDB, map the extra episodes to TMDB's Season 0 (Specials/OAV).
 
-## 5. Extension-Specific Mechanics
+## 6. Extension-Specific Mechanics
 
 Some extensions implement advanced logic to handle specific site structures or filtering needs.
 
