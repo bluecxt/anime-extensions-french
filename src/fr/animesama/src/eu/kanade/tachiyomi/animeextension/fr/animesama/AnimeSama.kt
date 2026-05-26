@@ -409,36 +409,15 @@ class AnimeSama : Source() {
                 .build()
             Video(
                 videoUrl = video.videoUrl,
-                videoTitle = cleanQuality(video.videoTitle),
+                videoTitle = coreCleanQuality(video.videoTitle),
                 headers = updatedHeaders,
                 subtitleTracks = video.subtitleTracks,
                 audioTracks = video.audioTracks,
             )
-        }.sortVideos()
+        }.coreSortVideos()
     }
 
-    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)(?:/s)?")
-    private val qualitySizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
-    private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|VK|VidMoly):default")
     private val pQualityRegex = Regex("""(\d+)p""")
-    private val whitespaceRegex = Regex("\\s+")
-
-    private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(qualityCleanRegex, "")
-            .replace(qualitySizeRegex, "")
-            .replace(qualityDefaultRegex, "")
-            .replace(" - - ", " - ")
-            .trim()
-            .removeSuffix("-")
-            .trim()
-
-        val servers = listOf("VidMoly", "Sibnet", "Sendvid", "VK")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
-    }
 
     // ============================ Utils =============================
     override fun List<Hoster>.sortHosters(): List<Hoster> {
@@ -448,21 +427,6 @@ class AnimeSama : Source() {
         return this.sortedWith(
             compareByDescending<Hoster> { it.hosterName.contains("($voices)", true) }
                 .thenByDescending { it.hosterName.contains(player, true) },
-        )
-    }
-
-    override fun List<Video>.sortVideos(): List<Video> {
-        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!.uppercase()
-        val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
-        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
-
-        return this.sortedWith(
-            compareByDescending<Video> { it.videoTitle.contains("($voices)", true) }
-                .thenByDescending { it.videoTitle.contains(player, true) }
-                .thenByDescending { it.videoTitle.contains(quality) }
-                .thenByDescending {
-                    pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                },
         )
     }
 
@@ -985,13 +949,7 @@ class AnimeSama : Source() {
         private val PLAYERS = playersMap.keys.toTypedArray()
         private val PLAYERS_VALUES = playersMap.values.toTypedArray()
 
-        private const val PREF_VOICES_KEY = "voices_preference"
-        private const val PREF_VOICES_DEFAULT = "vostfr"
-
         private const val PREF_QUALITY_KEY = "preferred_quality"
         private const val PREF_QUALITY_DEFAULT = "1080"
-
-        private const val PREF_PLAYER_KEY = "player_preference"
-        private const val PREF_PLAYER_DEFAULT = "sibnet"
     }
 }

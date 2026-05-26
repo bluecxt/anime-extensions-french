@@ -9,8 +9,10 @@ import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.getPreferencesLazy
@@ -129,11 +131,287 @@ abstract class Source :
         }
     }
 
+    // ============================ Utils =============================
+    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)(?:/s)?")
+    private val qualitySizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
+    private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|VK|VidMoly|Voe|Vidoza|Streamtape|Doodstream):default")
+    private val whitespaceRegex = Regex("\\s+")
+
+    /**
+     * Standardized video label cleaning.
+     * Removes file sizes, resolutions, technical suffixes and redundant server names.
+     */
+    protected fun coreCleanQuality(quality: String): String {
+        var cleaned = quality.replace(qualityCleanRegex, "")
+            .replace(qualitySizeRegex, "")
+            .replace(qualityDefaultRegex, "")
+            .replace(" - - ", " - ")
+            .trim()
+            .removeSuffix("-")
+            .trim()
+
+        val servers = listOf("VidMoly", "Sibnet", "Sendvid", "VK", "Voe", "Vidoza", "Streamtape", "Doodstream")
+        for (server in servers) {
+            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
+            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
+    }
+
+    /**
+     * Normalizes a URL by removing the domain if it matches the base URL
+     * and ensuring it starts with a leading slash.
+     */
+    protected fun coreCleanUrl(url: String): String {
+        if (url.isBlank()) return ""
+        val fixed = if (url.startsWith("http")) {
+            url.replace(Regex("^https?://[^/]+"), "")
+        } else {
+            url
+        }
+        return if (fixed.startsWith("/")) fixed else "/$fixed"
+    }
+
+    /**
+     * Safely sets the fetch type using reflection for backward compatibility.
+     */
+    protected fun SAnime.coreSetFetchType(type: eu.kanade.tachiyomi.animesource.model.FetchType) {
+        try {
+            val methods = this.javaClass.methods
+            val setter = methods.find { it.name == "setFetch_type" }
+            if (setter != null) {
+                val appFetchTypeClass = setter.parameterTypes[0]
+                val enumValue = appFetchTypeClass.enumConstants?.find { it.toString() == type.name }
+                setter.invoke(this, enumValue)
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Safely sets the season number using reflection for backward compatibility.
+     */
+    protected fun SAnime.coreSetSeasonNumber(season: Double) {
+        try {
+            val methods = this.javaClass.methods
+            val setter = methods.find { it.name == "setSeason_number" }
+            if (setter != null) {
+                setter.invoke(this, season)
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Standardized video sorting based on user preferences.
+     */
+    protected fun List<Video>.coreSortVideos(): List<Video> {
+        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+
+        val pQualityRegex = Regex("""(\d+)p""")
+
+        return this.sortedWith(
+            compareByDescending<Video> { it.quality.contains(voices, true) }
+                .thenByDescending { it.quality.contains(player, true) }
+                .thenByDescending {
+                    pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                },
+        )
+    }
+
+    // ============================ Season Engine =============================
+
+    /**
+     * Optimized title display logic according to REPO_RULES.
+     * Shortens seasons to numbers and detects special sub-titles/spin-offs.
+     * Prepends full title to description if shortened to a sub-title.
+     */
+    protected fun SAnime.coreOptimizeDisplayTitle(fullTitle: String, seriesTitle: String) {
+        var isSubTitleOnly = false
+        val effectiveSeriesTitle = if (seriesTitle.isNotEmpty() && fullTitle.contains(seriesTitle, ignoreCase = true)) {
+            seriesTitle
+        } else if (this.title.isNotEmpty() && fullTitle.contains(this.title, ignoreCase = true)) {
+            this.title
+        } else {
+            ""
+        }
+
+        if (effectiveSeriesTitle.isNotEmpty()) {
+            val suffix = fullTitle.split(Regex("(?i)${Regex.escape(effectiveSeriesTitle)}"), 2)
+                .last().trim().removePrefix(":").removePrefix("-").trim()
+
+            if (suffix.isNotEmpty()) {
+                val isStandardSeason = suffix.matches(Regex("""(?i)(?:Saison|Season|Partie|Part|Film|Movie|OAV|OVA|Special|HS|Kai|\d+).*"""))
+                if (!isStandardSeason) {
+                    this.title = suffix
+                    isSubTitleOnly = true
+                }
+            }
+        }
+
+        // REPO_RULES: "Saison X" -> "X" for consistency and space (Saison 1 is removed)
+        val titleBeforeCleaning = this.title
+        this.title = this.title
+            .replace(Regex("""(?i)\s*-\s*Saison\s*1(?!\d)"""), "")
+            .replace(Regex("""(?i)\s*Saison\s*1(?!\d)"""), "")
+            .replace(Regex("""(?i)\s*-\s*Saison\s*(\d+)"""), " $1")
+            .replace(Regex("""(?i)\s*Saison\s*(\d+)"""), " $1")
+            .replace(Regex("""(?i)Partie\s*(\d+)"""), "Part $1")
+            .trim()
+
+        // Always put raw full title at the very top if the display title was optimized to a subtitle
+        // We check if it's NOT a standard numeric season to avoid "Fullmetal Alchemist 1" in description
+        val isNumericSeason = this.title.matches(Regex("""(?i).*\s*\d+$|^Saison\s*\d+$|^\d+$"""))
+        if (isSubTitleOnly || (this.title != fullTitle && !isNumericSeason)) {
+            this.description = "$fullTitle\n\n${this.description ?: ""}"
+        }
+    }
+
+    /**
+     * Builds a standardized list of SAnime seasons for hierarchical mode.
+     * Applies TMDB continuation fallbacks and REPO_RULES automatically.
+     */
+    protected suspend fun coreBuildSeasonList(
+        baseTitle: String,
+        siteSeasons: List<Triple<String, String, Int>>, // Title, URL, SiteSNum
+        defStatus: Int = SAnime.UNKNOWN,
+    ): List<SAnime> = siteSeasons.mapIndexed { index, (sTitle, sUrl, siteSNum) ->
+        val tmdbMeta = fetchTmdbMetadata(baseTitle, siteSNum)
+        val isContinuation = siteSNum > 1 && (tmdbMeta == null || tmdbMeta.episodeSummaries.size < 2)
+        val finalMeta = if (isContinuation) fetchTmdbMetadata(baseTitle, siteSNum - 1) else tmdbMeta
+
+        SAnime.create().apply {
+            this.title = sTitle
+            this.url = sUrl
+            thumbnail_url = finalMeta?.posterUrl
+            description = finalMeta?.summary
+            genre = finalMeta?.genre
+            author = finalMeta?.author
+            artist = finalMeta?.artist
+            status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else (finalMeta?.status ?: defStatus)
+
+            coreOptimizeDisplayTitle(sTitle, baseTitle)
+            coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+            coreSetSeasonNumber(siteSNum.toDouble())
+            initialized = true
+        }
+    }
+
+    /**
+     * Calculates the episode offset for TMDB alignment.
+     * Handles seasons mapping and OAV overflow detection.
+     */
+    protected suspend fun coreCalculateEpisodeOffset(
+        baseTitle: String,
+        targetTmdbSNum: Int,
+        previousSeasonsCounts: Map<Int, Int>, // SiteSNum -> EpisodeCount
+    ): Pair<Int, Int> {
+        var siteOffsetAccumulator = 0
+        var oavOffsetAccumulator = 0
+        var lastTmdbSNum = -1
+
+        val sortedSiteSeasons = previousSeasonsCounts.keys.sorted()
+
+        for (sNum in sortedSiteSeasons) {
+            val siteCount = previousSeasonsCounts[sNum] ?: 0
+
+            // Determine TMDB Season
+            var tmdbS = sNum
+            val meta = fetchTmdbMetadata(baseTitle, tmdbS)
+            if (sNum > 1 && (meta == null || meta.episodeSummaries.size < 2)) {
+                tmdbS = sNum - 1
+            }
+
+            if (tmdbS != lastTmdbSNum) {
+                siteOffsetAccumulator = 0
+                oavOffsetAccumulator = 0
+                lastTmdbSNum = tmdbS
+            }
+
+            if (tmdbS == targetTmdbSNum) {
+                // We reached the current group
+                return siteOffsetAccumulator to oavOffsetAccumulator
+            }
+
+            // Accumulate counts for previous groups
+            val currentTmdbMeta = fetchTmdbMetadata(baseTitle, tmdbS)
+            val currentTmdbCount = currentTmdbMeta?.episodeSummaries?.size ?: 0
+
+            if (currentTmdbCount > 0) {
+                val remainingInTmdb = maxOf(0, currentTmdbCount - siteOffsetAccumulator)
+                siteOffsetAccumulator += minOf(siteCount, remainingInTmdb)
+                if (siteCount > remainingInTmdb) {
+                    oavOffsetAccumulator += (siteCount - remainingInTmdb)
+                }
+            } else {
+                siteOffsetAccumulator += siteCount
+            }
+        }
+
+        return siteOffsetAccumulator to oavOffsetAccumulator
+    }
+
+    /**
+     * Maps raw episodes to TMDB metadata with offsets and formatting.
+     */
+    protected fun coreMapEpisodes(
+        rawEpisodes: List<eu.kanade.tachiyomi.animesource.model.SEpisode>,
+        tmdbMetadata: TmdbMetadata?,
+        tmdbS0Metadata: TmdbMetadata?,
+        offsets: Pair<Int, Int>, // Pair(siteOffset, oavOffset)
+        sNum: Int,
+        isMovie: Boolean = false,
+        isOav: Boolean = false,
+    ): List<eu.kanade.tachiyomi.animesource.model.SEpisode> {
+        val (siteOffset, oavOffset) = offsets
+        val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
+
+        return rawEpisodes.map { episode ->
+            val epNum = episode.episode_number.toInt()
+            val absEpNum = epNum + siteOffset
+
+            var epMeta = tmdbMetadata?.episodeSummaries?.get(absEpNum)
+
+            // If not found and we are beyond the season count, try Season 0 (Specials)
+            if (epMeta == null && tmdbSeasonEpisodeCount > 0 && absEpNum > tmdbSeasonEpisodeCount) {
+                val s0EpNum = (absEpNum - tmdbSeasonEpisodeCount) + oavOffset
+                epMeta = tmdbS0Metadata?.episodeSummaries?.get(s0EpNum)
+            }
+
+            val tmdbName = epMeta?.first
+            val currentName = episode.name.replace("Épisode", "Episode", true)
+
+            val formattedName = if (currentName.contains(Regex("(?i)Episode\\s*\\d+")) || currentName.isBlank() || currentName.length < 3) {
+                if (tmdbName != null) "Episode $epNum - $tmdbName" else "Episode $epNum"
+            } else {
+                if (currentName.contains("Episode", true)) currentName else "Episode $epNum - $currentName"
+            }
+
+            val sPrefix = when {
+                isMovie -> "[Movie] "
+                isOav -> "[Special] "
+                sNum > 1 -> "[S$sNum] "
+                else -> ""
+            }
+
+            episode.apply {
+                name = "$sPrefix$formattedName"
+                preview_url = epMeta?.second
+                summary = epMeta?.third
+            }
+        }
+    }
+
     // ============================== TMDB Engine ==============================
     private val tmdbApiKey = "24621da8ae19dce721e59eff2ab479bb"
     private val tmdbBaseUrl = "https://api.themoviedb.org/3"
 
     companion object {
+        const val PREF_VOICES_KEY = "preferred_voices"
+        const val PREF_VOICES_DEFAULT = "VOSTFR"
+
+        const val PREF_PLAYER_KEY = "preferred_server"
+        const val PREF_PLAYER_DEFAULT = "sibnet"
+
         private val tmdbCache = mutableMapOf<String, TmdbMetadata?>()
 
         private val ignoredRegex by lazy {
