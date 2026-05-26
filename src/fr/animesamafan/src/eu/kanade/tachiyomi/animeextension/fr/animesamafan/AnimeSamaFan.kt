@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.Source
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -466,65 +467,66 @@ class AnimeSamaFan : Source() {
 
     // ================== Video (Extracteurs) ==================
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val hosters = mutableListOf<Hoster>()
         val langsString = episode.scanlator ?: "VOSTFR"
-        val langs = langsString.split(", ")
-
-        langs.forEach { lang ->
-            try {
-                val urlWithLang = if (episode.url.contains("?")) {
-                    "${episode.url}&lang=${lang.lowercase()}"
-                } else {
-                    "${episode.url}?lang=${lang.lowercase()}"
-                }
-                val doc = client.newCall(GET("$baseUrl$urlWithLang", headers)).execute().asJsoup()
-
-                val iframes = doc.select("iframe")
-                if (iframes.isNotEmpty()) {
-                    iframes.forEach { iframe ->
-                        val serverUrl = listOf(
-                            iframe.attr("abs:src"),
-                            iframe.attr("abs:data-src"),
-                            iframe.attr("abs:data-lazy-src"),
-                        ).firstOrNull { it.isNotBlank() }.orEmpty()
-
-                        val serverName = getServerName(serverUrl)
-                        if (serverName != null) {
-                            hosters.add(Hoster(hosterName = "($lang) $serverName", internalData = "$serverUrl|$lang"))
-                        }
-                    }
-                } else {
-                    // Movie pages often expose only an embed URL in meta tags (og:video / itemprop=embedUrl)
-                    val playerUrl = extractEmbeddedPlayerUrl(doc)
-                    val serverName = playerUrl?.let { getServerName(it) }
-                    if (playerUrl != null && serverName != null) {
-                        hosters.add(Hoster(hosterName = "($lang) $serverName", internalData = "$playerUrl|$lang"))
-                    }
-                }
-            } catch (_: Exception) {}
+        return langsString.split(", ").map { lang ->
+            Hoster(hosterName = lang, internalData = "${episode.url}|$lang")
         }
-        return hosters
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val data = hoster.internalData.split("|")
-        val serverUrl = data[0]
+        val episodeUrl = data[0]
         val lang = data[1]
-        val prefix = "($lang) ${hoster.hosterName.substringAfter(") ")} - "
-
-        val videoList = mutableListOf<Video>()
-        when {
-            serverUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            serverUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            serverUrl.contains("streamtape") || serverUrl.contains("shavetape") -> streamTapeExtractor.videoFromUrl(serverUrl, prefix)?.let { videoList.add(it) }
-            serverUrl.contains("dood") -> doodExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            serverUrl.contains("vidoza.net") -> vidoExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            serverUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-            serverUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
+        val langLabel = lang.uppercase()
+        val urlWithLang = if (episodeUrl.contains("?")) {
+            "$episodeUrl&lang=${lang.lowercase()}"
+        } else {
+            "$episodeUrl?lang=${lang.lowercase()}"
         }
 
-        return videoList.map {
-            Video(videoUrl = it.videoUrl, videoTitle = coreCleanQuality(it.videoTitle), headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
+        val doc = client.newCall(GET("$baseUrl$urlWithLang", headers)).execute().asJsoup()
+        val playerUrls = mutableListOf<String>()
+
+        val iframes = doc.select("iframe")
+        if (iframes.isNotEmpty()) {
+            iframes.forEach { iframe ->
+                val serverUrl = listOf(
+                    iframe.attr("abs:src"),
+                    iframe.attr("abs:data-src"),
+                    iframe.attr("abs:data-lazy-src"),
+                ).firstOrNull { it.isNotBlank() }.orEmpty()
+                if (serverUrl.isNotBlank()) playerUrls.add(serverUrl)
+            }
+        } else {
+            extractEmbeddedPlayerUrl(doc)?.let { playerUrls.add(it) }
+        }
+
+        return playerUrls.parallelMap { playerUrl ->
+            try {
+                val serverName = getServerName(playerUrl) ?: "Serveur"
+                val prefix = "($langLabel) $serverName - "
+
+                when {
+                    playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("streamtape") || playerUrl.contains("shavetape") -> streamTapeExtractor.videoFromUrl(playerUrl, prefix)?.let { listOf(it) } ?: emptyList()
+                    playerUrl.contains("dood") -> doodExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("vidoza.net") -> vidoExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(playerUrl, prefix)
+                    else -> emptyList()
+                }
+            } catch (e: Exception) {
+                emptyList<Video>()
+            }
+        }.flatten().map { video ->
+            Video(
+                videoUrl = video.videoUrl,
+                videoTitle = coreCleanQuality(video.videoTitle),
+                headers = video.headers,
+                subtitleTracks = video.subtitleTracks,
+                audioTracks = video.audioTracks,
+            )
         }.coreSortVideos()
     }
 
