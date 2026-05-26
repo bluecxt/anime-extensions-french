@@ -6,7 +6,7 @@ This document defines the mandatory standards for all Aniyomi extensions in the 
 - **Standard Terminology:** Use bracketed keywords recognized by AniZen to force grouping: `[S1]` (for Season 1), `[Movie]`, `[OAV]`, `[ONA]`, `[Special]`.
 - **Name Structure:** `[S1] Episode Y - [Title]` or simply `Episode Y - [Title]`.
 - **Special Content:** Always prefix with `[Movie]`, `[OAV]`, or `[Special]` (e.g., `[Movie] Episode 1 - [Title]`).
-- **Single Season:** If the anime has only one season and no OAV/Special, omit the `[S1]` prefix.
+- **First/Single Season:** Omit the `[S1]` prefix for the first or only season of an anime. Start using prefixes from `[S2]` onwards for subsequent seasons.
 - **No Redundancy:** If the title provided by the site already contains the episode number, do not repeat `Episode X` at the beginning.
 
 ## 2. Video Source Labels

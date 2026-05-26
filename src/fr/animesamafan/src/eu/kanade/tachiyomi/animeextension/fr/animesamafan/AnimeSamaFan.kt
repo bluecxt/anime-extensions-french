@@ -66,40 +66,13 @@ class AnimeSamaFan : Source() {
         )
 
     // ================== Utils ==================
-    private fun fixUrl(url: String): String = if (url.startsWith("http")) {
-        url.replace(Regex("^https?://[^/]+"), "")
-    } else {
-        if (url.startsWith("/")) url else "/$url"
-    }
-
-    private fun setFetchTypeSafe(anime: SAnime, type: eu.kanade.tachiyomi.animesource.model.FetchType) {
-        try {
-            val methods = anime.javaClass.methods
-            val setter = methods.find { it.name == "setFetch_type" }
-            if (setter != null) {
-                val appFetchTypeClass = setter.parameterTypes[0]
-                val enumValue = appFetchTypeClass.enumConstants?.find { it.toString() == type.name }
-                setter.invoke(anime, enumValue)
-            }
-        } catch (_: Exception) {}
-    }
-
-    private fun setSeasonNumberSafe(anime: SAnime, season: Double) {
-        try {
-            val methods = anime.javaClass.methods
-            val setter = methods.find { it.name == "setSeason_number" }
-            if (setter != null) {
-                setter.invoke(anime, season)
-            }
-        } catch (_: Exception) {}
-    }
 
     private fun parseAnimePage(document: Document, fallbackPage: Int): AnimesPage {
         val items = document.select("div.catalog-card").map { element ->
             SAnime.create().apply {
                 title = element.selectFirst(".card-title")?.text()?.trim().orEmpty()
                 thumbnail_url = element.selectFirst("img.card-image")?.attr("abs:src")
-                url = fixUrl(element.selectFirst("a")?.attr("href") ?: "")
+                url = coreCleanUrl(element.selectFirst("a")?.attr("href") ?: "")
             }
         }
 
@@ -175,7 +148,7 @@ class AnimeSamaFan : Source() {
             title = titleElement?.text()?.replace("VOSTFR", "", true)?.replace("VF", "", true)?.trim() ?: "Unknown Title"
             thumbnail_url = document.selectFirst(".anime-cover img")?.attr("abs:src")
                 ?: document.selectFirst("meta[property=og:image]")?.attr("content")
-            url = fixUrl(document.location())
+            url = coreCleanUrl(document.location())
         }
         return AnimesPage(listOf(anime), false)
     }
@@ -252,12 +225,16 @@ class AnimeSamaFan : Source() {
 
         // Set title and season number
         val isAlreadySeason = anime.url.contains("saison-", ignoreCase = true) || (sNum > 1 && document.selectFirst(".seasons-grid") == null)
-        anime.title = if (isAlreadySeason && !pageTitle.contains("Saison", true)) "$pageTitle - Saison $sNum" else pageTitle
-        setSeasonNumberSafe(anime, sNum.toDouble())
+
+        // Use Core Engine for title optimization
+        anime.coreOptimizeDisplayTitle(pageTitle, pageTitle.replace(Regex("(?i)\\s*-\\s*Saison.*|\\s*Saison.*"), "").trim())
+        anime.coreSetSeasonNumber(sNum.toDouble())
 
         // Baseline description from site
         val siteDescription = document.selectFirst(".synopsis-content p")?.text()
-        if (!siteDescription.isNullOrBlank()) anime.description = siteDescription
+        if (!siteDescription.isNullOrBlank()) {
+            anime.description = if (anime.description.isNullOrBlank()) siteDescription else "${anime.description}\n\n$siteDescription"
+        }
 
         // Genres from site
         val siteGenres = document.select(".synopsis-content .anime-genres .genre-link")
@@ -302,9 +279,9 @@ class AnimeSamaFan : Source() {
         val hasMultipleSeasons = seasonCards.size > 1
 
         if (hasMultipleSeasons && !isAlreadySeason) {
-            setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+            anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
         } else {
-            setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+            anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
         }
 
         return anime
@@ -327,28 +304,15 @@ class AnimeSamaFan : Source() {
         val seasonCards = document.select(".seasons-grid a.season-card")
         val siteSeasons = seasonCards.map { element ->
             val sHref = element.attr("href")
-            val sNum = getSeasonNumber(sHref)
-            val title = element.selectFirst(".season-title")?.text() ?: element.text().trim()
-            Triple(title, fixUrl(sHref), sNum)
+            val siteSNum = getSeasonNumber(sHref)
+            val sTitle = element.selectFirst(".season-title")?.text() ?: element.text().trim()
+
+            // Format full title for the engine: "[Name] - Saison [X]"
+            val fullSeasonTitle = if (!sTitle.contains(baseTitle, true)) "$baseTitle - $sTitle" else sTitle
+            Triple(fullSeasonTitle, coreCleanUrl(sHref), siteSNum)
         }
 
-        return siteSeasons.mapIndexed { index, (sTitle, sUrl, siteSNum) ->
-            SAnime.create().apply {
-                title = sTitle
-                url = sUrl
-
-                // Poster fetching for grid
-                val tmdbMeta = kotlinx.coroutines.runBlocking { fetchTmdbMetadata(baseTitle, siteSNum) }
-                val isContinuation = siteSNum > 1 && (tmdbMeta == null || tmdbMeta.episodeSummaries.size < 2)
-                val finalMeta = if (isContinuation) kotlinx.coroutines.runBlocking { fetchTmdbMetadata(baseTitle, siteSNum - 1) } else tmdbMeta
-
-                thumbnail_url = finalMeta?.posterUrl ?: anime.thumbnail_url
-                setFetchTypeSafe(this, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
-                setSeasonNumberSafe(this, siteSNum.toDouble())
-                status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else (finalMeta?.status ?: anime.status)
-                initialized = false
-            }
-        }
+        return coreBuildSeasonList(baseTitle, siteSeasons, anime.status)
     }
 
     // ================== Episodes ==================
@@ -364,7 +328,7 @@ class AnimeSamaFan : Source() {
         val gridCards = initialDoc.select(".seasons-grid a.season-card")
 
         val (doc, path) = if (episodeCards.isEmpty() && gridCards.isNotEmpty()) {
-            val firstUrl = fixUrl(gridCards.first()!!.attr("href"))
+            val firstUrl = coreCleanUrl(gridCards.first()!!.attr("href"))
             client.newCall(GET("$baseUrl$firstUrl", headers)).execute().asJsoup() to firstUrl
         } else {
             initialDoc to initialPath
@@ -379,68 +343,25 @@ class AnimeSamaFan : Source() {
 
         // 1. Find season tabs to calculate offset dynamically (Hierarchical Mode)
         val tabs = doc.select(".tabs-container a.tab")
-        if (tabs.isEmpty()) {
-            return parseEpisodesFromDocument(doc, baseTitle, 1, 0, 0, siteSNum)
-                .sortedByDescending { it.episode_number }
+        val (finalOffset, finalOavOffset, finalTargetSNum) = if (tabs.isEmpty()) {
+            Triple(0, 0, siteSNum)
+        } else {
+            val seasonLinks = tabs.map { coreCleanUrl(it.attr("href")) }.distinct()
+            val currentIdx = seasonLinks.indexOfFirst { it == path }
+            val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(path)
+
+            val countsMap = seasonsToAnalyze.associate { sUrl ->
+                val sNum = getSeasonNumber(sUrl)
+                val sDoc = if (sUrl == path) doc else tryGetDocument("$baseUrl$sUrl")
+                val siteCount = sDoc?.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")?.size ?: 0
+                sNum to siteCount
+            }
+
+            val offsets = coreCalculateEpisodeOffset(baseTitle, siteSNum, countsMap)
+            Triple(offsets.first, offsets.second, siteSNum)
         }
 
-        val seasonLinks = tabs.map { fixUrl(it.attr("href")) }.distinct()
-        val currentIdx = seasonLinks.indexOfFirst { it == path }
-
-        var siteOffsetAccumulator = 0
-        var oavOffsetAccumulator = 0
-        var lastTmdbSNum = -1
-        var finalTargetSNum = siteSNum
-        var finalOffset = 0
-        var finalOavOffset = 0
-
-        // Analyze previous tabs to calculate correct offsets for the current tab
-        val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(path)
-
-        for (sUrl in seasonsToAnalyze) {
-            val sNum = getSeasonNumber(sUrl)
-
-            // Determine TMDB Season
-            var tmdbS = sNum
-            val meta = fetchTmdbMetadata(baseTitle, tmdbS)
-            val tmdbCount = meta?.episodeSummaries?.size ?: 0
-
-            if (sNum > 1 && (meta == null || tmdbCount < 2)) {
-                tmdbS = sNum - 1
-            }
-
-            if (tmdbS != lastTmdbSNum) {
-                siteOffsetAccumulator = 0
-                oavOffsetAccumulator = 0
-                lastTmdbSNum = tmdbS
-            }
-
-            if (sUrl == path) {
-                finalTargetSNum = tmdbS
-                finalOffset = siteOffsetAccumulator
-                finalOavOffset = oavOffsetAccumulator
-                break
-            }
-
-            // Fetch previous season to count episodes and surplus (OAVs)
-            val sDoc = tryGetDocument("$baseUrl$sUrl")
-            val siteCount = sDoc?.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")?.size ?: 0
-
-            val currentTmdbMeta = fetchTmdbMetadata(baseTitle, tmdbS)
-            val currentTmdbCount = currentTmdbMeta?.episodeSummaries?.size ?: 0
-
-            if (currentTmdbCount > 0) {
-                val remainingInTmdb = maxOf(0, currentTmdbCount - siteOffsetAccumulator)
-                siteOffsetAccumulator += minOf(siteCount, remainingInTmdb)
-                if (siteCount > remainingInTmdb) {
-                    oavOffsetAccumulator += (siteCount - remainingInTmdb)
-                }
-            } else {
-                siteOffsetAccumulator += siteCount
-            }
-        }
-
-        return parseEpisodesFromDocument(doc, baseTitle, seasonLinks.size, finalOffset, finalOavOffset, finalTargetSNum)
+        return parseEpisodesFromDocument(doc, baseTitle, finalOffset, finalOavOffset, finalTargetSNum)
             .sortedByDescending { it.episode_number }
     }
 
@@ -472,7 +393,6 @@ class AnimeSamaFan : Source() {
     private suspend fun parseEpisodesFromDocument(
         document: Document,
         animeTitle: String,
-        totalSeasons: Int,
         siteOffset: Int,
         oavOffset: Int,
         tmdbSNumOverride: Int? = null,
@@ -490,11 +410,8 @@ class AnimeSamaFan : Source() {
             }
         }
 
-        var tmdbSeason1Metadata: fr.bluecxt.core.TmdbMetadata? = null
-        val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
-
         // Lazy load S0 metadata
-        var tmdbS0Metadata: fr.bluecxt.core.TmdbMetadata? = null
+        val tmdbS0Metadata = if (sNum > 0) fetchTmdbMetadata(animeTitle, 0)?.let { filterSmartMetadata(it, isSpecialSeason = true) } else null
 
         val episodeCards = document.select("a.episode-card, .episodes-grid a, .episodes-list a, .episode-item")
         Log.d("AnimeSamaFan", "parseEpisodesFromDocument cards found: ${episodeCards.size}")
@@ -509,7 +426,7 @@ class AnimeSamaFan : Source() {
             if (hasKnownPlayerIframe || embeddedPlayerUrl != null) {
                 return listOf(
                     SEpisode.create().apply {
-                        this.url = fixUrl(url)
+                        this.url = coreCleanUrl(url)
                         name = "[Movie] Film"
                         episode_number = 1f
                         scanlator = "VOSTFR, VF"
@@ -518,8 +435,8 @@ class AnimeSamaFan : Source() {
             }
         }
 
-        return episodeCards.map { card ->
-            val epUrl = fixUrl(card.attr("href"))
+        val rawEpisodes = episodeCards.map { card ->
+            val epUrl = coreCleanUrl(card.attr("href"))
             val availableLangs = mutableListOf<String>()
             val langs = card.attr("data-langs").uppercase()
             if (langs.contains("VOSTFR")) availableLangs.add("VOSTFR")
@@ -531,53 +448,20 @@ class AnimeSamaFan : Source() {
                     ?: card.selectFirst(".episode-title")?.text()
                     ?: card.text().trim()
 
-                val epTitle = epTitleRaw.replace("Épisode", "Episode", true).ifBlank { "Episode" }
+                // Clean title only (Episode 1, etc.)
+                name = epTitleRaw.replace("Épisode", "Episode", true).ifBlank { "Episode" }
 
-                // Extract episode number from text or URL
-                val epNumStr = (
-                    card.selectFirst(".episode-number")?.text()
-                        ?: epNumRegex.replace(epTitle, "")
-                    ).replace(epNumRegex, "")
-
-                val epNum = epNumStr.toIntOrNull() ?: 0
-
-                // Metadata from TMDB - Apply offset directly to primary metadata
-                val absEpNum = epNum + siteOffset
-                var epMeta = tmdbMetadata?.episodeSummaries?.get(absEpNum)
-
-                // If not found and we are beyond the season count, try Season 0 (Specials)
-                if (epMeta == null && tmdbSeasonEpisodeCount > 0 && absEpNum > tmdbSeasonEpisodeCount) {
-                    if (tmdbS0Metadata == null) tmdbS0Metadata = fetchTmdbMetadata(animeTitle, 0)?.let { filterSmartMetadata(it, isSpecialSeason = true) }
-                    val s0EpNum = (absEpNum - tmdbSeasonEpisodeCount) + oavOffset
-                    epMeta = tmdbS0Metadata?.episodeSummaries?.get(s0EpNum)
-                }
-
-                val tmdbName = epMeta?.first
-                val formattedName = if (epTitle.contains(Regex("(?i)Episode\\s*\\d+")) || epTitle.isBlank() || epTitle.length < 3) {
-                    if (tmdbName != null) "Episode $epNumStr - $tmdbName" else "Episode $epNumStr"
-                } else {
-                    if (epTitle.contains("Episode", true)) epTitle else "Episode $epNumStr - $epTitle"
-                }
-
-                val sPrefix = when {
-                    url.contains("film", true) || url.contains("movie", true) || animeTitle.contains("FILM", true) || animeTitle.contains("MOVIE", true) -> "[Movie] "
-
-                    url.contains("oav", true) || url.contains("special", true) || animeTitle.contains("OAV", true) || animeTitle.contains("Special", true) -> "[Special] "
-
-                    sNum > 1 -> "[S$sNum] "
-
-                    totalSeasons > 1 && sNum == 1 -> ""
-
-                    // Omit [S1] even if multiple seasons exist
-                    else -> ""
-                }
-                name = "$sPrefix$formattedName"
-                this.episode_number = epNum.toFloat()
-                this.scanlator = availableLangs.joinToString(", ").ifBlank { "VOSTFR" }
-                this.preview_url = epMeta?.second
-                this.summary = epMeta?.third
+                // Extract episode number
+                val epNumStr = (card.selectFirst(".episode-number")?.text() ?: epNumRegex.replace(name, "")).replace(epNumRegex, "")
+                episode_number = epNumStr.toFloatOrNull() ?: 0f
+                scanlator = availableLangs.joinToString(", ").ifBlank { "VOSTFR" }
             }
         }
+
+        val isMovie = url.contains("film", true) || url.contains("movie", true) || animeTitle.contains("FILM", true) || animeTitle.contains("MOVIE", true)
+        val isOav = url.contains("oav", true) || url.contains("special", true) || animeTitle.contains("OAV", true) || animeTitle.contains("Special", true)
+
+        return coreMapEpisodes(rawEpisodes, tmdbMetadata, tmdbS0Metadata, siteOffset to oavOffset, sNum, isMovie, isOav)
     }
 
     // ================== Video (Extracteurs) ==================
@@ -640,8 +524,8 @@ class AnimeSamaFan : Source() {
         }
 
         return videoList.map {
-            Video(videoUrl = it.videoUrl, videoTitle = cleanQuality(it.videoTitle), headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
-        }.sortVideos()
+            Video(videoUrl = it.videoUrl, videoTitle = coreCleanQuality(it.videoTitle), headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
+        }.coreSortVideos()
     }
 
     private fun getServerName(url: String): String? = when {
@@ -655,43 +539,13 @@ class AnimeSamaFan : Source() {
         else -> null
     }
 
-    private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)(Sendvid|Sibnet|Voe|Vidoza):default"), "")
-            .replace(" - - ", " - ")
-            .trim()
-            .removeSuffix("-")
-            .trim()
-
-        val servers = listOf("Sibnet", "Sendvid", "Streamtape", "Doodstream", "Vidoza", "Vidmoly", "Voe")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
-    }
-
     override fun List<Hoster>.sortHosters(): List<Hoster> {
-        val prefVoice = preferences.getString("preferred_voices", "VOSTFR")!!
-        val player = preferences.getString("preferred_server", "sibnet")!!
+        val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
 
         return this.sortedWith(
             compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) }
                 .thenByDescending { it.hosterName.contains(player, true) },
-        )
-    }
-
-    override fun List<Video>.sortVideos(): List<Video> {
-        val prefVoice = preferences.getString("preferred_voices", "VOSTFR")!!
-        val player = preferences.getString("preferred_server", "sibnet")!!
-
-        return this.sortedWith(
-            compareByDescending<Video> { it.videoTitle.contains("($prefVoice)", true) }
-                .thenByDescending { it.videoTitle.contains(player, true) }
-                .thenByDescending {
-                    pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                },
         )
     }
 
@@ -703,19 +557,19 @@ class AnimeSamaFan : Source() {
             setDefaultValue("https://animesama.co")
         }
         val voicesPref = ListPreference(screen.context).apply {
-            key = "preferred_voices"
+            key = PREF_VOICES_KEY
             title = "Préférence des voix"
             entries = arrayOf("Préférer VOSTFR", "Préférer VF")
             entryValues = arrayOf("VOSTFR", "VF")
-            setDefaultValue("VOSTFR")
+            setDefaultValue(PREF_VOICES_DEFAULT)
             summary = "%s"
         }
         val serverPref = ListPreference(screen.context).apply {
-            key = "preferred_server"
+            key = PREF_PLAYER_KEY
             title = "Serveur préféré"
             entries = arrayOf("Sibnet", "Sendvid", "Voe", "Streamtape", "Doodstream", "Vidoza")
             entryValues = arrayOf("sibnet", "sendvid", "voe", "streamtape", "dood", "vidoza")
-            setDefaultValue("sibnet")
+            setDefaultValue(PREF_PLAYER_DEFAULT)
             summary = "%s"
         }
         screen.addPreference(baseUrlPref)
