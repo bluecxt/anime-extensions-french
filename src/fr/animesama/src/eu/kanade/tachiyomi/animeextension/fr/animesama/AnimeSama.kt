@@ -97,7 +97,10 @@ class AnimeSama : Source() {
         return AnimesPage(animes, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl)
+    override fun latestUpdatesRequest(page: Int): Request {
+        super.latestUpdatesRequest(page)
+        return GET(baseUrl)
+    }
 
     // =============================== Search ===============================
     override fun getFilterList() = AnimeSamaFilters.FILTER_LIST
@@ -189,11 +192,13 @@ class AnimeSama : Source() {
         }
 
         // REPO_RULES: Optimize long titles for grid view
+        var isSubTitleOnly = false
         if (absoluteFullTitle.length > 40 && absoluteFullTitle.contains(" ") && seriesTitle.isNotEmpty()) {
             val suffix = absoluteFullTitle.substringAfter(seriesTitle).trim()
             val isStandardSeason = suffix.matches(Regex("""(?i)(?:-?\s*)?(?:Saison|Season|Partie|Part|\d+).*"""))
             if (suffix.isNotEmpty() && suffix != absoluteFullTitle && !isStandardSeason) {
                 anime.title = suffix
+                isSubTitleOnly = true
             }
         }
 
@@ -212,8 +217,10 @@ class AnimeSama : Source() {
             anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
         }
 
-        // Always put raw full title at the very top if the display title was optimized
-        if (anime.title != titleToSearch) {
+        // Always put raw full title at the very top if the display title was optimized to a subtitle
+        // We check if it's NOT a standard numeric season to avoid "Fullmetal Alchemist 1" in description
+        val isNumericSeason = anime.title.matches(Regex("""(?i).*\s*\d+$|^Saison\s*\d+$|^\d+$"""))
+        if (isSubTitleOnly || (anime.title != titleToSearch && !isNumericSeason)) {
             anime.description = "$titleToSearch\n\n${anime.description ?: ""}"
         }
 
@@ -532,10 +539,12 @@ class AnimeSama : Source() {
         return animes.parallelMap<Quadruple<String, String, Double, Int>, SAnime> { (fullTitle, url, sNum, defStatus) ->
             val tmdbMetadata = fetchSmartTmdbMetadata(fullTitle)
 
+            var isSubTitleOnly = false
             val displayTitle = if (fullTitle.length > 40 && fullTitle.contains(" ")) {
                 val suffix = fullTitle.substringAfter(animeName).trim()
                 val isStandardSeason = suffix.matches(Regex("""(?i)(?:-?\s*)?(?:Saison|Season|Partie|Part|\d+).*"""))
                 if (suffix.isNotEmpty() && suffix != fullTitle && !isStandardSeason) {
+                    isSubTitleOnly = true
                     suffix
                 } else {
                     fullTitle
@@ -562,8 +571,12 @@ class AnimeSama : Source() {
                     description = "Date de sortie : $date\n\n${description ?: ""}"
                 }
 
-                // Always put raw full title at the very top
-                description = "$fullTitle\n\n${description ?: ""}"
+                // Always put raw full title at the very top if the display title was optimized to a subtitle
+                // We check if it's NOT a standard numeric season to avoid "Fullmetal Alchemist 1" in description
+                val isNumericSeason = this.title.matches(Regex("""(?i).*\s*\d+$|^Saison\s*\d+$|^\d+$"""))
+                if (isSubTitleOnly || (this.title != fullTitle && !isNumericSeason)) {
+                    description = "$fullTitle\n\n${description ?: ""}"
+                }
 
                 genre = tmdbMetadata?.genre ?: animeDoc.select("h2:contains(genres) + a").text().replace(" - ", ", ")
                 author = tmdbMetadata?.author
