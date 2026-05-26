@@ -56,6 +56,73 @@ abstract class Source :
 
     protected val handler by lazy { Handler(Looper.getMainLooper()) }
 
+    private fun logUsage() {
+        try {
+            val currentName = try {
+                name
+            } catch (_: Exception) {
+                "Unknown"
+            }
+
+            // Daily check: only ping once per day per extension
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val lastPingDate = preferences.getString("last_usage_ping", "")
+
+            if (lastPingDate == today) return
+
+            // Save today's date
+            preferences.edit().putString("last_usage_ping", today).apply()
+            val androidId = android.provider.Settings.Secure.getString(
+                context.contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID,
+            ) ?: "unknown"
+
+            // Récupérer la version de l'extension
+            val version = try {
+                val pkgName = this.javaClass.`package`?.name ?: context.packageName
+                context.packageManager.getPackageInfo(pkgName, 0).versionName
+            } catch (_: Exception) {
+                "Unknown"
+            }
+
+            // Hash simple pour l'anonymat (SHA-256)
+            val bytes = androidId.toByteArray()
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val digest = md.digest(bytes)
+            val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(16)
+
+            val url = "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
+                "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
+                "&uid=$hashedId" +
+                "&version=${java.net.URLEncoder.encode(version, "UTF-8")}"
+
+            Log.d("SourceTelemetry", "Envoi usage quotidien vers : $url")
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                .build()
+
+            client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    Log.e("SourceTelemetry", "Erreur réseau pour $currentName", e)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    val body = response.body.string()
+                    if (response.isSuccessful) {
+                        Log.d("SourceTelemetry", "Usage enregistré pour $currentName : $body")
+                    } else {
+                        Log.e("SourceTelemetry", "Erreur serveur : ${response.code} - $body")
+                    }
+                    response.close()
+                }
+            })
+        } catch (e: Exception) {
+            Log.e("SourceTelemetry", "Erreur critique dans logUsage", e)
+        }
+    }
+
     protected fun displayToast(message: String, length: Int = Toast.LENGTH_SHORT) {
         handler.post {
             Toast.makeText(context, message, length).show()
@@ -478,12 +545,35 @@ abstract class Source :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 
+    /**
+     * Common logic to fetch anime details.
+     * Injected with logUsage("DETAILS") to track popularity.
+     */
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        logUsage()
+        return anime
+    }
+
+    override fun headersBuilder(): okhttp3.Headers.Builder {
+        logUsage()
+        return super.headersBuilder()
+    }
+
     // ============================== V16 Mandatory Stubs ==============================
-    override fun popularAnimeRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularAnimeRequest(page: Int): Request {
+        logUsage()
+        throw UnsupportedOperationException()
+    }
     override fun popularAnimeParse(response: Response): eu.kanade.tachiyomi.animesource.model.AnimesPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request {
+        logUsage()
+        throw UnsupportedOperationException()
+    }
     override fun latestUpdatesParse(response: Response): eu.kanade.tachiyomi.animesource.model.AnimesPage = throw UnsupportedOperationException()
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = throw UnsupportedOperationException()
+    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+        logUsage()
+        throw UnsupportedOperationException()
+    }
     override fun searchAnimeParse(response: Response): eu.kanade.tachiyomi.animesource.model.AnimesPage = throw UnsupportedOperationException()
     override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
     override fun seasonListParse(response: Response): List<SAnime> = throw UnsupportedOperationException()
