@@ -373,8 +373,21 @@ class AnimeSama : Source() {
         val hosters = mutableListOf<Hoster>()
 
         playerUrls.forEachIndexed { i, it ->
+            if (it.isEmpty()) return@forEachIndexed
             val lang = VOICES_VALUES[i].uppercase()
-            it.forEach { playerUrl ->
+            // Internal data: JSON array of URLs for this language | lang tag
+            hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(it) + "|" + lang))
+        }
+        return hosters
+    }
+
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val data = hoster.internalData.split("|")
+        val urls = json.decodeFromString<List<String>>(data[0])
+        val lang = data[1]
+
+        return urls.parallelMap { playerUrl ->
+            try {
                 val server = when {
                     playerUrl.contains("sibnet.ru") -> "Sibnet"
                     playerUrl.contains("vk.") -> "VK"
@@ -382,39 +395,32 @@ class AnimeSama : Source() {
                     playerUrl.contains("vidmoly.") -> "VidMoly"
                     else -> "Serveur"
                 }
-                hosters.add(Hoster(hosterName = "($lang) $server", internalData = "$playerUrl|$lang"))
+                val prefix = "($lang) $server - "
+
+                val videos = when {
+                    playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("vk.") -> vkExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
+                    else -> emptyList()
+                }
+
+                videos.map { video ->
+                    val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder()
+                        .set("User-Agent", headers["User-Agent"]!!)
+                        .build()
+                    Video(
+                        videoUrl = video.videoUrl,
+                        videoTitle = coreCleanQuality(video.videoTitle),
+                        headers = updatedHeaders,
+                        subtitleTracks = video.subtitleTracks,
+                        audioTracks = video.audioTracks,
+                    )
+                }
+            } catch (e: Exception) {
+                emptyList<Video>()
             }
-        }
-        return hosters
-    }
-
-    override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val data = hoster.internalData.split("|")
-        val playerUrl = data[0]
-        val lang = data[1]
-        val server = hoster.hosterName.substringAfter(") ")
-        val prefix = "($lang) $server - "
-
-        val videos = when {
-            playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-            playerUrl.contains("vk.") -> vkExtractor.videosFromUrl(playerUrl, prefix)
-            playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
-            playerUrl.contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
-            else -> emptyList()
-        }
-
-        return videos.map { video ->
-            val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder()
-                .set("User-Agent", headers["User-Agent"]!!)
-                .build()
-            Video(
-                videoUrl = video.videoUrl,
-                videoTitle = coreCleanQuality(video.videoTitle),
-                headers = updatedHeaders,
-                subtitleTracks = video.subtitleTracks,
-                audioTracks = video.audioTracks,
-            )
-        }.coreSortVideos()
+        }.flatten().coreSortVideos()
     }
 
     private val pQualityRegex = Regex("""(\d+)p""")
