@@ -138,6 +138,18 @@ TODO: add the missing infos with anilist API "https://anilist.co/graphiql"
 - [ ] **Episode Thumbnail**: [Provider: TMDB]
 - [ ] **Episode Summary**: [Provider: TMDB]
 
+## Movix
+- [x] **Title**: [Provider: Self]
+- [x] **Author**: [Provider: TMDB]
+- [x] **Artist**: [Provider: TMDB]
+- [x] **Description**: [Provider: TMDB]
+- [x] **Genre**: [Provider: Self]
+- [x] **Status**: [Provider: None]
+- [x] **Release Date**: [Provider: TMDB]
+- [x] **Thumbnail**: [Provider: TMDB/Self]
+- [x] **Episode Thumbnail**: [Provider: TMDB]
+- [x] **Episode Summary**: [Provider: TMDB]
+
 ## SouthTV
 - [x] **Title**: [Provider: Self]
 - [x] **Author**: [Provider: TMDB]
