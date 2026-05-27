@@ -40,7 +40,40 @@ class Movix : Source() {
 
     override val name = "Movix"
 
-    override val baseUrl by lazy { preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!! }
+    private var dynamicBaseUrl: String? = null
+
+    override val baseUrl: String
+        get() {
+            if (dynamicBaseUrl != null) return dynamicBaseUrl!!
+
+            val prefUrl = preferences.getString(PREF_URL_KEY, "")?.trim()
+            if (!prefUrl.isNullOrEmpty() && prefUrl != "https://movix.online") {
+                dynamicBaseUrl = prefUrl
+                return dynamicBaseUrl!!
+            }
+
+            // If empty or explicitly set to the status page, fetch the real one
+            return fetchAndSaveRealUrl()
+        }
+
+    private fun fetchAndSaveRealUrl(): String {
+        try {
+            val response = client.newCall(GET("https://movix.online/")).execute()
+            val html = response.body.string()
+            val activeDomainRegex = Regex("""La seule adresse active de Movix est <a href="(https://[^"]+)"""")
+            val match = activeDomainRegex.find(html)
+
+            if (match != null) {
+                val newDomain = match.groupValues[1].removeSuffix("/")
+                preferences.edit().putString(PREF_URL_KEY, newDomain).apply()
+                dynamicBaseUrl = newDomain
+                return newDomain
+            }
+        } catch (e: Exception) {
+            // Ignore and fallback
+        }
+        return PREF_URL_DEFAULT
+    }
 
     private val domain: String
         get() = baseUrl.toHttpUrl().host
@@ -71,11 +104,12 @@ class Movix : Source() {
         EditTextPreference(screen.context).apply {
             key = PREF_URL_KEY
             title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
+            setDefaultValue("")
+            summary = "Laissez vide pour trouver automatiquement le domaine actif via movix.online. Actuel: $baseUrl"
             setOnPreferenceChangeListener { _, newValue ->
                 val newUrl = newValue as String
                 preferences.edit().putString(PREF_URL_KEY, newUrl).apply()
+                dynamicBaseUrl = null // Force refresh
                 true
             }
         }.also(screen::addPreference)
