@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
+import eu.kanade.tachiyomi.lib.embed4meextractor.Embed4meExtractor
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
@@ -370,6 +371,7 @@ class Movix : Source() {
         val streamTapeExtractor by lazy { eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor(client) }
         val vidoExtractor by lazy { eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor(client) }
         val voeExtractor by lazy { eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor(client, headers) }
+        val embed4meExtractor by lazy { Embed4meExtractor(client) }
 
         return players.parallelMap { playerUrl ->
             try {
@@ -383,6 +385,7 @@ class Movix : Source() {
                     playerUrl.contains("streamtape", true) || playerUrl.contains("shavetape", true) -> "StreamTape"
                     playerUrl.contains("vidoza", true) -> "Vidoza"
                     playerUrl.contains("voe", true) -> "Voe"
+                    playerUrl.contains("embed4me", true) || playerUrl.contains("seekstreaming", true) -> "Embed4me"
                     else -> "Serveur"
                 }
                 val prefix = "($langLabel) $serverName - "
@@ -397,6 +400,7 @@ class Movix : Source() {
                     playerUrl.contains("streamtape", true) || playerUrl.contains("shavetape", true) -> streamTapeExtractor.videoFromUrl(playerUrl, prefix)?.let { listOf(it) } ?: emptyList()
                     playerUrl.contains("vidoza", true) -> vidoExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("voe", true) -> voeExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("embed4me", true) || playerUrl.contains("seekstreaming", true) -> embed4meExtractor.videosFromUrl(playerUrl, prefix)
                     else -> emptyList()
                 }
             } catch (e: Exception) {
