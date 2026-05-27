@@ -74,7 +74,8 @@ class Movix : Source() {
             setDefaultValue(PREF_URL_DEFAULT)
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
+                val newUrl = newValue as String
+                preferences.edit().putString(PREF_URL_KEY, newUrl).apply()
                 true
             }
         }.also(screen::addPreference)
