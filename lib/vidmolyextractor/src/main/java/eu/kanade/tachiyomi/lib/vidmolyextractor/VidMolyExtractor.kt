@@ -52,6 +52,7 @@ class VidMolyExtractor(private val client: OkHttpClient, headers: Headers = Head
             
             val sources = sourcesRegex.find(script)?.groupValues?.get(1)
             if (sources == null) {
+                // FALLBACK 1: Direct file pattern
                 val directFile = Regex("file:\\s*[\"'](.*?\\.m3u8.*?)[\"']").find(script)?.groupValues?.get(1)
                 if (directFile != null) {
                     android.util.Log.d("VidMoly", "Found direct m3u8 file")
@@ -61,6 +62,18 @@ class VidMolyExtractor(private val client: OkHttpClient, headers: Headers = Head
                         videoHeaders = headers,
                     )
                 }
+
+                // FALLBACK 2: Hyper-aggressive search for any m3u8 link
+                val aggressiveM3u8 = Regex("""https?://[^\s"'<>]+?\.m3u8[^\s"'<>]*""").find(script)?.value
+                if (aggressiveM3u8 != null) {
+                    android.util.Log.d("VidMoly", "Found m3u8 via aggressive regex")
+                    return playlistUtils.extractFromHls(aggressiveM3u8,
+                        videoNameGen = { quality -> "${prefix}VidMoly - $quality" },
+                        masterHeaders = headers,
+                        videoHeaders = headers,
+                    )
+                }
+
                 android.util.Log.d("VidMoly", "Sources regex failed to match")
                 return emptyList()
             }

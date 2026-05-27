@@ -62,7 +62,8 @@ class Embed4meExtractor(private val client: OkHttpClient) {
             val cfUrl = dataObj["cf"]?.jsonPrimitive?.content ?: ""
             val sourceUrl = dataObj["source"]?.jsonPrimitive?.content ?: ""
             
-            val videoUrl = cfUrl.ifEmpty { sourceUrl }
+            // Prefer sourceUrl if it contains .m3u8, as cfUrl might be a .txt manifest causing app issues
+            val videoUrl = if (sourceUrl.contains(".m3u8")) sourceUrl else cfUrl.ifEmpty { sourceUrl }
             
             if (videoUrl.isNotEmpty()) {
                 listOf(Video(videoUrl = videoUrl, videoTitle = "${prefix}Embed4me"))
