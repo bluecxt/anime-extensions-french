@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 class VidMolyExtractor(private val client: OkHttpClient, headers: Headers = Headers.EMPTY) {
@@ -18,15 +19,30 @@ class VidMolyExtractor(private val client: OkHttpClient, headers: Headers = Head
         .set("Referer", "$baseUrl/")
         .build()
 
-    private val sourcesRegex = Regex("sources:\\s*(\\[.*?])")
+    private val sourcesRegex = Regex("sources:\\s*(\\[.*?])", RegexOption.DOT_MATCHES_ALL)
     private val urlsRegex = Regex("""file:\s*["'](.*?)["']""")
 
     fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
         return try {
             android.util.Log.d("VidMoly", "Fetching URL: $url")
-            val document = client.newCall(
+            var response = client.newCall(
                 GET(url, headers.newBuilder().set("Sec-Fetch-Dest", "iframe").build())
-            ).execute().asJsoup()
+            ).execute()
+            var html = response.body.string()
+            
+            // Fallback: Follow JS redirection
+            if (html.contains("window.location.replace")) {
+                val nextPath = Regex("""window\.location\.replace\(['\"](.*?)['\"]\)""").find(html)?.groupValues?.get(1)
+                if (nextPath != null) {
+                    val uri = url.toHttpUrl()
+                    val host = "${uri.scheme}://${uri.host}"
+                    val nextUrl = if (nextPath.startsWith("http")) nextPath else "$host$nextPath"
+                    android.util.Log.d("VidMoly", "Following redirection to: $nextUrl")
+                    response = client.newCall(GET(nextUrl, headers.newBuilder().set("Referer", url).build())).execute()
+                    html = response.body.string()
+                }
+            }
+            val document = org.jsoup.Jsoup.parse(html, url)
             
             var script = document.selectFirst("script:containsData(sources)")?.data()
             if (script == null) {
