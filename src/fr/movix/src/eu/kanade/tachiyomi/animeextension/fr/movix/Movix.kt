@@ -107,7 +107,7 @@ class Movix : Source() {
     }
 
     private suspend fun fetchAndCache(query: String, targetUrl: String? = null): AnimesPage {
-        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val encodedQuery = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
         val response = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=true&includeEpisodes=true", headers)).execute()
         val results = json.decodeFromString<List<AnimeItem>>(response.body.string())
 
