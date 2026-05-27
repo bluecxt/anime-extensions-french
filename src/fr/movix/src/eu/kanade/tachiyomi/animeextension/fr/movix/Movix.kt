@@ -131,6 +131,7 @@ class Movix : Source() {
     }
 
     private suspend fun fetchAndCache(query: String, targetUrl: String? = null): AnimesPage {
+        android.util.Log.d("MovixDebug", "fetchAndCache called with query: $query, targetUrl: $targetUrl")
         val encodedQuery = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
         val response = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=true&includeEpisodes=true", headers)).execute()
         val results = json.decodeFromString<List<AnimeItem>>(response.body.string())
@@ -189,7 +190,12 @@ class Movix : Source() {
         val id = anime.url.substringAfter("/anime/").substringBefore("#").substringBefore("?")
         val cleanId = id.removePrefix(PREFIX_SEARCH)
         val decodedName = java.net.URLDecoder.decode(cleanId, "UTF-8").split("/").filter { it.isNotBlank() }.last()
-        val item = animeCache[id] ?: animeCache.values.firstOrNull { it.name.equals(decodedName, true) } ?: return emptyList()
+        android.util.Log.d("MovixDebug", "getSeasonList for id: $id, decodedName: $decodedName")
+        val item = animeCache[id] ?: animeCache.values.firstOrNull { it.name.equals(decodedName, true) }
+        if (item == null) {
+            android.util.Log.d("MovixDebug", "getSeasonList: Item not found, returning empty list")
+            return emptyList()
+        }
 
         val siteSeasons = item.seasons.mapIndexed { index, season ->
             val seasonNum = index + 1
