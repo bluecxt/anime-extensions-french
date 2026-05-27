@@ -83,7 +83,7 @@ class Movix : Source() {
         val animes = data.top10.map { item ->
             SAnime.create().apply {
                 title = item.title
-                thumbnail_url = item.posterPath?.let { "https://image.tmdb.org/t/p/w500\$it" }
+                thumbnail_url = item.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
                 val encodedId = URLEncoder.encode(item.title, "UTF-8").replace("+", "%20")
                 url = "/anime/${PREFIX_SEARCH}$encodedId"
                 initialized = false
@@ -97,11 +97,22 @@ class Movix : Source() {
 
     // = :::::::::::::::::::::::::: Latest :::::::::::::::::::::::::: =
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        // Dummy search for latest
-        if (page > 1) return AnimesPage(emptyList(), false)
-        return getSearchAnime(1, "Solo Leveling", AnimeFilterList())
-    }
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+        val tmdbUrl = "https://api.themoviedb.org/3/discover/tv?api_key=f3d757824f08ea2cff45eb8f47ca3a1e&with_genres=&page=$page&language=fr-FR&vote_average_gte=0&sort_by=first_air_date.desc&with_watch_providers=283&watch_region=FR&with_release_type=2%7C3"
+        val response = client.newCall(GET(tmdbUrl)).execute()
+        val data = json.decodeFromString<TmdbDiscoverResponse>(response.body.string())
+
+        val animes = data.results.mapNotNull { item ->
+            val titleStr = item.name ?: item.title ?: return@mapNotNull null
+            SAnime.create().apply {
+                title = titleStr
+                thumbnail_url = item.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                val encodedId = URLEncoder.encode(titleStr, "UTF-8").replace("+", "%20")
+                url = "/anime/${PREFIX_SEARCH}$encodedId"
+                initialized = false
+            }
+        }
+        return AnimesPage(animes, data.results.isNotEmpty())
+    } override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
     // = :::::::::::::::::::::::::: Search :::::::::::::::::::::::::: =
@@ -202,7 +213,8 @@ class Movix : Source() {
 
         val allEpisodes = mutableListOf<SEpisode>()
         for ((season, seasonNumber) in seasonsToProcess) {
-            val tmdbMetadata = fetchTmdbMetadata(item.name, seasonNumber)
+            val tmdbSNum = season.name.replace("Saison ", "").toDoubleOrNull()?.toInt() ?: seasonNumber
+            val tmdbMetadata = fetchTmdbMetadata(item.name, tmdbSNum)
 
             val rawEpisodes = season.episodes.map { ep ->
                 SEpisode.create().apply {
@@ -217,7 +229,7 @@ class Movix : Source() {
                 tmdbMetadata = tmdbMetadata,
                 tmdbS0Metadata = null,
                 offsets = Pair(0, 0),
-                sNum = seasonNumber,
+                sNum = tmdbSNum,
                 isMovie = anime.title.contains("Film", true) || season.name.contains("Film", true),
                 isOav = season.name.contains("OAV", true) || season.name.contains("Special", true),
             )
