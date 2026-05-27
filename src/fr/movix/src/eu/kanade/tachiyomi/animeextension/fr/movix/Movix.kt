@@ -84,10 +84,12 @@ class Movix : Source() {
         val animes = data.top10.parallelMap { item ->
             try {
                 val encodedQuery = URLEncoder.encode(item.title, "UTF-8").replace("+", "%20")
+                android.util.Log.d("MovixDebug", "Popular: Fetching URL for ${item.title} -> $encodedQuery")
                 val searchRes = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=false&includeEpisodes=false", headers)).execute()
                 val results = json.decodeFromString<List<AnimeItem>>(searchRes.body.string())
                 val exactMatch = results.firstOrNull { it.name.equals(item.title, true) } ?: results.firstOrNull()
 
+                android.util.Log.d("MovixDebug", "Popular: Results for ${item.title} -> Found: ${exactMatch != null}")
                 if (exactMatch != null) {
                     val id = URLEncoder.encode(exactMatch.url, "UTF-8")
                     animeCache[id] = exactMatch
