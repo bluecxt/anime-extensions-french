@@ -28,14 +28,23 @@ class VidMolyExtractor(private val client: OkHttpClient, headers: Headers = Head
                 GET(url, headers.newBuilder().set("Sec-Fetch-Dest", "iframe").build())
             ).execute().asJsoup()
             
-            val script = document.selectFirst("script:containsData(sources)")?.data()
+            var script = document.selectFirst("script:containsData(sources)")?.data()
             if (script == null) {
-                android.util.Log.d("VidMoly", "Script containing sources not found")
-                return emptyList()
+                android.util.Log.d("VidMoly", "Script tag not found, searching full HTML")
+                script = document.html()
             }
             
             val sources = sourcesRegex.find(script)?.groupValues?.get(1)
             if (sources == null) {
+                val directFile = Regex("file:\\s*[\"'](.*?\\.m3u8.*?)[\"']").find(script)?.groupValues?.get(1)
+                if (directFile != null) {
+                    android.util.Log.d("VidMoly", "Found direct m3u8 file")
+                    return playlistUtils.extractFromHls(directFile,
+                        videoNameGen = { quality -> "${prefix}VidMoly - $quality" },
+                        masterHeaders = headers,
+                        videoHeaders = headers,
+                    )
+                }
                 android.util.Log.d("VidMoly", "Sources regex failed to match")
                 return emptyList()
             }
