@@ -367,7 +367,7 @@ class Movix : Source() {
         val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
         val sibnetExtractor by lazy { SibnetExtractor(client) }
         val vkExtractor by lazy { VkExtractor(client, headers) }
-        val vidMolyExtractor by lazy { VidMolyExtractor(client) }
+        val vidMolyExtractor by lazy { VidMolyExtractor(client, headers) }
         val filemoonExtractor by lazy { FilemoonExtractor(client) }
         val doodExtractor by lazy { eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor(client) }
         val streamTapeExtractor by lazy { eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor(client) }
@@ -427,10 +427,10 @@ class Movix : Source() {
                 emptyList()
             }
         }.flatten().map { video ->
-            val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder()
-                .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                .set("Referer", baseUrl)
-                .build()
+            val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder().apply {
+                set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                if (video.headers?.get("Referer") == null) set("Referer", "$baseUrl/")
+            }.build()
             Video(
                 videoUrl = video.videoUrl,
                 videoTitle = coreCleanQuality(video.videoTitle),
