@@ -119,16 +119,36 @@ class Movix : Source() {
         val response = client.newCall(GET(tmdbUrl)).execute()
         val data = json.decodeFromString<TmdbDiscoverResponse>(response.body.string())
 
-        val animes = data.results.mapNotNull { item ->
-            val titleStr = item.name ?: item.title ?: return@mapNotNull null
-            SAnime.create().apply {
-                title = titleStr
-                thumbnail_url = item.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" }
-                val encodedId = URLEncoder.encode(titleStr, "UTF-8").replace("+", "%20")
-                url = "/anime/${PREFIX_SEARCH}$encodedId"
-                initialized = false
+        val animes = data.results.parallelMap { item ->
+            try {
+                val titleStr = item.name ?: item.title ?: return@parallelMap null
+                val encodedQuery = URLEncoder.encode(titleStr, "UTF-8").replace("+", "%20")
+                android.util.Log.d("MovixDebug", "Latest: Fetching URL for $titleStr -> $encodedQuery")
+
+                val searchRes = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=false&includeEpisodes=false", headers)).execute()
+                val results = json.decodeFromString<List<AnimeItem>>(searchRes.body.string())
+                val exactMatch = results.firstOrNull { it.name.equals(titleStr, true) } ?: results.firstOrNull()
+
+                android.util.Log.d("MovixDebug", "Latest: Results for $titleStr -> Found: ${exactMatch != null}")
+
+                if (exactMatch != null) {
+                    val id = URLEncoder.encode(exactMatch.url, "UTF-8")
+                    animeCache[id] = exactMatch
+                    SAnime.create().apply {
+                        title = exactMatch.name
+                        thumbnail_url = item.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" } ?: exactMatch.image
+                        url = "/anime/$id"
+                        initialized = false
+                    }
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                android.util.Log.d("MovixDebug", "Latest Error: ${e.message}")
+                null
             }
-        }
+        }.filterNotNull()
+
         return AnimesPage(animes, data.results.isNotEmpty())
     } override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
