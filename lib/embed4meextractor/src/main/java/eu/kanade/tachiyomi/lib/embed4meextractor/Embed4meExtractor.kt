@@ -64,10 +64,10 @@ class Embed4meExtractor(private val client: OkHttpClient) {
             
             val videoUrl = cfUrl.ifEmpty { sourceUrl }
             
-            if (videoUrl.isNotEmpty() && videoUrl.contains(".m3u8")) {
+            if (videoUrl.isNotEmpty()) {
                 listOf(Video(videoUrl = videoUrl, videoTitle = "${prefix}Embed4me"))
             } else {
-                android.util.Log.d("Embed4me", "No m3u8 found. videoUrl: $videoUrl")
+                android.util.Log.d("Embed4me", "No videoUrl found. cfUrl: $cfUrl, sourceUrl: $sourceUrl")
                 emptyList()
             }
         } catch (e: Exception) {
