@@ -13,4 +13,7 @@ dependencies {
     implementation(project(':lib:sibnetextractor'))
     implementation(project(':lib:vidmolyextractor'))
     implementation(project(':lib:filemoonextractor'))
+    implementation(project(':lib:doodextractor'))
+    implementation(project(':lib:streamtapeextractor'))
+    implementation(project(':lib:voeextractor'))
 }
