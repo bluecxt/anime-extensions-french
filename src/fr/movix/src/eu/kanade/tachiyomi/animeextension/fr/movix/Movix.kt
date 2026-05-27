@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.AnimeItem
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.Top10Response
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -74,9 +75,20 @@ class Movix : Source() {
 
     // = :::::::::::::::::::::::::: Popular :::::::::::::::::::::::::: =
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        // Movix doesn't have a trending anime endpoint, so we search for popular titles
         if (page > 1) return AnimesPage(emptyList(), false)
-        return getSearchAnime(1, "One Piece", AnimeFilterList())
+        val response = client.newCall(GET("$apiUrl/api/top10/overview?type=anime", headers)).execute()
+        val data = json.decodeFromString<Top10Response>(response.body.string())
+
+        val animes = data.top10.map { item ->
+            SAnime.create().apply {
+                title = item.title
+                thumbnail_url = item.posterPath?.let { "https://image.tmdb.org/t/p/w500\$it" }
+                val encodedId = URLEncoder.encode(item.title, "UTF-8").replace("+", "%20")
+                url = "/anime/${PREFIX_SEARCH}$encodedId"
+                initialized = false
+            }
+        }
+        return AnimesPage(animes, false)
     }
 
     override fun popularAnimeParse(response: Response) = throw UnsupportedOperationException()

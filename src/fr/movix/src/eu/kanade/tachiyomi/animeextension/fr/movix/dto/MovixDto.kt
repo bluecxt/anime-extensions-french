@@ -32,3 +32,15 @@ data class StreamingLink(
     val language: String,
     val players: List<String> = emptyList(),
 )
+
+@Serializable
+data class Top10Response(
+    val top10: List<Top10Item> = emptyList(),
+)
+
+@Serializable
+data class Top10Item(
+    val title: String,
+    val posterPath: String? = null,
+    val contentId: String? = null,
+)
