@@ -366,25 +366,37 @@ class Movix : Source() {
         val vkExtractor by lazy { VkExtractor(client, headers) }
         val vidMolyExtractor by lazy { VidMolyExtractor(client) }
         val filemoonExtractor by lazy { FilemoonExtractor(client) }
+        val doodExtractor by lazy { eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor(client) }
+        val streamTapeExtractor by lazy { eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor(client) }
+        val vidoExtractor by lazy { eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor(client) }
+        val voeExtractor by lazy { eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor(client, headers) }
 
         return players.parallelMap { playerUrl ->
             try {
                 val serverName = when {
-                    playerUrl.contains("sibnet.ru") -> "Sibnet"
-                    playerUrl.contains("vidmoly") -> "Vidmoly"
-                    playerUrl.contains("vk.com") -> "VK"
-                    playerUrl.contains("sendvid") -> "Sendvid"
-                    playerUrl.contains("filemoon") -> "Filemoon"
+                    playerUrl.contains("sibnet.ru", true) -> "Sibnet"
+                    playerUrl.contains("vidmoly", true) -> "Vidmoly"
+                    playerUrl.contains("vk.com", true) -> "VK"
+                    playerUrl.contains("sendvid", true) -> "Sendvid"
+                    playerUrl.contains("filemoon", true) -> "Filemoon"
+                    playerUrl.contains("dood", true) -> "DoodStream"
+                    playerUrl.contains("streamtape", true) || playerUrl.contains("shavetape", true) -> "StreamTape"
+                    playerUrl.contains("vidoza", true) -> "Vidoza"
+                    playerUrl.contains("voe", true) -> "Voe"
                     else -> "Serveur"
                 }
                 val prefix = "($langLabel) $serverName - "
 
                 when {
-                    playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("vidmoly") -> vidMolyExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("vk.com") -> vkExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("sendvid") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("filemoon") -> filemoonExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("sibnet.ru", true) -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("vidmoly", true) -> vidMolyExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("vk.com", true) -> vkExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("sendvid", true) -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("filemoon", true) -> filemoonExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("dood", true) -> doodExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("streamtape", true) || playerUrl.contains("shavetape", true) -> streamTapeExtractor.videoFromUrl(playerUrl, prefix)?.let { listOf(it) } ?: emptyList()
+                    playerUrl.contains("vidoza", true) -> vidoExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("voe", true) -> voeExtractor.videosFromUrl(playerUrl, prefix)
                     else -> emptyList()
                 }
             } catch (e: Exception) {
