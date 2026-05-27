@@ -187,7 +187,9 @@ class Movix : Source() {
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val id = anime.url.substringAfter("/anime/").substringBefore("#").substringBefore("?")
-        val item = animeCache[id] ?: return emptyList()
+        val cleanId = id.removePrefix(PREFIX_SEARCH)
+        val decodedName = java.net.URLDecoder.decode(cleanId, "UTF-8").split("/").filter { it.isNotBlank() }.last()
+        val item = animeCache[id] ?: animeCache.values.firstOrNull { it.name.equals(decodedName, true) } ?: return emptyList()
 
         val siteSeasons = item.seasons.mapIndexed { index, season ->
             val seasonNum = index + 1
@@ -201,7 +203,9 @@ class Movix : Source() {
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val id = anime.url.substringAfter("/anime/").substringBefore("#").substringBefore("?")
-        val item = animeCache[id] ?: return emptyList()
+        val cleanId = id.removePrefix(PREFIX_SEARCH)
+        val decodedName = java.net.URLDecoder.decode(cleanId, "UTF-8").split("/").filter { it.isNotBlank() }.last()
+        val item = animeCache[id] ?: animeCache.values.firstOrNull { it.name.equals(decodedName, true) } ?: return emptyList()
 
         val sIdxFromUrl = anime.url.substringAfter("#s", "").toIntOrNull()
 
