@@ -44,3 +44,15 @@ data class Top10Item(
     val posterPath: String? = null,
     val contentId: String? = null,
 )
+
+@Serializable
+data class TmdbDiscoverResponse(
+    val results: List<TmdbDiscoverResult> = emptyList(),
+)
+
+@Serializable
+data class TmdbDiscoverResult(
+    val name: String? = null,
+    val title: String? = null,
+    val poster_path: String? = null,
+)

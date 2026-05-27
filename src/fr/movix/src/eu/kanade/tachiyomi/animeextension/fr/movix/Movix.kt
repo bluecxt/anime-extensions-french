@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.AnimeItem
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbDiscoverResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.Top10Response
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
