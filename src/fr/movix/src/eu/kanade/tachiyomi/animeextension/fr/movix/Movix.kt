@@ -40,9 +40,13 @@ class Movix : Source() {
 
     override val name = "Movix"
 
-    override val baseUrl = "https://movix.tax"
+    override val baseUrl by lazy { preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!! }
 
-    private val apiUrl = "https://api.movix.tax"
+    private val domain: String
+        get() = baseUrl.toHttpUrl().host
+
+    private val apiUrl: String
+        get() = "https://api.$domain"
 
     override val lang = "fr"
 
@@ -59,7 +63,7 @@ class Movix : Source() {
 
     companion object {
         private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://movix.tax"
+        private const val PREF_URL_DEFAULT = "https://movix.cloud"
         const val PREFIX_SEARCH = "id:"
     }
 
