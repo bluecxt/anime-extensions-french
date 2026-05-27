@@ -358,8 +358,10 @@ class Movix : Source() {
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        android.util.Log.d("MovixDebug", "getVideoList START for hoster: ${hoster.hosterName}")
         val data = hoster.internalData.split("|")
         val players = json.decodeFromString<List<String>>(data[0])
+        android.util.Log.d("MovixDebug", "Raw players list: $players")
         val langLabel = data[1]
 
         val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
@@ -418,6 +420,8 @@ class Movix : Source() {
                 subtitleTracks = video.subtitleTracks,
                 audioTracks = video.audioTracks,
             )
-        }.coreSortVideos()
+        }.coreSortVideos().also {
+            android.util.Log.d("MovixDebug", "Final sorted videos list: ${it.map { v -> v.videoTitle + " -> " + v.videoUrl }}")
+        }
     }
 }
