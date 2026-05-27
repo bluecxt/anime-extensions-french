@@ -34,38 +34,44 @@ class Embed4meExtractor(private val client: OkHttpClient) {
         if (videoId.isEmpty()) return emptyList()
 
         val parsedUrl = url.toHttpUrl()
-        val apiUrl = "${parsedUrl.scheme}://${parsedUrl.host}/api/source/$videoId"
+        val apiUrl = "${parsedUrl.scheme}://${parsedUrl.host}/api/v1/video?id=$videoId&w=1920&h=1080&r="
 
         val headers = Headers.Builder()
             .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36")
+            .add("Accept", "*/*")
+            .add("Accept-Language", "en-US,en;q=0.5")
             .add("Origin", "${parsedUrl.scheme}://${parsedUrl.host}")
-            .add("Referer", url)
+            .add("Referer", "${parsedUrl.scheme}://${parsedUrl.host}/")
             .build()
 
         return try {
-            val response = client.newCall(POST(apiUrl, headers)).execute()
-            val responseBody = response.body.string()
-            val dataElement = json.parseToJsonElement(responseBody).jsonObject["data"] ?: return emptyList()
+            val response = client.newCall(eu.kanade.tachiyomi.network.GET(apiUrl, headers)).execute()
+            val responseBody = response.body.string().trim()
             
-            // Check if data is a string (encrypted) or array (already decrypted)
-            val jsonArray = if (dataElement is kotlinx.serialization.json.JsonPrimitive && dataElement.isString) {
-                val encryptedHex = dataElement.content
-                val decryptedJsonStr = decryptAesCbc(encryptedHex, "kiemtienmua911ca", "1234567890oiuytr")
-                if (decryptedJsonStr == null) return emptyList()
-                json.parseToJsonElement(decryptedJsonStr).jsonArray
+            android.util.Log.d("Embed4me", "API Response length: ${responseBody.length}")
+            
+            val decryptedJsonStr = decryptAesCbc(responseBody, "kiemtienmua911ca", "1234567890oiuytr")
+            if (decryptedJsonStr == null) {
+                android.util.Log.d("Embed4me", "Decrypted string is null")
+                return emptyList()
+            }
+            
+            android.util.Log.d("Embed4me", "Decrypted JSON: $decryptedJsonStr")
+            
+            val dataObj = json.parseToJsonElement(decryptedJsonStr).jsonObject
+            val cfUrl = dataObj["cf"]?.jsonPrimitive?.content ?: ""
+            val sourceUrl = dataObj["source"]?.jsonPrimitive?.content ?: ""
+            
+            val videoUrl = cfUrl.ifEmpty { sourceUrl }
+            
+            if (videoUrl.isNotEmpty() && videoUrl.contains(".m3u8")) {
+                listOf(Video(videoUrl = videoUrl, videoTitle = "${prefix}Embed4me"))
             } else {
-                dataElement.jsonArray
+                android.util.Log.d("Embed4me", "No m3u8 found. videoUrl: $videoUrl")
+                emptyList()
             }
-
-            val videos = mutableListOf<Video>()
-            for (source in jsonArray) {
-                val file = source.jsonObject["file"]?.jsonPrimitive?.content ?: continue
-                if (file.contains(".m3u8")) {
-                    videos.add(Video(videoUrl = file, videoTitle = "${prefix}Embed4me"))
-                }
-            }
-            videos
         } catch (e: Exception) {
+            android.util.Log.d("Embed4me", "Exception in videosFromUrl: ${e.message}")
             emptyList()
         }
     }
@@ -87,7 +93,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
             val decryptedBytes = cipher.doFinal(data)
             String(decryptedBytes, Charsets.UTF_8)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.d("Embed4me", "Decryption error: ${e.message}")
             null
         }
     }
