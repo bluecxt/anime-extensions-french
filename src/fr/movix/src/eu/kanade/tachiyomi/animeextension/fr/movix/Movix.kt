@@ -195,14 +195,23 @@ class Movix : Source() {
 
     // = :::::::::::::::::::::::::: Details :::::::::::::::::::::::::: =
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        android.util.Log.d("MovixDebug", "-----------------------------------------")
+        android.util.Log.d("MovixDebug", "getAnimeDetails START for: ${anime.title}")
+        android.util.Log.d("MovixDebug", "Incoming URL: ${anime.url}")
+
         val id = anime.url.substringAfter("/anime/").substringBefore("#").substringBefore("?")
+        android.util.Log.d("MovixDebug", "Parsed ID (Cache Key): $id")
+
         var item = animeCache[id]
+        android.util.Log.d("MovixDebug", "Item found in cache? ${item != null}")
 
         if (item == null) {
             val decodedUrl = java.net.URLDecoder.decode(id, "UTF-8")
             val name = decodedUrl.split("/").filter { it.isNotBlank() }.last()
+            android.util.Log.d("MovixDebug", "Cache miss! Forcing fetchAndCache for name: $name, decodedUrl: $decodedUrl")
             fetchAndCache(name, decodedUrl)
             item = animeCache[id]
+            android.util.Log.d("MovixDebug", "Item found after forced fetch? ${item != null}")
         }
 
         if (item != null) {
