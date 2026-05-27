@@ -80,15 +80,31 @@ class Movix : Source() {
         val response = client.newCall(GET("$apiUrl/api/top10/overview?type=anime", headers)).execute()
         val data = json.decodeFromString<Top10Response>(response.body.string())
 
-        val animes = data.top10.map { item ->
-            SAnime.create().apply {
-                title = item.title
-                thumbnail_url = item.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
-                val encodedId = URLEncoder.encode(item.title, "UTF-8").replace("+", "%20")
-                url = "/anime/${PREFIX_SEARCH}$encodedId"
-                initialized = false
+        // We must fetch the real URL from Movix API to ensure getAnimeDetails works
+        val animes = data.top10.parallelMap { item ->
+            try {
+                val encodedQuery = URLEncoder.encode(item.title, "UTF-8").replace("+", "%20")
+                val searchRes = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=false&includeEpisodes=false", headers)).execute()
+                val results = json.decodeFromString<List<AnimeItem>>(searchRes.body.string())
+                val exactMatch = results.firstOrNull { it.name.equals(item.title, true) } ?: results.firstOrNull()
+
+                if (exactMatch != null) {
+                    val id = URLEncoder.encode(exactMatch.url, "UTF-8")
+                    animeCache[id] = exactMatch
+                    SAnime.create().apply {
+                        title = exactMatch.name
+                        thumbnail_url = item.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" } ?: exactMatch.image
+                        url = "/anime/$id"
+                        initialized = false
+                    }
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                null
             }
-        }
+        }.filterNotNull()
+
         return AnimesPage(animes, false)
     }
 
