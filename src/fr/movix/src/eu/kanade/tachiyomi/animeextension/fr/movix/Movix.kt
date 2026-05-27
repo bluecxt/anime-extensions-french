@@ -124,14 +124,15 @@ class Movix : Source() {
             val id = trimmedQuery.substring(PREFIX_SEARCH.length).trim()
             val decodedUrl = java.net.URLDecoder.decode(id, "UTF-8")
             val name = decodedUrl.split("/").filter { it.isNotBlank() }.last()
-            return fetchAndCache(name, decodedUrl)
+            // DO NOT filter by targetUrl if the id is just the title (like from Popular/Latest)
+            val target = if (decodedUrl.startsWith("http")) decodedUrl else null
+            return fetchAndCache(name, target)
         }
 
         return fetchAndCache(trimmedQuery)
     }
 
     private suspend fun fetchAndCache(query: String, targetUrl: String? = null): AnimesPage {
-        android.util.Log.d("MovixDebug", "fetchAndCache called with query: $query, targetUrl: $targetUrl")
         val encodedQuery = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
         val response = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=true&includeEpisodes=true", headers)).execute()
         val results = json.decodeFromString<List<AnimeItem>>(response.body.string())
@@ -190,10 +191,8 @@ class Movix : Source() {
         val id = anime.url.substringAfter("/anime/").substringBefore("#").substringBefore("?")
         val cleanId = id.removePrefix(PREFIX_SEARCH)
         val decodedName = java.net.URLDecoder.decode(cleanId, "UTF-8").split("/").filter { it.isNotBlank() }.last()
-        android.util.Log.d("MovixDebug", "getSeasonList for id: $id, decodedName: $decodedName")
         val item = animeCache[id] ?: animeCache.values.firstOrNull { it.name.equals(decodedName, true) }
         if (item == null) {
-            android.util.Log.d("MovixDebug", "getSeasonList: Item not found, returning empty list")
             return emptyList()
         }
 
