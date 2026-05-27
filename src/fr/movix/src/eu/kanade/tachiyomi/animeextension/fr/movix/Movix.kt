@@ -251,7 +251,7 @@ class Movix : Source() {
 
         if (item == null) {
             val decodedUrl = java.net.URLDecoder.decode(id, "UTF-8")
-            val name = decodedUrl.split("/").filter { it.isNotBlank() }.last()
+            val name = decodedUrl.split("/").filter { it.isNotBlank() }.last().replace("-", " ")
             android.util.Log.d("MovixDebug", "Cache miss! Forcing fetchAndCache for name: $name, decodedUrl: $decodedUrl")
             fetchAndCache(name, decodedUrl)
             item = animeCache[id]
