@@ -392,20 +392,38 @@ class Movix : Source() {
                 }
                 val prefix = "($langLabel) $serverName - "
 
-                when {
+                val extracted = when {
                     playerUrl.contains("sibnet.ru", true) -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("vidmoly", true) -> vidMolyExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("vk.com", true) -> vkExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("sendvid", true) -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("filemoon", true) -> filemoonExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("dood", true) -> doodExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("streamtape", true) || playerUrl.contains("shavetape", true) -> streamTapeExtractor.videoFromUrl(playerUrl, prefix)?.let { listOf(it) } ?: emptyList()
+
                     playerUrl.contains("vidoza", true) -> vidoExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("voe", true) -> voeExtractor.videosFromUrl(playerUrl, prefix)
+
                     playerUrl.contains("embed4me", true) || playerUrl.contains("seekstreaming", true) -> embed4meExtractor.videosFromUrl(playerUrl, prefix)
-                    else -> emptyList()
+
+                    else -> {
+                        android.util.Log.d("MovixDebug", "No extractor found for: $playerUrl")
+                        emptyList()
+                    }
                 }
+                if (extracted.isEmpty() && serverName != "Serveur") {
+                    android.util.Log.d("MovixDebug", "Extractor returned empty for: $serverName -> $playerUrl")
+                }
+                extracted
             } catch (e: Exception) {
+                android.util.Log.d("MovixDebug", "Exception extracting $playerUrl : ${e.message}")
                 emptyList()
             }
         }.flatten().map { video ->
