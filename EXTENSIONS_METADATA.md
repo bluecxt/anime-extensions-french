@@ -1,20 +1,20 @@
-# Extensions Metadata Tracking
+# Suivi des Métadonnées des Extensions
 
-This file tracks the source of information used by each extension to populate anime details.
-TODO: add the missing infos with anilist API "https://anilist.co/graphiql"
+Ce fichier répertorie la source d'information utilisée par chaque extension pour remplir les détails des animes.
+TODO : ajouter les informations manquantes avec l'API Anilist "https://anilist.co/graphiql"
 
 ## Common Structure
-- **Title**: Name of the work.
-- **Author**: Usually the studio or original creator.
-- **Artist**: Illustrator or animation director (if applicable).
-- **Description**: Synopsis or summary of the anime.
-- **Genre**: Categories/Tags associated with the anime.
-- **Status**: Current status (Ongoing, Completed, On Hiatus, etc.).
-- **Release Date**: Year or date of release.
-- **Thumbnail**: Cover image URL of the anime.
-- **Episode Thumbnail**: Image for individual episodes (default: `TMDB`).
-- **Episode Summary**: Description for individual episodes (default: `TMDB`).
-- **Provider**: The data source (default: `Self` for the source website itself).
+- **Title** : Nom de l'œuvre.
+- **Author** : Généralement le studio ou le créateur original.
+- **Artist** : Illustrateur ou directeur d'animation (si applicable).
+- **Description** : Synopsis ou résumé de l'anime.
+- **Genre** : Catégories/Tags associés à l'anime.
+- **Status** : Statut actuel (Ongoing, Completed, On Hiatus, etc.).
+- **Release Date** : Année ou date de sortie.
+- **Thumbnail** : URL de l'image de couverture de l'anime.
+- **Episode Thumbnail** : Image pour les épisodes individuels (par défaut : `TMDB`).
+- **Episode Summary** : Description pour les épisodes individuels (par défaut : `TMDB`).
+- **Provider** : La source des données (par défaut : `Self` pour le site source lui-même).
 
 ---
 
