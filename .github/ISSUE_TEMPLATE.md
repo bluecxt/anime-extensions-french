@@ -6,7 +6,7 @@ I acknowledge that:
 - I have updated all extensions
 - If this is an issue with the app itself, that I should be opening an issue in App's support site.
 - I have searched the existing issues for duplicates
-- For source requests, I have checked the list of existing extensions including the multi-source spreadsheet: https://yuzono.github.io/extensions-aniyomi/
+- For source requests, I have checked the list of existing extensions: https://github.com/bluecxt/anime-extensions-french#état-des-extensions-mai-2026
 
 **DELETE THIS SECTION IF YOU HAVE READ AND ACKNOWLEDGED IT**
 

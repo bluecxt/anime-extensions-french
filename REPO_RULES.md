@@ -17,7 +17,7 @@ This document defines the mandatory standards for all Aniyomi extensions in the 
     - Remove file weight information (e.g., `- 300MB`).
     - Remove technical suffixes (`:default`, `default`).
     - Include the fansub team name if available (mandatory for Anime-Ultime).
-
+https://raw.githubusercontent.com/bluecxt/anime-extensions-french/repo/index.min.json
 ## 3. Hoster Grouping (Super Packs)
 - **Consolidation:** Hosters must be grouped by language to avoid long repetitive lists in the initial selection screen.
 - **Naming Convention:** Use the uppercase language tag as the hoster name (e.g., `VOSTFR`, `VF`, `VA`).

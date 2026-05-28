@@ -58,3 +58,9 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 | **Torrentio Anime** | ✅ | Version optimisée Anime pour Torrentio (Anilist). | Multi (All)    | Non     |
 
 ---
+
+## 💬 Support
+
+Besoin d'aide ou envie de discuter du projet ? Rejoigne le discord !
+
+[![Discord](https://img.shields.io/badge/Discord-%237289DA.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/Bx2PhgndEC)

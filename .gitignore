@@ -42,3 +42,4 @@ cover/
 __pycache__/
 signingkey.jks
 .obsidian/
+issue/

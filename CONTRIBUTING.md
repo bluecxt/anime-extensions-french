@@ -5,7 +5,7 @@ it carefully** if you're a new contributor or don't have any experience on the r
 and knowledges.
 
 This guide is not definitive and it's being updated over time. If you find any issue on it, feel
-free to report it through a [Meta Issue](https://github.com/yuzono/aniyomi-extensions/issues/new?assignees=&labels=Meta+request&template=06_request_meta.yml)
+free to report it through a [Meta Issue](https://github.com/bluecxt/anime-extensions-french/issues/new?assignees=&labels=Meta+request&template=06_request_meta.yml)
 or fixing it directly by submitting a Pull Request.
 
 ## Table of Contents
@@ -69,7 +69,7 @@ small, just do a normal full clone instead.**
 1. Do a partial clone.
     ```bash
     git clone --filter=blob:none --sparse <fork-repo-url>
-    cd aniyomi-extensions/
+    cd anime-extensions-french/
     ```
 2. Configure sparse checkout.
 
@@ -125,15 +125,15 @@ small, just do a normal full clone instead.**
 3. Configure remotes.
     ```bash
     # add upstream
-    git remote add upstream <yuzono-url>
+    git remote add upstream https://github.com/bluecxt/anime-extensions-french.git
     # optionally disable push to upstream
     git remote set-url --push upstream no_pushing
     # optionally fetch master only (ignore all other branches)
-    git config remote.upstream.fetch "+refs/heads/master:refs/remotes/upstream/master"
+    git config remote.upstream.fetch "+refs/heads/main:refs/remotes/upstream/main"
     # update remotes
     git remote update
-    # track master of upstream instead of fork
-    git branch master -u upstream/master
+    # track main of upstream instead of fork
+    git branch main -u upstream/main
     ```
 4. Useful configurations. (optional)
     ```bash
@@ -147,7 +147,7 @@ small, just do a normal full clone instead.**
     # sparse rules, which makes the local repo accumulate unused files.
     # Use `git sync-master` to avoid this. Be careful if you have changes
     # on master branch, which is not a good practice.
-    git config alias.sync-master '!git switch master && git fetch upstream && git reset --keep FETCH_HEAD'
+    git config alias.sync-master '!git switch main && git fetch upstream && git reset --keep FETCH_HEAD'
     ```
 5. Later, if you change the sparse checkout filter, run `git sparse-checkout reapply`.
 
@@ -161,10 +161,11 @@ and [negative refspecs](https://github.blog/2020-10-19-git-2-29-released/#user-c
 
 ## Getting help
 
-- Join [the Discord server](https://discord.gg/85MZhUX688) for online help and to ask questions while
+- Join [the Discord server](https://discord.gg/Bx2PhgndEC) for online help and to ask questions while
 developing your extension. When doing so, please ask it in the `#dev` channel.
 - There are some features and tricks that are not explored in this document. Refer to existing
 extension code for examples.
+
 
 ## Writing an extension
 
@@ -262,7 +263,7 @@ Referencing the actual implementation will help with understanding extensions' c
 
 #### DataImage library
 
-[`lib-dataimage`](https://github.com/yuzono/aniyomi-extensions/tree/master/lib/dataimage) is a library
+[`lib-dataimage`](https://github.com/bluecxt/anime-extensions-french/tree/main/lib/dataimage) is a library
 or handling [base 64 encoded image data](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs)
 using an [OkHttp interceptor](https://square.github.io/okhttp/interceptors/).
 
@@ -274,7 +275,7 @@ dependencies {
 
 #### i18n library
 
-[`lib-i18n`](https://github.com/yuzono/aniyomi-extensions/tree/master/lib/i18n) is a library for handling
+[`lib-i18n`](https://github.com/bluecxt/anime-extensions-french/tree/main/lib/i18n) is a library for handling
 internationalization in the sources. It allows loading `.properties` files with messages located under
 the `assets/i18n` folder of each extension, that can be used to translate strings under the source.
 
@@ -503,7 +504,7 @@ There is some cases where existing sources changes their name on the website. To
 these changes in the extension, you need to explicity set the `id` to the same old value, otherwise
 it will get changed by the new `name` value and users will be forced to migrate back to the source.
 
-To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/yuzono/anime-repo/blob/repo/index.json)
+To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://raw.githubusercontent.com/bluecxt/anime-extensions-french/repo/index.min.json)
 by looking into the `sources` attribute of the extension. When you have the `id` copied, you can
 override it in the source:
 
