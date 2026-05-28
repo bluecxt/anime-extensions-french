@@ -11,8 +11,10 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.lib.embed4meextractor.Embed4meExtractor
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
+import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
@@ -234,17 +236,24 @@ class AnimeSama : Source() {
 
         val scripts = doc.select("script").toString()
         val uncommented = commentRegex.replace(scripts, "")
+        android.util.Log.d("AnimeSamaDebug", "AnimeDetails: Scripts length: ${scripts.length}, uncommented: ${uncommented.length}")
 
         // Count distinct base stems to avoid duplicates (VOSTFR vs VF panels)
-        val distinctSeasons = seasonRegex.findAll(uncommented)
+        val matches = seasonRegex.findAll(uncommented).toList()
+        android.util.Log.d("AnimeSamaDebug", "AnimeDetails: Found ${matches.size} total season matches")
+
+        val distinctSeasons = matches
             .map {
-                it.groupValues[2].trim().removeSuffix("/")
+                val stem = it.groupValues[2].trim().removeSuffix("/")
                     .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
+                android.util.Log.d("AnimeSamaDebug", "AnimeDetails: Match - Name: ${it.groupValues[1]}, Stem: ${it.groupValues[2]}, BaseStem: $stem")
+                stem
             }
             .distinct()
             .toList()
 
         val isHub = !anime.url.contains(Regex("/(saison|film|oav|special|hs|kai)", RegexOption.IGNORE_CASE))
+        android.util.Log.d("AnimeSamaDebug", "AnimeDetails: isHub: $isHub, distinctSeasons count: ${distinctSeasons.size}")
         anime.fetch_type = if (isHub && distinctSeasons.size > 1) FetchType.Seasons else FetchType.Episodes
 
         // Set season number for proper app state
@@ -366,7 +375,8 @@ class AnimeSama : Source() {
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
     private val vkExtractor by lazy { VkExtractor(client, headers) }
     private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-    private val vidmolyExtractor by lazy { VidMolyASExtractor(client, headers) }
+    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
+    private val embed4meExtractor by lazy { Embed4meExtractor(client) }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val playerUrls = json.decodeFromString<List<List<String>>>(episode.url)
@@ -382,8 +392,10 @@ class AnimeSama : Source() {
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        android.util.Log.d("AnimeSamaDebug", "getVideoList START for hoster: ${hoster.hosterName}")
         val data = hoster.internalData.split("|")
         val urls = json.decodeFromString<List<String>>(data[0])
+        android.util.Log.d("AnimeSamaDebug", "Raw players list: $urls")
         val lang = data[1]
 
         return urls.parallelMap { playerUrl ->
@@ -393,6 +405,7 @@ class AnimeSama : Source() {
                     playerUrl.contains("vk.") -> "VK"
                     playerUrl.contains("sendvid.com") -> "Sendvid"
                     playerUrl.contains("vidmoly.") -> "VidMoly"
+                    playerUrl.contains("embed4me") || playerUrl.contains("seekstreaming") -> "Embed4me"
                     else -> "Serveur"
                 }
                 val prefix = "($lang) $server - "
@@ -402,7 +415,12 @@ class AnimeSama : Source() {
                     playerUrl.contains("vk.") -> vkExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("embed4me") || playerUrl.contains("seekstreaming") -> embed4meExtractor.videosFromUrl(playerUrl, prefix)
                     else -> emptyList()
+                }
+
+                if (videos.isEmpty() && server != "Serveur") {
+                    android.util.Log.d("AnimeSamaDebug", "Extractor returned empty for: $server -> $playerUrl")
                 }
 
                 videos.map { video ->
@@ -418,9 +436,12 @@ class AnimeSama : Source() {
                     )
                 }
             } catch (e: Exception) {
+                android.util.Log.e("AnimeSamaDebug", "Exception extracting $playerUrl", e)
                 emptyList<Video>()
             }
-        }.flatten().coreSortVideos()
+        }.flatten().coreSortVideos().also {
+            android.util.Log.d("AnimeSamaDebug", "Final sorted videos list: ${it.map { v -> v.videoTitle + " -> " + v.videoUrl }}")
+        }
     }
 
     private val pQualityRegex = Regex("""(\d+)p""")
@@ -472,12 +493,15 @@ class AnimeSama : Source() {
 
         val scripts = animeDoc.select("script").toString()
         val uncommented = commentRegex.replace(scripts, "")
+        android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Found script matches")
 
         // REPO_RULES: Group by base stem to merge VOSTFR and VF panels
         val allMatches = seasonRegex.findAll(uncommented).toList()
             .distinctBy {
-                it.groupValues[2].trim().removeSuffix("/")
+                val stem = it.groupValues[2].trim().removeSuffix("/")
                     .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
+                android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Match - Name: ${it.groupValues[1]}, Stem: ${it.groupValues[2]}, BaseStem: $stem")
+                stem
             }
 
         val animes = allMatches.flatMapIndexed { animeIndex, seasonMatch ->
@@ -501,6 +525,7 @@ class AnimeSama : Source() {
                     }
                 }
             }
+            android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Name: $seasonName -> sNum: $sNum")
             val defaultStatus = if (seasonStem.contains("film", true)) SAnime.COMPLETED else SAnime.UNKNOWN
 
             listOf(Quadruple("$animeName $seasonName", "$animeUrl/$seasonStem", sNum, defaultStatus))
@@ -951,6 +976,7 @@ class AnimeSama : Source() {
             "Sibnet" to "sibnet",
             "VK" to "vk",
             "VidMoly" to "vidmoly",
+            "Embed4me" to "embed4me",
         )
         private val PLAYERS = playersMap.keys.toTypedArray()
         private val PLAYERS_VALUES = playersMap.values.toTypedArray()

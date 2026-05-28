@@ -11,5 +11,6 @@ dependencies {
     implementation(project(':lib:vkextractor'))
     implementation(project(':lib:sendvidextractor'))
     implementation(project(':lib:vidmolyextractor'))
+    implementation(project(':lib:embed4meextractor'))
     implementation(project(':lib:playlistutils'))
 }
