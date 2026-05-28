@@ -47,9 +47,9 @@ class UniversalExtractor(private val client: OkHttpClient) {
                     view: WebView,
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
-                    val url = request.url.toString()
-                    if (VIDEO_REGEX.containsMatchIn(url)) {
-                        resultUrl = url
+                    val videoUrl = request.url.toString()
+                    if (VIDEO_REGEX.containsMatchIn(videoUrl)) {
+                        resultUrl = videoUrl
                         latch.countDown()
                     }
                     return super.shouldInterceptRequest(view, request)

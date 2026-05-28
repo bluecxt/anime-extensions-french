@@ -150,7 +150,7 @@ abstract class Source :
             .removeSuffix("-")
             .trim()
 
-        val servers = listOf("VidMoly", "Sibnet", "Sendvid", "VK", "Voe", "Vidoza", "Streamtape", "Doodstream")
+        val servers = listOf("VidMoly", "Sibnet", "Sendvid", "VK", "Voe", "Vidoza", "Streamtape", "Doodstream", "Embed4me", "SeekStreaming")
         for (server in servers) {
             cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
             cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")

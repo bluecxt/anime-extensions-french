@@ -4,14 +4,19 @@ import android.net.Uri
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.network.awaitSuccess
+import keiyoushi.utils.UrlUtils
+import keiyoushi.utils.bodyString
+import keiyoushi.utils.commonEmptyHeaders
+import keiyoushi.utils.parallelMapNotNullBlocking
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.io.File
 import kotlin.math.abs
 
-class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
+class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = commonEmptyHeaders) {
 
     // ================================ M3U8 ================================
 
@@ -40,18 +45,16 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         toStandardQuality: (String) -> String = { quality ->
             stnQuality(quality)
         },
-    ): List<Video> {
-        return extractFromHls(
-            playlistUrl,
-            referer,
-            { _, _ -> masterHeaders },
-            { _, _, _ -> videoHeaders },
-            videoNameGen,
-            subtitleList,
-            audioList,
-            toStandardQuality,
-        )
-    }
+    ): List<Video> = extractFromHls(
+        playlistUrl,
+        referer,
+        { _, _ -> masterHeaders },
+        { _, _, _ -> videoHeaders },
+        videoNameGen,
+        subtitleList,
+        audioList,
+        toStandardQuality,
+    )
 
     /**
      * Extracts videos from a .m3u8 file.
@@ -78,7 +81,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         playlistUrl: String,
         referer: String = playlistUrl.toDefaultReferer(),
         masterHeadersGen: (Headers, String) -> Headers = ::generateMasterHeaders,
-        videoHeadersGen: (Headers, String, String) -> Headers = { baseHeaders, referer, videoUrl ->
+        videoHeadersGen: (Headers, String, String) -> Headers = { baseHeaders, referer, _ ->
             generateMasterHeaders(baseHeaders, referer)
         },
         videoNameGen: (String) -> String = { quality -> quality },
@@ -90,8 +93,8 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
     ): List<Video> {
         val masterHeaders = masterHeadersGen(headers, referer)
 
-        val masterPlaylist = client.newCall(GET(playlistUrl, masterHeaders)).execute()
-            .body.string()
+        val masterPlaylist = client.newCall(GET(playlistUrl, masterHeaders))
+            .execute().bodyString()
 
         // Check if there isn't multiple streams available
         if (PLAYLIST_SEPARATOR !in masterPlaylist) {
@@ -106,19 +109,10 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             )
         }
 
-        val playlistHttpUrl = playlistUrl.toHttpUrl()
-
-        val masterUrlBasePath = playlistHttpUrl.newBuilder().apply {
-            removePathSegment(playlistHttpUrl.pathSize - 1)
-            addPathSegment("")
-            query(null)
-            fragment(null)
-        }.build().toString()
-
         // Get subtitles
         val subtitleTracks = subtitleList + SUBTITLE_REGEX.findAll(masterPlaylist).mapNotNull {
             Track(
-                getAbsoluteUrl(it.groupValues[2], playlistUrl, masterUrlBasePath) ?: return@mapNotNull null,
+                UrlUtils.fixUrl(it.groupValues[2], playlistUrl) ?: return@mapNotNull null,
                 it.groupValues[1],
             )
         }.toList()
@@ -126,12 +120,12 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         // Get audio tracks
         val audioTracks = audioList + AUDIO_REGEX.findAll(masterPlaylist).mapNotNull {
             Track(
-                getAbsoluteUrl(it.groupValues[2], playlistUrl, masterUrlBasePath) ?: return@mapNotNull null,
+                UrlUtils.fixUrl(it.groupValues[2], playlistUrl) ?: return@mapNotNull null,
                 it.groupValues[1],
             )
         }.toList()
 
-        /**
+        /*
          * Stream might have multiple sub-streams separated by [PLAYLIST_SEPARATOR]. Template:
          *
          * #EXTM3U
@@ -163,8 +157,9 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         return masterPlaylist.substringAfter(PLAYLIST_SEPARATOR).split(PLAYLIST_SEPARATOR).mapNotNull { stream ->
             val codec = CODECS_REGEX.find(stream)?.groupValues?.get(1)
             if (!codec.isNullOrBlank()) {
-                // FIXME: Why skip mp4a?
-                if (codec.startsWith("mp4a")) return@mapNotNull null
+                // Skip audio only streams. Can check if `codecs` starts with any of avc/hev1/hvc1/vp9/av01.
+                val codecs = codec.split(',')
+                if (codecs.all { it.startsWith("mp4a") }) return@mapNotNull null
             }
 
             val resolution = RESOLUTION_REGEX.find(stream)
@@ -181,16 +176,16 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                     }
                 }
             val bandwidth = BANDWIDTH_REGEX.find(stream)
-                    ?.groupValues?.get(1)
-                    ?.toLongOrNull()
+                ?.groupValues?.get(1)
+                ?.toLongOrNull()
             val bandwidthFormatted = bandwidth
-                    ?.let(::formatBytes)
+                ?.let(::formatBytes)
             val streamName = listOfNotNull(resolution, bandwidthFormatted).joinToString(" - ")
                 .takeIf { it.isNotBlank() }
                 ?: "Video"
 
             val videoUrl = stream.substringAfter("\n").substringBefore("\n").let { url ->
-                getAbsoluteUrl(url, playlistUrl, masterUrlBasePath)?.trimEnd()
+                UrlUtils.fixUrl(url, playlistUrl)?.trimEnd()
             } ?: return@mapNotNull null
 
             bandwidth to Video(
@@ -207,26 +202,13 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             .map { (_, video) -> video }
     }
 
-    private fun getAbsoluteUrl(url: String, playlistUrl: String, masterBase: String): String? {
-        return when {
-            url.isEmpty() -> null
-            url.startsWith("http") -> url
-            url.startsWith("//") -> "https:$url"
-            url.startsWith("/") -> playlistUrl.toHttpUrl().newBuilder().encodedPath("/").build().toString()
-                .substringBeforeLast("/") + url
-            else -> masterBase + url
+    fun generateMasterHeaders(baseHeaders: Headers, referer: String): Headers = baseHeaders.newBuilder().apply {
+        set("Accept", "*/*")
+        if (referer.isNotEmpty()) {
+            set("Origin", "https://${referer.toHttpUrl().host}")
+            set("Referer", referer)
         }
-    }
-
-    fun generateMasterHeaders(baseHeaders: Headers, referer: String): Headers {
-        return baseHeaders.newBuilder().apply {
-            set("Accept", "*/*")
-            if (referer.isNotEmpty()) {
-                set("Origin", "https://${referer.toHttpUrl().host}")
-                set("Referer", referer)
-            }
-        }.build()
-    }
+    }.build()
 
     // ================================ DASH ================================
 
@@ -256,20 +238,18 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         toStandardQuality: (String) -> String = { quality ->
             stnQuality(quality)
         },
-    ): List<Video> {
-        return extractFromDash(
-            mpdUrl,
-            { videoRes, bandwidth ->
-                videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
-            },
-            referer,
-            { _, _ -> mpdHeaders },
-            { _, _, _ -> videoHeaders },
-            subtitleList,
-            audioList,
-            toStandardQuality,
-        )
-    }
+    ): List<Video> = extractFromDash(
+        mpdUrl,
+        { videoRes, bandwidth ->
+            videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
+        },
+        referer,
+        { _, _ -> mpdHeaders },
+        { _, _, _ -> videoHeaders },
+        subtitleList,
+        audioList,
+        toStandardQuality,
+    )
 
     /**
      * Extracts video information from a DASH .mpd file.
@@ -297,7 +277,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         videoNameGen: (String) -> String,
         referer: String = mpdUrl.toDefaultReferer(),
         mpdHeadersGen: (Headers, String) -> Headers = ::generateMasterHeaders,
-        videoHeadersGen: (Headers, String, String) -> Headers = { baseHeaders, referer, videoUrl ->
+        videoHeadersGen: (Headers, String, String) -> Headers = { baseHeaders, referer, _ ->
             generateMasterHeaders(baseHeaders, referer)
         },
         subtitleList: List<Track> = emptyList(),
@@ -305,20 +285,18 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         toStandardQuality: (String) -> String = { quality ->
             stnQuality(quality)
         },
-    ): List<Video> {
-        return extractFromDash(
-            mpdUrl,
-            { videoRes, bandwidth ->
-                videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
-            },
-            referer,
-            mpdHeadersGen,
-            videoHeadersGen,
-            subtitleList,
-            audioList,
-            toStandardQuality,
-        )
-    }
+    ): List<Video> = extractFromDash(
+        mpdUrl,
+        { videoRes, bandwidth ->
+            videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
+        },
+        referer,
+        mpdHeadersGen,
+        videoHeadersGen,
+        subtitleList,
+        audioList,
+        toStandardQuality,
+    )
 
     /**
      * Extracts video information from a DASH .mpd file.
@@ -348,7 +326,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         videoNameGen: (String, String) -> String,
         referer: String = mpdUrl.toDefaultReferer(),
         mpdHeadersGen: (Headers, String) -> Headers = ::generateMasterHeaders,
-        videoHeadersGen: (Headers, String, String) -> Headers = { baseHeaders, referer, videoUrl ->
+        videoHeadersGen: (Headers, String, String) -> Headers = { baseHeaders, referer, _ ->
             generateMasterHeaders(baseHeaders, referer)
         },
         subtitleList: List<Track> = emptyList(),
@@ -359,8 +337,8 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
     ): List<Video> {
         val mpdHeaders = mpdHeadersGen(headers, referer)
 
-        val doc = client.newCall(GET(mpdUrl, mpdHeaders)).execute()
-            .asJsoup()
+        val doc = client.newCall(GET(mpdUrl, mpdHeaders))
+            .execute().useAsJsoup()
 
         // Get audio tracks
         val audioTracks = audioList + doc.select("Representation[mimetype~=audio]").map { audioSrc ->
@@ -374,37 +352,32 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                 .let(toStandardQuality)
                 .let { "$it (${videoSrc.attr("width")}x${videoSrc.attr("height")})" }
             val videoUrl = videoSrc.text()
-
-            Video(
-                videoUrl = videoUrl,
-                videoTitle = videoNameGen(res, bandwidth),
-                audioTracks = audioTracks,
-                subtitleTracks = subtitleList,
-                headers = videoHeadersGen(headers, referer, videoUrl),
-            )
+Video(
+    videoUrl = videoUrl,
+    videoTitle = videoNameGen(res, bandwidth),
+    audioTracks = audioTracks,
+    subtitleTracks = subtitleList,
+    headers = videoHeadersGen(headers, referer, videoUrl),
+)
         }
     }
 
-    private fun formatBytes(bytes: Long?): String {
-        return when {
-            bytes == null -> ""
-            bytes >= 1_000_000_000 -> "%.2f GB/s".format(bytes / 1_000_000_000.0)
-            bytes >= 1_000_000 -> "%.2f MB/s".format(bytes / 1_000_000.0)
-            bytes >= 1_000 -> "%.2f KB/s".format(bytes / 1_000.0)
-            bytes > 1 -> "$bytes bytes/s"
-            bytes == 1L -> "$bytes byte/s"
-            else -> ""
-        }
+    private fun formatBytes(bytes: Long?): String = when {
+        bytes == null -> ""
+        bytes >= 1_000_000_000 -> "%.2f GB/s".format(bytes / 1_000_000_000.0)
+        bytes >= 1_000_000 -> "%.2f MB/s".format(bytes / 1_000_000.0)
+        bytes >= 1_000 -> "%.2f KB/s".format(bytes / 1_000.0)
+        bytes > 1 -> "$bytes bytes/s"
+        bytes == 1L -> "$bytes byte/s"
+        else -> ""
     }
 
     // ============================= Utilities ==============================
 
-    private fun String.toDefaultReferer(): String {
-        return try {
-            toHttpUrl().run { "$scheme://$host/" }
-        } catch (e: IllegalArgumentException) {
-            ""
-        }
+    private fun String.toDefaultReferer(): String = try {
+        toHttpUrl().run { "$scheme://$host/" }
+    } catch (_: IllegalArgumentException) {
+        ""
     }
 
     private fun stnQuality(quality: String): String {
@@ -413,31 +386,47 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         return "${result}p"
     }
 
+    /**
+     * When the regex finds a match (illegal newlines), this function is called to replace them.
+     * Instead of just deleting the lines (which might mess up the visual timing/positioning intended by the creator),
+     * it replaces them with non-breaking spaces (`&nbsp;`).
+     * This preserves the "height" or "spacing" of the original text without breaking the VTT file structure.
+     */
     private fun cleanSubtitleData(matchResult: MatchResult): String {
         val lineCount = matchResult.groupValues[1].count { it == '\n' }
         return "\n" + "&nbsp;\n".repeat(lineCount - 1)
     }
 
-    fun fixSubtitles(subtitleList: List<Track>): List<Track> {
-        return subtitleList.mapNotNull {
-            try {
-                val subData = client.newCall(GET(it.url)).execute().body.string()
+    /**
+     * Fix a common issue in VTT (WebVTT) subtitle files where extra or unexpected newline characters break the subtitle format,
+     * potentially causing players to fail to render them correctly.
+     */
+    fun fixSubtitles(subtitleList: List<Track>): List<Track> = subtitleList.parallelMapNotNullBlocking {
+        runCatching {
+            val subData = client.newCall(GET(it.url))
+                .awaitSuccess().bodyString()
 
-                val file = File.createTempFile("subs", "vtt")
-                    .also(File::deleteOnExit)
+            val file = File.createTempFile("subs", "vtt")
+                .also(File::deleteOnExit)
 
-                file.writeText(FIX_SUBTITLE_REGEX.replace(subData, ::cleanSubtitleData))
-                val uri = Uri.fromFile(file)
+            file.writeText(FIX_SUBTITLE_REGEX.replace(subData, ::cleanSubtitleData))
+            val uri = Uri.fromFile(file)
 
-                Track(uri.toString(), it.lang)
-            } catch (_: Exception) {
-                null
-            }
-        }
+            Track(uri.toString(), it.lang)
+        }.getOrNull()
     }
 
     companion object {
-        private val FIX_SUBTITLE_REGEX = Regex("""${'$'}(\n{2,})(?!(?:\d+:)*\d+(?:\.\d+)?\s-+>\s(?:\d+:)*\d+(?:\.\d+)?)""", RegexOption.MULTILINE)
+        /**
+         * This regex identifies "illegal" gaps or line breaks within a subtitle file.
+         *
+         * * `$`: Matches the end of a line.
+         * * `(\n{2,})`: Captures a group of two or more consecutive newline characters. In VTT files, a double newline usually indicates the end of one "cue" (subtitle block) and the start of another.
+         * * `(?!(?:\d+:)*\d+(?:\.\d+)?\s-+>\s(?:\d+:)*\d+(?:\.\d+)?)`: This is a negative lookahead. It checks that what follows the newlines is NOT a VTT timestamp (e.g., `00:00:10.000 --> 00:00:12.000)`.
+         *
+         * **Logic**: If the code finds multiple empty lines, but the next thing it sees isn't a new timestamp, it assumes those empty lines are garbage or mid-text breaks that will break the parser.
+         */
+        private val FIX_SUBTITLE_REGEX = Regex("""$(\n{2,})(?!(?:\d+:)*\d+(?:\.\d+)?\s-+>\s(?:\d+:)*\d+(?:\.\d+)?)""", RegexOption.MULTILINE)
 
         private const val PLAYLIST_SEPARATOR = "#EXT-X-STREAM-INF:"
 
