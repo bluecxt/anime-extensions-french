@@ -43,7 +43,7 @@ class AnimeSamaFan : Source() {
     }
     override val lang = "fr"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val json: Json by injectLazy()
 
@@ -117,8 +117,39 @@ class AnimeSamaFan : Source() {
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(catalogueRequest(page = page)).execute()
-        return parseAnimePage(response.asJsoup(), page)
+        if (page > 1) return AnimesPage(emptyList(), false)
+        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val doc = response.asJsoup()
+        return AnimesPage(parseLatestFromHome(doc), false)
+    }
+
+    private fun parseLatestFromHome(document: Document): List<SAnime> {
+        val container = document.selectFirst("main.container") ?: document
+        val sections = container.select("div.section:has(h1:contains(DERNIERS ANIMES SORTIS)), div.section:has(h1:contains(DERNIERS ÉPISODES AJOUTÉS))")
+
+        return sections.flatMap { section ->
+            section.select("div.catalog-card a[href], div.card-base a[href]").map { a ->
+                val href = a.attr("href")
+                val hubUrl = getHubUrl(href)
+                val title = a.selectFirst(".card-title")?.text()?.trim().orEmpty()
+                val thumb = a.selectFirst("img.card-image")?.attr("abs:src")
+
+                SAnime.create().apply {
+                    this.title = title
+                    this.url = hubUrl
+                    this.thumbnail_url = thumb
+                }
+            }
+        }.distinctBy { it.url }
+    }
+
+    private fun getHubUrl(url: String): String {
+        val segments = url.trim('/').split("/")
+        return if (segments.size >= 2) {
+            "/${segments[0]}/${segments[1].substringBefore(".html")}.html"
+        } else {
+            url
+        }
     }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {

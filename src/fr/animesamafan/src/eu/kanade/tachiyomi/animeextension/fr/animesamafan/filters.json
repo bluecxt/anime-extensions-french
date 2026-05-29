@@ -27,7 +27,6 @@
   ],
   "SORT": [
     ["Plus récents", "recent"],
-    ["A → Z", "az"],
-    ["Les plus vus", "views"]
+    ["A → Z", "az"]
   ]
 }
