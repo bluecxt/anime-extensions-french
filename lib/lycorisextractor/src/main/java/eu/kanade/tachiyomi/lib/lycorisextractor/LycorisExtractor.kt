@@ -57,7 +57,7 @@ class LycorisExtractor(private val client: OkHttpClient) {
 
     private fun decodeVideoLinks(data: String): String? {
         return try {
-            val decoded = java.util.Base64.getDecoder().decode(data)
+            val decoded = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
             String(decoded, Charset.forName("UTF-8"))
         } catch (e: Exception) {
             null
