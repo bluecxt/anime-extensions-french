@@ -4,6 +4,9 @@
 -keep class eu.kanade.tachiyomi.animesource.** { *; }
 -keep class fr.bluecxt.core.** { *; }
 
+# Désactiver l'obfuscation (renommage) pour éviter les VerifyError dans l'inspector
+-dontobfuscate
+
 # 2. Sérialisation (Kotlinx Serialization)
 # Indispensable pour que le JSON fonctionne toujours après optimisation
 -keep @kotlinx.serialization.Serializable class * { *; }
@@ -13,12 +16,8 @@
 }
 -keepattributes RuntimeVisibleAnnotations, AnnotationDefault
 
-# 3. Optimisations de performance (Agressives mais sûres)
-# Autorise R8 à passer des classes/méthodes en 'final' ou 'private' pour accélérer l'exécution
--allowaccessmodification
-# Fusionne les interfaces quand c'est possible pour réduire le nombre de classes
--mergeinterfacesaggressively
-# Supprime les attributs de débogage inutiles qui gonflent l'APK
+# 3. Optimisations de performance
+# On reste conservateur pour éviter de casser la compatibilité avec l'inspector
 -renamesourcefileattribute SourceFile
 -keepattributes SourceFile,LineNumberTable
 
