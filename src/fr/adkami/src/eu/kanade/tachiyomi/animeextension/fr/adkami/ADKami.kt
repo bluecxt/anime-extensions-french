@@ -44,10 +44,12 @@ class ADKami : Source() {
         preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
     }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(CloudflareInterceptor(network.client))
-        .protocols(listOf(Protocol.HTTP_1_1))
-        .build()
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor(CloudflareInterceptor(network.client))
+            .protocols(listOf(Protocol.HTTP_1_1))
+            .build()
+    }
 
     override val json: Json by injectLazy()
 
