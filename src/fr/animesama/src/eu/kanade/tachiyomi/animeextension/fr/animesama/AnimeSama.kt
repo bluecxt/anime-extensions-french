@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.embed4meextractor.Embed4meExtractor
+import eu.kanade.tachiyomi.lib.minochinosextractor.MinoChinosExtractor
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
@@ -396,6 +397,7 @@ class AnimeSama : Source() {
     private val vkExtractor by lazy { VkExtractor(client, headers) }
     private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
     private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
+    private val minochinosExtractor by lazy { MinoChinosExtractor(client) }
     private val embed4meExtractor by lazy { Embed4meExtractor(client) }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
@@ -425,6 +427,7 @@ class AnimeSama : Source() {
                     playerUrl.contains("vk.") -> "VK"
                     playerUrl.contains("sendvid.com") -> "Sendvid"
                     playerUrl.contains("vidmoly.") -> "VidMoly"
+                    playerUrl.contains("minochinos.com") || playerUrl.contains("vidhide") -> "MinoChinos"
                     playerUrl.contains("embed4me") || playerUrl.contains("seekstreaming") -> "Embed4me"
                     else -> "Serveur"
                 }
@@ -435,6 +438,7 @@ class AnimeSama : Source() {
                     playerUrl.contains("vk.") -> vkExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
+                    playerUrl.contains("minochinos.com") || playerUrl.contains("vidhide") -> minochinosExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("embed4me") || playerUrl.contains("seekstreaming") -> embed4meExtractor.videosFromUrl(playerUrl, prefix)
                     else -> emptyList()
                 }
@@ -472,7 +476,7 @@ class AnimeSama : Source() {
         val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
 
         return this.sortedWith(
-            compareByDescending<Hoster> { it.hosterName.contains("($voices)", true) }
+            compareByDescending<Hoster> { it.hosterName.equals(voices, true) }
                 .thenByDescending { it.hosterName.contains(player, true) },
         )
     }
@@ -1013,8 +1017,6 @@ class AnimeSama : Source() {
         private val voicesMap = mapOf(
             "Prefer VOSTFR" to "vostfr",
             "Prefer VF" to "vf",
-            "Prefer VF1" to "vf1",
-            "Prefer VF2" to "vf2",
             "Prefer VA" to "va",
             "Prefer VCN" to "vcn",
             "Prefer VJ" to "vj",
@@ -1029,6 +1031,7 @@ class AnimeSama : Source() {
             "Sibnet" to "sibnet",
             "VK" to "vk",
             "VidMoly" to "vidmoly",
+            "MinoChinos" to "minochinos",
             "Embed4me" to "embed4me",
         )
         private val PLAYERS = playersMap.keys.toTypedArray()
