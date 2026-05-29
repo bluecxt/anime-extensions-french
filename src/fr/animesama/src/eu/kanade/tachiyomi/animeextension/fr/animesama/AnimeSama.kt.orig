@@ -503,18 +503,16 @@ class AnimeSama : Source() {
         val allMatches = seasonRegex.findAll(uncommented).toList()
             .filter {
                 val stem = it.groupValues[2].trim().removeSuffix("/")
-                // Filter out pointers to the hub itself (must have at least one / to be a sub-season)
-                val isSubSeason = stem.contains("/")
-                if (!isSubSeason) {
-                    android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Filtering out Hub self-ref: $stem")
-                }
-                isSubSeason
+                // Filter out pointers to the hub itself (just a language suffix)
+                !stem.equals("vostfr", true) && !stem.equals("vf", true) &&
+                    !stem.equals("vf1", true) && !stem.equals("vf2", true) &&
+                    !stem.equals("va", true) && !stem.equals("vcn", true) &&
+                    !stem.equals("vj", true) && !stem.equals("vkr", true) &&
+                    !stem.equals("vqc", true)
             }
             .distinctBy {
-                val stem = it.groupValues[2].trim().removeSuffix("/")
+                it.groupValues[2].trim().removeSuffix("/")
                     .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
-                android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Match - Name: ${it.groupValues[1]}, Stem: ${it.groupValues[2]}, BaseStem: $stem")
-                stem
             }
 
         val animes = allMatches.flatMapIndexed { animeIndex, seasonMatch ->
