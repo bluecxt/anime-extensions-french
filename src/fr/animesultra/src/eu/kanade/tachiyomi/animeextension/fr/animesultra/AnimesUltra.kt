@@ -27,6 +27,8 @@ import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
 class AnimesUltra : Source() {
@@ -45,7 +47,7 @@ class AnimesUltra : Source() {
         private const val PREF_URL_KEY = "preferred_baseUrl"
         private const val PREF_URL_DEFAULT = "https://ww.animesultra.org"
 
-        private val CLEAN_REGEX = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL)\\b)")
+        private val CLEAN_REGEX = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL|Saison|Season)\\b)")
         private val WHITESPACE_REGEX = Regex("\\s+")
         private val NEWS_ID_REGEX = Regex("""/(\d+)-""")
         private val QUALITY_REGEX = Regex("""(\d+)p""")
@@ -79,8 +81,21 @@ class AnimesUltra : Source() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/anime-vostfr/page/$page/", headers)).execute()
+        if (page > 1) return AnimesPage(emptyList(), false)
+        val response = client.newCall(GET(baseUrl, headers)).execute()
         val document = response.asJsoup()
+        val items = document.select(".block_area_trending .swiper-slide").map { element ->
+            SAnime.create().apply {
+                val link = element.selectFirst("a.film-poster")!!
+                title = link.attr("title").ifBlank { element.selectFirst(".film-title")?.text() ?: "" }
+                setUrlWithoutDomain(link.attr("abs:href"))
+                thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
+            }
+        }
+        return AnimesPage(unifyAnimes(items), false)
+    }
+
+    private fun parseAnimesPage(document: Document): AnimesPage {
         val items = document.select("div.flw-item").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("h3.film-name a")!!
@@ -89,7 +104,7 @@ class AnimesUltra : Source() {
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
-        val hasNextPage = document.selectFirst(".pagi-nav a:contains(Suivant), .pagi-nav a:contains(Next)") != null
+        val hasNextPage = document.select(".page-link").last()?.hasAttr("href") == true
         return AnimesPage(unifyAnimes(items), hasNextPage)
     }
 
@@ -107,24 +122,15 @@ class AnimesUltra : Source() {
 
     private fun cleanTitle(title: String): String = title.replace(CLEAN_REGEX, "").replace(WHITESPACE_REGEX, " ").trim()
 
+    // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/page/$page/", headers)).execute()
-        return getPopularAnime(page) // Reuse logic
+        val response = client.newCall(GET("$baseUrl/xfsearch/statut/En%20Cours/page/$page/", headers)).execute()
+        return parseAnimesPage(response.asJsoup())
     }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query", headers)).execute()
-        val document = response.asJsoup()
-        val items = document.select("div.flw-item").map { element ->
-            SAnime.create().apply {
-                val link = element.selectFirst("h3.film-name a")!!
-                title = link.text()
-                setUrlWithoutDomain(link.attr("abs:href"))
-                thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
-            }
-        }
-        val hasNextPage = document.selectFirst(".pagi-nav a:contains(Suivant), .pagi-nav a:contains(Next)") != null
-        return AnimesPage(unifyAnimes(items), hasNextPage)
+        return parseAnimesPage(response.asJsoup())
     }
 
     // =========================== Anime Details ============================
@@ -241,7 +247,7 @@ class AnimesUltra : Source() {
                 name = "${sPrefix}Episode $num"
                 episode_number = num.toFloatOrNull() ?: 0f
                 url = buildJsonObject { langUrls.forEach { (l, u) -> put(l.lowercase(), u) } }.toString()
-                scanlator = langUrls.keys.joinToString(" / ") { it.uppercase() }
+                scanlator = langUrls.keys.joinToString(", ") { it.uppercase() }
 
                 // TMDB Metadata
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(numInt)
