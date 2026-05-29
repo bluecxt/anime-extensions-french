@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
 import eu.kanade.tachiyomi.lib.embed4meextractor.Embed4meExtractor
+import eu.kanade.tachiyomi.lib.minochinosextractor.MinoChinosExtractor
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
@@ -264,6 +265,8 @@ class Movix : Source() {
             tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
             tmdbMetadata?.author?.let { anime.author = it }
             tmdbMetadata?.artist?.let { anime.artist = it }
+            tmdbMetadata?.genre?.let { anime.genre = it }
+            tmdbMetadata?.status?.let { anime.status = it }
 
             if (item.seasons.size > 1) {
                 anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
@@ -368,6 +371,7 @@ class Movix : Source() {
         val sibnetExtractor by lazy { SibnetExtractor(client) }
         val vkExtractor by lazy { VkExtractor(client, headers) }
         val vidMolyExtractor by lazy { VidMolyExtractor(client, headers) }
+        val minochinosExtractor by lazy { MinoChinosExtractor(client) }
         val filemoonExtractor by lazy { FilemoonExtractor(client) }
         val doodExtractor by lazy { eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor(client) }
         val streamTapeExtractor by lazy { eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor(client) }
@@ -387,6 +391,7 @@ class Movix : Source() {
                     playerUrl.contains("streamtape", true) || playerUrl.contains("shavetape", true) -> "StreamTape"
                     playerUrl.contains("vidoza", true) -> "Vidoza"
                     playerUrl.contains("voe", true) -> "Voe"
+                    playerUrl.contains("minochinos.com", true) || playerUrl.contains("vidhide", true) -> "MinoChinos"
                     playerUrl.contains("embed4me", true) || playerUrl.contains("seekstreaming", true) -> "Embed4me"
                     else -> "Serveur"
                 }
@@ -410,6 +415,8 @@ class Movix : Source() {
                     playerUrl.contains("vidoza", true) -> vidoExtractor.videosFromUrl(playerUrl, prefix)
 
                     playerUrl.contains("voe", true) -> voeExtractor.videosFromUrl(playerUrl, prefix)
+
+                    playerUrl.contains("minochinos.com", true) || playerUrl.contains("vidhide", true) -> minochinosExtractor.videosFromUrl(playerUrl, prefix)
 
                     playerUrl.contains("embed4me", true) || playerUrl.contains("seekstreaming", true) -> embed4meExtractor.videosFromUrl(playerUrl, prefix)
 
