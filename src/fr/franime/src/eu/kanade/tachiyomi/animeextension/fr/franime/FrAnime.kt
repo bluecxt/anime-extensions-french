@@ -206,6 +206,7 @@ class FrAnime : Source() {
             anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
         } else {
             anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+            if (sNumFromUrl != null) anime.coreSetSeasonNumber(-2.0)
         }
 
         anime.initialized = true
@@ -231,6 +232,7 @@ class FrAnime : Source() {
         }
 
         return coreBuildSeasonList(tmdbSearchTitle, siteSeasons, parseStatus(animeData.status, animeData.seasons.size, animeData.seasons.size))
+            .onEach { it.coreSetSeasonNumber(-2.0) }
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {

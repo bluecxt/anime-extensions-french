@@ -311,10 +311,10 @@ class AnimeSamaFan : Source() {
 
             // Format full title for the engine: "[Name] - Saison [X]"
             val fullSeasonTitle = if (!sTitle.contains(baseTitle, true)) "$baseTitle - $sTitle" else sTitle
-            Triple(fullSeasonTitle, coreCleanUrl(sHref), -2.0)
+            Triple(fullSeasonTitle, coreCleanUrl(sHref), siteSNum)
         }
 
-        return coreBuildSeasonList(baseTitle, siteSeasons, anime.status)
+        return coreBuildSeasonList(baseTitle, siteSeasons, anime.status).onEach { it.coreSetSeasonNumber(-2.0) }
     }
 
     // ================== Episodes ==================
