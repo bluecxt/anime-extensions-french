@@ -15,8 +15,8 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
 import eu.kanade.tachiyomi.lib.embed4meextractor.Embed4meExtractor
-import eu.kanade.tachiyomi.lib.minochinosextractor.MinoChinosExtractor
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
+import eu.kanade.tachiyomi.lib.minochinosextractor.MinoChinosExtractor
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
@@ -261,7 +261,10 @@ class Movix : Source() {
 
         if (item != null) {
             val tmdbMetadata = fetchTmdbMetadata(item.name)
-            tmdbMetadata?.summary?.let { anime.description = it }
+            anime.description = tmdbMetadata?.summary ?: ""
+            tmdbMetadata?.releaseDate?.let { date ->
+                anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
+            }
             tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
             tmdbMetadata?.author?.let { anime.author = it }
             tmdbMetadata?.artist?.let { anime.artist = it }
@@ -433,7 +436,7 @@ class Movix : Source() {
                 android.util.Log.d("MovixDebug", "Exception extracting $playerUrl : ${e.message}")
                 emptyList()
             }
-        }.flatten().map { video ->
+        }.flatten().distinctBy { it.videoUrl }.map { video ->
             val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder().apply {
                 set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                 if (video.headers?.get("Referer") == null) set("Referer", "$baseUrl/")
@@ -445,8 +448,9 @@ class Movix : Source() {
                 subtitleTracks = video.subtitleTracks,
                 audioTracks = video.audioTracks,
             )
-        }.coreSortVideos().also {
-            android.util.Log.d("MovixDebug", "Final sorted videos list: ${it.map { v -> v.videoTitle + " -> " + v.videoUrl }}")
+        }.coreSortVideos().also { videos ->
+            val logMessage = videos.joinToString { v -> "${v.videoTitle} -> ${v.videoUrl}" }
+            android.util.Log.d("MovixDebug", "Final sorted videos list: [$logMessage]")
         }
     }
 }
