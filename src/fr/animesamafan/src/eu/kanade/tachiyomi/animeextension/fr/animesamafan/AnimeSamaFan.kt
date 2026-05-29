@@ -229,7 +229,8 @@ class AnimeSamaFan : Source() {
 
         // Use Core Engine for title optimization
         anime.coreOptimizeDisplayTitle(pageTitle, pageTitle.replace(Regex("(?i)\\s*-\\s*Saison.*|\\s*Saison.*"), "").trim())
-        anime.coreSetSeasonNumber(sNum.toDouble())
+        // AniZen bypass: Force -2.0 to totally disable auto-labeling and use our provided title
+        anime.coreSetSeasonNumber(-2.0)
 
         // Baseline description from site
         val siteDescription = document.selectFirst(".synopsis-content p")?.text()
@@ -310,7 +311,7 @@ class AnimeSamaFan : Source() {
 
             // Format full title for the engine: "[Name] - Saison [X]"
             val fullSeasonTitle = if (!sTitle.contains(baseTitle, true)) "$baseTitle - $sTitle" else sTitle
-            Triple(fullSeasonTitle, coreCleanUrl(sHref), siteSNum)
+            Triple(fullSeasonTitle, coreCleanUrl(sHref), -2.0)
         }
 
         return coreBuildSeasonList(baseTitle, siteSeasons, anime.status)
