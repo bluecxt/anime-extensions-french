@@ -241,9 +241,28 @@ class AnimoFlix : Source() {
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(catalogueRequest(page = page, sort = "recent")).execute()
-        return parseCatalogueAjaxResponse(response, page)
+        if (page > 1) return AnimesPage(emptyList(), false)
+        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val doc = response.asJsoup()
+        return AnimesPage(parseLatestFromHome(doc), false)
     }
+
+    private fun parseLatestFromHome(document: Document): List<SAnime> = document.select("div.section:has(h1:contains(DERNIERS ÉPISODES))")
+        .flatMap { section ->
+            section.select("div.card-base a[href]").map { a ->
+                val href = a.attr("href")
+                val hubUrl = getHubUrl(href)
+                val title = a.selectFirst(".card-title")?.text()?.trim().orEmpty()
+                val thumb = a.selectFirst("img.card-image")?.attr("abs:src")
+
+                SAnime.create().apply {
+                    this.title = title
+                    this.url = hubUrl
+                    this.thumbnail_url = thumb
+                }
+            }
+        }
+        .distinctBy { it.url }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val f = AnimoFlixCatalogueFilters.getSearchFilters(filters)
