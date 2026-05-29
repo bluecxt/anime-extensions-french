@@ -17,7 +17,7 @@ class DoodExtractor(private val client: OkHttpClient) {
     ): Video? {
         return runCatching {
             val response = client.newCall(GET(url)).execute()
-            val newUrl = if (redirect) response.header("Location") ?: response.header("Content-Location") ?: url else url
+            val newUrl = if (redirect) response.request.url.toString() else url
 
             val doodHost = getBaseUrl(newUrl)
             val content = response.body.string()
@@ -32,7 +32,7 @@ class DoodExtractor(private val client: OkHttpClient) {
             // Determinar la calidad a usar
             val newQuality = listOfNotNull(
                 prefix,
-                "Doodstream " + (extractedQuality ?: ( if (redirect) "mirror" else "")),
+                "Doodstream " + (extractedQuality ?: (if (redirect) "mirror" else "")),
             ).joinToString(" - ")
 
             // Obtener el hash MD5
@@ -73,15 +73,13 @@ class DoodExtractor(private val client: OkHttpClient) {
     }
 
     // Método para obtener la base de la URL
-    private fun getBaseUrl(url: String): String {
-        return URI(url).let {
-            "${it.scheme}://${it.host}"
-        }
+    private fun getBaseUrl(url: String): String = URI(url).let {
+        "${it.scheme}://${it.host}"
     }
 
     // Método para obtener headers personalizados
     private fun doodHeaders(host: String) = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        add("User-Agent", "Aniyomi")
         add("Referer", "https://$host/")
     }.build()
 }

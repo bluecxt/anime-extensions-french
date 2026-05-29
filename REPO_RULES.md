@@ -1,59 +1,46 @@
-# 📜 Harmonization Rules for French Extensions
+# 📜 Règles d'Harmonisation pour les Extensions Françaises
 
-This document defines the mandatory standards for all Aniyomi extensions in the bluecxt francophone repository. These rules ensure a consistent and professional user experience.
+Ce document définit les normes obligatoires pour toutes les extensions Aniyomi dans le dépôt francophone de bluecxt. Ces règles garantissent une expérience utilisateur cohérente et professionnelle.
 
-## 1. Episode Formatting
-- **Standard Terminology:** Use bracketed keywords recognized by AniZen to force grouping: `[S1]` (for Season 1), `[Movie]`, `[OAV]`, `[ONA]`, `[Special]`.
-- **Name Structure:** `[S1] Episode Y - [Title]` or simply `Episode Y - [Title]`.
-- **Special Content:** Always prefix with `[Movie]`, `[OAV]`, or `[Special]` (e.g., `[Movie] Episode 1 - [Title]`).
-- **First/Single Season:** Omit the `[S1]` prefix for the first or only season of an anime. Start using prefixes from `[S2]` onwards for subsequent seasons.
-- **No Redundancy:** If the title provided by the site already contains the episode number, do not repeat `Episode X` at the beginning.
+## 1. Formatage des Épisodes
+- **Terminologie Standard :** Utilisez des mots-clés entre crochets reconnus par AniZen pour forcer le regroupement : `[S1]` (pour la Saison 1), `[Movie]`, `[OAV]`, `[ONA]`, `[Special]`.
+- **Structure du Nom :** `[S1] Épisode Y - [Titre]` ou simplement `Épisode Y - [Titre]`.
+- **Contenu Spécial :** Toujours préfixer avec `[Movie]`, `[OAV]`, ou `[Special]` (ex: `[Movie] Épisode 1 - [Titre]`).
+- **Première/Unique Saison :** Omettez le préfixe `[S1]` pour la première ou l'unique saison d'un anime. Commencez à utiliser les préfixes à partir de `[S2]` pour les saisons suivantes.
+- **Pas de Redondance :** Si le titre fourni par le site contient déjà le numéro de l'épisode, ne répétez pas `Épisode X` au début.
 
-## 2. Video Source Labels
-- **Standard Format:** `(Language) Server - Quality` or `(Language) Team Server - Quality`.
-- **Language Tags:** `(VOSTFR)`, `(VF)`, `(VA)`.
-- **Cleaning (Regex):**
-    - Remove server name repetitions (e.g., `Vidmoly - Vidmoly` -> `Vidmoly`).
-    - Remove file weight information (e.g., `- 300MB`).
-    - Remove technical suffixes (`:default`, `default`).
-    - Include the fansub team name if available (mandatory for Anime-Ultime).
+## 2. Libellés des Sources Vidéo
+- **Format Standard :** `(Langue) Serveur - Qualité` ou `(Langue) Team Serveur - Qualité`.
+- **Tags de Langue :** `(VOSTFR)`, `(VF)`, `(VA)`.
+- **Nettoyage (Regex) :**
+    - Supprimez les répétitions du nom du serveur (ex: `Vidmoly - Vidmoly` -> `Vidmoly`).
+    - Supprimez les informations de poids de fichier (ex: `- 300MB`).
+    - Supprimez les suffixes techniques (`:default`, `default`).
+    - Incluez le nom de la team de fansub si disponible (obligatoire pour Anime-Ultime).
 
-## 3. Hoster Grouping (Super Packs)
-- **Consolidation:** Hosters must be grouped by language to avoid long repetitive lists in the initial selection screen.
-- **Naming Convention:** Use the uppercase language tag as the hoster name (e.g., `VOSTFR`, `VF`, `VA`).
-- **Unified List:** When a language group is selected, the extension must aggregate all available server links for that language into a single, perfectly sorted list.
-- **Efficiency:** Extraction for all servers within a group should ideally be performed in parallel to ensure a fast and responsive user experience.
+## 3. Regroupement par Hébergeur (Super Packs)
+- **Consolidation :** Les hébergeurs doivent être regroupés par langue pour éviter de longues listes répétitives sur l'écran de sélection initial.
+- **Convention de Nommage :** Utilisez le tag de langue en majuscules comme nom d'hébergeur (ex: `VOSTFR`, `VF`, `VA`).
+- **Liste Unifiée :** Lorsqu'un groupe de langue est sélectionné, l'extension doit agréger tous les liens de serveurs disponibles pour cette langue dans une seule liste parfaitement triée.
+- **Efficacité :** L'extraction pour tous les serveurs au sein d'un groupe doit idéalement être effectuée en parallèle pour garantir une expérience utilisateur rapide et réactive.
 
-## 4. Sorting and Prioritization
-- **Language:** Sort videos based on the language preference defined in the extension settings.
-- **Resolution:** For the same language, sort by descending resolution (e.g., `1080p` > `720p` > `480p`).
-- **Quality Parsing:** Use a Regex to extract the pixel count (e.g., `(\d+)p`) to ensure reliable numerical sorting.
+## 4. Tri et Priorisation
+- **Langue :** Triez les vidéos en fonction de la préférence de langue définie dans les paramètres de l'extension.
+- **Résolution :** Pour une même langue, triez par résolution décroissante (ex: `1080p` > `720p` > `480p`).
+- **Analyse de la Qualité :** Utilisez une Regex pour extraire le nombre de pixels (ex: `(\d+)p`) afin de garantir un tri numérique fiable.
 
-## 5. Metadata (TMDB)
-- **Release Date:** Always use the exact French label `Date de sortie :` (at the beginning of the description) to guarantee consistency across sources.
-- **Studios/Creators:** Use the `Artist` field (for studios) and `Author` field (for creators/mangakas) provided by the TMDB engine.
-- **Season Overflow:** If a season on the site contains more episodes than listed on TMDB, map the extra episodes to TMDB's Season 0 (Specials/OAV).
+## 5. Métadonnées (TMDB)
+- **Date de Sortie :** Utilisez toujours le libellé français exact `Date de sortie :` (au début de la description) pour garantir la cohérence entre les sources.
+- **Studios/Créateurs :** Utilisez le champ `Artist` (pour les studios) et le champ `Author` (pour les créateurs/mangakas) fournis par le moteur TMDB.
+- **Débordement de Saison :** Si une saison sur le site contient plus d'épisodes que ce qui est listé sur TMDB, mappez les épisodes supplémentaires à la Saison 0 de TMDB (Spéciaux/OAV).
 
-## 6. Extension-Specific Mechanics
+## 6. Mécaniques Spécifiques aux Extensions
 
-Some extensions implement advanced logic to handle specific site structures or filtering needs.
+Certaines extensions implémentent une logique avancée pour gérer des structures de site spécifiques ou des besoins de filtrage particuliers.
 
 ### Anime-Sama
-- **Smart Title Parsing:** Automatically detects keywords like "Saison X", "OAV", or "FILM" in the title to accurately target the correct TMDB category (TV Season, Season 0, or Movie).
-- **Cumulative OAV Offset:** When a season overflow occurs in Season > 1, the extension calculates a cumulative offset by counting "missing" episodes (OAVs) in all previous seasons. This ensures that overflow episodes are mapped to the correct sequential index in TMDB's Season 0.
-- **OAV Content Filtering:** For OAV/Special pages, metadata is filtered to only include episodes with a valid summary, skipping technical or bonus content (interviews, clean openings) often found on TMDB.
-
-### Anime-Sama-Fan
-- **Special Episode Filtering:** Uses a specialized Regex (`ignoredSpecialRegex`) to automatically exclude non-fiction content such as *special broadcasts, video comments, behind the scenes, recaps, trailers, or PVs*.
-- **Hybrid Season Mapping:** Handles cases where seasons are split on the site but merged on TMDB by calculating cumulative episode offsets across multiple site seasons.
+- **Analyse Intelligente des Titres :** Détecte automatiquement les mots-clés comme "Saison X", "OAV", ou "FILM" dans le titre pour cibler précisément la bonne catégorie TMDB (Saison TV, Saison 0, ou Film).
+- **Décalage OAV Cumulatif :** Lorsqu'un débordement de saison se produit en Saison > 1, l'extension calcule un décalage cumulatif en comptant les épisodes "manquants" (OAV) dans toutes les saisons précédentes. Cela garantit que les épisodes de débordement sont mappés au bon index séquentiel dans la Saison 0 de TMDB.
 
 ### Anime-Ultime
-- **Fansub Attribution:** Mandatorily includes the fansub team name in the video labels to respect the community standards of the source site.
-- **Legacy Nomenclature:** Specifically handles "ONA" and "Special" tags found in the site's raw numbering to map them to standard bracketed prefixes.
-
-### Les Poroïniens
-- **Parallel Scanning:** Uses a parallelized scanning approach (via Kotlin Coroutines `async`) during catalogue parsing to handle high-latency API responses without blocking the UI thread.
-- **Smart Episode Normalization:** Automatically detects and adjusts episode numbers for "half-episodes" (e.g., Episode 1.5) by calculating sequential offsets to maintain TMDB alignment.
-
-### SouthTV
-- **Hardcoded TMDB Mapping:** For specific high-priority series where automatic title matching fails, the extension uses hardcoded TMDB ID mappings to ensure 100% metadata accuracy.
+- **Attribution Fansub :** Inclut obligatoirement le nom de la team de fansub dans les libellés vidéo pour respecter les normes communautaires du site source.

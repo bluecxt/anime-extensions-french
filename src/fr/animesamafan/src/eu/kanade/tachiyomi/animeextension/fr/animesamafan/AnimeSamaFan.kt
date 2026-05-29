@@ -229,7 +229,8 @@ class AnimeSamaFan : Source() {
 
         // Use Core Engine for title optimization
         anime.coreOptimizeDisplayTitle(pageTitle, pageTitle.replace(Regex("(?i)\\s*-\\s*Saison.*|\\s*Saison.*"), "").trim())
-        anime.coreSetSeasonNumber(sNum.toDouble())
+        // AniZen bypass: Force -2.0 to totally disable auto-labeling and use our provided title
+        anime.coreSetSeasonNumber(-2.0)
 
         // Baseline description from site
         val siteDescription = document.selectFirst(".synopsis-content p")?.text()
@@ -313,7 +314,7 @@ class AnimeSamaFan : Source() {
             Triple(fullSeasonTitle, coreCleanUrl(sHref), siteSNum)
         }
 
-        return coreBuildSeasonList(baseTitle, siteSeasons, anime.status)
+        return coreBuildSeasonList(baseTitle, siteSeasons, anime.status).onEach { it.coreSetSeasonNumber(-2.0) }
     }
 
     // ================== Episodes ==================

@@ -17,19 +17,19 @@ class GoogleDriveExtractor(private val client: OkHttpClient, private val headers
     private val cookieList = client.cookieJar.loadForRequest("https://drive.google.com".toHttpUrl())
 
     fun videosFromUrl(itemId: String, videoName: String = "Video"): List<Video> {
-        val url = "https://drive.usercontent.google.com/download?id=$itemId"
+        val initialVideoUrl = "https://drive.usercontent.google.com/download?id=$itemId"
         val docHeaders = headers.newBuilder().apply {
             add("Accept", ACCEPT)
             add("Cookie", cookieList.toStr())
         }.build()
 
         val docResp = client.newCall(
-            GET(url, docHeaders)
+            GET(initialVideoUrl, docHeaders)
         ).execute()
 
         if (!docResp.peekBody(15).string().equals("<!DOCTYPE html>", true)) {
             return listOf(
-                Video(videoUrl = url, videoTitle = videoName, headers = docHeaders)
+                Video(videoUrl = initialVideoUrl, videoTitle = videoName, headers = docHeaders)
             )
         }
 
@@ -39,14 +39,14 @@ class GoogleDriveExtractor(private val client: OkHttpClient, private val headers
             ?.let { " ${it.ownText().trim()} " }
             ?: ""
 
-        val videoUrl = url.toHttpUrl().newBuilder().apply {
+        val finalVideoUrl = initialVideoUrl.toHttpUrl().newBuilder().apply {
             document.select("input[type=hidden]").forEach {
                 setQueryParameter(it.attr("name"), it.attr("value"))
             }
         }.build().toString()
 
         return listOf(
-            Video(videoUrl = videoUrl, videoTitle = videoName + itemSize, headers = docHeaders)
+            Video(videoUrl = finalVideoUrl, videoTitle = videoName + itemSize, headers = docHeaders)
         )
     }
 

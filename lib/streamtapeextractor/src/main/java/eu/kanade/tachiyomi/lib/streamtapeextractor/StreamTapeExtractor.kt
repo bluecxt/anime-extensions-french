@@ -13,7 +13,9 @@ class StreamTapeExtractor(private val client: OkHttpClient) {
             // ["https", "", "<domain>", "<???>", "<id>", ...]
             val id = url.split("/").getOrNull(4) ?: return null
             baseUrl + id
-        } else { url }
+        } else {
+            url
+        }
 
         val document = client.newCall(GET(newUrl)).execute().asJsoup()
         val targetLine = "document.getElementById('robotlink')"
@@ -21,13 +23,11 @@ class StreamTapeExtractor(private val client: OkHttpClient) {
             ?.data()
             ?.substringAfter("$targetLine.innerHTML = '")
             ?: return null
-        val videoUrl = "https:" + script.substringBefore("'") +
+        val videoUrlStart = "https:" + script.substringBefore("'") +
             script.substringAfter("+ ('xcd").substringBefore("'")
 
-        return Video(videoUrl = videoUrl, videoTitle = quality, subtitleTracks = subtitleList)
+        return Video(videoUrl = videoUrlStart, videoTitle = quality, subtitleTracks = subtitleList)
     }
 
-    fun videosFromUrl(url: String, quality: String = "Streamtape", subtitleList: List<Track> = emptyList()): List<Video> {
-        return videoFromUrl(url, quality, subtitleList)?.let(::listOf).orEmpty()
-    }
+    fun videosFromUrl(url: String, quality: String = "Streamtape", subtitleList: List<Track> = emptyList()): List<Video> = videoFromUrl(url, quality, subtitleList)?.let(::listOf).orEmpty()
 }

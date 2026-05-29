@@ -70,7 +70,8 @@ class Embed4meExtractor(private val client: OkHttpClient) {
                     .set("Referer", "${parsedUrl.scheme}://${parsedUrl.host}/")
                     .set("Origin", "${parsedUrl.scheme}://${parsedUrl.host}")
                     .build()
-                listOf(Video(videoUrl = videoUrl, videoTitle = "${prefix}Embed4me", headers = videoHeaders))
+                val title = if (prefix.isNotEmpty()) prefix.trim().removeSuffix("-").trim() else "Embed4me"
+                listOf(Video(videoUrl = videoUrl, videoTitle = title, headers = videoHeaders))
             } else {
                 android.util.Log.d("Embed4me", "No videoUrl found. cfUrl: $cfUrl, sourceUrl: $sourceUrl")
                 emptyList()

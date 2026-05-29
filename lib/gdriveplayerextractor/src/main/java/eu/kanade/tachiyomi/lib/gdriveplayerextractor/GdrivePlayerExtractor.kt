@@ -41,9 +41,9 @@ class GdrivePlayerExtractor(private val client: OkHttpClient) {
             .distinctBy { it.groupValues[2] } // remove duplicates by quality
             .map {
                 val qualityStr = it.groupValues[2]
-                val quality = "$playerName ${qualityStr}p - $name"
+                val videoTitle = "$playerName ${qualityStr}p - $name"
                 val videoUrl = "https:" + it.groupValues[1] + "&res=$qualityStr"
-                Video(videoUrl = videoUrl, videoTitle = quality, subtitleTracks = subtitleList)
+                Video(videoUrl = videoUrl, videoTitle = videoTitle, subtitleTracks = subtitleList)
             }.toList()
     }
 

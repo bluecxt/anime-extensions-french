@@ -1,32 +1,32 @@
-**PLEASE READ THIS**
+**VEUILLEZ LIRE CECI**
 
-I acknowledge that:
+Je reconnais que :
 
-- I have updated to the latest version of the app
-- I have updated all extensions
-- If this is an issue with the app itself, that I should be opening an issue in App's support site.
-- I have searched the existing issues for duplicates
-- For source requests, I have checked the list of existing extensions including the multi-source spreadsheet: https://yuzono.github.io/extensions-aniyomi/
+- J'ai mis à jour l'application vers la dernière version
+- J'ai mis à jour toutes les extensions
+- S'il s'agit d'un problème avec l'application elle-même, je dois ouvrir un ticket sur le site de support de l'application.
+- J'ai recherché les tickets existants pour éviter les doublons
+- Pour les demandes de sources, j'ai vérifié la liste des extensions existantes : https://github.com/bluecxt/anime-extensions-french#état-des-extensions-mai-2026
 
-**DELETE THIS SECTION IF YOU HAVE READ AND ACKNOWLEDGED IT**
+**SUPPRIMEZ CETTE SECTION SI VOUS L'AVEZ LUE ET RECONNUE**
 
 ---
 
-## Device information
-* Aniyomi version: ?
-* Android version: ?
-* Device: ?
+## Informations sur l'appareil
+* Version d'Aniyomi : ?
+* Version d'Android : ?
+* Appareil : ?
 
-## Source information
-* Source name: ?
-* Source extension version: ?
+## Informations sur la source
+* Nom de la source : ?
+* Version de l'extension de la source : ?
 
-## Steps to reproduce
-1. First step
-2. Second step
+## Étapes pour reproduire
+1. Première étape
+2. Deuxième étape
 
-## Issue/Request
+## Problème/Demande
 ?
 
-## Other details
-Additional details and attachments.
+## Autres détails
+Détails supplémentaires et pièces jointes.
