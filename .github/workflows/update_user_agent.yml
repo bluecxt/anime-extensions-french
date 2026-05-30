@@ -1,0 +1,40 @@
+name: Update User-Agent
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly at midnight on Sunday
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  update-ua:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Run update script
+        run: python .github/scripts/update-user-agent.py
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: update central User-Agent"
+          branch: update-user-agent
+          delete-branch: true
+          title: "Update central User-Agent"
+          body: |
+            Automatic update of the central User-Agent constant in `core/Source.kt`.
+            Fetched from [useragents.me](https://www.useragents.me/).
+          labels: |
+            bot
+            chore
