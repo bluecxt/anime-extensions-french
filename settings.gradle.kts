@@ -13,8 +13,7 @@ include(":core")
 File(rootDir, "lib").eachDir { include("lib:${it.name}") }
 
 // Load all modules under /lib-multisrc
-// not updated yet for v16
-// File(rootDir, "lib-multisrc").eachDir { include("lib-multisrc:${it.name}") }
+File(rootDir, "lib-multisrc").eachDir { include("lib-multisrc:${it.name}") }
 
 /**
  * ======================================== HELPER FUNCTION ========================================
