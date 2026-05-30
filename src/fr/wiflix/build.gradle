@@ -2,8 +2,8 @@ ext {
     extName = 'Wiflix'
     extClass = '.Wiflix'
     themePkg = 'datalifeengine'
-    baseUrl = 'https://flemmix.best'
-    overrideVersionCode = 26
+    baseUrl = 'https://flemmix.win'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
@@ -17,4 +17,6 @@ dependencies {
     implementation(project(':lib:vidhideextractor'))
     implementation(project(':lib:upstreamextractor'))
     implementation(project(':lib:voeextractor'))
+    implementation(project(':lib:luluextractor'))
+    implementation(project(':lib:vidaraextractor'))
 }

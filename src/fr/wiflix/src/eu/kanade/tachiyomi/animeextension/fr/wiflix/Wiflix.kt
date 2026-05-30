@@ -1,21 +1,25 @@
 package eu.kanade.tachiyomi.animeextension.fr.wiflix
 
-import aniyomi.lib.doodextractor.DoodExtractor
-import aniyomi.lib.streamdavextractor.StreamDavExtractor
-import aniyomi.lib.upstreamextractor.UpstreamExtractor
-import aniyomi.lib.uqloadextractor.UqloadExtractor
-import aniyomi.lib.vidhideextractor.VidHideExtractor
-import aniyomi.lib.vidoextractor.VidoExtractor
-import aniyomi.lib.voeextractor.VoeExtractor
-import aniyomi.lib.vudeoextractor.VudeoExtractor
+import android.util.Log
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
+import eu.kanade.tachiyomi.lib.luluextractor.LuluExtractor
+import eu.kanade.tachiyomi.lib.streamdavextractor.StreamDavExtractor
+import eu.kanade.tachiyomi.lib.upstreamextractor.UpstreamExtractor
+import eu.kanade.tachiyomi.lib.uqloadextractor.UqloadExtractor
+import eu.kanade.tachiyomi.lib.vidaraextractor.VidaraExtractor
+import eu.kanade.tachiyomi.lib.vidhideextractor.VidHideExtractor
+import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
+import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
+import eu.kanade.tachiyomi.lib.vudeoextractor.VudeoExtractor
 import eu.kanade.tachiyomi.multisrc.datalifeengine.DataLifeEngine
 import eu.kanade.tachiyomi.network.GET
-import keiyoushi.utils.parallelCatchingFlatMap
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 /**
@@ -65,42 +69,122 @@ class Wiflix :
 
     // ============================== Episodes ==============================
 
-    override fun episodeListSelector(): String = ".hostsblock div:has(a[href*=https])"
+    override fun episodeListSelector(): String = "ul.eplist li.clicbtn"
 
-    override fun episodeListParse(response: Response): List<SEpisode> = super.episodeListParse(response).sort()
+    override fun episodeListParse(response: Response): List<SEpisode> {
+        val document = response.asJsoup()
+        val anime = SAnime.create() // Dummy for prepareNewEpisode
+
+        return document.select(episodeListSelector()).map { element ->
+            episodeFromElement(element).also { prepareNewEpisode(it, anime) }
+        }.reversed()
+    }
 
     override fun episodeFromElement(element: Element): SEpisode = SEpisode.create().apply {
-        episode_number = element.className().filter { it.isDigit() }.toFloat()
-        name = "Episode ${episode_number.toInt()}"
-        scanlator = if (element.className().contains("vf")) "VF" else "VOSTFR"
-        url = element.select("a").joinToString(",") { it.attr("href").removePrefix("/vd.php?u=") }
+        val epNum = element.text().filter { it.isDigit() }.ifBlank { "1" }.toFloat()
+        episode_number = epNum
+        val lang = if (element.parents().hasClass("blocvostfr")) "VOSTFR" else "VF"
+        name = "Épisode ${epNum.toInt()} ($lang)"
+        scanlator = lang
+        // Store both the anime URL and the rel ID
+        val animeUrl = element.ownerDocument()!!.location().substringAfter(baseUrl.removeSuffix("/"))
+        url = "$animeUrl#${element.attr("rel")}"
     }
 
     // ============================ Video Links =============================
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        val list = episode.url.split(",").filter { it.isNotBlank() }.parallelCatchingFlatMap {
-            with(it) {
-                when {
-                    contains("doods.pro") -> DoodExtractor(client).videosFromUrl(this)
-                    contains("vido.lol") -> VidoExtractor(client).videosFromUrl(this)
-                    contains("uqload.co") -> UqloadExtractor(client).videosFromUrl(this)
-                    contains("waaw1.tv") -> emptyList()
-                    contains("vudeo.co") -> VudeoExtractor(client).videosFromUrl(this)
-                    contains("streamvid.net") -> VidHideExtractor(client, headers).videosFromUrl(this)
-                    contains("upstream.to") -> UpstreamExtractor(client).videosFromUrl(this)
-                    contains("streamdav.com") -> StreamDavExtractor(client).videosFromUrl(this)
-                    contains("voe.sx") -> VoeExtractor(client, headers).videosFromUrl(this)
-                    else -> emptyList()
-                }
-            }
+
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val animeUrl = episode.url.substringBefore("#")
+        val rel = episode.url.substringAfter("#")
+
+        // We need the document to find the clichost links inside the div with class=rel
+        val response = client.newCall(GET(baseUrl.removeSuffix("/") + animeUrl)).execute()
+        val document = response.asJsoup()
+
+        val hosterElements = document.select("div.$rel a")
+        if (hosterElements.isEmpty()) {
+            Log.e("Wiflix", "No hoster found for rel: $rel at $animeUrl")
         }
-        if (list.isEmpty()) throw Exception("no player found")
-        return list
+
+        return hosterElements.map {
+            val onclick = it.attr("onclick")
+            val videoUrl = onclick.substringAfter("'").substringBefore("'")
+            val name = it.text().trim().ifBlank { videoUrl.substringAfter("//").substringBefore("/").removePrefix("www.") }
+            Hoster(hosterName = name, hosterUrl = videoUrl, lazy = true)
+        }
     }
 
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
+    private fun SEpisode.getAnimeUrl(): String = this.url.substringBefore("#")
 
-    override fun videoListSelector(): String = throw UnsupportedOperationException()
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val url = hoster.hosterUrl
+        Log.d("Wiflix", "Extracting video for: $url")
+        val videos = when {
+            url.contains("doods.pro") -> {
+                Log.d("Wiflix", "Using DoodExtractor for $url")
+                DoodExtractor(client).videosFromUrl(url)
+            }
 
-    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+            url.contains("vido.lol") -> {
+                Log.d("Wiflix", "Using VidoExtractor for $url")
+                VidoExtractor(client).videosFromUrl(url)
+            }
+
+            url.contains("uqload.co") -> {
+                Log.d("Wiflix", "Using UqloadExtractor for $url")
+                UqloadExtractor(client).videosFromUrl(url)
+            }
+
+            url.contains("waaw1.tv") -> {
+                Log.d("Wiflix", "Skipping waaw1.tv")
+                emptyList()
+            }
+
+            url.contains("vudeo.co") -> {
+                Log.d("Wiflix", "Using VudeoExtractor for $url")
+                VudeoExtractor(client).videosFromUrl(url)
+            }
+
+            url.contains("streamvid.net") -> {
+                Log.d("Wiflix", "Using VidHideExtractor for $url")
+                VidHideExtractor(client, headers).videosFromUrl(url)
+            }
+
+            url.contains("upstream.to") -> {
+                Log.d("Wiflix", "Using UpstreamExtractor for $url")
+                UpstreamExtractor(client).videosFromUrl(url)
+            }
+
+            url.contains("upns.pro") || url.contains("vidaraa.cc") -> {
+                Log.d("Wiflix", "Using VidaraExtractor for $url")
+                VidaraExtractor(client).videosFromUrl(url, "")
+            }
+
+            url.contains("streamdav.com") -> {
+                Log.d("Wiflix", "Using StreamDavExtractor for $url")
+                StreamDavExtractor(client).videosFromUrl(url)
+            }
+
+            url.contains("voe.sx") || url.contains("bryantenunder.com") || url.contains("vickisaveworker.com") -> {
+                Log.d("Wiflix", "Using VoeExtractor for $url")
+                VoeExtractor(client, headers).videosFromUrl(url, "")
+            }
+
+            url.contains("luluvdo.com") || url.contains("luluvid.com") || url.contains("vidsonic.net") -> {
+                Log.d("Wiflix", "Using LuluExtractor for $url")
+                LuluExtractor(client, headers).videosFromUrl(url, "")
+            }
+
+            else -> {
+                Log.d("Wiflix", "No specific extractor found for $url")
+                emptyList()
+            }
+        }
+
+        if (videos.isEmpty()) {
+            Log.e("Wiflix", "No videos found for hoster: ${hoster.hosterName} at $url")
+        }
+
+        return videos
+    }
 }
