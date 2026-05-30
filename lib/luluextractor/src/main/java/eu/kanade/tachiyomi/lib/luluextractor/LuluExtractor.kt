@@ -17,8 +17,8 @@ class LuluExtractor(private val client: OkHttpClient, private val baseHeaders: H
         val uri = url.toHttpUrl()
         val referer = "${uri.scheme}://${uri.host}/"
         val headers = baseHeaders.newBuilder()
-            .add("Referer", url) // Using full URL as Referer is more stable
-            .add("Origin", referer.removeSuffix("/"))
+            .set("Referer", url) // Using full URL as Referer is more stable
+            .set("Origin", referer.removeSuffix("/"))
             .build()
 
         try {
@@ -27,7 +27,12 @@ class LuluExtractor(private val client: OkHttpClient, private val baseHeaders: H
             val fixedUrl = fixM3u8Link(m3u8Url)
             val quality = getResolution(fixedUrl, headers)
 
-            videos.add(Video(videoUrl = fixedUrl, videoTitle = "${prefix}Lulu - $quality", headers = headers))
+            val videoHeaders = headers.newBuilder()
+                .set("Referer", url)
+                .set("Origin", referer.removeSuffix("/"))
+                .build()
+
+            videos.add(Video(videoUrl = fixedUrl, videoTitle = "${prefix}Lulu - $quality", headers = videoHeaders))
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -36,6 +41,20 @@ class LuluExtractor(private val client: OkHttpClient, private val baseHeaders: H
     }
 
     private fun extractM3u8Url(html: String): String? {
+        val hexReverseRegex = Regex("""const _0x1 = '([^']+)';""")
+        val hexMatch = hexReverseRegex.find(html)
+        if (hexMatch != null) {
+            return try {
+                val hex = hexMatch.groupValues[1].replace("|", "")
+                hex.chunked(2)
+                    .map { it.toInt(16).toChar() }
+                    .joinToString("")
+                    .reversed()
+            } catch (e: Exception) {
+                null
+            }
+        }
+
         return when {
             html.contains("eval(function(p,a,c,k,e") -> {
                 val unpacked = JavaScriptUnpacker.unpack(html) ?: return null
