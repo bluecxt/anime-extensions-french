@@ -23,15 +23,13 @@ class Embed4meExtractor(private val client: OkHttpClient) {
 
     fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
         val decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
-        val videoId = if (decodedUrl.contains("#")) {
-            decodedUrl.substringAfterLast("#").trim()
-        } else if (decodedUrl.lowercase().contains("/embed/")) {
-            decodedUrl.substringBeforeLast("/").substringAfterLast("/embed/").trim()
-        } else {
-            decodedUrl.substringAfterLast("/").trim()
+        val videoId = when {
+            decodedUrl.contains("#") -> decodedUrl.substringAfterLast("#").trim()
+            decodedUrl.contains("/embed/", true) -> decodedUrl.substringAfter("/embed/").substringBefore("/").trim()
+            else -> decodedUrl.substringAfterLast("/").trim()
         }
 
-        if (videoId.isEmpty()) return emptyList()
+        if (videoId.isEmpty() || videoId.contains("http")) return emptyList()
 
         val parsedUrl = url.toHttpUrl()
         val apiUrl = "${parsedUrl.scheme}://${parsedUrl.host}/api/v1/video?id=$videoId&w=1920&h=1080&r="
