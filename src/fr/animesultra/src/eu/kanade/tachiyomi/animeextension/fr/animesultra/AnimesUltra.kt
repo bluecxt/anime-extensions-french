@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesultra
 
+import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.animeextension.fr.animesultra.extractors.VidstreamExtractor
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -10,6 +12,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
+import eu.kanade.tachiyomi.lib.megacloudextractor.MegaCloudExtractor
 import eu.kanade.tachiyomi.lib.okruextractor.OkruExtractor
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
@@ -17,6 +20,7 @@ import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -47,13 +51,23 @@ class AnimesUltra : Source() {
         private const val PREF_URL_KEY = "preferred_baseUrl"
         private const val PREF_URL_DEFAULT = "https://ww.animesultra.org"
 
+        private const val PREF_VOICES_KEY = "preferred_voices"
+        private val VOICES_ENTRIES = arrayOf("Préférer VOSTFR", "Préférer VF")
+        private val VOICES_VALUES = arrayOf("VOSTFR", "VF")
+        private const val PREF_VOICES_DEFAULT = "VOSTFR"
+
+        private const val PREF_SERVER_KEY = "preferred_server"
+        private val SERVER_ENTRIES = arrayOf("UltraCDN", "Vidmoly", "Sibnet", "Sendvid")
+        private val SERVER_VALUES = arrayOf("ultracdn", "vidmoly", "sibnet", "sendvid")
+        private const val PREF_SERVER_DEFAULT = "ultracdn"
+
         private val CLEAN_REGEX = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL|Saison|Season)\\b)")
         private val WHITESPACE_REGEX = Regex("\\s+")
         private val NEWS_ID_REGEX = Regex("""/(\d+)-""")
         private val QUALITY_REGEX = Regex("""(\d+)p""")
         private val CLEAN_QUALITY_REGEX_1 = Regex("(?i)\\(\\s*Player\\s*\\)\\s*|\\(\\s*None\\s*\\)\\s*|\\s*\\(\\d+x\\d+\\)|\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
         private val CLEAN_QUALITY_REGEX_2 = Regex("(?i)Sendvid:default|Sibnet:default|Voe:default|Vidmoly:default")
-        private val SERVERS = listOf("Vidmoly", "Sibnet", "Sendvid", "Voe", "Doodstream", "Okru", "Filemoon", "Player")
+        private val SERVERS = listOf("UltraCDN", "Vidmoly", "Sibnet", "Sendvid")
     }
 
     @Serializable
@@ -63,7 +77,7 @@ class AnimesUltra : Source() {
     data class FullStoryResponse(val status: Boolean = false, val html: String = "")
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.3")
         .add("Referer", "$baseUrl/")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -74,6 +88,32 @@ class AnimesUltra : Source() {
             summary = baseUrl
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
+                true
+            }
+        }.also(screen::addPreference)
+
+        androidx.preference.ListPreference(screen.context).apply {
+            key = PREF_VOICES_KEY
+            title = "Préférence des voix"
+            entries = VOICES_ENTRIES
+            entryValues = VOICES_VALUES
+            setDefaultValue(PREF_VOICES_DEFAULT)
+            summary = "%s"
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).apply()
+                true
+            }
+        }.also(screen::addPreference)
+
+        androidx.preference.ListPreference(screen.context).apply {
+            key = PREF_SERVER_KEY
+            title = "Serveur préféré"
+            entries = SERVER_ENTRIES
+            entryValues = SERVER_VALUES
+            setDefaultValue(PREF_SERVER_DEFAULT)
+            summary = "%s"
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(PREF_SERVER_KEY, newValue as String).apply()
                 true
             }
         }.also(screen::addPreference)
@@ -265,26 +305,40 @@ class AnimesUltra : Source() {
             return emptyList()
         }
 
-        val hosters = mutableListOf<Hoster>()
+        val langGroupedHosters = mutableMapOf<String, MutableList<Pair<String, String>>>()
+
         urlMap.forEach { (lang, path) ->
             val langTag = lang.uppercase()
             val url = if (path.startsWith("http")) path else baseUrl + path
-            val response = client.newCall(GET(url, headers)).execute()
+            val response = try {
+                client.newCall(GET(url, headers)).execute()
+            } catch (_: Exception) {
+                null
+            } ?: return@forEach
             val document = response.asJsoup()
+
+            val foundPlayers = mutableListOf<Pair<String, String>>()
 
             val findHosters = { doc: org.jsoup.nodes.Document ->
                 doc.select("div.server-item").forEach { element ->
-                    val embedUrl = element.attr("data-embed")
-                    val serverName = element.text().trim()
-                    if (embedUrl.isNotBlank()) {
-                        hosters.add(Hoster(hosterName = "($langTag) $serverName", internalData = "$embedUrl|$langTag"))
+                    val serverId = element.attr("data-server-id").trim()
+                    val serverName = element.text().trim().takeIf { it.isNotBlank() } ?: "Serveur"
+
+                    // Look for specific player box (robust selector)
+                    val playerBox = doc.selectFirst("[id=content_player_$serverId]")
+                    val content = playerBox?.text()?.trim() ?: element.attr("data-embed")
+
+                    if (content.isNotBlank() && content.length > 2) {
+                        foundPlayers.add(content to serverName)
                     }
                 }
-                doc.select("[id^=content_player_]").forEach { element ->
-                    val playerUrl = element.text().trim()
-                    if (playerUrl.startsWith("http")) {
-                        val serverName = getServerName(playerUrl)
-                        hosters.add(Hoster(hosterName = "($langTag) $serverName", internalData = "$playerUrl|$langTag"))
+
+                // Fallback for players not linked to a button
+                doc.select(".player_box").forEach { element ->
+                    val content = element.text().trim()
+                    if (content.isNotBlank() && content.length > 5 && foundPlayers.none { it.first == content }) {
+                        val name = getServerName(content) ?: "Serveur"
+                        foundPlayers.add(content to name)
                     }
                 }
             }
@@ -299,48 +353,97 @@ class AnimesUltra : Source() {
                 val html = if (ajaxBody.trim().startsWith("{")) json.decodeFromString<FullStoryResponse>(ajaxBody).html else ajaxBody
                 findHosters(Jsoup.parse(html))
             } catch (_: Exception) {}
+
+            if (foundPlayers.isNotEmpty()) {
+                // Group by server name and take only 3 mirrors max
+                val limitedPlayers = foundPlayers.groupBy {
+                    when {
+                        it.second.contains("Sibnet", true) -> "Sibnet"
+                        it.second.contains("Vidmoly", true) -> "Vidmoly"
+                        it.second.contains("Sendvid", true) -> "Sendvid"
+                        else -> "UltraCDN"
+                    }
+                }.flatMap { (_, players) -> players.take(3) }
+
+                langGroupedHosters.getOrPut(langTag) { mutableListOf() }.addAll(limitedPlayers)
+            }
         }
-        return hosters.distinctBy { it.internalData }
+
+        return langGroupedHosters.map { (lang, players) ->
+            // Store as List of Pairs serialized to JSON
+            // Unique by both URL and Name to avoid merging different servers with same generic embed
+            val internalData = json.encodeToString(players.distinctBy { "${it.first}|${it.second}" }) + "|" + lang
+            Hoster(hosterName = lang, internalData = internalData)
+        }.coreSortHosters()
     }
 
-    private fun getServerName(url: String): String = when {
+    private fun getServerName(url: String): String? = when {
         url.contains("sibnet.ru") -> "Sibnet"
         url.contains("vidmoly") -> "Vidmoly"
-        url.contains("voe.sx") -> "Voe"
         url.contains("sendvid.com") -> "Sendvid"
-        url.contains("dood") || url.contains("d0000d") -> "Doodstream"
-        url.contains("ok.ru") -> "Okru"
-        url.contains("filemoon") || url.contains("fmoon") -> "Filemoon"
-        else -> "Player"
+        url.contains("daisukianime.xyz") || url.contains("vidstream.pro") || url.contains("animesultra.org/player") || url.all { it.isDigit() } -> "UltraCDN"
+        else -> null
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val data = hoster.internalData.split("|")
-        val embedUrl = data[0]
+        val players = json.decodeFromString<List<Pair<String, String>>>(data[0])
         val langTag = data[1]
-        val server = hoster.hosterName.substringAfter(") ")
-        val prefix = "($langTag) $server - "
 
-        val absoluteUrl = if (embedUrl.startsWith("//")) "https:$embedUrl" else embedUrl
+        // Only process unique URLs to avoid overwhelming the server
+        val uniquePlayers = players.distinctBy { it.first }
 
-        val videos = try {
-            when {
-                absoluteUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(absoluteUrl, prefix)
-                absoluteUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(absoluteUrl, prefix)
-                absoluteUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(absoluteUrl, prefix)
-                absoluteUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(absoluteUrl, prefix)
-                absoluteUrl.contains("dood") || absoluteUrl.contains("d0000d") -> doodExtractor.videosFromUrl(absoluteUrl, "${server}Doodstream - ")
-                absoluteUrl.contains("ok.ru") -> okruExtractor.videosFromUrl(absoluteUrl, "${server}Okru - ")
-                absoluteUrl.contains("filemoon") || absoluteUrl.contains("fmoon") -> filemoonExtractor.videosFromUrl(absoluteUrl, "${server}Filemoon - ")
-                else -> emptyList()
+        val allVideos = uniquePlayers.parallelMap { (embedUrl, serverName) ->
+            val absoluteUrl = when {
+                // FORCE Sibnet direct URL for reliability
+                serverName.contains("Sibnet", true) -> {
+                    val id = NEWS_ID_REGEX.find(embedUrl)?.groupValues?.get(1) ?: embedUrl.filter { it.isDigit() }
+                    "https://video.sibnet.ru/shell.php?videoid=$id"
+                }
+
+                embedUrl.startsWith("//") -> "https:$embedUrl"
+
+                embedUrl.all { it.isDigit() } -> "https://lb.daisukianime.xyz/dist/embeds.html?id=$embedUrl"
+
+                else -> embedUrl
             }
-        } catch (_: Exception) {
-            emptyList()
+            val prefix = "($langTag) $serverName - "
+
+            android.util.Log.d("AnimesUltraDebug", "Processing $serverName: $absoluteUrl")
+
+            try {
+                when {
+                    absoluteUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(absoluteUrl, prefix)
+
+                    absoluteUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(absoluteUrl, prefix)
+
+                    absoluteUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(absoluteUrl, prefix)
+
+                    else -> vidstreamExtractor.videosFromUrl(absoluteUrl, "$baseUrl/").map {
+                        it.copy(videoTitle = "($langTag) ${it.videoTitle.replace("UltraCDN", serverName)}")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AnimesUltraDebug", "Error extracting $serverName", e)
+                emptyList()
+            }
+        }.flatten()
+
+        val finalVideos = allVideos.map {
+            val cleanedTitle = cleanQuality(it.videoTitle)
+            it.copy(
+                videoTitle = cleanedTitle,
+                resolution = QUALITY_REGEX.find(cleanedTitle)?.groupValues?.get(1)?.toIntOrNull(),
+            )
+        }.distinctBy { it.videoUrl }.coreSortVideos()
+
+        if (finalVideos.isEmpty()) {
+            android.util.Log.d("AnimesUltraDebug", "No videos found for $langTag")
+        } else {
+            android.util.Log.d("AnimesUltraDebug", "Final qualities for $langTag: ${finalVideos.map { it.videoTitle }}")
         }
 
-        return videos.map {
-            Video(videoUrl = it.videoUrl, videoTitle = cleanQuality(it.videoTitle), headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
-        }.sortVideos()
+        return finalVideos
     }
 
     private fun cleanQuality(quality: String): String {
@@ -351,17 +454,10 @@ class AnimesUltra : Source() {
         return cleaned.replace(WHITESPACE_REGEX, " ").replace(" - - ", " - ").trim()
     }
 
-    override fun List<Video>.sortVideos(): List<Video> = this.sortedWith(
-        compareBy {
-            QUALITY_REGEX.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        },
-    ).reversed()
+    override fun List<Video>.sortVideos(): List<Video> = this.coreSortVideos()
 
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val vidmolyExtractor by lazy { VidMolyExtractor(client) }
-    private val voeExtractor by lazy { VoeExtractor(client, headers) }
+    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
     private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-    private val doodExtractor by lazy { DoodExtractor(client) }
-    private val okruExtractor by lazy { OkruExtractor(client) }
-    private val filemoonExtractor by lazy { FilemoonExtractor(client) }
+    private val vidstreamExtractor by lazy { VidstreamExtractor(client) }
 }

@@ -7,51 +7,65 @@ import okhttp3.OkHttpClient
 
 class VidstreamExtractor(private val client: OkHttpClient) {
     fun videosFromUrl(url: String, referer: String): List<Video> {
+        val id = url.substringAfter("id=", "").substringBefore("&")
+        if (id.isEmpty()) return emptyList()
+
         val headers = Headers.Builder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-            .add("Referer", referer)
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.3")
+            .add("Referer", "https://lb.daisukianime.xyz/")
             .add("Accept", "*/*")
             .build()
 
         return try {
-            val response = client.newCall(GET(url, headers)).execute()
-            val html = response.use { it.body.string() }
+            val apiUrl = "https://cdn2.daisukianime.xyz/sib/$id"
+            android.util.Log.d("VidstreamDebug", "Calling API: $apiUrl")
 
-            val videos = mutableListOf<Video>()
+            val apiResponse = client.newCall(GET(apiUrl, headers)).execute().body.string()
 
-            // 1. Check for sources in script (standard Vidstream)
-            val m3u8Regex = Regex("""["']?file["']?\s*:\s*["']([^"']+\.m3u8[^"']*)["']""")
-            m3u8Regex.findAll(html).forEach { match ->
-                val m3u8Url = match.groupValues[1].replace("\\/", "/")
-                val quality = when {
-                    m3u8Url.contains("master.m3u8") -> "UltraCDN (Auto)"
-                    m3u8Url.contains("1080") -> "UltraCDN 1080p"
-                    m3u8Url.contains("720") -> "UltraCDN 720p"
-                    else -> "UltraCDN HD"
+            // Simple JSON parsing to get the "file" field
+            val videoUrl = Regex("""["']file["']\s*:\s*["']([^"']+)["']""").find(apiResponse)?.groupValues?.get(1)
+
+            if (videoUrl != null) {
+                val absoluteVideoUrl = videoUrl.replace("\\/", "/")
+
+                val resolution = try {
+                    val rangeHeaders = headers.newBuilder().add("Range", "bytes=0-16383").build()
+                    val response = client.newCall(GET(absoluteVideoUrl, rangeHeaders)).execute()
+                    val bytes = response.body.bytes()
+                    getResolutionFromMp4(bytes)
+                } catch (e: Exception) {
+                    null
                 }
-                videos.add(Video(videoUrl = m3u8Url, videoTitle = quality, headers = headers))
-            }
 
-            // 2. Check for hidden iframes or other players in the unified player
-            if (videos.isEmpty()) {
-                val iframeRegex = Regex("""<iframe[^>]+src=["']([^"']+)["']""")
-                iframeRegex.findAll(html).forEach { match ->
-                    val iframeUrl = match.groupValues[1].replace("\\/", "/")
-                    if (!iframeUrl.contains("animesultra") && !iframeUrl.contains("google")) {
-                        // Recursively try to get videos from the iframe if it's a known host
-                        // For now we just add it as a source
-                        if (iframeUrl.contains("sibnet")) {
-                            videos.add(Video(videoUrl = iframeUrl, videoTitle = "Sibnet (via Unified)", headers = headers))
-                        } else if (iframeUrl.contains("vidmoly")) {
-                            videos.add(Video(videoUrl = iframeUrl, videoTitle = "Vidmoly (via Unified)", headers = headers))
-                        }
-                    }
-                }
+                val title = if (resolution != null) "UltraCDN - ${resolution}p" else "UltraCDN"
+                listOf(Video(videoUrl = absoluteVideoUrl, videoTitle = title, headers = headers))
+            } else {
+                emptyList()
             }
-
-            videos
         } catch (e: Exception) {
+            android.util.Log.e("VidstreamDebug", "API fetch failed for $id", e)
             emptyList()
         }
+    }
+
+    private fun getResolutionFromMp4(bytes: ByteArray): Int? {
+        try {
+            val hex = bytes.joinToString("") { "%02x".format(it) }
+            val tkhdIndex = hex.indexOf("746b6864") // "tkhd"
+            if (tkhdIndex != -1) {
+                // In version 0 of tkhd atom:
+                // From the start of "tkhd" string (4 bytes):
+                // Offset to Width is 80 bytes (160 hex chars)
+                // Offset to Height is 84 bytes (168 hex chars)
+                // These are 16.16 fixed-point numbers, we take the integer part (first 4 chars)
+                val heightHex = hex.substring(tkhdIndex + 168, tkhdIndex + 172)
+                val height = heightHex.toInt(16)
+
+                if (height in 240..2160) {
+                    return height
+                }
+            }
+        } catch (_: Exception) {}
+        return null
     }
 }
