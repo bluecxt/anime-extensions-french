@@ -25,7 +25,7 @@ import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
 import java.text.Normalizer
 
-const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.3"
 
 /**
  * Metadata result from TMDB
