@@ -80,7 +80,7 @@ jobs:
           --output detekt.zip
         unzip detekt.zip -d "$dest"
         # Find the executable in the unzipped folder
-        DETEKT_BIN=$(find "$dest" -name detekt -type f | head -n 1)
+        DETEKT_BIN=$(find "$dest" -name detekt-cli -type f | head -n 1)
         chmod a+x "$DETEKT_BIN"
         # Move it to a cleaner path
         mkdir -p bin
