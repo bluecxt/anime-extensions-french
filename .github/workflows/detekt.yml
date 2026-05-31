@@ -30,6 +30,12 @@ jobs:
       with:
         persist-credentials: false
 
+    - name: Set up Java
+      uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+      with:
+        java-version: 17
+        distribution: temurin
+
     - name: Get Detekt download URL
       id: detekt_info
       env:
@@ -41,8 +47,9 @@ jobs:
           query getReleaseAssetDownloadUrl($tagName: String!) {
             repository(name: "detekt", owner: "detekt") {
               release(tagName: $tagName) {
-                releaseAssets(name: "detekt", first: 1) {
+                releaseAssets(first: 10) {
                   nodes {
+                    name
                     downloadUrl
                   }
                 }
@@ -60,7 +67,7 @@ jobs:
           exit 1
         fi
 
-        DETEKT_DOWNLOAD_URL=$(jq --raw-output '.data.repository.release.releaseAssets.nodes[0].downloadUrl' gh_response.json)
+        DETEKT_DOWNLOAD_URL=$(jq --raw-output '.data.repository.release.releaseAssets.nodes[] | select(.name | contains("detekt-cli") and endswith(".zip")) | .downloadUrl' gh_response.json)
         echo "download_url=$DETEKT_DOWNLOAD_URL" >> $GITHUB_OUTPUT
 
     - name: Setup Detekt
@@ -70,9 +77,15 @@ jobs:
           --url ${{ steps.detekt_info.outputs.download_url }} \
           --silent \
           --location \
-          --output $dest/detekt
-        chmod a+x $dest/detekt
-        echo "$dest" >> $GITHUB_PATH
+          --output detekt.zip
+        unzip detekt.zip -d "$dest"
+        # Find the executable in the unzipped folder
+        DETEKT_BIN=$(find "$dest" -name detekt -type f | head -n 1)
+        chmod a+x "$DETEKT_BIN"
+        # Move it to a cleaner path
+        mkdir -p bin
+        cp "$DETEKT_BIN" ./bin/detekt
+        echo "$(pwd)/bin" >> $GITHUB_PATH
 
     - name: Run Detekt
       continue-on-error: true
