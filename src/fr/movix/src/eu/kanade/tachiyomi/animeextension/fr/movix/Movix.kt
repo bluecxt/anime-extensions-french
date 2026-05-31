@@ -328,7 +328,15 @@ class Movix : Source() {
         }
 
         if (item != null) {
-            val tmdbMetadata = fetchTmdbMetadata(item.name)
+            val titleFromUrl = anime.url.substringAfter("|", "").takeIf { it.isNotBlank() }
+            val titleToSearch = titleFromUrl ?: anime.title
+
+            val tmdbMetadata = if (anime.url.contains("#s")) {
+                fetchSmartTmdbMetadata(titleToSearch)
+            } else {
+                fetchSmartTmdbMetadata(item.name)
+            }
+
             anime.description = tmdbMetadata?.summary ?: ""
             tmdbMetadata?.releaseDate?.let { date ->
                 anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
@@ -339,7 +347,7 @@ class Movix : Source() {
             tmdbMetadata?.genre?.let { anime.genre = it }
             tmdbMetadata?.status?.let { anime.status = it }
 
-            if (item.seasons.size > 1) {
+            if (item.seasons.size > 1 && !anime.url.contains("#s")) {
                 anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
             } else {
                 anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
@@ -352,6 +360,55 @@ class Movix : Source() {
 
     override fun animeDetailsParse(response: Response) = throw UnsupportedOperationException()
 
+    private suspend fun fetchSmartTmdbMetadata(title: String, isMovieHint: Boolean = false): fr.bluecxt.core.TmdbMetadata? {
+        if (title.isBlank()) return null
+
+        val seasonRegex = Regex("""(?i)(.*?)\s+\b(?:Saison|Season)\b\s*(\d+)""")
+        val oavRegex = Regex("""(?i)(.*?)\s+\b(?:OAV|OVA|Special|Kai|Director's Cut)\b""")
+        val movieRegex = Regex("""(?i)(.*?)\s+\b(?:FILM|MOVIE)\b""")
+
+        android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: Raw title = '$title'")
+
+        return when {
+            seasonRegex.containsMatchIn(title) -> {
+                val match = seasonRegex.find(title)!!
+                val cleanTitle = match.groupValues[1].trim()
+                val season = match.groupValues[2].toIntOrNull() ?: 1
+                android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: Detected SEASON. CleanTitle = '$cleanTitle', Season = $season")
+                fetchTmdbMetadata(cleanTitle, season, "tv")
+            }
+
+            oavRegex.containsMatchIn(title) -> {
+                val match = oavRegex.find(title)!!
+                val cleanTitle = match.groupValues[1].trim()
+                val isTrueSpecial = !title.contains("Kai", true) && !title.contains("Director's Cut", true)
+                val seasonToFetch = if (isTrueSpecial) 0 else 1
+                android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: Detected OAV/SPECIAL. CleanTitle = '$cleanTitle', SeasonToFetch = $seasonToFetch")
+                val meta = fetchTmdbMetadata(cleanTitle, seasonToFetch, "tv")
+                meta?.let { filterSmartMetadata(it, isSpecialSeason = isTrueSpecial) }
+            }
+
+            isMovieHint || movieRegex.containsMatchIn(title) -> {
+                val match = movieRegex.find(title)
+                val cleanTitle = match?.groupValues?.get(1)?.trim() ?: title
+                android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: Detected MOVIE. CleanTitle = '$cleanTitle'")
+                val movieMeta = fetchTmdbMetadata(cleanTitle, 1, "movie")
+                android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: Movie fetch result = ${movieMeta != null}")
+                movieMeta ?: fetchTmdbMetadata(cleanTitle, 1, "tv")
+            }
+
+            else -> {
+                android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: No regex match, fetching as is: '$title'")
+                fetchTmdbMetadata(title)
+            }
+        }.also {
+            android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: Final returned meta is null? ${it == null}")
+            if (it != null) {
+                android.util.Log.d("MovixDebug", "fetchSmartTmdbMetadata: Meta details: poster=${it.posterUrl}, epSummaries keys=${it.episodeSummaries.keys}")
+            }
+        }
+    }
+
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val id = anime.url.substringAfter("/anime/").substringBefore("#").substringBefore("?")
         val cleanId = id.removePrefix(PREFIX_SEARCH)
@@ -363,12 +420,33 @@ class Movix : Source() {
 
         val siteSeasons = item.seasons.mapIndexed { index, season ->
             val seasonNum = index + 1
-            val sTitle = season.name
-            val sUrl = "/anime/$id#s$index"
-            Triple(sTitle, sUrl, seasonNum)
+            val fullTitle = if (season.name.contains(item.name, true)) season.name else "${item.name} ${season.name}"
+            val sUrl = "/anime/$id#s$index|${fullTitle.replace("|", "")}"
+            Triple(fullTitle, sUrl, seasonNum)
         }
 
-        return coreBuildSeasonList(item.name, siteSeasons, SAnime.UNKNOWN)
+        return siteSeasons.mapIndexed { index, (sTitle, sUrl, _) ->
+            val tmdbMeta = fetchSmartTmdbMetadata(sTitle)
+
+            SAnime.create().apply {
+                title = sTitle
+                url = sUrl
+                thumbnail_url = tmdbMeta?.posterUrl ?: item.image
+                description = tmdbMeta?.summary
+                tmdbMeta?.releaseDate?.let { date ->
+                    description = "Date de sortie : $date\n\n${description ?: ""}"
+                }
+                genre = tmdbMeta?.genre
+                author = tmdbMeta?.author
+                artist = tmdbMeta?.artist
+                status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else (tmdbMeta?.status ?: SAnime.UNKNOWN)
+
+                coreOptimizeDisplayTitle(sTitle, item.name)
+                coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+                coreSetSeasonNumber(-2.0)
+                initialized = true
+            }
+        }
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
@@ -377,7 +455,7 @@ class Movix : Source() {
         val decodedName = java.net.URLDecoder.decode(cleanId, "UTF-8").split("/").filter { it.isNotBlank() }.last()
         val item = animeCache[id] ?: animeCache.values.firstOrNull { it.name.equals(decodedName, true) } ?: return emptyList()
 
-        val sIdxFromUrl = anime.url.substringAfter("#s", "").toIntOrNull()
+        val sIdxFromUrl = anime.url.substringAfter("#s", "").substringBefore("|").toIntOrNull()
 
         val seasonsToProcess = if (sIdxFromUrl != null) {
             listOf(item.seasons[sIdxFromUrl] to (sIdxFromUrl + 1))
@@ -387,8 +465,68 @@ class Movix : Source() {
 
         val allEpisodes = mutableListOf<SEpisode>()
         for ((season, seasonNumber) in seasonsToProcess) {
+            val fullTitle = if (season.name.contains(item.name, true)) season.name else "${item.name} ${season.name}"
+            android.util.Log.d("MovixDebug", "getEpisodeList: Processing season with fullTitle = '$fullTitle', seasonNumber = $seasonNumber")
+
             val tmdbSNum = season.name.replace("Saison ", "").toDoubleOrNull()?.toInt() ?: seasonNumber
-            val tmdbMetadata = fetchTmdbMetadata(item.name, tmdbSNum)
+            val isMovieHint = season.episodes.size == 1 && !fullTitle.contains("OAV", true) && !fullTitle.contains("Special", true)
+            val isOav = fullTitle.contains("OAV", true) || fullTitle.contains("Special", true)
+            val isMovie = fullTitle.contains("Film", true) || fullTitle.contains("Movie", true) || isMovieHint
+
+            val tmdbMetadata = fetchSmartTmdbMetadata(fullTitle, isMovieHint)
+
+            // Offset Calculation (AnimeSama logic)
+            var siteOffset = 0
+            var oavOffset = 0
+            val baseTitle = item.name
+            val realCurrentIndex = item.seasons.indexOf(season)
+            val seenTmdbSeasons = mutableSetOf<Int>()
+
+            for (i in 0 until realCurrentIndex) {
+                val prevSeason = item.seasons[i]
+                val prevName = prevSeason.name
+                val count = prevSeason.episodes.size
+                if (count == 0) continue
+
+                val isPrevOav = prevName.contains("OAV", true) || prevName.contains("Film", true) || prevName.contains("Special", true)
+                val seasonNumMatch = Regex("""\d+""").find(prevName)
+
+                if (!isPrevOav && seasonNumMatch != null) {
+                    val sN = seasonNumMatch.value.toInt()
+                    if (seenTmdbSeasons.contains(sN)) continue
+                    seenTmdbSeasons.add(sN)
+                    val prevTmdbMeta = fetchTmdbMetadata(baseTitle, sN, "tv")
+                    val tmdbCount = prevTmdbMeta?.episodeSummaries?.size ?: 0
+                    if (tmdbCount > 0) {
+                        siteOffset += minOf(count, tmdbCount)
+                        if (count > tmdbCount) {
+                            oavOffset += (count - tmdbCount)
+                        }
+                    } else {
+                        siteOffset += count
+                    }
+                } else {
+                    oavOffset += count
+                }
+            }
+
+            // Reverse Overflow (Absolute Mapping) Check
+            val activeTmdbMeta = if (!isOav && !isMovie && tmdbSNum > 1 && siteOffset > 0) {
+                val s1Meta = fetchTmdbMetadata(baseTitle, 1)
+                val s1Count = s1Meta?.episodeSummaries?.size ?: 0
+                if (s1Count > siteOffset) s1Meta else tmdbMetadata
+            } else {
+                tmdbMetadata
+            }
+
+            var tmdbEpCount = activeTmdbMeta?.episodeSummaries?.size ?: 0
+
+            // Overflow metadata (S0)
+            val s0Metadata = if (tmdbSNum > 0 && season.episodes.size > tmdbEpCount) {
+                fetchTmdbMetadata(baseTitle, 0, "tv")?.let { filterSmartMetadata(it, isSpecialSeason = true) }
+            } else {
+                null
+            }
 
             val rawEpisodes = season.episodes.map { ep ->
                 SEpisode.create().apply {
@@ -398,17 +536,32 @@ class Movix : Source() {
                 }
             }
 
+            android.util.Log.d("MovixDebug", "getEpisodeList: isMovie detected as $isMovie for title '$fullTitle'")
+
             val mappedEpisodes = coreMapEpisodes(
                 rawEpisodes = rawEpisodes,
-                tmdbMetadata = tmdbMetadata,
-                tmdbS0Metadata = null,
-                offsets = Pair(0, 0),
+                tmdbMetadata = activeTmdbMeta,
+                tmdbS0Metadata = s0Metadata,
+                offsets = Pair(siteOffset, oavOffset),
                 sNum = tmdbSNum,
-                isMovie = anime.title.contains("Film", true) || season.name.contains("Film", true),
-                isOav = season.name.contains("OAV", true) || season.name.contains("Special", true),
+                isMovie = isMovie,
+                isOav = isOav,
             )
 
-            mappedEpisodes.forEach { it.scanlator = "Season $seasonNumber" }
+            mappedEpisodes.forEach {
+                it.scanlator = "Season $seasonNumber"
+                android.util.Log.d("MovixDebug", "getEpisodeList: Mapped Episode ${it.name}, initial preview_url = ${it.preview_url}")
+                if (isMovie && season.episodes.size == 1) {
+                    it.name = "[Movie] $fullTitle".replace(" [Movie]", "") // On nettoie le nom pour n'avoir que le titre du film
+                    it.preview_url = tmdbMetadata?.posterUrl ?: it.preview_url
+                    it.summary = tmdbMetadata?.summary ?: it.summary
+                    android.util.Log.d("MovixDebug", "getEpisodeList: Single-episode movie detected. Renamed to ${it.name}, Overrode preview_url with posterUrl = ${it.preview_url}")
+                } else if (isMovie && it.preview_url == null) {
+                    it.preview_url = tmdbMetadata?.posterUrl
+                    it.summary = tmdbMetadata?.summary
+                    android.util.Log.d("MovixDebug", "getEpisodeList: Overrode preview_url with posterUrl = ${it.preview_url}")
+                }
+            }
             allEpisodes.addAll(mappedEpisodes)
         }
 
