@@ -31,6 +31,8 @@ import uy.kohesive.injekt.injectLazy
 
 class AnimeSama : Source() {
 
+    private val log = "AnimeSamaDebug"
+
     override val name = "Anime-Sama"
 
     override val baseUrl: String
@@ -359,7 +361,7 @@ class AnimeSama : Source() {
         if (title.isBlank()) return null
 
         val seasonRegex = Regex("""(?i)(.*?)\s+(?:Saison|Season)\s*(\d+)""")
-        val oavRegex = Regex("""(?i)(.*?)\s+(?:OAV|OVA|Special|Kai|Director's Cut)""")
+        val oavRegex = Regex("""(?i)(.*?)\s+(?:OAV|OVA|Special|Director's Cut|\bKai$)""")
         val movieRegex = Regex("""(?i)(.*?)\s+(?:FILM|MOVIE)""")
 
         return when {
@@ -412,10 +414,10 @@ class AnimeSama : Source() {
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        android.util.Log.d("AnimeSamaDebug", "getVideoList START for hoster: ${hoster.hosterName}")
+        android.util.Log.d(log, "getVideoList START for hoster: ${hoster.hosterName}")
         val data = hoster.internalData.split("|")
         val urls = json.decodeFromString<List<String>>(data[0])
-        android.util.Log.d("AnimeSamaDebug", "Raw players list: $urls")
+        android.util.Log.d(log, "Raw players list: $urls")
         val lang = data[1]
 
         return urls.parallelMap { playerUrl ->
@@ -440,7 +442,7 @@ class AnimeSama : Source() {
                 }
 
                 if (videos.isEmpty() && server != "Serveur") {
-                    android.util.Log.d("AnimeSamaDebug", "Extractor returned empty for: $server -> $playerUrl")
+                    android.util.Log.d(log, "Extractor returned empty for: $server -> $playerUrl")
                 }
 
                 videos.map { video ->
@@ -456,11 +458,11 @@ class AnimeSama : Source() {
                     )
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AnimeSamaDebug", "Exception extracting $playerUrl", e)
+                android.util.Log.e(log, "Exception extracting $playerUrl", e)
                 emptyList<Video>()
             }
         }.flatten().coreSortVideos().also {
-            android.util.Log.d("AnimeSamaDebug", "Final sorted videos list: ${it.map { v -> v.videoTitle + " -> " + v.videoUrl }}")
+            android.util.Log.d(log, "Final sorted videos list: ${it.map { v -> v.videoTitle + " -> " + v.videoUrl }}")
         }
     }
 
@@ -502,27 +504,15 @@ class AnimeSama : Source() {
         val animeUrl = hubUrl.toHttpUrl()
 
         // Clean animeName to avoid "Anime Saison 1 Saison 1"
-        val animeName = (animeDoc.getElementById("titreOeuvre")?.text() ?: "").trim()
-            .substringBefore(" - Saison")
-            .substringBefore(" Saison")
-            .substringBefore(" - Season")
-            .substringBefore(" Season")
-            .substringBefore(" - Film")
-            .substringBefore(" Film")
-            .substringBefore(" - Movie")
-            .substringBefore(" Movie")
-            .substringBefore(" - OAV")
-            .substringBefore(" OAV")
-            .substringBefore(" - Partie")
-            .substringBefore(" Partie")
-            .substringBefore(" - Part")
-            .substringBefore(" Part")
-            .substringBefore(" - Kai")
-            .substringBefore(" Kai")
-            .substringBefore(" - Director's Cut")
-            .substringBefore(" Director's Cut")
-            .trim()
-        android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Extracted animeName: '$animeName'")
+        val rawTitle = (animeDoc.getElementById("titreOeuvre")?.text() ?: "").trim()
+
+        val attributesRegex = Regex("""(?i)\s*(?:-\s*)?(?:Saison|Season|Film|Movie|OAV|OVA|Partie|Part)\b.*""")
+        val intermediateTitle = rawTitle.replace(attributesRegex, "").trim()
+
+        val editionRegex = Regex("""(?i)\s*(?:-\s*)?(?:\bKai|\bDirector's Cut)$""")
+        val animeName = intermediateTitle.replace(editionRegex, "").trim()
+
+        android.util.Log.d(log, "fetchAnimeSeasons: Extracted animeName: '$animeName'")
 
         val scripts = animeDoc.select("script").toString()
         val uncommented = commentRegex.replace(scripts, "")
@@ -541,14 +531,14 @@ class AnimeSama : Source() {
 
                 val isSubSeason = stem.contains("/") && !isLangOnly
                 if (!isSubSeason) {
-                    android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Filtering out Hub self-ref: $stem")
+                    android.util.Log.d(log, "fetchAnimeSeasons: Filtering out Hub self-ref: $stem")
                 }
                 isSubSeason
             }
             .distinctBy {
                 val stem = it.groupValues[2].trim().removeSuffix("/")
                     .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
-                android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Match - Name: ${it.groupValues[1]}, Stem: ${it.groupValues[2]}, BaseStem: $stem")
+                android.util.Log.d(log, "fetchAnimeSeasons: Match - Name: ${it.groupValues[1]}, Stem: ${it.groupValues[2]}, BaseStem: $stem")
                 stem
             }
 
@@ -566,7 +556,7 @@ class AnimeSama : Source() {
                 else -> {
                     val baseNum = seasonNumMatch?.value?.toDoubleOrNull() ?: 1.0
                     when {
-                        seasonName.contains("Kai", true) || seasonName.contains("Director's Cut", true) -> -1.0
+                        seasonName.contains(Regex("""(?i)\bKai\b""")) || seasonName.contains("Director's Cut", true) -> -1.0
                         else -> baseNum
                     }
                 }
@@ -608,7 +598,7 @@ class AnimeSama : Source() {
                 .replace(Regex("""(?i)Partie\s*(\d+)"""), "Part $1")
                 .trim()
 
-            android.util.Log.d("AnimeSamaDebug", "fetchAnimeSeasons: Season - Final Title: '$finalTitle', URL: '$url'")
+            android.util.Log.d(log, "fetchAnimeSeasons: Season - Final Title: '$finalTitle', URL: '$url'")
 
             SAnime.create().apply {
                 this.title = finalTitle
@@ -655,7 +645,9 @@ class AnimeSama : Source() {
         val effectiveTitle = originalTitleFromUrl ?: anime.title
 
         // REPO_RULES: Standard terminology for AniZen grouping
-        val isSpecial = effectiveTitle.contains("Special", true) || effectiveTitle.contains("Kai", true) || effectiveTitle.contains("Director's Cut", true)
+        val isSpecial = effectiveTitle.contains("Special", true) ||
+            effectiveTitle.contains(Regex("""(?i)\bKai\b""")) ||
+            effectiveTitle.contains("Director's Cut", true)
         val isOav = effectiveTitle.contains("OAV", true) || effectiveTitle.contains("OVA", true) || isSpecial
         val isMovie = effectiveTitle.contains("FILM", true) || effectiveTitle.contains("MOVIE", true) || animeUrlPath.contains("film", true) || animeUrlPath.contains("movie", true)
 
@@ -776,7 +768,7 @@ class AnimeSama : Source() {
             else -> ""
         }
 
-        val isSpecialVersion = effectiveTitle.contains("Kai", true) || effectiveTitle.contains("Director's Cut", true)
+        val isSpecialVersion = effectiveTitle.contains(Regex("""(?i)\bKai\b""")) || effectiveTitle.contains("Director's Cut", true)
 
         val movieNames = if (isMovie) {
             val urlsToTry = mutableListOf("$baseUrl$animeUrlPath")
