@@ -30,8 +30,10 @@ def ensure_anitester():
 def find_apk(ext_name):
     patterns = []
     if AUDIT_APK_DIR:
-        patterns.append(os.path.join(AUDIT_APK_DIR, f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk"))
+        # Chercher de manière récursive dans le dossier des artifacts
+        patterns.append(os.path.join(AUDIT_APK_DIR, f"**/*{ext_name}*.apk"))
     patterns.append(f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk")
+    
     for pattern in patterns:
         apks = glob.glob(pattern, recursive=True)
         apks = [a for a in apks if "androidTest" not in a]
@@ -56,14 +58,10 @@ def run_kotlin_test(ext_name):
         return False, "Timeout global"
 
     output_upper = output.upper()
-    
-    # Correction de la détection de succès
-    # Si on voit "COMPLETED POPULAR PAGE TEST" et PAS de message d'erreur fatal, c'est réussi
     if "COMPLETED POPULAR PAGE TEST" in output_upper:
         if "FAILED" not in output_upper.split("COMPLETED")[-1]:
             return True, "Test Popular réussi"
 
-    # Fallback sur la détection par nombre de résultats
     if "RESULTS" in output_upper:
         for line in output.split("\n"):
             if "Results" in line and "->" in line:
@@ -109,6 +107,15 @@ def run_all():
     for name, status, reason in results:
         print(f"{name:<15} | {status:<15} | {reason}")
     print("="*80)
+
+    # Check for non-ignored failures
+    failed_critical = [r for r in results if r[1] == "❌ FAIL"]
+    if failed_critical:
+        print(f"\n❌ L'audit a échoué pour {len(failed_critical)} extension(s) critique(s).")
+        sys.exit(1)
+    else:
+        print("\n✅ Audit terminé avec succès (ou échecs ignorés).")
+        sys.exit(0)
 
 if __name__ == "__main__":
     run_all()
