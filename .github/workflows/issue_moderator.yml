@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Moderate issues
-        uses: aniyomiorg/issue-moderator-action@v2
+        uses: aniyomiorg/issue-moderator-action@c31c01d8f7af4400c6a2bfd73c015f88e9139380
         with:
           repo-token: ${{ github.token }}
           member-token: ${{ secrets.GITHUB_TOKEN }}
