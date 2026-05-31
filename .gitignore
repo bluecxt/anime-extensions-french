@@ -44,3 +44,6 @@ signingkey.jks
 .obsidian/
 issue/
 .gemini/
+.editorconfig
+.gitattributes
+ktlintCodeStyle.xml
