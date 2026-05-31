@@ -10,7 +10,6 @@ on:
       - "!.github/**"
       - ".github/scripts/**"
       - ".github/workflows/build_push.yml"
-  # Manual trigger
   workflow_dispatch:
 
 permissions: {}
@@ -41,6 +40,35 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check Core/Lib changes and bump versions
+        id: bump-check
+        run: |
+          COMMIT_COUNT=$(jq '.commits | length' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "0")
+
+          if [ "$COMMIT_COUNT" -gt 0 ]; then
+            BASE_COMMIT="HEAD~$COMMIT_COUNT"
+          else
+            BASE_COMMIT="${{ github.event.before }}"
+            if [ "$BASE_COMMIT" = "0000000000000000000000000000000000000000" ] || [ -z "$BASE_COMMIT" ]; then
+              BASE_COMMIT="HEAD~1"
+            fi
+          fi
+
+          echo "[+] Analyse globale de l'historique ($BASE_COMMIT -> HEAD) contenant $COMMIT_COUNT commit(s)..."
+
+          if git diff --name-only $BASE_COMMIT HEAD | grep -E '^(src/fr/bluecxt/core/|lib/)'; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+            python bump_versions.py
+
+            git add src/
+            if ! git diff-index --quiet HEAD --; then
+              git commit -m "[CI] Auto-bump extension versions due to Core/Lib updates"
+              git push origin main
+            fi
+          fi
+
       - name: Set env
         id: set-env
         run: |
@@ -67,6 +95,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: main
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -127,6 +157,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: main
 
       - name: Checkout repo branch
         uses: actions/checkout@v6
@@ -148,16 +180,10 @@ jobs:
 
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
 
-          # Inspector needs to generate output.json for create-repo.py
           java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
-
-          # This script uses output.json to create repo/index.min.json
           python ./.github/scripts/create-repo.py
-
-          # Copy index.min.json to index.json for compatibility (both should be in the same format)
           cp repo/index.min.json repo/index.json
 
-          # Extract signing fingerprint and create mandatory repo.json for Anikku
           SAMPLE_APK=$(find repo/apk -name "*.apk" | head -n 1)
           if [ -n "$SAMPLE_APK" ]; then
             FINGERPRINT=$(keytool -printcert -jarfile "$SAMPLE_APK" | grep "SHA256:" | head -n 1 | awk -F': ' '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
@@ -169,7 +195,6 @@ jobs:
             exit 1
           fi
 
-          # Use local French flag as repository icon/logo
           sudo apt-get update && sudo apt-get install -y librsvg2-bin
           rsvg-convert -w 512 -h 512 repo_logo.svg -o repo/icon.png
           cp repo/icon.png repo/logo.png
