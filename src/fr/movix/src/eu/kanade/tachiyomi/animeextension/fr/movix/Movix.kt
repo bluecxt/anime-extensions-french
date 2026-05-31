@@ -100,6 +100,37 @@ class Movix : Source() {
         private const val PREF_URL_KEY = "preferred_baseUrl"
         private const val PREF_URL_DEFAULT = "https://movix.cloud"
         const val PREFIX_SEARCH = "id:"
+
+        private val voicesMap = mapOf(
+            "Prefer VOSTFR" to "vostfr",
+            "Prefer VF" to "vf",
+            "Prefer VA" to "va",
+            "Prefer VCN" to "vcn",
+            "Prefer VJ" to "vj",
+            "Prefer VKR" to "vkr",
+            "Prefer VQC" to "vqc",
+        )
+        private val VOICES = voicesMap.keys.toTypedArray()
+        private val VOICES_VALUES = voicesMap.values.toTypedArray()
+
+        private val playersMap = mapOf(
+            "Sendvid" to "sendvid",
+            "Sibnet" to "sibnet",
+            "VK" to "vk",
+            "Vidmoly" to "vidmoly",
+            "Filemoon" to "filemoon",
+            "DoodStream" to "dood",
+            "StreamTape" to "streamtape",
+            "Vidoza" to "vidoza",
+            "Voe" to "voe",
+            "MinoChinos" to "minochinos",
+            "Embed4me" to "embed4me",
+        )
+        private val PLAYERS = playersMap.keys.toTypedArray()
+        private val PLAYERS_VALUES = playersMap.values.toTypedArray()
+
+        private const val PREF_QUALITY_KEY = "preferred_quality"
+        private const val PREF_QUALITY_DEFAULT = "1080"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -115,6 +146,43 @@ class Movix : Source() {
                 true
             }
         }.also(screen::addPreference)
+
+        androidx.preference.ListPreference(screen.context).apply {
+            key = PREF_QUALITY_KEY
+            title = "Preferred quality"
+            entries = arrayOf("1080p", "720p", "480p", "360p")
+            entryValues = arrayOf("1080", "720", "480", "360")
+            setDefaultValue(PREF_QUALITY_DEFAULT)
+            summary = "%s"
+        }.also(screen::addPreference)
+
+        androidx.preference.ListPreference(screen.context).apply {
+            key = PREF_VOICES_KEY
+            title = "Voices preference"
+            entries = VOICES
+            entryValues = VOICES_VALUES
+            setDefaultValue(PREF_VOICES_DEFAULT)
+            summary = "%s"
+        }.also(screen::addPreference)
+
+        androidx.preference.ListPreference(screen.context).apply {
+            key = PREF_PLAYER_KEY
+            title = "Default player"
+            entries = PLAYERS
+            entryValues = PLAYERS_VALUES
+            setDefaultValue(PREF_PLAYER_DEFAULT)
+            summary = "%s"
+        }.also(screen::addPreference)
+    }
+
+    override fun List<Hoster>.sortHosters(): List<Hoster> {
+        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!.uppercase()
+        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+
+        return this.sortedWith(
+            compareByDescending<Hoster> { it.hosterName.equals(voices, true) }
+                .thenByDescending { it.hosterName.contains(player, true) },
+        )
     }
 
     private fun getAnimeId(url: String): String = URLEncoder.encode(url, "UTF-8")
