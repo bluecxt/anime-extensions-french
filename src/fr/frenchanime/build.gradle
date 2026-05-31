@@ -2,7 +2,7 @@ ext {
     extName = 'French Anime'
     extClass = '.FrenchAnime'
     baseUrl = 'https://french-anime.com'
-    extVersionCode = 38
+    extVersionCode = 39
 }
 
 apply from: "$rootDir/common.gradle"

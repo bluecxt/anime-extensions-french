@@ -2,7 +2,7 @@ ext {
     extName = 'Wiflix'
     extClass = '.Wiflix'
     baseUrl = 'https://flemmix.win'
-    extVersionCode = 1
+    extVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
