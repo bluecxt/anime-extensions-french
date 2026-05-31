@@ -238,7 +238,7 @@ jobs:
           cp repo/icon.png repo/logo.png
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@a28d30e3713f01908865e8a3a0e6205777405e32 # v3.1.1
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.1.1
         with:
           path: repo/
 
