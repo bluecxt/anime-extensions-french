@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.lib.minochinosextractor.MinoChinosExtractor
 import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
 import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
@@ -394,7 +393,6 @@ class AnimeSama : Source() {
     // ============================ Video Links =============================
 
     private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val vkExtractor by lazy { VkExtractor(client, headers) }
     private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
     private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
     private val minochinosExtractor by lazy { MinoChinosExtractor(client) }
@@ -424,7 +422,6 @@ class AnimeSama : Source() {
             try {
                 val server = when {
                     playerUrl.contains("sibnet.ru") -> "Sibnet"
-                    playerUrl.contains("vk.") -> "VK"
                     playerUrl.contains("sendvid.com") -> "Sendvid"
                     playerUrl.contains("vidmoly.") -> "VidMoly"
                     playerUrl.contains("minochinos.com") || playerUrl.contains("vidhide") -> "MinoChinos"
@@ -435,7 +432,6 @@ class AnimeSama : Source() {
 
                 val videos = when {
                     playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("vk.") -> vkExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
                     playerUrl.contains("minochinos.com") || playerUrl.contains("vidhide") -> minochinosExtractor.videosFromUrl(playerUrl, prefix)
@@ -943,14 +939,7 @@ class AnimeSama : Source() {
 
         val urls = QuickJs.create().use { qjs ->
             qjs.evaluate(doc)
-            val res = qjs.evaluate(
-                $$"""
-                JSON.stringify(
-                    Array.from({length: 40}, (e,i) => this[`eps${i + 1}`])
-                        .filter(e => e !== undefined && e !== null)
-                )
-            """,
-            )
+            val res = qjs.evaluate("JSON.stringify(Array.from({length: 40}, (e, i) => this['eps' + (i + 1)]).filter(e => e !== undefined && e !== null))")
             json.decodeFromString<List<List<String>>>(res as String)
         }
 
@@ -1012,7 +1001,7 @@ class AnimeSama : Source() {
         private const val PREF_URL_KEY = "base_url_pref"
         private const val PREF_URL_TITLE = "Base URL"
         private const val PREF_URL_DEFAULT = "https://anime-sama.to"
-        private const val PREF_URL_SUMMARY = "To change the domain of the extension. See https://anime-sama.pw"
+        private const val PREF_URL_SUMMARY = "See https://anime-sama.pw"
 
         private val voicesMap = mapOf(
             "Prefer VOSTFR" to "vostfr",
@@ -1029,7 +1018,6 @@ class AnimeSama : Source() {
         private val playersMap = mapOf(
             "Sendvid" to "sendvid",
             "Sibnet" to "sibnet",
-            "VK" to "vk",
             "VidMoly" to "vidmoly",
             "MinoChinos" to "minochinos",
             "Embed4me" to "embed4me",
