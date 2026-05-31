@@ -17,7 +17,7 @@ https://raw.githubusercontent.com/bluecxt/anime-extensions-french/repo/index.min
 
 ## ⚠️ Notes Importantes (DNS)
 
-Si vous rencontrez des problèmes de chargement des lecteurs (notamment **MinoChinos**, **VidMoly** ou **Sibnet**), il est fortement recommandé d'utiliser les DNS de Cloudflare :
+Si vous rencontrez des problèmes de chargement des lecteurs, il est fortement recommandé d'utiliser les DNS de Cloudflare :
 *   **Sur Android :** Suivez ce guide [Configuration 1.1.1.1](https://developers.cloudflare.com/1.1.1.1/setup/android/)
 *   **Dans AniZen :** Allez dans `Paramètres` > `Avancé` > `DNS over HTTPS` et activez-le.
 
