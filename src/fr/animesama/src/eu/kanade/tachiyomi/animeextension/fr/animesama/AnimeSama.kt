@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
+import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -21,6 +22,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -139,16 +141,13 @@ class AnimeSama : Source() {
 
     private fun parseCatalogue(document: org.jsoup.nodes.Document, page: String): AnimesPage {
         val animes = document.select("div.catalog-card").mapNotNull {
-            val typeText = it.select(".info-row:has(.info-label:contains(Types)) .info-value").text()
-            val types =
-                typeText.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() && !t.equals("Scans", true) }
-            if (types.isEmpty()) return@mapNotNull null
+            if (it.select(".info-row:has(.info-label:contains(Types)) .info-value").text().trim().equals("Scans", true)) return@mapNotNull null
 
-            val a = it.selectFirst("a") ?: return@mapNotNull null
+            val cardLink = it.selectFirst("a") ?: return@mapNotNull null
             SAnime.create().apply {
-                title = a.select(".card-title").text().trim()
-                thumbnail_url = a.select("img").attr("abs:src")
-                url = a.attr("abs:href").toHttpUrl().encodedPath
+                title = cardLink.select(".card-title").text().trim()
+                thumbnail_url = cardLink.select("img").attr("abs:src")
+                url = cardLink.safeRelativePath()
             }
         }
 

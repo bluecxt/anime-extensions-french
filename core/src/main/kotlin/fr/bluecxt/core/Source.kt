@@ -493,7 +493,7 @@ abstract class Source :
      * Fetches metadata from TMDB specifically for a movie.
      * Only returns a result if there's exactly one match to ensure accuracy.
      */
-    suspend fun fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR"): TmdbMetadata? {
+    fun fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR"): TmdbMetadata? {
         val searchUrl = "$tmdbBaseUrl/search/movie?api_key=$tmdbApiKey&query=${URLEncoder.encode(query, "UTF-8")}&language=$lang"
         return try {
             val response = client.newCall(GET(searchUrl)).execute().use { it.body.string() }
