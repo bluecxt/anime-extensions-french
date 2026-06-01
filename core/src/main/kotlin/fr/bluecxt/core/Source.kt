@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
@@ -865,6 +866,8 @@ abstract class Source :
         logUsage()
         throw UnsupportedOperationException()
     }
+
+    override suspend fun getVideoList(episode: SEpisode): List<Video> = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): eu.kanade.tachiyomi.animesource.model.AnimesPage = throw UnsupportedOperationException()
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         logUsage()

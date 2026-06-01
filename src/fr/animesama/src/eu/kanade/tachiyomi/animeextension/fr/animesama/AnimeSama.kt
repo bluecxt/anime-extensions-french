@@ -322,7 +322,7 @@ class AnimeSama : Source() {
         val isHub = rawUrl.pathSegments.size <= 2
 
         // If it's a hub (no season/film/oav in URL) but we are in Episode mode,
-        // it means there's only one season or we want to show the first one.
+        // it means there's only one season, or we want to show the first one.
         if (isHub) {
             val response = client.newCall(GET("$baseUrl$animeUrlPath/")).execute()
             val doc = response.asJsoup()
@@ -350,7 +350,7 @@ class AnimeSama : Source() {
             }
         }
 
-        val players = VOICES_VALUES.toList().parallelMap<String, List<List<String>>> {
+        val players = VOICES_VALUES.toList().parallelMap {
             fetchPlayers("$baseUrl$seasonRootPath/$it")
         }
         val episodes = playersToEpisodes(players, anime, "$seasonRootPath/")
@@ -375,7 +375,7 @@ class AnimeSama : Source() {
             oavRegex.containsMatchIn(title) -> {
                 val match = oavRegex.find(title)!!
                 val cleanTitle = match.groupValues[1].trim()
-                // REPO_RULES: Kai and Director's Cut should use Season 1 metadata
+                // REPO_RULES: Kai and Director's cut should use Season 1 metadata
                 val isTrueSpecial = !title.contains("Kai", true) && !title.contains("Director's Cut", true)
                 val seasonToFetch = if (isTrueSpecial) 0 else 1
                 val meta = fetchTmdbMetadata(cleanTitle, seasonToFetch, "tv")
@@ -459,7 +459,7 @@ class AnimeSama : Source() {
                 }
             } catch (e: Exception) {
                 android.util.Log.e(log, "Exception extracting $playerUrl", e)
-                emptyList<Video>()
+                emptyList()
             }
         }.flatten().coreSortVideos().also {
             android.util.Log.d(log, "Final sorted videos list: ${it.map { v -> v.videoTitle + " -> " + v.videoUrl }}")
@@ -475,11 +475,6 @@ class AnimeSama : Source() {
             compareByDescending<Hoster> { it.hosterName.equals(voices, true) }
                 .thenByDescending { it.hosterName.contains(player, true) },
         )
-    }
-
-    private suspend fun fetchAnimeSeasons(animeUrl: String): List<SAnime> {
-        val res = client.newCall(GET(animeUrl)).execute()
-        return fetchAnimeSeasons(res)
     }
 
     private val commentRegex by lazy { Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL) }
@@ -570,7 +565,7 @@ class AnimeSama : Source() {
 
             listOf(Quadruple(fullTitle, "$animeUrl/$seasonStem", sNum, defaultStatus))
         }
-        return animes.parallelMap<Quadruple<String, String, Double, Int>, SAnime> { (fullTitle, url, sNum, defStatus) ->
+        return animes.parallelMap { (fullTitle, url, _, defStatus) ->
             val tmdbMetadata = fetchSmartTmdbMetadata(fullTitle)
 
             var isSubTitleOnly = false
@@ -697,7 +692,7 @@ class AnimeSama : Source() {
                     stemBase != currentBaseStem
                 }
 
-                val seasonData = seasonsToScan.parallelMap<MatchResult, Quadruple<String, String, Int, Nothing?>> { match ->
+                val seasonData = seasonsToScan.parallelMap { match ->
                     val (seasonName, stem) = match.destructured
                     val cleanStem = stem.trim().removeSuffix("/")
                     val count = countEpisodesInSeason("$rootPath/$cleanStem")
@@ -799,7 +794,7 @@ class AnimeSama : Source() {
             null
         }
 
-        return (0 until maxEpisodes).parallelMap<Int, SEpisode> { episodeNumber ->
+        return (0 until maxEpisodes).parallelMap { episodeNumber ->
             val epNum = episodeNumber + 1
             val players = list.map { it.getOrElse(episodeNumber) { emptyList() } }
 
@@ -892,7 +887,7 @@ class AnimeSama : Source() {
             if (p != cleanSeasonPath.trim().removeSuffix("/")) jsPaths.add(p)
         }
 
-        val counts = jsPaths.parallelMap<String, Int> { p ->
+        val counts = jsPaths.parallelMap { p ->
             try {
                 val docUrl = "$baseUrl$p/episodes.js"
                 val js = client.newCall(GET(docUrl)).execute().use {
@@ -902,7 +897,7 @@ class AnimeSama : Source() {
                 if (js.trim().startsWith("<")) return@parallelMap 0
 
                 // Simple regex to find the size of the first array (eps1)
-                val match = Regex("""eps1\s*=\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(js)
+                val match = Regex("""eps1\s*=\s*\[(.*?)]""", RegexOption.DOT_MATCHES_ALL).find(js)
                 val content = match?.groupValues?.get(1)?.trim() ?: return@parallelMap 0
                 if (content.isEmpty() || content == "[]") return@parallelMap 0
                 content.split(",").filter { it.isNotBlank() }.size
