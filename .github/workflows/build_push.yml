@@ -165,7 +165,7 @@ jobs:
 
       - name: Run Orchestrator
         env:
-          AUDIT_APK_DIR: apk-artifacts
+          AUDIT_APK_SOURCE_DIR: apk-artifacts
           AUDIT_SKIP_GRADLE_BUILD: "1"
         run: python3 audit_extensions.py
 
