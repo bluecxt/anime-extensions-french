@@ -58,6 +58,7 @@ jobs:
           echo "[+] Analyse globale de l'historique ($BASE_COMMIT -> HEAD) contenant $COMMIT_COUNT commit(s)..."
 
           if git diff --name-only $BASE_COMMIT HEAD | grep -E '^(src/fr/bluecxt/core/|lib/)'; then
+            echo "core a changé depuis la dernière fois"
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
 

@@ -32,6 +32,7 @@ const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleW
 /**
  * Metadata result from TMDB
  */
+
 data class TmdbMetadata(
     val posterUrl: String? = null,
     val episodeThumbUrl: String? = null,
