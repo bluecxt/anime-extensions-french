@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
+import com.sun.org.apache.xpath.internal.functions.FuncCurrent
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.FetchType
@@ -399,11 +400,7 @@ abstract class Source :
             val tmdbName = epMeta?.first
             val currentName = episode.name.replace("Épisode", "Episode", true)
 
-            val formattedName = if (currentName.contains(Regex("(?i)Episode\\s*\\d+")) || currentName.isBlank() || currentName.length < 3) {
-                if (tmdbName != null) "Episode $epNum - $tmdbName" else "Episode $epNum"
-            } else {
-                if (currentName.contains("Episode", true)) currentName else "Episode $epNum - $currentName"
-            }
+            val formattedName = formatName(currentName, tmdbName, epNum)
 
             val sPrefix = when {
                 isMovie -> "[Movie] "
@@ -418,6 +415,12 @@ abstract class Source :
                 summary = epMeta?.third
             }
         }
+    }
+
+    private fun formatName(currentName: String, tmdbName: String?, epNum: Int): String = if (currentName.contains(Regex("(?i)Episode\\s*\\d+")) || currentName.isBlank() || currentName.length < 3) {
+        if (tmdbName != null) "Episode $epNum - $tmdbName" else "Episode $epNum"
+    } else {
+        if (currentName.contains("Episode", true)) currentName else "Episode $epNum - $currentName"
     }
 
     // ============================== TMDB Engine ==============================
