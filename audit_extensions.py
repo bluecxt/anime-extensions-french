@@ -5,12 +5,14 @@ import json
 import glob
 import shutil
 import urllib.request
+from tabulate import tabulate
 
 # Configuration pour l'Inspecteur (ton fork)
 GITHUB_API_URL = "https://api.github.com/repos/bluecxt/aniyomi-extensions-inspector/releases/latest"
 INSPECTOR_JAR = "inspector_ephemeral.jar"
 AUDIT_APK_DIR = os.environ.get("AUDIT_APK_DIR", "build/all-apks")
 JAVA_HOME = os.environ.get("JAVA_HOME")
+OUTPUT_JSON = "audit_report.json"
 if JAVA_HOME:
     JAVA_BIN = os.path.join(JAVA_HOME, "bin", "java")
 else:
@@ -30,7 +32,7 @@ def get_latest_inspector_url():
 
 def download_inspector(url):
     """Télécharge le JAR de l'inspecteur."""
-    print(f"📥 Téléchargement de l'Inspecteur depuis GitHub...")
+    print("📥 Téléchargement de l'Inspecteur depuis GitHub...")
     try:
         urllib.request.urlretrieve(url, INSPECTOR_JAR)
         return True
@@ -44,7 +46,7 @@ def prepare_apk_dir():
         shutil.rmtree(AUDIT_APK_DIR)
     os.makedirs(AUDIT_APK_DIR, exist_ok=True)
     
-    apks = glob.glob("src/fr/**/build/outputs/apk/debug/*.apk", recursive=True)
+    apks = glob.glob("src/*/*/build/outputs/apk/debug/*.apk", recursive=True)
     if os.environ.get("AUDIT_APK_SOURCE_DIR"):
          apks += glob.glob(os.path.join(os.environ.get("AUDIT_APK_SOURCE_DIR"), "**/*.apk"), recursive=True)
     
@@ -66,13 +68,12 @@ def run_inspector():
     if not prepare_apk_dir():
         return False, "Aucun APK trouvé pour l'audit"
 
-    print(f"🚀 [CHEF D'ORCHESTRE] Démarrage de l'audit dynamique\n")
+    print("🚀 [CHEF D'ORCHESTRE] Démarrage de l'audit dynamique")
     
-    output_json = "audit_report.json"
     tmp_dir = "inspector_tmp"
     os.makedirs(tmp_dir, exist_ok=True)
     
-    cmd = [JAVA_BIN, "-jar", INSPECTOR_JAR, AUDIT_APK_DIR, output_json, tmp_dir]
+    cmd = [JAVA_BIN, "-jar", INSPECTOR_JAR, AUDIT_APK_DIR, OUTPUT_JSON, tmp_dir]
     
     try:
         result = subprocess.run(cmd, capture_output=False, text=True)
@@ -89,6 +90,22 @@ def run_inspector():
 
 def run_all():
     success, reason = run_inspector()
+    with open(OUTPUT_JSON, "r") as f:
+        data = json.load(f)
+        rows = []
+        for package, extensions in data.items():
+            # Extraction du nom court du package pour alléger le tableau
+            short_package = package.replace("eu.kanade.tachiyomi.animeextension.", "")
+            for ext in extensions:
+                rows.append([
+                    short_package,
+                    ext.get('name'),
+                    ext.get('lang'),
+                    ext.get('baseUrl')
+                ])
+        
+        headers = ["Package (Short)", "Nom de l'extension", "Lang", "Base URL", "ID"]
+        print(tabulate(rows, headers=headers, tablefmt="rounded_grid"))
     if not success:
         print(f"\n❌ ÉCHEC DE L'AUDIT : {reason}")
         sys.exit(0) #TODO: rendre l'inspector accurate il est tout pourris la
