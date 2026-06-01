@@ -131,13 +131,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           TMDB_API: ${{ secrets.TMDB_API }}
         run: |
-          ./gradlew $MODULES
+          ./gradlew $MODULES && ls src/*/*/build/outputs/apk/debug/*.apk
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
-          path: "src/fr/**/build/outputs/apk/debug/*.apk"
+          path: "src/*/*/build/outputs/apk/debug/*.apk"
           retention-days: 1
 
       - name: Clean up CI files
