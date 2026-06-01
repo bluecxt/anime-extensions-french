@@ -79,23 +79,27 @@ jobs:
           --output detekt.zip
         unzip detekt.zip
         DETEKT_DIR=$(find . -maxdepth 1 -name "detekt-cli-*" -type d | head -n 1)
-        chmod +x $DETEKT_DIR/bin/detekt-cli
+        chmod +x "$DETEKT_DIR/bin/detekt-cli"
         echo "$(pwd)/$DETEKT_DIR/bin" >> $GITHUB_PATH
 
     - name: Run Detekt
       continue-on-error: true
+      env:
+        WORKSPACE: ${{ github.workspace }}
       run: |
-        detekt-cli --input ${{ github.workspace }} --report sarif:${{ github.workspace }}/detekt.sarif.json
+        detekt-cli --input "$WORKSPACE" --report sarif:"$WORKSPACE/detekt.sarif.json"
 
     - name: Make artifact location URIs relative
       continue-on-error: true
+      env:
+        WORKSPACE: ${{ github.workspace }}
       run: |
         echo "$(
           jq \
-            --arg github_workspace ${{ github.workspace }} \
+            --arg github_workspace "$WORKSPACE" \
             '. | ( .runs[].results[].locations[].physicalLocation.artifactLocation.uri |= if test($github_workspace) then .[($github_workspace | length | . + 1):] else . end )' \
-            ${{ github.workspace }}/detekt.sarif.json
-        )" > ${{ github.workspace }}/detekt.sarif.json
+            "$WORKSPACE/detekt.sarif.json"
+        )" > "$WORKSPACE/detekt.sarif.json"
 
     - name: Upload results to GitHub
       uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57

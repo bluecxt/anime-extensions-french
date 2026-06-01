@@ -61,7 +61,7 @@ jobs:
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-            python bump_versions.py
+            python3 bump_versions.py
 
             git add src/
             if ! git diff-index --quiet HEAD --; then
@@ -85,7 +85,7 @@ jobs:
           if [ "$BASE_COMMIT" = "0000000000000000000000000000000000000000" ]; then
             BASE_COMMIT="HEAD~1"
           fi
-          python ./.github/scripts/generate-build-matrices.py "$BASE_COMMIT" Release
+          python3 ./.github/scripts/generate-build-matrices.py "$BASE_COMMIT" Release
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
@@ -100,6 +100,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: main
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
@@ -116,8 +117,10 @@ jobs:
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: |
-          echo "$SIGNING_KEY" | base64 -d > signingkey.jks
-          chmod 600 signingkey.jks
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | base64 -d > signingkey.jks
+            chmod 600 signingkey.jks
+          fi
 
       - name: Build extensions (${{ matrix.chunk.number }})
         env:
@@ -133,11 +136,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
-          path: "**/*.apk"
+          path: "src/fr/**/build/outputs/apk/debug/*.apk"
           retention-days: 1
 
       - name: Clean up CI files
-        run: rm signingkey.jks
+        run: rm -f signingkey.jks
 
   audit:
     name: Audit Extensions
@@ -149,6 +152,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: main
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
@@ -192,19 +196,21 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: main
+          persist-credentials: false
 
       - name: Checkout repo branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: repo
           path: repo
+          persist-credentials: false
 
       - name: Create repo artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_NAME: ${{ github.repository }}
         run: |
-          python ./.github/scripts/move-built-apks.py
+          python3 ./.github/scripts/move-built-apks.py
           INSPECTOR_LINK="$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/bluecxt/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -n 1)"
 
           if [ -z "$INSPECTOR_LINK" ] || [ "$INSPECTOR_LINK" = "null" ]; then
@@ -215,7 +221,7 @@ jobs:
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
 
           java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
-          python ./.github/scripts/create-repo.py
+          python3 ./.github/scripts/create-repo.py
           cp repo/index.min.json repo/index.json
 
           SAMPLE_APK=$(find repo/apk -name "*.apk" | head -n 1)
