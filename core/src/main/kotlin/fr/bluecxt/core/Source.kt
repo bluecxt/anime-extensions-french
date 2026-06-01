@@ -268,7 +268,6 @@ abstract class Source :
         }
 
         // REPO_RULES: "Saison X" -> "X" for consistency and space (Saison 1 is removed)
-        val titleBeforeCleaning = this.title
         this.title = this.title
             .replace(Regex("""(?i)\s*-\s*Saison\s*1(?!\d)"""), "")
             .replace(Regex("""(?i)\s*Saison\s*1(?!\d)"""), "")

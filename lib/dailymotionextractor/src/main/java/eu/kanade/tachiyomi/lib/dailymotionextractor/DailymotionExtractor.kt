@@ -29,8 +29,6 @@ class DailymotionExtractor(private val client: OkHttpClient, private val headers
         .apply { block() }
         .build()
 
-    private val json: Json by injectLazy()
-
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
     fun videosFromUrl(url: String, prefix: String = "Dailymotion - ", baseUrl: String = "", password: String? = null): List<Video> {

@@ -151,8 +151,6 @@ class RapidCloudExtractor(
     private fun getVideoDto(url: String): List<VideoDto> {
         val type = if (url.contains("rapid-cloud")) 0 else 1
 
-        val keyType = SOURCES_KEY[type]
-
         val id = url.substringAfter(SOURCES_SPLITTER[type], "")
             .substringBefore("?", "")
             .ifEmpty { throw Exception("Failed to extract ID from URL") }

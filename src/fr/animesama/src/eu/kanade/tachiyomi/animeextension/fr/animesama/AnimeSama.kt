@@ -466,8 +466,6 @@ class AnimeSama : Source() {
         }
     }
 
-    private val pQualityRegex = Regex("""(\d+)p""")
-
     // ============================ Utils =============================
     override fun List<Hoster>.sortHosters(): List<Hoster> {
         val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!.uppercase()

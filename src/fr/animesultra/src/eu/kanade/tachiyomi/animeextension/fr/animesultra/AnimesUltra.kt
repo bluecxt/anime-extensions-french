@@ -419,7 +419,7 @@ class AnimesUltra : Source() {
 
                     absoluteUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(absoluteUrl, prefix)
 
-                    else -> vidstreamExtractor.videosFromUrl(absoluteUrl, "$baseUrl/").map {
+                    else -> vidstreamExtractor.videosFromUrl(absoluteUrl).map {
                         it.copy(videoTitle = "($langTag) ${it.videoTitle.replace("UltraCDN", serverName)}")
                     }
                 }

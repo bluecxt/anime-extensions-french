@@ -57,7 +57,6 @@ class AnimeSamaFan : Source() {
 
     private val seasonRegex = Regex("""saison-(\d+)""")
     private val epNumRegex = Regex("[^0-9.]")
-    private val pQualityRegex = Regex("""(\d+)p""")
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")

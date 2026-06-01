@@ -6,7 +6,7 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 
 class VidstreamExtractor(private val client: OkHttpClient) {
-    fun videosFromUrl(url: String, referer: String): List<Video> {
+    fun videosFromUrl(url: String): List<Video> {
         val id = url.substringAfter("id=", "").substringBefore("&")
         if (id.isEmpty()) return emptyList()
 
