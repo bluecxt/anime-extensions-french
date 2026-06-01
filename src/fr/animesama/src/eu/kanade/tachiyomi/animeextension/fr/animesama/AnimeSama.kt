@@ -189,8 +189,8 @@ class AnimeSama : Source() {
             }
         }
 
-        val seriesTitle = hubDoc.getElementById("titreOeuvre")?.text() ?: ""
-        val absoluteFullTitle = doc.getElementById("titreOeuvre")?.text() ?: anime.title
+        val seriesTitle = hubDoc.selectFirst("div.my-2 > h1")?.text() ?: ""
+        val absoluteFullTitle = doc.selectFirst("div.my-2 > h1")?.text() ?: anime.title
 
         // Extract title from URL fragment if available (set in fetchAnimeSeasons)
         val originalTitleFromUrl = anime.url.substringAfter("|", "").takeIf { it.isNotBlank() }
@@ -494,10 +494,11 @@ class AnimeSama : Source() {
         }
 
         val animeUrl = hubUrl.toHttpUrl()
+        Log.d(log, "animeUrl = $animeUrl")
 
         // Clean animeName to avoid "Anime Saison 1 Saison 1"
-        val rawTitle = (animeDoc.getElementById("titreOeuvre")?.text() ?: "").trim()
-
+        val rawTitle = (animeDoc.selectFirst("div.my-2 > h1")?.text() ?: "").trim()
+        Log.d(log, "rawtitle = $rawTitle")
         val attributesRegex = Regex("""(?i)\s*(?:-\s*)?(?:Saison|Season|Film|Movie|OAV|OVA|Partie|Part)\b.*""")
         val intermediateTitle = rawTitle.replace(attributesRegex, "").trim()
 
