@@ -47,6 +47,11 @@ jobs:
           python-version: '3.x'
           cache: 'pip'
 
+      - name : Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Check Core/Lib changes and bump versions
         id: bump-check
         run: |
