@@ -6,115 +6,94 @@ import glob
 import shutil
 import urllib.request
 
-ANITESTER_URL = "https://github.com/Claudemirovsky/aniyomi-extensions-tester/releases/download/v2.6.1/anitester-min.jar"
-SCRIPTS_DIR = os.path.join(".github", "scripts")
-ANITESTER_JAR = os.path.join(SCRIPTS_DIR, "anitester.jar")
-AUDIT_APK_DIR = os.environ.get("AUDIT_APK_DIR")
-AUDIT_SKIP_GRADLE_BUILD = os.environ.get("AUDIT_SKIP_GRADLE_BUILD", "0") == "1"
+# Configuration pour l'Inspecteur (ton fork)
+GITHUB_API_URL = "https://api.github.com/repos/bluecxt/aniyomi-extensions-inspector/releases/latest"
+INSPECTOR_JAR = "inspector_ephemeral.jar"
+AUDIT_APK_DIR = os.environ.get("AUDIT_APK_DIR", "build/all-apks")
 JAVA_HOME = os.environ.get("JAVA_HOME")
 if JAVA_HOME:
     JAVA_BIN = os.path.join(JAVA_HOME, "bin", "java")
 else:
     JAVA_BIN = shutil.which("java")
 
-def ensure_anitester():
-    if not os.path.exists(ANITESTER_JAR):
-        print(f"📥 Téléchargement de anitester.jar...")
-        os.makedirs(SCRIPTS_DIR, exist_ok=True)
-        try:
-            urllib.request.urlretrieve(ANITESTER_URL, ANITESTER_JAR)
-        except Exception as e:
-            print(f"   ❌ Erreur: {e}")
-            sys.exit(1)
-
-def find_apk(ext_name):
-    patterns = []
-    if AUDIT_APK_DIR:
-        # Chercher de manière récursive dans le dossier des artifacts
-        patterns.append(os.path.join(AUDIT_APK_DIR, f"**/*{ext_name}*.apk"))
-    patterns.append(f"src/fr/{ext_name}/build/outputs/apk/debug/*.apk")
-    
-    for pattern in patterns:
-        apks = glob.glob(pattern, recursive=True)
-        apks = [a for a in apks if "androidTest" not in a]
-        if apks: return apks[0]
+def get_latest_inspector_url():
+    """Récupère dynamiquement l'URL du dernier JAR via l'API GitHub."""
+    try:
+        with urllib.request.urlopen(GITHUB_API_URL) as response:
+            data = json.loads(response.read().decode())
+            for asset in data.get('assets', []):
+                if asset['name'].endswith('.jar'):
+                    return asset['browser_download_url']
+    except Exception as e:
+        print(f"   ❌ Erreur lors de la récupération de l'URL : {e}")
     return None
 
-def run_kotlin_test(ext_name):
-    apk = find_apk(ext_name)
-    if not apk:
-        if AUDIT_SKIP_GRADLE_BUILD: return False, "APK introuvable"
-        print(f"   ⚠️  Compilation de {ext_name}...")
-        subprocess.run(f"./gradlew :src:fr:{ext_name}:assembleDebug -q", shell=True)
-        apk = find_apk(ext_name)
-        if not apk: return False, "Échec compilation"
-
-    print(f"   📦 APK : {os.path.basename(apk)}")
-    cmd = [JAVA_BIN, "-jar", ANITESTER_JAR, apk, "-t", "popular", "-c", "2", "--timeout", "30"]
+def download_inspector(url):
+    """Télécharge le JAR de l'inspecteur."""
+    print(f"📥 Téléchargement de l'Inspecteur depuis GitHub...")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        output = result.stdout + result.stderr
-    except subprocess.TimeoutExpired:
-        return False, "Timeout global"
+        urllib.request.urlretrieve(url, INSPECTOR_JAR)
+        return True
+    except Exception as e:
+        print(f"   ❌ Erreur de téléchargement : {e}")
+        return False
 
-    output_upper = output.upper()
-    if "COMPLETED POPULAR PAGE TEST" in output_upper:
-        if "FAILED" not in output_upper.split("COMPLETED")[-1]:
-            return True, "Test Popular réussi"
-
-    if "RESULTS" in output_upper:
-        for line in output.split("\n"):
-            if "Results" in line and "->" in line:
-                try:
-                    count = int(line.split("->")[-1].strip())
-                    if count > 0: return True, f"{count} animes trouvés"
-                except: pass
-
-    reason = "Échec du test"
-    if "403" in output_upper: reason = "Erreur HTTP 403"
-    elif "404" in output_upper: reason = "Erreur HTTP 404"
-    elif "TIMEOUT" in output_upper: reason = "Timeout"
-    elif "CLOUDFLARE" in output_upper: reason = "Cloudflare"
+def prepare_apk_dir():
+    """Regroupe les APKs pour l'inspecteur."""
+    if os.path.exists(AUDIT_APK_DIR):
+        shutil.rmtree(AUDIT_APK_DIR)
+    os.makedirs(AUDIT_APK_DIR, exist_ok=True)
     
-    return False, reason
+    apks = glob.glob("src/fr/**/build/outputs/apk/debug/*.apk", recursive=True)
+    if os.environ.get("AUDIT_APK_SOURCE_DIR"):
+         apks += glob.glob(os.path.join(os.environ.get("AUDIT_APK_SOURCE_DIR"), "**/*.apk"), recursive=True)
+    
+    found_any = False
+    for apk in apks:
+        if "androidTest" in apk: continue
+        shutil.copy(apk, AUDIT_APK_DIR)
+        found_any = True
+    return found_any
+
+def run_inspector():
+    inspector_url = get_latest_inspector_url()
+    if not inspector_url:
+        return False, "Impossible de trouver l'URL de l'inspecteur"
+    
+    if not download_inspector(inspector_url):
+        return False, "Échec du téléchargement"
+
+    if not prepare_apk_dir():
+        return False, "Aucun APK trouvé pour l'audit"
+
+    print(f"🚀 [CHEF D'ORCHESTRE] Démarrage de l'audit dynamique\n")
+    
+    output_json = "audit_report.json"
+    tmp_dir = "inspector_tmp"
+    os.makedirs(tmp_dir, exist_ok=True)
+    
+    cmd = [JAVA_BIN, "-jar", INSPECTOR_JAR, AUDIT_APK_DIR, output_json, tmp_dir]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=False, text=True)
+        success = (result.returncode == 0)
+        return success, "Audit terminé" if success else f"Code retour : {result.returncode}"
+    except Exception as e:
+        return False, f"Erreur fatale : {str(e)}"
+    finally:
+        # Nettoyage systématique
+        print("\n🧹 Nettoyage des fichiers temporaires...")
+        if os.path.exists(INSPECTOR_JAR): os.remove(INSPECTOR_JAR)
+        if os.path.exists(tmp_dir): shutil.rmtree(tmp_dir)
+        if os.path.exists(AUDIT_APK_DIR): shutil.rmtree(AUDIT_APK_DIR)
 
 def run_all():
-    ensure_anitester()
-    print(f"🚀 [CHEF D'ORCHESTRE] Démarrage de l'audit (Java 17)\n")
-    extensions_path = "src/fr"
-    results = []
-    ignored = []
-    if os.path.exists("ignored_extensions.json"):
-        with open("ignored_extensions.json", "r") as f: ignored = json.load(f)
-
-    for ext_name in sorted(os.listdir(extensions_path)):
-        if not os.path.isdir(os.path.join(extensions_path, ext_name)): continue
-        
-        print(f"--------------------------------------------------")
-        print(f"🔎 Audit de : {ext_name.upper()}")
-        success, reason = run_kotlin_test(ext_name)
-        
-        status = "✅ PASS" if success else "❌ FAIL"
-        if not success and ext_name.lower() in [x.lower() for x in ignored]:
-            status = "⚠️ FAIL (Ignoré)"
-        
-        print(f"   Resultat : {status} - {reason}")
-        results.append((ext_name, status, reason))
-
-    print("\n\n" + "="*80)
-    print(f"{'Extension':<15} | {'Statut':<15} | {'Raison'}")
-    print("="*80)
-    for name, status, reason in results:
-        print(f"{name:<15} | {status:<15} | {reason}")
-    print("="*80)
-
-    # Check for non-ignored failures
-    failed_critical = [r for r in results if r[1] == "❌ FAIL"]
-    if failed_critical:
-        print(f"\n❌ L'audit a échoué pour {len(failed_critical)} extension(s) critique(s).")
+    success, reason = run_inspector()
+    if not success:
+        print(f"\n❌ ÉCHEC DE L'AUDIT : {reason}")
         sys.exit(1)
     else:
-        print("\n✅ Audit terminé avec succès (ou échecs ignorés).")
+        print("\n✅ AUDIT RÉUSSI")
         sys.exit(0)
 
 if __name__ == "__main__":
