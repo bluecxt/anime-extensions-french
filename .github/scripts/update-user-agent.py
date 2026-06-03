@@ -48,7 +48,7 @@ def update_user_agent():
 
     print(f"Found new User-Agent: {new_ua}")
     
-    file_path = "core/src/main/kotlin/fr/bluecxt/core/Source.kt"
+    file_path = "core/src/main/kotlin/fr/bluecxt/core/Const.kt"
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")
         return

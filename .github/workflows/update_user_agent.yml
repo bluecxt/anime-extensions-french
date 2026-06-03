@@ -39,7 +39,7 @@ jobs:
           delete-branch: true
           title: "Update central User-Agent"
           body: |
-            Automatic update of the central User-Agent constant in `core/Source.kt`.
+            Automatic update of the central User-Agent constant in `core/Const.kt`.
             Fetched from [useragents.me](https://www.useragents.me/).
           labels: |
             bot
