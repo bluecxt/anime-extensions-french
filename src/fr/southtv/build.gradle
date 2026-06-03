@@ -2,9 +2,5 @@ ext {
     extName = 'SouthTV'
     extClass = '.SouthTV'
     extVersionCode = 15
-    isNsfw = false
 }
 apply from: "$rootDir/common.gradle"
-
-// Override the version name from the project's properties
-project.ext.libVersion = project.ext.extVersionName

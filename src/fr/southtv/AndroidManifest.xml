@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
-        android:icon="@mipmap/ic_launcher">
+    <application>
         <activity
-                android:name=".fr.southtv.SouthTVUrlActivity"
-                android:excludeFromRecents="true"
-                android:exported="true"
-                android:theme="@android:style/Theme.NoDisplay"
-        >
+            android:name=".fr.southtv.SouthTVUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
+
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+
                 <data android:scheme="https" />
                 <data android:host="southtv.fr" />
-                <data android:pathPattern="/..*" />
+                <data android:pathPattern="/*" />
             </intent-filter>
         </activity>
     </application>

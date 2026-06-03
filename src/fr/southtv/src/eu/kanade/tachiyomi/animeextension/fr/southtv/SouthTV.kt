@@ -10,7 +10,9 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.TmdbMetadata
 import okhttp3.Headers
 import okhttp3.Request
 
@@ -32,24 +34,22 @@ private data class MediaInfo(
 )
 
 private val mediaList = listOf(
-    MediaInfo("South Park", "south_park_vf", TMDB_ID_SOUTHPARK, isMovie = false),
-    MediaInfo("Creed", "creed.mp4", TMDB_ID_CREED, isMovie = true),
-    MediaInfo("Panda Verse", "pandav.mp4", TMDB_ID_PANDAV, isMovie = true),
-    MediaInfo("The end of Obesity", "obes.mp4", TMDB_ID_OBES, isMovie = true),
-    MediaInfo("Streaming War P1", "streamwar1.mp4", TMDB_ID_STREAMWAR1, isMovie = true),
-    MediaInfo("Streaming War P2", "streamwar2.mp4", TMDB_ID_STREAMWAR2, isMovie = true),
+    MediaInfo("South Park", "southpark", TMDB_ID_SOUTHPARK, isMovie = false),
+    MediaInfo("Creed", "films/creed.mp4", TMDB_ID_CREED, isMovie = true),
+    MediaInfo("Panda Verse", "films/pandav.mp4", TMDB_ID_PANDAV, isMovie = true),
+    MediaInfo("The end of Obesity", "films/obes.mp4", TMDB_ID_OBES, isMovie = true),
+    MediaInfo("Streaming War P1", "films/streamwar1.mp4", TMDB_ID_STREAMWAR1, isMovie = true),
+    MediaInfo("Streaming War P2", "films/streamwar2.mp4", TMDB_ID_STREAMWAR2, isMovie = true),
     MediaInfo("Post Covid P1", "southpark/s24e3.mp4", TMDB_ID_POSTCOVID1, isMovie = true),
     MediaInfo("Post Covid P2", "southpark/s24e4.mp4", TMDB_ID_POSTCOVID2, isMovie = true),
-    MediaInfo("South Park le Film", "Filmsouthpark.mp4", TMDB_ID_SOUTHPARKMOVIE, isMovie = true),
+    MediaInfo("South Park le Film", "films/Filmsouthpark.mp4", TMDB_ID_SOUTHPARKMOVIE, isMovie = true),
 )
 
 class SouthTV : Source() {
-
-    private val log = "southTvDebug"
     private val userAgent = DEFAULT_USER_AGENT
 
     override val name = "SouthTV"
-    override val baseUrl = "https://southtv.fr"
+    override val baseUrl = "https://southtv.fr/"
     override val lang = "fr"
     override val supportsLatest = false
 
@@ -62,7 +62,7 @@ class SouthTV : Source() {
 
         SAnime.create().apply {
             title = media.title
-            url = if (media.isMovie) "movie_${media.urlSuffix}" else media.urlSuffix
+            url = media.urlSuffix
             status = if (media.isMovie) SAnime.COMPLETED else SAnime.ONGOING
             thumbnail_url = meta?.posterUrl
         }
@@ -81,6 +81,8 @@ class SouthTV : Source() {
         val (type, id) = getTmdbID(anime.url) ?: return anime
         val seasonNumber = anime.url.substringAfter("#s=").toIntOrNull()
         val meta = fetchTmdbMetadataById(id, type, if (seasonNumber != null) seasonNumber else 1) ?: return anime
+        val (title, thumb, summary) = meta.episodeSummaries[0] ?: Triple(null, null, null)
+
         if (seasonNumber != null) {
             anime.title = "${anime.title} Saison $seasonNumber"
         }
@@ -95,7 +97,7 @@ class SouthTV : Source() {
             if (meta.releaseDate != null) append("Date de sortie : ${meta.releaseDate}\n\n")
             append(meta.summary ?: "")
         }
-        anime.fetch_type = if (anime.url.contains("south_park_vf")) FetchType.Seasons else FetchType.Episodes
+        anime.fetch_type = if (type == "tv" && anime.url == "southpark") FetchType.Seasons else FetchType.Episodes
 
         return anime
     }
@@ -109,42 +111,55 @@ class SouthTV : Source() {
 
         SAnime.create().apply {
             title = anime.title + " Saison $seasonIndex"
-            season_number = -2.0 // seasonIndex.toDouble()
+            season_number = HUB_SEASON_NUMBER // seasonIndex.toDouble()
             url = anime.url + "#s=$seasonIndex"
             thumbnail_url = meta?.posterUrl ?: anime.thumbnail_url
         }
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val episodes = mutableListOf<SEpisode>()
-        val seasonNumber = anime.url.substringAfter("#s=").toIntOrNull()
+        val seasonNumber = anime.url.substringAfter("#s=").toIntOrNull() ?: 1
         val episodesPerSeason = fetchEpisodesPerSeason()
         val info = getTmdbID(anime.url)
-        val meta = info?.let {
-            Log.d(log, "type = ${it.first}")
-            fetchTmdbMetadataById(it.second, it.first, if (it.first == "tv" && seasonNumber != null) seasonNumber else 1)
-        }
-        if (seasonNumber != null) Log.d(log, "Saison $seasonNumber")
 
-        return List(if (seasonNumber == null) 1 else episodesPerSeason.getOrNull(seasonNumber - 1) ?: 0) { episodeIndex ->
-            val info = getTmdbID(anime.url)
-            val episodeNumber = episodeIndex + 1
-            SEpisode.create().apply {
-                val episodeData = meta?.episodeSummaries[episodeNumber]
-                val (title, thumb, summary) = episodeData ?: Triple(null, null, null)
+        val tmdbSeason = if (info?.first == "tv") seasonNumber else 1
+        val meta = info?.let { fetchTmdbMetadataById(it.second, it.first, tmdbSeason) }
 
-                this.name = buildString {
-                    if (seasonNumber != null && seasonNumber > 1) append("[S$seasonNumber] ")
-                    append("Episode $episodeNumber")
-                    if (title != null) append(" - $title")
-                }
-                this.url = "south_park#s=$seasonNumber&e=$episodeNumber"
-                this.episode_number = episodeNumber.toFloat()
-                this.scanlator = "VF"
-                if (thumb != null) this.preview_url = thumb
-                if (summary != null) this.summary = summary
-            }
+        val count = episodesPerSeason.getOrNull(seasonNumber - 1) ?: 0
+        return List(count) { index ->
+            createEpisode(anime.url, seasonNumber, index + 1, meta)
         }.reversed()
+    }
+
+    private fun createEpisode(animeUrl: String, seasonNumber: Int, episodeNumber: Int, meta: TmdbMetadata?): SEpisode {
+        val (title, thumb, summary) = meta?.episodeSummaries?.get(episodeNumber) ?: Triple(null, null, null)
+
+        return SEpisode.create().apply {
+            episode_number = episodeNumber.toFloat()
+            name = buildEpisodeName(seasonNumber, episodeNumber, title)
+            url = buildEpisodeUrl(animeUrl, seasonNumber, episodeNumber)
+            preview_url = thumb
+            this.summary = summary
+        }
+    }
+
+    private fun buildEpisodeName(seasonNumber: Int, episodeNumber: Int, title: String?): String = buildString {
+        if (seasonNumber > 1) append("[S$seasonNumber]")
+        append("Episode $episodeNumber")
+        if (title != null) append(" - $title")
+    }
+
+    private fun buildEpisodeUrl(animeUrl: String, seasonNumber: Int, episodeNumber: Int): String = buildString {
+        val url = animeUrl.substringBefore("#")
+        if (url.contains("/")) {
+            append(url)
+        } else {
+            append(url)
+            append("/")
+            append("s$seasonNumber")
+            append("e$episodeNumber")
+            append(".mp4")
+        }
     }
 
     private fun fetchEpisodesPerSeason(): List<Int> {
@@ -165,19 +180,8 @@ class SouthTV : Source() {
         val videoList = mutableListOf<Video>()
         val videoHeaders = Headers.Builder().add("User-Agent", userAgent).build()
         val url = hoster.internalData
-
-        if (url.startsWith("south_park")) {
-            val parts = url.split("#")[1].split("&")
-            val season = parts.find { it.startsWith("s=") }!!.substring(2)
-            val episodeNum = parts.find { it.startsWith("e=") }!!.substring(2)
-            val videoUrl = "$baseUrl/southpark/s${season}e$episodeNum.mp4"
-
-            videoList.add(Video(videoUrl = videoUrl, videoTitle = "(VF) SouthTV", headers = videoHeaders))
-        } else { // movie
-            val moviePath = url.substringAfter("movie_")
-            val videoUrl = if (moviePath.contains("/")) "$baseUrl/$moviePath" else "$baseUrl/films/$moviePath"
-            videoList.add(Video(videoUrl = videoUrl, videoTitle = "(VF) SouthTV", headers = videoHeaders))
-        }
+        val videoUrl = "$baseUrl/$url"
+        videoList.add(Video(videoUrl = videoUrl, videoTitle = "SouthTV", headers = videoHeaders))
         return videoList
     }
 
