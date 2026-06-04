@@ -1,6 +1,77 @@
 package fr.bluecxt.core
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.animesource.model.Video
+import keiyoushi.utils.addEditTextPreference
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Element
 
+/**
+ * Safely extracts the relative path from an element's href attribute.
+ * Uses abs:href to ensure a full URL is parsed, then returns only the encoded path.
+ */
 fun Element.safeRelativePath(): String = this.attr("abs:href").toHttpUrlOrNull()?.encodedPath ?: ""
+
+/**
+ * Returns a new Video instance with secured headers.
+ * Injects the global DEFAULT_USER_AGENT and sets the Referer to baseUrl if missing.
+ * Useful for bypassing 403 Forbidden errors on various hosters.
+ */
+fun Video.withDefaultHeaders(baseUrl: String): Video {
+    val updatedHeaders = (this.headers ?: Headers.Builder().build()).newBuilder()
+        .set("User-Agent", DEFAULT_USER_AGENT)
+        .apply {
+            if (this.build()["Referer"] == null) set("Referer", "$baseUrl/")
+        }.build()
+
+    return this.copy(headers = updatedHeaders)
+}
+
+/**
+ * Adds an EditTextPreference for managing the extension's base URL.
+ * Automatically cleans the input (trim and trailing slash removal).
+ * If the field is cleared, it resets the preference to the default URL.
+ */
+fun PreferenceScreen.addBaseUrlPreference(
+    preferences: SharedPreferences,
+    defaultUrl: String,
+    title: String = "URL de base",
+    key: String = "base_url_pref",
+    summary: String? = null,
+    onComplete: (String) -> Unit = {},
+) {
+    val currentUrl = preferences.getString(key, defaultUrl) ?: defaultUrl
+
+    addEditTextPreference(
+        key = key,
+        title = title,
+        summary = if (summary.isNullOrBlank()) currentUrl else summary,
+        default = defaultUrl,
+        getSummary = { newValue ->
+            if (summary.isNullOrBlank()) {
+                if (newValue.isBlank()) defaultUrl else newValue
+            } else {
+                summary
+            }
+        },
+        onChange = { _, newValue ->
+            val cleanUrl = newValue.trim().removeSuffix("/")
+
+            if (newValue.isBlank()) {
+                // Reset à la valeur par défaut
+                preferences.edit().remove(key).apply()
+                onComplete(defaultUrl)
+                true
+            } else if (cleanUrl.isNotEmpty()) {
+                // Enregistrement de la nouvelle URL nettoyée
+                preferences.edit().putString(key, cleanUrl).apply()
+                onComplete(cleanUrl)
+                true
+            } else {
+                false
+            }
+        },
+    )
+}

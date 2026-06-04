@@ -30,6 +30,8 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -70,7 +72,7 @@ class Wiflix : Source() {
             .build()
 
         val requestHeaders = headers.newBuilder()
-            .set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0")
+            .set("User-Agent", DEFAULT_USER_AGENT)
             .set("Accept", "*/*")
             .set("Accept-Language", "fr,fr-FR;q=0.9")
             .set("Accept-Encoding", "identity")
@@ -121,7 +123,7 @@ class Wiflix : Source() {
         val animes = document.select("div.mov").mapNotNull { element ->
             SAnime.create().apply {
                 title = element.selectFirst("a.mov-t")?.text() ?: "failed selector"
-                url = element.selectFirst("a.mov-t")?.attr("abs:href")?.substringAfter(baseUrl) ?: ""
+                url = element.selectFirst("a.mov-t")?.safeRelativePath() ?: ""
                 Log.d(log, url)
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: "https://http.cat/404.jpg"
             }
@@ -302,23 +304,7 @@ class Wiflix : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = PREF_URL_TITLE
-            summary = PREF_URL_SUMMARY
-            setDefaultValue(PREF_URL_DEFAULT)
-            dialogTitle = PREF_URL_TITLE
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val cleanUrl = (newValue as String).trim().removeSuffix("/")
-                    preferences.edit().putString(PREF_URL_KEY, cleanUrl).apply()
-                    true
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, PREF_URL_TITLE, PREF_URL_KEY, PREF_URL_SUMMARY)
 
         ListPreference(screen.context).apply {
             key = PREF_QUALITY_KEY
@@ -351,7 +337,7 @@ class Wiflix : Source() {
     companion object {
         private const val PREF_URL_KEY = "base_url_pref"
         private const val PREF_URL_TITLE = "Base URL"
-        private const val PREF_URL_DEFAULT = "https://flemmix.win"
+        private const val PREF_URL_DEFAULT = "https://flemmix.team"
         private const val PREF_URL_SUMMARY = "https://ww1.wiflix-adresses.fun | https://wiflix-news.site"
 
         private const val PREF_QUALITY_KEY = "preferred_quality"

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.animeextension.fr.frenchmanga
 
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -10,7 +11,7 @@ import java.util.regex.Pattern
 
 class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl: String) {
 
-    private val defaultua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+    private val defaultua = DEFAULT_USER_AGENT
 
     fun videosFromUrl(url: String, prefix: String): List<Video> {
         val videos = mutableListOf<Video>()

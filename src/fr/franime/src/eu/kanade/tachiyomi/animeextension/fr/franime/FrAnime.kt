@@ -19,7 +19,9 @@ import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
 import eu.kanade.tachiyomi.network.GET
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -42,7 +44,7 @@ class FrAnime : Source() {
             val url = request.url.toString()
             if (url.contains("nautiljon.com")) {
                 val newRequest = request.newBuilder()
-                    .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36")
+                    .header("User-Agent", DEFAULT_USER_AGENT)
                     .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
                     .header("Sec-Fetch-Site", "none")
                     .header("Sec-Fetch-Mode", "no-cors")
@@ -71,7 +73,7 @@ class FrAnime : Source() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .add("User-Agent", DEFAULT_USER_AGENT)
 
     override val json: Json by injectLazy()
 
@@ -95,16 +97,7 @@ class FrAnime : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
 
         ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY

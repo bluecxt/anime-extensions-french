@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
+import fr.bluecxt.core.addBaseUrlPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -74,16 +75,7 @@ class AnimoFlix : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
 
         ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY

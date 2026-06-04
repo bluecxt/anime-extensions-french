@@ -22,7 +22,11 @@ import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.withDefaultHeaders
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -54,7 +58,7 @@ class ADKami : Source() {
     override val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0")
+        .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
@@ -320,7 +324,7 @@ class ADKami : Source() {
                         name = "${sType}Episode $numStr"
                         episode_number = numStr.toFloatOrNull() ?: 1f
                         scanlator = lang
-                        setUrlWithoutDomain(a.attr("abs:href") + "?lang=$lang")
+                        url = a.safeRelativePath() + "?lang=$lang"
                     },
                 )
             }
@@ -445,7 +449,7 @@ class ADKami : Source() {
         } catch (_: Exception) {}
 
         return videos.map {
-            Video(videoUrl = it.videoUrl, videoTitle = cleanQuality(it.videoTitle), headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
+            it.withDefaultHeaders(baseUrl).copy(videoTitle = cleanQuality(it.videoTitle))
         }.filter { isLinkValid(it) }.sortVideos()
     }
 
@@ -518,7 +522,7 @@ class ADKami : Source() {
         val animes = document.select(selector).map { element: Element ->
             SAnime.create().apply {
                 val link: Element = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return@map this
-                setUrlWithoutDomain(link.attr("abs:href"))
+                url = link.safeRelativePath()
                 title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
                 element.selectFirst(".visual img, img")?.let { img ->
                     val dataOriginal = img.attr("abs:data-original")
@@ -559,17 +563,7 @@ class ADKami : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
-            setOnPreferenceChangeListener { preference, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue.toString()).apply()
-                (preference as EditTextPreference).summary = newValue.toString()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
 
         androidx.preference.ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY

@@ -20,9 +20,12 @@ import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
+import fr.bluecxt.core.addBaseUrlPreference
 import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.withDefaultHeaders
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -47,10 +50,7 @@ class AnimeSama : Source() {
     override val client = network.client
 
     override fun headersBuilder() = super.headersBuilder()
-        .add(
-            "User-Agent",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1",
-        )
+        .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
     override val json: Json by injectLazy()
@@ -115,10 +115,7 @@ class AnimeSama : Source() {
         return AnimesPage(animes, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        super.latestUpdatesRequest(page)
-        return GET(baseUrl)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl)
 
     // =============================== Search ===============================
     override fun getFilterList() = AnimeSamaFilters.FILTER_LIST
@@ -445,16 +442,7 @@ class AnimeSama : Source() {
                 }
 
                 videos.map { video ->
-                    val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder()
-                        .set("User-Agent", headers["User-Agent"]!!)
-                        .build()
-                    Video(
-                        videoUrl = video.videoUrl,
-                        videoTitle = coreCleanQuality(video.videoTitle),
-                        headers = updatedHeaders,
-                        subtitleTracks = video.subtitleTracks,
-                        audioTracks = video.audioTracks,
-                    )
+                    video.withDefaultHeaders(baseUrl).copy(videoTitle = coreCleanQuality(video.videoTitle))
                 }
             } catch (e: Exception) {
                 android.util.Log.e(log, "Exception extracting $playerUrl", e)
@@ -933,22 +921,7 @@ class AnimeSama : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = PREF_URL_TITLE
-            summary = PREF_URL_SUMMARY
-            setDefaultValue(PREF_URL_DEFAULT)
-            dialogTitle = PREF_URL_TITLE
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                    true
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, PREF_URL_TITLE, PREF_URL_KEY, PREF_URL_SUMMARY)
 
         ListPreference(screen.context).apply {
             key = PREF_QUALITY_KEY

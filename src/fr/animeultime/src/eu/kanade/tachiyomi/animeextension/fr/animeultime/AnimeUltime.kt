@@ -15,7 +15,10 @@ import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -37,10 +40,8 @@ class AnimeUltime : Source() {
     override val client: OkHttpClient = network.client
     override val json: Json by injectLazy()
 
-    private val userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:149.0) Gecko/20100101 Firefox/149.0"
-
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", userAgent)
+        .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
@@ -50,7 +51,7 @@ class AnimeUltime : Source() {
         val items = document.select("div.slides li").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
-                setUrlWithoutDomain(link.attr("abs:href"))
+                url = link.safeRelativePath()
                 title = element.selectFirst(".box-text p")?.text() ?: ""
                 thumbnail_url = element.selectFirst(".imgCtn img")?.attr("abs:src")?.replace("_thindex", "")
             }
@@ -284,16 +285,7 @@ class AnimeUltime : Source() {
     private val whitespaceRegex = Regex("\\s+")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
     }
 
     companion object {

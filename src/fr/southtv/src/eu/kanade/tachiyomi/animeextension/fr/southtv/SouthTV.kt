@@ -13,6 +13,7 @@ import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
+import fr.bluecxt.core.withDefaultHeaders
 import okhttp3.Headers
 import okhttp3.Request
 
@@ -177,12 +178,9 @@ class SouthTV : Source() {
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "SouthTV", internalData = episode.url))
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val videoList = mutableListOf<Video>()
-        val videoHeaders = Headers.Builder().add("User-Agent", userAgent).build()
         val url = hoster.internalData
         val videoUrl = "$baseUrl/$url"
-        videoList.add(Video(videoUrl = videoUrl, videoTitle = "SouthTV", headers = videoHeaders))
-        return videoList
+        return listOf(Video(videoUrl = videoUrl, videoTitle = "SouthTV").withDefaultHeaders(baseUrl))
     }
 
     // ============================ Utils =============================

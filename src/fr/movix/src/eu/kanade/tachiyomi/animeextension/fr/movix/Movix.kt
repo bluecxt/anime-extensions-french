@@ -26,7 +26,10 @@ import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.withDefaultHeaders
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -92,7 +95,7 @@ class Movix : Source() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
-        .add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0")
+        .add("User-Agent", DEFAULT_USER_AGENT)
 
     private val animeCache = mutableMapOf<String, AnimeItem>()
 
@@ -134,18 +137,13 @@ class Movix : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "URL de base"
-            setDefaultValue("")
-            summary = "Laissez vide pour trouver automatiquement le domaine actif via movix.online. Actuel: $baseUrl"
-            setOnPreferenceChangeListener { _, newValue ->
-                val newUrl = newValue as String
-                preferences.edit().putString(PREF_URL_KEY, newUrl).apply()
-                dynamicBaseUrl = null // Force refresh
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(
+            preferences,
+            "",
+            key = PREF_URL_KEY,
+            summary = "Laissez vide pour trouver automatiquement le domaine actif via movix.online. Actuel: $baseUrl",
+            onComplete = { dynamicBaseUrl = null },
+        )
 
         androidx.preference.ListPreference(screen.context).apply {
             key = PREF_QUALITY_KEY
@@ -658,17 +656,7 @@ class Movix : Source() {
                 emptyList()
             }
         }.flatten().distinctBy { it.videoUrl }.map { video ->
-            val updatedHeaders = (video.headers ?: Headers.Builder().build()).newBuilder().apply {
-                set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                if (video.headers?.get("Referer") == null) set("Referer", "$baseUrl/")
-            }.build()
-            Video(
-                videoUrl = video.videoUrl,
-                videoTitle = coreCleanQuality(video.videoTitle),
-                headers = updatedHeaders,
-                subtitleTracks = video.subtitleTracks,
-                audioTracks = video.audioTracks,
-            )
+            video.withDefaultHeaders(baseUrl).copy(videoTitle = coreCleanQuality(video.videoTitle))
         }.coreSortVideos().also { videos ->
             val logMessage = videos.joinToString { v -> "${v.videoTitle} -> ${v.videoUrl}" }
             android.util.Log.d("MovixDebug", "Final sorted videos list: [$logMessage]")

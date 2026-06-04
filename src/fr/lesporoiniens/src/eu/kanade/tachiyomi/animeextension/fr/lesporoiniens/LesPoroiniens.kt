@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.lib.googledriveextractor.GoogleDriveExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -43,11 +44,11 @@ class LesPoroiniens : Source() {
 
     override val json: Json by injectLazy()
 
-    private val gdriveExtractor by lazy { GoogleDriveExtractor(client, Headers.Builder().add("User-Agent", "Mozilla/5.0").build()) }
+    private val gdriveExtractor by lazy { GoogleDriveExtractor(client, Headers.Builder().add("User-Agent", DEFAULT_USER_AGENT).build()) }
     private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+        .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
     // --- Catalogue (Scan Parallèle pour la performance) ---

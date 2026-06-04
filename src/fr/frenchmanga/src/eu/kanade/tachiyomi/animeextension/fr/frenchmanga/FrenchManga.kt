@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -347,16 +348,7 @@ open class FrenchManga(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = prefUrlKey
-            title = "Base URL"
-            setDefaultValue(prefUrlDefault)
-            summary = baseUrl
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(prefUrlKey, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, prefUrlDefault, key = prefUrlKey)
 
         androidx.preference.ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY

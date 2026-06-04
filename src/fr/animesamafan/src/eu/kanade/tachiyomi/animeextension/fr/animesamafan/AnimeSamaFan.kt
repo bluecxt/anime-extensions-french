@@ -22,7 +22,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -60,10 +63,7 @@ class AnimeSamaFan : Source() {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        )
+        .add("User-Agent", DEFAULT_USER_AGENT)
 
     // ================== Utils ==================
 
@@ -72,7 +72,7 @@ class AnimeSamaFan : Source() {
             SAnime.create().apply {
                 title = element.selectFirst(".card-title")?.text()?.trim().orEmpty()
                 thumbnail_url = element.selectFirst("img.card-image")?.attr("abs:src")
-                url = coreCleanUrl(element.selectFirst("a")?.attr("href") ?: "")
+                url = element.selectFirst("a")?.safeRelativePath() ?: ""
             }
         }
 
@@ -583,31 +583,25 @@ class AnimeSamaFan : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = EditTextPreference(screen.context).apply {
-            key = "base_url"
-            title = "Base URL"
-            summary = "Changer l'URL de base de l'extension (actuelle: $baseUrl)"
-            setDefaultValue("https://animesama.co")
-        }
-        val voicesPref = ListPreference(screen.context).apply {
+        screen.addBaseUrlPreference(preferences, "https://animesama.co", key = "base_url")
+
+        ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
             title = "Préférence des voix"
             entries = arrayOf("Préférer VOSTFR", "Préférer VF")
             entryValues = arrayOf("VOSTFR", "VF")
             setDefaultValue(PREF_VOICES_DEFAULT)
             summary = "%s"
-        }
-        val serverPref = ListPreference(screen.context).apply {
+        }.also(screen::addPreference)
+
+        ListPreference(screen.context).apply {
             key = PREF_PLAYER_KEY
             title = "Serveur préféré"
             entries = arrayOf("Sibnet", "Sendvid", "Voe", "Streamtape", "Doodstream", "Vidoza")
             entryValues = arrayOf("sibnet", "sendvid", "voe", "streamtape", "dood", "vidoza")
             setDefaultValue(PREF_PLAYER_DEFAULT)
             summary = "%s"
-        }
-        screen.addPreference(baseUrlPref)
-        screen.addPreference(voicesPref)
-        screen.addPreference(serverPref)
+        }.also(screen::addPreference)
     }
 
     companion object {

@@ -25,6 +25,8 @@ import eu.kanade.tachiyomi.lib.vudeoextractor.VudeoExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
@@ -35,13 +37,16 @@ import uy.kohesive.injekt.injectLazy
 class FrenchAnime : Source() {
 
     override val name = "French Anime"
-    override val baseUrl = "https://french-anime.com"
+    override val baseUrl: String
+        get() = preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
     override val lang = "fr"
     override val supportsLatest = true
 
     override val json: Json by injectLazy()
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {}
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
+    }
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -50,7 +55,8 @@ class FrenchAnime : Source() {
         val animes = document.select("div#dle-content > div.mov").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a[href]")!!
-                setUrlWithoutDomain(link.attr("href"))
+                url = link.safeRelativePath()
+
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
                 title = "${link.text()} ${element.selectFirst("span.block-sai")?.text() ?: ""}".trim()
             }
@@ -71,7 +77,8 @@ class FrenchAnime : Source() {
         val animes = document.select("div#dle-content > div.mov").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a[href]")!!
-                setUrlWithoutDomain(link.attr("href"))
+                url = link.safeRelativePath()
+
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
                 title = "${link.text()} ${element.selectFirst("span.block-sai")?.text() ?: ""}".trim()
             }
@@ -241,4 +248,9 @@ class FrenchAnime : Source() {
             Regex("""(\d+)p""").find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         },
     ).reversed()
+
+    companion object {
+        private const val PREF_URL_KEY = "preferred_baseUrl"
+        private const val PREF_URL_DEFAULT = "https://french-anime.com"
+    }
 }

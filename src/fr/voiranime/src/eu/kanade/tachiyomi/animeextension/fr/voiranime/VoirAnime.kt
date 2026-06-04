@@ -21,6 +21,8 @@ import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -62,7 +64,7 @@ class VoirAnime : Source() {
         val items = document.select("div.listupd article.bs").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
-                setUrlWithoutDomain(link.attr("abs:href"))
+                url = link.safeRelativePath()
                 title = link.selectFirst(".tt")?.ownText() ?: "Inconnu"
                 thumbnail_url = link.selectFirst("img")?.attr("abs:src")?.substringBefore("?")
             }
@@ -77,7 +79,7 @@ class VoirAnime : Source() {
         val items = document.select("div.listupd article.bs").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
-                setUrlWithoutDomain(link.attr("abs:href"))
+                url = link.safeRelativePath()
                 title = link.selectFirst(".tt")?.ownText() ?: "Inconnu"
                 thumbnail_url = link.selectFirst("img")?.attr("abs:src")?.substringBefore("?")
             }
@@ -177,7 +179,7 @@ class VoirAnime : Source() {
             val lang = if (subText.contains("VF", true)) "VF" else "VOSTFR"
 
             SEpisode.create().apply {
-                setUrlWithoutDomain(element.attr("abs:href"))
+                url = element.safeRelativePath()
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(num)
                 val tmdbName = epMeta?.first
                 val baseName = if (tmdbName != null) "Episode $numStr - $tmdbName" else "Episode $numStr"
@@ -263,16 +265,7 @@ class VoirAnime : Source() {
     ).reversed()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
     }
 
     companion object {

@@ -1,6 +1,6 @@
 ext {
     extName = 'SouthTV'
     extClass = '.SouthTV'
-    extVersionCode = 15
+    extVersionCode = 16
 }
 apply from: "$rootDir/common.gradle"

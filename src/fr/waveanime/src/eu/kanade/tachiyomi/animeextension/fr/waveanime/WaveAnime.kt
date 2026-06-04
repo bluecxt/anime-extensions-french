@@ -14,6 +14,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,16 +49,7 @@ class WaveAnime : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "URL de base"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
 
         ListPreference(screen.context).apply {
             key = PREF_QUALITY_KEY
@@ -89,7 +82,7 @@ class WaveAnime : Source() {
         val items = document.select("div.component.serie-card").map { element ->
             val link = element.selectFirst("a")!!
             SAnime.create().apply {
-                setUrlWithoutDomain(link.attr("href"))
+                url = link.safeRelativePath()
                 title = element.attr("title")
                 thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
             }
@@ -110,7 +103,7 @@ class WaveAnime : Source() {
         val items = document.select("div.component.serie-card").map { element ->
             val link = element.selectFirst("a")!!
             SAnime.create().apply {
-                setUrlWithoutDomain(link.attr("href"))
+                url = link.safeRelativePath()
                 title = element.attr("title")
                 thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
             }

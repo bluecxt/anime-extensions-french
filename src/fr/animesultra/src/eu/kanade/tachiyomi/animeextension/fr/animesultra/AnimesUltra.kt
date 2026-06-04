@@ -21,7 +21,10 @@ import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -77,20 +80,11 @@ class AnimesUltra : Source() {
     data class FullStoryResponse(val status: Boolean = false, val html: String = "")
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.3")
+        .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_URL_KEY
-            title = "Base URL"
-            setDefaultValue(PREF_URL_DEFAULT)
-            summary = baseUrl
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_URL_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
 
         androidx.preference.ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
@@ -128,7 +122,7 @@ class AnimesUltra : Source() {
             SAnime.create().apply {
                 val link = element.selectFirst("a.film-poster")!!
                 title = link.attr("title").ifBlank { element.selectFirst(".film-title")?.text() ?: "" }
-                setUrlWithoutDomain(link.attr("abs:href"))
+                url = link.safeRelativePath()
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
@@ -140,7 +134,7 @@ class AnimesUltra : Source() {
             SAnime.create().apply {
                 val link = element.selectFirst("h3.film-name a")!!
                 title = link.text()
-                setUrlWithoutDomain(link.attr("abs:href"))
+                url = link.safeRelativePath()
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
