@@ -180,7 +180,7 @@ complexity:
 coroutines:
   active: true
   GlobalCoroutineUsage:
-    active: false
+    active: true
   InjectDispatcher:
     active: true
     dispatcherNames:
@@ -409,7 +409,7 @@ potential-bugs:
   CastToNullableType:
     active: false
   Deprecation:
-    active: false
+    active: true
   DontDowncastCollectionTypes:
     active: false
   DoubleMutabilityForCollection:
@@ -424,7 +424,7 @@ potential-bugs:
       - 'java.util.LinkedHashMap'
       - 'java.util.HashMap'
   ElseCaseInsteadOfExhaustiveWhen:
-    active: false
+    active: true
     ignoredSubjectTypes: []
   EqualsAlwaysReturnsTrueOrFalse:
     active: true
@@ -730,7 +730,7 @@ style:
   UntilInsteadOfRangeTo:
     active: false
   UnusedImports:
-    active: false
+    active: true
   UnusedParameter:
     active: true
     allowedNames: 'ignored|expected'
