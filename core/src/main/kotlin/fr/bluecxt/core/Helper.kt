@@ -3,6 +3,7 @@ package fr.bluecxt.core
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.Video
+import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.addEditTextPreference
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -13,6 +14,12 @@ import org.jsoup.nodes.Element
  * Uses abs:href to ensure a full URL is parsed, then returns only the encoded path.
  */
 fun Element.safeRelativePath(): String = this.attr("abs:href").toHttpUrlOrNull()?.encodedPath ?: ""
+
+/**
+ * Resolves a URL (relative or absolute) against a base URL and returns the cleaned relative path.
+ * Uses OkHttp's resolve engine to handle normalization and special characters.
+ */
+fun String.safeRelativePath(base: String): String = base.toHttpUrlOrNull()?.resolve(this)?.encodedPath ?: ""
 
 /**
  * Returns a new Video instance with secured headers.
@@ -73,5 +80,15 @@ fun PreferenceScreen.addBaseUrlPreference(
                 false
             }
         },
+    )
+}
+
+fun List<Video>.toExtractedSources(refererUrl: String? = null): List<ExtractedSource> = this.map { video ->
+    ExtractedSource(
+        url = video.videoUrl,
+        quality = video.videoTitle,
+        referer = refererUrl?.toHttpUrlOrNull(),
+        subtitleTracks = video.subtitleTracks,
+        audioTracks = video.audioTracks,
     )
 }

@@ -11,13 +11,6 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
-import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
-import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
@@ -48,18 +41,10 @@ class AnimeSamaFan : Source() {
 
     override val supportsLatest = true
 
-    override val json: Json by injectLazy()
-
-    private val doodExtractor by lazy { DoodExtractor(client) }
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-    private val streamTapeExtractor by lazy { StreamTapeExtractor(client) }
-    private val vidoExtractor by lazy { VidoExtractor(client) }
-    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
-    private val voeExtractor by lazy { VoeExtractor(client, headers) }
-
     private val seasonRegex = Regex("""saison-(\d+)""")
     private val epNumRegex = Regex("[^0-9.]")
+
+    private val allowedServers = listOf("Sibnet", "Sendvid")
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -179,7 +164,7 @@ class AnimeSamaFan : Source() {
             title = titleElement?.text()?.replace("VOSTFR", "", true)?.replace("VF", "", true)?.trim() ?: "Unknown Title"
             thumbnail_url = document.selectFirst(".anime-cover img")?.attr("abs:src")
                 ?: document.selectFirst("meta[property=og:image]")?.attr("content")
-            url = coreCleanUrl(document.location())
+            url = document.location().safeRelativePath(baseUrl)
         }
         return AnimesPage(listOf(anime), false)
     }
@@ -341,7 +326,7 @@ class AnimeSamaFan : Source() {
 
             // Format full title for the engine: "[Name] - Saison [X]"
             val fullSeasonTitle = if (!sTitle.contains(baseTitle, true)) "$baseTitle - $sTitle" else sTitle
-            Triple(fullSeasonTitle, coreCleanUrl(sHref), siteSNum)
+            Triple(fullSeasonTitle, element.safeRelativePath(), siteSNum)
         }
 
         return coreBuildSeasonList(baseTitle, siteSeasons, anime.status).onEach { it.coreSetSeasonNumber(-2.0) }
@@ -360,7 +345,7 @@ class AnimeSamaFan : Source() {
         val gridCards = initialDoc.select(".seasons-grid a.season-card")
 
         val (doc, path) = if (episodeCards.isEmpty() && gridCards.isNotEmpty()) {
-            val firstUrl = coreCleanUrl(gridCards.first()!!.attr("href"))
+            val firstUrl = gridCards.first()!!.safeRelativePath()
             client.newCall(GET("$baseUrl$firstUrl", headers)).execute().asJsoup() to firstUrl
         } else {
             initialDoc to initialPath
@@ -378,7 +363,7 @@ class AnimeSamaFan : Source() {
         val (finalOffset, finalOavOffset, finalTargetSNum) = if (tabs.isEmpty()) {
             Triple(0, 0, siteSNum)
         } else {
-            val seasonLinks = tabs.map { coreCleanUrl(it.attr("href")) }.distinct()
+            val seasonLinks = tabs.map { it.safeRelativePath() }.distinct()
             val currentIdx = seasonLinks.indexOfFirst { it == path }
             val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(path)
 
@@ -453,12 +438,12 @@ class AnimeSamaFan : Source() {
             val embeddedPlayerUrl = extractEmbeddedPlayerUrl(document)
             val hasKnownPlayerIframe = document.select("iframe")
                 .flatMap { listOf(it.attr("abs:src"), it.attr("abs:data-src")) }
-                .any { src -> src.isNotBlank() && getServerName(src) != null }
+                .any { src -> src.isNotBlank() && getServerName(src, allowedServers) != null }
 
             if (hasKnownPlayerIframe || embeddedPlayerUrl != null) {
                 return listOf(
                     SEpisode.create().apply {
-                        this.url = coreCleanUrl(url)
+                        this.url = url.safeRelativePath(baseUrl)
                         name = "[Movie] Film"
                         episode_number = 1f
                         scanlator = "VOSTFR, VF"
@@ -468,7 +453,7 @@ class AnimeSamaFan : Source() {
         }
 
         val rawEpisodes = episodeCards.map { card ->
-            val epUrl = coreCleanUrl(card.attr("href"))
+            val epUrl = card.safeRelativePath()
             val availableLangs = mutableListOf<String>()
             val langs = card.attr("data-langs").uppercase()
             if (langs.contains("VOSTFR")) availableLangs.add("VOSTFR")
@@ -533,43 +518,8 @@ class AnimeSamaFan : Source() {
         }
 
         return playerUrls.parallelMap { playerUrl ->
-            try {
-                val serverName = getServerName(playerUrl) ?: "Serveur"
-                val prefix = "($langLabel) $serverName - "
-
-                when {
-                    playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("streamtape") || playerUrl.contains("shavetape") -> streamTapeExtractor.videoFromUrl(playerUrl, prefix)?.let { listOf(it) } ?: emptyList()
-                    playerUrl.contains("dood") -> doodExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("vidoza.net") -> vidoExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(playerUrl, prefix)
-                    else -> emptyList()
-                }
-            } catch (e: Exception) {
-                emptyList<Video>()
-            }
-        }.flatten().map { video ->
-            Video(
-                videoUrl = video.videoUrl,
-                videoTitle = coreCleanQuality(video.videoTitle),
-                headers = video.headers,
-                subtitleTracks = video.subtitleTracks,
-                audioTracks = video.audioTracks,
-            )
-        }.coreSortVideos()
-    }
-
-    private fun getServerName(url: String): String? = when {
-        url.contains("sibnet.ru") -> "Sibnet"
-        url.contains("sendvid.com") -> "Sendvid"
-        url.contains("streamtape") || url.contains("shavetape") -> "Streamtape"
-        url.contains("dood") -> "Doodstream"
-        url.contains("vidoza.net") -> "Vidoza"
-        url.contains("vidmoly", true) -> "Vidmoly"
-        url.contains("voe.sx") -> "Voe"
-        else -> null
+            extractVideos(playerUrl, langLabel, allowedServers)
+        }.flatten().coreSortVideos()
     }
 
     override fun List<Hoster>.sortHosters(): List<Hoster> {
@@ -597,8 +547,8 @@ class AnimeSamaFan : Source() {
         ListPreference(screen.context).apply {
             key = PREF_PLAYER_KEY
             title = "Serveur préféré"
-            entries = arrayOf("Sibnet", "Sendvid", "Voe", "Streamtape", "Doodstream", "Vidoza")
-            entryValues = arrayOf("sibnet", "sendvid", "voe", "streamtape", "dood", "vidoza")
+            entries = arrayOf("Sibnet", "Sendvid")
+            entryValues = arrayOf("sibnet", "sendvid")
             setDefaultValue(PREF_PLAYER_DEFAULT)
             summary = "%s"
         }.also(screen::addPreference)

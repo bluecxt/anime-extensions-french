@@ -47,10 +47,9 @@ private val mediaList = listOf(
 )
 
 class SouthTV : Source() {
-    private val userAgent = DEFAULT_USER_AGENT
 
     override val name = "SouthTV"
-    override val baseUrl = "https://southtv.fr/"
+    override val baseUrl = "https://southtv.fr"
     override val lang = "fr"
     override val supportsLatest = false
 
@@ -119,16 +118,21 @@ class SouthTV : Source() {
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val seasonNumber = anime.url.substringAfter("#s=").toIntOrNull() ?: 1
+        val seasonNumber = anime.url.substringAfter("#s=").toIntOrNull()
         val episodesPerSeason = fetchEpisodesPerSeason()
         val info = getTmdbID(anime.url)
 
-        val tmdbSeason = if (info?.first == "tv") seasonNumber else 1
+        val tmdbSeason = if (info?.first == "tv") seasonNumber ?: 1 else 1
         val meta = info?.let { fetchTmdbMetadataById(it.second, it.first, tmdbSeason) }
 
-        val count = episodesPerSeason.getOrNull(seasonNumber - 1) ?: 0
+        val count = if (seasonNumber != null) {
+            episodesPerSeason.getOrNull(seasonNumber - 1) ?: 0
+        } else {
+            1
+        }
+
         return List(count) { index ->
-            createEpisode(anime.url, seasonNumber, index + 1, meta)
+            createEpisode(anime.url, seasonNumber ?: 1, index + 1, meta)
         }.reversed()
     }
 

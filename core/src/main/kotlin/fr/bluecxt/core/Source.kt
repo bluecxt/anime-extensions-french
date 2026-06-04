@@ -2,14 +2,11 @@ package fr.bluecxt.core
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import androidx.preference.PreferenceScreen
-import com.sun.org.apache.xpath.internal.functions.FuncCurrent
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -17,8 +14,10 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
+import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONArray
@@ -51,87 +50,12 @@ data class TmdbMetadata(
 abstract class Source :
     AnimeHttpSource(),
     ConfigurableAnimeSource {
-    protected val context: Application by injectLazy()
 
-    protected open val migration: SharedPreferences.() -> Unit = {}
+    val preferences: SharedPreferences by getPreferencesLazy()
 
-    open val json: Json by injectLazy()
-
-    val preferences: SharedPreferences by getPreferencesLazy { migration }
-
-    protected val handler by lazy { Handler(Looper.getMainLooper()) }
-
-    private fun logUsage() {
-        try {
-            val currentName = try {
-                name
-            } catch (_: Exception) {
-                "Unknown"
-            }
-
-            // Daily check: only ping once per day per extension
-            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-            val lastPingDate = preferences.getString("last_usage_ping", "")
-
-            if (lastPingDate == today) return
-
-            // Save today's date
-            preferences.edit().putString("last_usage_ping", today).apply()
-            val androidId = android.provider.Settings.Secure.getString(
-                context.contentResolver,
-                android.provider.Settings.Secure.ANDROID_ID,
-            ) ?: "unknown"
-
-            // Récupérer la version de l'extension
-            val version = try {
-                val pkgName = this.javaClass.`package`?.name ?: context.packageName
-                context.packageManager.getPackageInfo(pkgName, 0).versionName
-            } catch (_: Exception) {
-                "Unknown"
-            }
-
-            // Hash simple pour l'anonymat (SHA-256)
-            val bytes = androidId.toByteArray()
-            val md = java.security.MessageDigest.getInstance("SHA-256")
-            val digest = md.digest(bytes)
-            val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(16)
-
-            val url = "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
-                "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
-                "&uid=$hashedId" +
-                "&version=${java.net.URLEncoder.encode(version, "UTF-8")}"
-
-            Log.d("SourceTelemetry", "Envoi usage quotidien vers : $url")
-
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-                .build()
-
-            client.newCall(request).enqueue(object : okhttp3.Callback {
-                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                    Log.e("SourceTelemetry", "Erreur réseau pour $currentName", e)
-                }
-
-                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                    val body = response.body.string()
-                    if (response.isSuccessful) {
-                        Log.d("SourceTelemetry", "Usage enregistré pour $currentName : $body")
-                    } else {
-                        Log.e("SourceTelemetry", "Erreur serveur : ${response.code} - $body")
-                    }
-                    response.close()
-                }
-            })
-        } catch (e: Exception) {
-            Log.e("SourceTelemetry", "Erreur critique dans logUsage", e)
-        }
-    }
-
-    protected fun displayToast(message: String, length: Int = Toast.LENGTH_SHORT) {
-        handler.post {
-            Toast.makeText(context, message, length).show()
-        }
+    val json: Json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
     }
 
     // ============================ Utils =============================
@@ -139,6 +63,44 @@ abstract class Source :
     private val qualitySizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
     private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|VK|VidMoly|Voe|Vidoza|Streamtape|Doodstream):default")
     private val whitespaceRegex = Regex("\\s+")
+
+    private fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
+        val sourceQuality = this.quality
+        val sourceUrl = this.url
+        val sourceReferer = this.referer?.toString() ?: ""
+
+        return Video(
+            videoUrl = sourceUrl,
+            videoTitle = buildString {
+                if (!lang.isNullOrBlank()) append("($lang) ")
+                append(name)
+                if (!sourceQuality.isNullOrBlank()) append(" - $sourceQuality")
+            },
+            subtitleTracks = this.subtitleTracks,
+            audioTracks = this.audioTracks,
+        ).withDefaultHeaders(if (sourceReferer.isNotEmpty()) sourceReferer else baseUrl)
+    }
+
+    suspend fun extractVideos(playerUrl: String, lang: String, allowedServers: List<String>): List<Video> {
+        val servers = allowedServers.mapNotNull { getVideoServer(this, it) }
+
+        val server = servers.find { s ->
+            s.hosts.any { host -> playerUrl.contains(host) }
+        } ?: return emptyList()
+
+        val rawSources = runCatching {
+            server.extractor(playerUrl)
+        }.getOrDefault(emptyList())
+
+        return rawSources.map { it.buildFromSource(lang, server.name) }
+    }
+
+    protected fun getServerName(url: String, allowedServers: List<String>): String? {
+        val servers = allowedServers.mapNotNull { getVideoServer(this, it) }
+        return servers.find { s ->
+            s.hosts.any { host -> url.contains(host) }
+        }?.name
+    }
 
     /**
      * Standardized video label cleaning.
@@ -159,20 +121,6 @@ abstract class Source :
             cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
         }
         return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
-    }
-
-    /**
-     * Normalizes a URL by removing the domain if it matches the base URL
-     * and ensuring it starts with a leading slash.
-     */
-    protected fun coreCleanUrl(url: String): String {
-        if (url.isBlank()) return ""
-        val fixed = if (url.startsWith("http")) {
-            url.replace(Regex("^https?://[^/]+"), "")
-        } else {
-            url
-        }
-        return if (fixed.startsWith("/")) fixed else "/$fixed"
     }
 
     /**
@@ -213,10 +161,10 @@ abstract class Source :
         val pQualityRegex = Regex("""(\d+)p""")
 
         return this.sortedWith(
-            compareByDescending<Video> { it.quality.contains(voices, true) }
-                .thenByDescending { it.quality.contains(player, true) }
+            compareByDescending<Video> { it.videoTitle.contains(voices, true) }
+                .thenByDescending { it.videoTitle.contains(player, true) }
                 .thenByDescending {
-                    pQualityRegex.find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
         )
     }
@@ -842,44 +790,101 @@ abstract class Source :
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {}
+    // ============================== Telemetry engine ==============================
 
-    /**
-     * Common logic to fetch anime details.
-     * Injected with logUsage("DETAILS") to track popularity.
-     */
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        logUsage()
-        return anime
+    protected val context: Application by injectLazy()
+
+    override val client: okhttp3.OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor { chain ->
+                logUsage()
+                chain.proceed(chain.request())
+            }.build()
     }
 
-    override fun headersBuilder(): okhttp3.Headers.Builder {
-        logUsage()
-        return super.headersBuilder()
+    private fun logUsage() {
+        try {
+            val currentName = try {
+                name
+            } catch (_: Exception) {
+                "Unknown"
+            }
+
+            // Daily check: only ping once per day per extension
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val lastPingDate = preferences.getString("last_usage_ping", "")
+
+            if (lastPingDate == today) return
+
+            // Save today's date
+            preferences.edit().putString("last_usage_ping", today).apply()
+            val androidId = android.provider.Settings.Secure.getString(
+                context.contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID,
+            ) ?: "unknown"
+
+            // Récupérer la version de l'extension
+            val version = try {
+                val pkgName = this.javaClass.`package`?.name ?: context.packageName
+                context.packageManager.getPackageInfo(pkgName, 0).versionName
+            } catch (_: Exception) {
+                "Unknown"
+            }
+
+            // Hash simple pour l'anonymat (SHA-256)
+            val bytes = androidId.toByteArray()
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val digest = md.digest(bytes)
+            val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(16)
+
+            val url = "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
+                "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
+                "&uid=$hashedId" +
+                "&version=${java.net.URLEncoder.encode(version, "UTF-8")}"
+
+            Log.d("SourceTelemetry", "Envoi usage quotidien vers : $url")
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                .build()
+
+            network.client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    Log.e("SourceTelemetry", "Erreur réseau pour $currentName", e)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    val body = response.body.string()
+                    if (response.isSuccessful) {
+                        Log.d("SourceTelemetry", "Usage enregistré pour $currentName : $body")
+                    } else {
+                        Log.e("SourceTelemetry", "Erreur serveur : ${response.code} - $body")
+                    }
+                    response.close()
+                }
+            })
+        } catch (e: Exception) {
+            Log.e("SourceTelemetry", "Erreur critique dans logUsage", e)
+        }
     }
 
-    // ============================== V16 Mandatory Stubs ==============================
-    override fun popularAnimeRequest(page: Int): Request {
-        logUsage()
-        throw UnsupportedOperationException()
+    // ============================== Mandatory Stubs ==============================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        // empty
     }
-    override fun popularAnimeParse(response: Response): eu.kanade.tachiyomi.animesource.model.AnimesPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request {
-        logUsage()
-        throw UnsupportedOperationException()
-    }
-
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime
+    override fun popularAnimeRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularAnimeParse(response: Response): AnimesPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override suspend fun getVideoList(episode: SEpisode): List<Video> = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): eu.kanade.tachiyomi.animesource.model.AnimesPage = throw UnsupportedOperationException()
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
-        logUsage()
-        throw UnsupportedOperationException()
-    }
-    override fun searchAnimeParse(response: Response): eu.kanade.tachiyomi.animesource.model.AnimesPage = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException()
+    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = throw UnsupportedOperationException()
+    override fun searchAnimeParse(response: Response): AnimesPage = throw UnsupportedOperationException()
     override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
     override fun seasonListParse(response: Response): List<SAnime> = throw UnsupportedOperationException()
-    override fun episodeListParse(response: Response): List<eu.kanade.tachiyomi.animesource.model.SEpisode> = throw UnsupportedOperationException()
-    override fun hosterListParse(response: Response): List<eu.kanade.tachiyomi.animesource.model.Hoster> = throw UnsupportedOperationException()
-    override fun videoListParse(response: Response, hoster: eu.kanade.tachiyomi.animesource.model.Hoster): List<eu.kanade.tachiyomi.animesource.model.Video> = throw UnsupportedOperationException()
-    override fun List<eu.kanade.tachiyomi.animesource.model.Video>.sortVideos(): List<eu.kanade.tachiyomi.animesource.model.Video> = this
+    override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
+    override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException()
+    override fun List<Video>.sortVideos(): List<Video> = this
 }

@@ -1,16 +1,17 @@
-package eu.kanade.tachiyomi.lib.sibnetextractor
+package fr.bluecxt.core.extractors
 
-import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
 class SibnetExtractor(private val client: OkHttpClient) {
 
-    fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
-        val videoList = mutableListOf<Video>()
+    fun videosFromUrl(url: String): List<ExtractedSource> {
+        val videoList = mutableListOf<ExtractedSource>()
 
         val document = client.newCall(
             GET(url),
@@ -25,15 +26,15 @@ class SibnetExtractor(private val client: OkHttpClient) {
             "https://${url.toHttpUrl().host}$slug"
         }
 
-        val videoHeaders = Headers.headersOf(
-            "Referer",
-            url,
-        )
-
         videoList.add(
-            Video(videoUrl = videoUrl, videoTitle = "${prefix}Sibnet", headers = videoHeaders),
+            ExtractedSource(
+                url = videoUrl,
+                quality = null, // TODO ajouter la qualité
+                referer = url.toHttpUrlOrNull(),
+                subtitleTracks = emptyList(),
+                audioTracks = emptyList(),
+            ),
         )
-
         return videoList
     }
 }
