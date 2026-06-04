@@ -42,6 +42,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check Core/Lib changes and bump versions
+        if: false
         id: bump-check
         run: |
           COMMIT_COUNT=$(jq '.commits | length' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "0")
