@@ -15,12 +15,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.addBaseUrlPreference
-import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
 class WaveAnime : Source() {
@@ -75,16 +76,22 @@ class WaveAnime : Source() {
         return parseAnimePage(response)
     }
 
+    private fun Element.safeUrl(): String {
+        val url = this.attr("abs:href").toHttpUrlOrNull() ?: return ""
+        val query = url.encodedQuery
+        return if (query == null) url.encodedPath else "${url.encodedPath}?$query"
+    }
+
     private fun parseAnimePage(response: Response): AnimesPage {
         val document = response.asJsoup()
         val items = document.select("div.component.serie-card").mapNotNull { element ->
             val link = element.selectFirst("a") ?: return@mapNotNull null
             SAnime.create().apply {
-                url = link.safeRelativePath()
+                url = link.safeUrl()
                 title = element.attr("title").ifBlank { "Titre inconnu" }
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
-        }.distinctBy { it.url }.sortedBy { it.title }
+        }.distinctBy { it.url }
 
         return AnimesPage(items, false)
     }
@@ -93,21 +100,7 @@ class WaveAnime : Source() {
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl")).execute()
-        return parsePopularPage(response)
-    }
-
-    private fun parsePopularPage(response: Response): AnimesPage {
-        val document = response.asJsoup()
-        val items = document.select("div.component.serie-card").mapNotNull { element ->
-            val link = element.selectFirst("a") ?: return@mapNotNull null
-            SAnime.create().apply {
-                url = link.safeRelativePath()
-                title = element.attr("title").ifBlank { "Titre inconnu" }
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-            }
-        }.distinctBy { it.url }
-
-        return AnimesPage(items, false)
+        return parseAnimePage(response)
     }
 
     // =============================== Search ===============================
@@ -196,7 +189,7 @@ class WaveAnime : Source() {
                 episodes.add(
                     SEpisode.create().apply {
                         val link = element.selectFirst("a") ?: return@forEach
-                        url = link.safeRelativePath()
+                        url = link.safeUrl()
 
                         // Metadata from TMDB
                         val epMeta = tmdbMetadata?.episodeSummaries?.get(epActualNum)
@@ -267,47 +260,13 @@ class WaveAnime : Source() {
             }
         } catch (_: Exception) {}
 
-        // Utilise le nouvel extracteur du Core pour le DASH
+        // Utilise l'extracteur du Core (maintenant simplifié)
         val rawSources = wavePlayerExtractor.videosFromUrl(masterUrl, baseUrl + episodeUrl, tracks)
 
-        // Utilise le formatage officiel du core
-        val videos = rawSources.map { source ->
+        return rawSources.map { source ->
             source.buildFromSource(lang = null, name = "(DASH) WavePlayer")
         }
-
-        return videos.sortVideos()
     }
 
-    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
-    private val qualityResRegex = Regex("\\s*\\(\\d+x\\d+\\)")
-    private val qualityExtraSpaceRegex = Regex("\\s+")
-    private val qualityRegex = Regex("""(\d+)p""")
-
-    private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(qualityCleanRegex, "")
-            .replace(qualityResRegex, "")
-            .replace(" - - ", " - ")
-            .trim()
-            .removeSuffix("-")
-            .trim()
-
-        cleaned = cleaned.replace(Regex("(?i)WavePlayer\\s*-\\s*WavePlayer", RegexOption.IGNORE_CASE), "WavePlayer")
-        return cleaned.replace(qualityExtraSpaceRegex, " ").replace(" - - ", " - ").trim()
-    }
-
-    override fun List<Video>.sortVideos(): List<Video> {
-        val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
-        val sortedList = this.sortedWith(
-            compareByDescending {
-                qualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            },
-        )
-        if (quality == "Highest") return sortedList
-        return sortedList.sortedWith(
-            compareByDescending<Video> { it.videoTitle.contains(quality) }
-                .thenByDescending {
-                    qualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                },
-        )
-    }
+    override fun List<Video>.sortVideos(): List<Video> = this
 }
