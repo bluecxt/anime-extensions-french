@@ -13,11 +13,11 @@ private const val ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.
 
 class GoogleDriveExtractor(private val client: OkHttpClient) {
 
-    val videoList = mutableListOf<ExtractedSource>()
-
     private val cookieList = client.cookieJar.loadForRequest("https://drive.google.com".toHttpUrl())
 
     fun videosFromUrl(itemId: String): List<ExtractedSource> {
+        val videoList = mutableListOf<ExtractedSource>()
+
         val initialVideoUrl = "https://drive.usercontent.google.com/download?id=$itemId"
 
         val docHeaders = Headers.Builder().apply {

@@ -37,7 +37,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
                 headers = headers,
                 subtitleTracks = emptyList(),
                 audioTracks = emptyList(),
-            )
+            ),
         )
     }
 }

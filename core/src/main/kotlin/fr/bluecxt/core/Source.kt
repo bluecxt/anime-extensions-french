@@ -75,6 +75,7 @@ abstract class Source :
                 append(name)
                 if (!sourceQuality.isNullOrBlank()) append(" - $sourceQuality")
             },
+            headers = this.headers,
             subtitleTracks = this.subtitleTracks,
             audioTracks = this.audioTracks,
         ).withDefaultHeaders(sourceUrl)
