@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import keiyoushi.utils.UrlUtils
 import keiyoushi.utils.bodyString
-import keiyoushi.utils.commonEmptyHeaders
 import keiyoushi.utils.parallelMapNotNullBlocking
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
@@ -16,7 +15,7 @@ import okhttp3.OkHttpClient
 import java.io.File
 import kotlin.math.abs
 
-class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = commonEmptyHeaders) {
+class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
 
     // ================================ M3U8 ================================
 

@@ -67,7 +67,6 @@ abstract class Source :
     private fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
         val sourceQuality = this.quality
         val sourceUrl = this.url
-        val sourceReferer = this.referer?.toString() ?: ""
 
         return Video(
             videoUrl = sourceUrl,
@@ -78,7 +77,7 @@ abstract class Source :
             },
             subtitleTracks = this.subtitleTracks,
             audioTracks = this.audioTracks,
-        ).withDefaultHeaders(if (sourceReferer.isNotEmpty()) sourceReferer else baseUrl)
+        ).withDefaultHeaders(sourceUrl)
     }
 
     suspend fun extractVideos(playerUrl: String, lang: String, allowedServers: List<String>): List<Video> {
