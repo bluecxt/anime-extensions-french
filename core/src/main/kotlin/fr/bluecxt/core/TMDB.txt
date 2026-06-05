@@ -1,0 +1,15 @@
+package fr.bluecxt.core
+
+data class TmdbMetadata(
+    val posterUrl: String? = null,
+    val episodeThumbUrl: String? = null,
+    val summary: String? = null,
+    val author: String? = null,
+    val artist: String? = null,
+    val status: Int = 0, // SAnime.UNKNOWN
+    val releaseDate: String? = null,
+    val genre: String? = null,
+    // Map<EpNumber, Triple<String? (Title), String? (Thumb), String? (Summary)>>
+    val episodeSummaries: Map<Int, Triple<String?, String?, String?>> = emptyMap(),
+)
+
