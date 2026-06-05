@@ -53,7 +53,7 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
             videoList.add(
                 ExtractedSource(
                     url = finalVideoUrl,
-                    quality = itemSize,
+                    quality = itemSize.trim().removeSurrounding("(", ")"),
                     headers = docHeaders,
                 ),
             )

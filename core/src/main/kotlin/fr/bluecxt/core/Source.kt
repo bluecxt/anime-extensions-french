@@ -64,7 +64,7 @@ abstract class Source :
     private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|VK|VidMoly|Voe|Vidoza|Streamtape|Doodstream):default")
     private val whitespaceRegex = Regex("\\s+")
 
-    private fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
+    fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
         val sourceQuality = this.quality
         val sourceUrl = this.url
 

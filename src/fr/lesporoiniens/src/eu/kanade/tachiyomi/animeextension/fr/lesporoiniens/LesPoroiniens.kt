@@ -7,12 +7,11 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.googledriveextractor.GoogleDriveExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -26,7 +25,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
 import java.text.Normalizer
@@ -39,13 +37,6 @@ class LesPoroiniens : Source() {
     override val baseUrl = "https://lesporoiniens.org"
     override val lang = "fr"
     override val supportsLatest = false
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {}
-
-    override val json: Json by injectLazy()
-
-    private val gdriveExtractor by lazy { GoogleDriveExtractor(client, Headers.Builder().add("User-Agent", DEFAULT_USER_AGENT).build()) }
-    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
@@ -136,9 +127,8 @@ class LesPoroiniens : Source() {
         val hasMultipleSeasons = hasSeasonDiversity && hasSeasonResetSignal
 
         val seriesTitle = obj["title"]?.jsonPrimitive?.content ?: ""
-        val tmdbId = fetchTmdbId(seriesTitle)
-        val tmdbSeason1 = tmdbId?.let { fetchTmdbSeasonData(it, 1) }.orEmpty()
-        val tmdbSeason0 = tmdbId?.let { fetchTmdbSeasonData(it, 0) }.orEmpty()
+        val tmdbSeason1 = fetchTmdbMetadata(seriesTitle, 1)?.episodeSummaries.orEmpty()
+        val tmdbSeason0 = fetchTmdbMetadata(seriesTitle, 0)?.episodeSummaries.orEmpty()
 
         val adjustedEpisodeNumbers = run {
             var offset = 0
@@ -210,46 +200,11 @@ class LesPoroiniens : Source() {
         return episodes.sortedByDescending { it.episode_number }
     }
 
-    private fun fetchTmdbId(title: String): Int? {
-        val url = "https://api.themoviedb.org/3/search/tv?api_key=24621da8ae19dce721e59eff2ab479bb&query=${URLEncoder.encode(title, "UTF-8")}&language=fr-FR"
-        return try {
-            client.newCall(GET(url)).execute().use { response ->
-                val json = JSONObject(response.body.string())
-                val results = json.getJSONArray("results")
-                if (results.length() > 0) results.getJSONObject(0).getInt("id") else null
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun fetchTmdbSeasonData(tmdbId: Int, season: Int): Map<Int, Triple<String?, String?, String?>> {
-        val url = "https://api.themoviedb.org/3/tv/$tmdbId/season/$season?api_key=24621da8ae19dce721e59eff2ab479bb&language=fr-FR"
-        return try {
-            client.newCall(GET(url)).execute().use { response ->
-                val json = JSONObject(response.body.string())
-                val episodesJson = json.getJSONArray("episodes")
-                val map = mutableMapOf<Int, Triple<String?, String?, String?>>()
-                for (i in 0 until episodesJson.length()) {
-                    val ep = episodesJson.getJSONObject(i)
-                    val epName = ep.optString("name").takeIf { it.isNotBlank() }
-                    val thumb = ep.optString("still_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
-                    val summary = ep.optString("overview").takeIf { it.isNotBlank() }
-                    map[ep.getInt("episode_number")] = Triple(epName, thumb, summary)
-                }
-                map
-            }
-        } catch (_: Exception) {
-            emptyMap()
-        }
-    }
-
     // --- Vidéos ---
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val type = episode.url.substringAfter("type=").substringBefore("&")
         val hosterName = when (type) {
             "gdrive" -> "Google Drive"
-            "vidmoly" -> "Vidmoly"
             else -> type.replaceFirstChar { it.uppercase() }
         }
         return listOf(Hoster(hosterName = hosterName, internalData = episode.url))
@@ -262,35 +217,20 @@ class LesPoroiniens : Source() {
 
         return when (type) {
             "gdrive" -> {
-                gdriveExtractor.videosFromUrl(id, "(VOSTFR) Google Drive -")
-                    .map { video ->
-                        Video(videoUrl = video.videoUrl, videoTitle = cleanQuality(video.videoTitle), headers = video.headers, subtitleTracks = video.subtitleTracks, audioTracks = video.audioTracks)
-                    }
-            }
-
-            "vidmoly" -> {
-                val vidmolyUrl = "https://vidmoly.to/embed-$id.html"
-                vidmolyExtractor.videosFromUrl(vidmolyUrl, "(VOSTFR) Vidmoly -")
-                    .map { video ->
-                        Video(videoUrl = video.videoUrl, videoTitle = cleanQuality(video.videoTitle), headers = video.headers, subtitleTracks = video.subtitleTracks, audioTracks = video.audioTracks)
-                    }
+                GoogleDriveExtractor(client).videosFromUrl(id)
+                    .map { it.buildFromSource("VOSTFR", "Google Drive") }
             }
 
             else -> emptyList()
         }
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(" - (", " - ")
-        .replace(QUALITY_CLEAN_REGEX, "")
-        .replace(" - - ", " - ")
-        .trim()
-
     // --- Utils ---
     private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(SLUG_REGEX_1, "")
         .lowercase().replace(SLUG_REGEX_2, "_").replace(SLUG_REGEX_3, "_").trim('_')
 
     private fun parseStatus(status: String?): Int = when (status?.lowercase()?.trim()) {
-        "en cours" -> SAnime.ONGOING
+        "en cours", "en cou" -> SAnime.ONGOING
         "terminé", "fini" -> SAnime.COMPLETED
         else -> SAnime.UNKNOWN
     }
