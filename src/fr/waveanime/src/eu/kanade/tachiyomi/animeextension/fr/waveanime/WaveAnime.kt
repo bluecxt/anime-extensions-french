@@ -35,8 +35,6 @@ class WaveAnime : Source() {
 
     override val supportsLatest = true
 
-    override val json: Json by injectLazy()
-
     companion object {
         private const val PREF_URL_KEY = "preferred_baseUrl"
         private const val PREF_URL_DEFAULT = "https://waveanime.fr"
@@ -79,14 +77,14 @@ class WaveAnime : Source() {
 
     private fun parseAnimePage(response: Response): AnimesPage {
         val document = response.asJsoup()
-        val items = document.select("div.component.serie-card").map { element ->
-            val link = element.selectFirst("a")!!
+        val items = document.select("div.component.serie-card").mapNotNull { element ->
+            val link = element.selectFirst("a") ?: return@mapNotNull null
             SAnime.create().apply {
                 url = link.safeRelativePath()
-                title = element.attr("title")
-                thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
+                title = element.attr("title").ifBlank { "Titre inconnu" }
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
-        }.sortedBy { it.title }
+        }.distinctBy { it.url }.sortedBy { it.title }
 
         return AnimesPage(items, false)
     }
@@ -100,12 +98,12 @@ class WaveAnime : Source() {
 
     private fun parsePopularPage(response: Response): AnimesPage {
         val document = response.asJsoup()
-        val items = document.select("div.component.serie-card").map { element ->
-            val link = element.selectFirst("a")!!
+        val items = document.select("div.component.serie-card").mapNotNull { element ->
+            val link = element.selectFirst("a") ?: return@mapNotNull null
             SAnime.create().apply {
                 url = link.safeRelativePath()
-                title = element.attr("title")
-                thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
+                title = element.attr("title").ifBlank { "Titre inconnu" }
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }.distinctBy { it.url }
 
@@ -188,14 +186,17 @@ class WaveAnime : Source() {
             val tmdbMetadata = fetchTmdbMetadataWithType(anime.title, seasonNum, format)
 
             seasonGrid.select("div.component.episode-card").forEach { element ->
-                val epActualNumStr = element.selectFirst("h5")?.text()?.substringAfter("E")?.trim() ?: "0"
+                val fullTitle = element.attr("title").ifBlank { return@forEach }
+                // Exemple: "S1 E2 - Sans nom n°2" ou "E3 - Titre"
+                val epMatch = Regex("""E(\d+(?:\.\d+)?)""").find(fullTitle)
+                val epActualNumStr = epMatch?.groupValues?.get(1) ?: "0"
                 val epActualNum = epActualNumStr.toIntOrNull() ?: 0
-                val epName = element.selectFirst("h4")?.text() ?: ""
+                val epName = fullTitle.substringAfter("-").trim()
 
                 episodes.add(
                     SEpisode.create().apply {
-                        val link = element.selectFirst("a")!!.attr("href")
-                        setUrlWithoutDomain(link)
+                        val link = element.selectFirst("a") ?: return@forEach
+                        url = link.safeRelativePath()
 
                         // Metadata from TMDB
                         val epMeta = tmdbMetadata?.episodeSummaries?.get(epActualNum)
@@ -203,7 +204,7 @@ class WaveAnime : Source() {
 
                         // GEMINI.md Rules: [S1] Episode Y - [Titre]
                         val sPrefix = if (seasonGrids.size > 1) "[S$seasonNum] " else ""
-                        val baseName = "Episode $epActualNumStr" + if (epName.contains("Sans nom", true)) {
+                        val baseName = "Episode $epActualNumStr" + if (epName.contains("Sans nom", true) || epName.isBlank()) {
                             if (tmdbName != null) " - $tmdbName" else ""
                         } else {
                             " - $epName"
@@ -230,6 +231,8 @@ class WaveAnime : Source() {
     // ============================ Video Links =============================
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "WavePlayer (DASH)", internalData = episode.url))
 
+    private val wavePlayerExtractor by lazy { fr.bluecxt.core.extractors.WavePlayerExtractor(client, headers) }
+
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val episodeUrl = hoster.internalData
         val response = client.newCall(GET(baseUrl + episodeUrl, headers)).execute()
@@ -242,9 +245,9 @@ class WaveAnime : Source() {
         val playbackPath = Regex("""/playback/([^/]+)/master\.mpd""").find(html)?.value
             ?: return emptyList()
 
-        val videoUrl = baseUrl + playbackPath
+        val masterUrl = baseUrl + playbackPath
 
-        // Fetch tracks (subtitles)
+        // Fetch tracks (subtitles) via API WaveAnime
         val tracks = mutableListOf<Track>()
         try {
             val tracksResponse = client.newCall(GET("$baseUrl/api/episodes/tracks?episodeId=$episodeId", headers)).execute()
@@ -264,42 +267,15 @@ class WaveAnime : Source() {
             }
         } catch (_: Exception) {}
 
-        // Parse MPD to get qualities
-        val videoList = mutableListOf<Video>()
-        val prefix = "(DASH) WavePlayer - "
+        // Utilise le nouvel extracteur du Core pour le DASH
+        val rawSources = wavePlayerExtractor.videosFromUrl(masterUrl, baseUrl + episodeUrl, tracks)
 
-        try {
-            val mpdResponse = client.newCall(GET(videoUrl, headers)).execute()
-            val mpdBody = mpdResponse.body.string()
-
-            val repRegex = Regex("""<Representation[^>]+width="(\d+)"[^>]+height="(\d+)"[^>]*>""")
-            val qualities = repRegex.findAll(mpdBody).map {
-                val h = it.groupValues[2].toInt()
-                val w = it.groupValues[1].toInt()
-                val label = when {
-                    h >= 2160 || w >= 3840 -> "2160p (4K)"
-                    h >= 1440 || w >= 2560 -> "1440p (2K)"
-                    h >= 1080 || w >= 1920 -> "1080p"
-                    h >= 720 || w >= 1280 -> "720p"
-                    h >= 480 || w >= 854 -> "480p"
-                    h >= 360 || w >= 640 -> "360p"
-                    else -> "${h}p"
-                }
-                label
-            }.distinct().toList()
-
-            if (qualities.isEmpty()) {
-                videoList.add(Video(videoUrl = videoUrl, videoTitle = cleanQuality("${prefix}DASH"), subtitleTracks = tracks))
-            } else {
-                qualities.forEach { label ->
-                    videoList.add(Video(videoUrl = videoUrl, videoTitle = cleanQuality("$prefix$label"), subtitleTracks = tracks))
-                }
-            }
-        } catch (_: Exception) {
-            videoList.add(Video(videoUrl = videoUrl, videoTitle = cleanQuality("${prefix}DASH"), subtitleTracks = tracks))
+        // Utilise le formatage officiel du core
+        val videos = rawSources.map { source ->
+            source.buildFromSource(lang = null, name = "(DASH) WavePlayer")
         }
 
-        return videoList.sortVideos()
+        return videos.sortVideos()
     }
 
     private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")

@@ -2,6 +2,7 @@ package fr.bluecxt.core
 
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
+import fr.bluecxt.core.extractors.WavePlayerExtractor
 import fr.bluecxt.core.model.VideoServer
 
 /**
@@ -19,6 +20,16 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Sendvid",
         hosts = listOf("sendvid.com"),
         extractor = { url -> SendvidExtractor(source.client, source.headers).videosFromUrl(url) },
+    )
+
+    "WavePlayer" -> VideoServer(
+        name = "WavePlayer",
+        hosts = listOf("waveanime.fr"),
+        extractor = { url ->
+            // WavePlayer est spécial, l'appel sera géré manuellement dans WaveAnime
+            // à cause de la gestion complexe des sous-titres, mais on l'inscrit ici pour l'architecture
+            emptyList()
+        },
     )
 
     else -> null
