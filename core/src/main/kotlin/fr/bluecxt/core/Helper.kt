@@ -27,13 +27,16 @@ fun String.safeRelativePath(base: String): String = base.toHttpUrlOrNull()?.reso
  * Useful for bypassing 403 Forbidden errors on various hosters.
  */
 fun Video.withDefaultHeaders(baseUrl: String): Video {
-    val updatedHeaders = (this.headers ?: Headers.Builder().build()).newBuilder()
-        .set("User-Agent", DEFAULT_USER_AGENT)
-        .apply {
-            if (this.build()["Referer"] == null) set("Referer", "$baseUrl/")
-        }.build()
 
-    return this.copy(headers = updatedHeaders)
+    val builder = this.headers?.newBuilder() ?: Headers.Builder()
+
+    builder.set("User-Agent", DEFAULT_USER_AGENT)
+
+    if (this.headers?.get("Referer") == null) {
+        builder.set("Referer", "$baseUrl/")
+    }
+
+    return this.copy(headers = builder.build())
 }
 
 /**
@@ -83,11 +86,13 @@ fun PreferenceScreen.addBaseUrlPreference(
     )
 }
 
-fun List<Video>.toExtractedSources(refererUrl: String? = null): List<ExtractedSource> = this.map { video ->
+fun List<Video>.toExtractedSources(headers: Headers? = null): List<ExtractedSource> = this.map { video ->
+    val builderHeaders = headers?.newBuilder() ?: Headers.Builder()
+
     ExtractedSource(
         url = video.videoUrl,
         quality = video.videoTitle,
-        referer = refererUrl?.toHttpUrlOrNull(),
+        headers = builderHeaders,
         subtitleTracks = video.subtitleTracks,
         audioTracks = video.audioTracks,
     )

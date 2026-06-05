@@ -26,15 +26,18 @@ class SibnetExtractor(private val client: OkHttpClient) {
             "https://${url.toHttpUrl().host}$slug"
         }
 
-        videoList.add(
+        val headers = Headers.Builder()
+            .add("Referer", url)
+            .build()
+
+        return listOf(
             ExtractedSource(
                 url = videoUrl,
                 quality = null, // TODO ajouter la qualité
-                referer = url.toHttpUrlOrNull(),
+                headers = headers,
                 subtitleTracks = emptyList(),
                 audioTracks = emptyList(),
-            ),
+            )
         )
-        return videoList
     }
 }

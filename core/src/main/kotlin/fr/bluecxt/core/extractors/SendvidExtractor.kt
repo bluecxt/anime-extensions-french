@@ -16,15 +16,19 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
     fun videosFromUrl(url: String, prefix: String = ""): List<ExtractedSource> {
         val document = client.newCall(GET(url, headers)).execute().asJsoup()
         val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: return emptyList()
+        val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
+
+        val headers = Headers.Builder()
+            .add("Referer", httpUrl)
+            .build()
 
         return if (masterUrl.contains(".m3u8")) {
             playlistUtils.extractFromHls(masterUrl, url).toExtractedSources(url)
         } else {
-            val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
             listOf(
                 ExtractedSource(
                     url = masterUrl,
-                    referer = httpUrl,
+                    headers = headers
                 ),
             )
         }
