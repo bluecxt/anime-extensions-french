@@ -117,7 +117,7 @@ class VoirAnime : Source() {
     }
 
     @Serializable
-    data class AnimeResult(val postTitle: String, val postImage: String, val postLink: String)
+    data class AnimeResult(val post_title: String, val post_image: String, val post_link: String)
 
     @Serializable
     data class SearchResponse(val all: List<AnimeResult>)
@@ -132,9 +132,9 @@ class VoirAnime : Source() {
             val data = json.decodeFromString<SearchResponse>(seriesDataString)
             val items = data.all.map { result ->
                 SAnime.create().apply {
-                    title = result.postTitle
-                    thumbnail_url = result.postImage.substringBefore("?")
-                    url = result.postLink.substringAfter(baseUrl)
+                    title = result.post_title
+                    thumbnail_url = result.post_image.substringBefore("?")
+                    url = result.post_link.substringAfter(baseUrl)
                 }
             }
             return AnimesPage(items, false)
