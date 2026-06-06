@@ -59,10 +59,6 @@ abstract class Source :
     }
 
     // ============================ Utils =============================
-    private val qualityCleanRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)(?:/s)?")
-    private val qualitySizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
-    private val qualityDefaultRegex = Regex("(?i)(Sendvid|Sibnet|VK|VidMoly|Voe|Vidoza|Streamtape|Doodstream):default")
-    private val whitespaceRegex = Regex("\\s+")
 
     fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
         val sourceQuality = this.quality
@@ -84,9 +80,7 @@ abstract class Source :
     suspend fun extractVideos(playerUrl: String, lang: String, allowedServers: List<String>): List<Video> {
         val servers = allowedServers.mapNotNull { getVideoServer(this, it) }
 
-        val server = servers.find { s ->
-            s.hosts.any { host -> playerUrl.contains(host) }
-        } ?: return emptyList()
+        val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
 
         val rawSources = runCatching {
             server.extractor(playerUrl)
@@ -97,30 +91,7 @@ abstract class Source :
 
     protected fun getServerName(url: String, allowedServers: List<String>): String? {
         val servers = allowedServers.mapNotNull { getVideoServer(this, it) }
-        return servers.find { s ->
-            s.hosts.any { host -> url.contains(host) }
-        }?.name
-    }
-
-    /**
-     * Standardized video label cleaning.
-     * Removes file sizes, resolutions, technical suffixes and redundant server names.
-     */
-    protected fun coreCleanQuality(quality: String): String {
-        var cleaned = quality.replace(qualityCleanRegex, "")
-            .replace(qualitySizeRegex, "")
-            .replace(qualityDefaultRegex, "")
-            .replace(" - - ", " - ")
-            .trim()
-            .removeSuffix("-")
-            .trim()
-
-        val servers = listOf("VidMoly", "Sibnet", "Sendvid", "VK", "Voe", "Vidoza", "Streamtape", "Doodstream", "Embed4me", "SeekStreaming")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
+        return servers.find { s -> s.matches(url) }?.name
     }
 
     /**

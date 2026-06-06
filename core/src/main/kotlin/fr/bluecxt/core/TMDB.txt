@@ -1,5 +1,10 @@
 package fr.bluecxt.core
 
+interface TmdbSource {
+    val client: OkHttpClient
+
+    // le reste
+
 data class TmdbMetadata(
     val posterUrl: String? = null,
     val episodeThumbUrl: String? = null,

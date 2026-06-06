@@ -1,9 +1,14 @@
 package fr.bluecxt.core
 
+import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
-import fr.bluecxt.core.extractors.WavePlayerExtractor
+import fr.bluecxt.core.extractors.VidmolyExtractor
+import fr.bluecxt.core.extractors.WaveplayerExtractor
+import fr.bluecxt.core.extractors.Embed4me
 import fr.bluecxt.core.model.VideoServer
+
+val DEFAULT_SERVER = listOf("Sibnet", "Sendvid", "Vidmoly")
 
 /**
  * Factory pour créer les objets serveurs à la demande.
@@ -30,6 +35,24 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             // à cause de la gestion complexe des sous-titres, mais on l'inscrit ici pour l'architecture
             emptyList()
         },
+    )
+
+    "Vidmoly" -> VideoServer(
+        name = "Vidmoly",
+        hosts = listOf("vidmoly.*"),
+        extractor = { url -> VidmolyExtractor(source.client, source.headers).videosFromUrl(url) },
+    )
+
+    "Minochinos" -> VideoServer(
+        name = "Minochinos",
+        hosts = listOf("minochinos.com"),
+        extractor = { url -> MinochinosExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Embed4me" -> VideoServer(
+        name = "Embed4me",
+        hosts = listOf("*embed4me*"),
+        extractor = { url -> Embed4me(source.client).videosFromUrl(url) },
     )
 
     else -> null

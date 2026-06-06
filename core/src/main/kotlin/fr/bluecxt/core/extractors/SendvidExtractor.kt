@@ -23,7 +23,7 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
             .build()
 
         return if (masterUrl.contains(".m3u8")) {
-            playlistUtils.extractFromHls(masterUrl, url).toExtractedSources(headers)
+            playlistUtils.extractFromHlsToVideo(masterUrl, url, headers, headers).toExtractedSources(headers)
         } else {
             listOf(
                 ExtractedSource(

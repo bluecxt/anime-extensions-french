@@ -12,11 +12,6 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.embed4meextractor.Embed4meExtractor
-import eu.kanade.tachiyomi.lib.minochinosextractor.MinoChinosExtractor
-import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
@@ -38,6 +33,8 @@ class AnimeSama : Source() {
 
     private val log = "AnimeSamaDebug"
 
+    private val supportedServer = listOf("Sibnet", "Sendvid", "Vidmoly", "Embed4me", "Minochinos")
+
     override val name = "Anime-Sama"
 
     override val baseUrl: String
@@ -47,13 +44,9 @@ class AnimeSama : Source() {
 
     override val supportsLatest = true
 
-    override val client = network.client
-
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
-
-    override val json: Json by injectLazy()
 
     // ============================== Popular ===============================
     override fun popularAnimeParse(response: Response): AnimesPage {
@@ -390,12 +383,6 @@ class AnimeSama : Source() {
 
     // ============================ Video Links =============================
 
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
-    private val minochinosExtractor by lazy { MinoChinosExtractor(client) }
-    private val embed4meExtractor by lazy { Embed4meExtractor(client) }
-
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val playerUrls = json.decodeFromString<List<List<String>>>(episode.url)
         val hosters = mutableListOf<Hoster>()
@@ -410,47 +397,19 @@ class AnimeSama : Source() {
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        android.util.Log.d(log, "getVideoList START for hoster: ${hoster.hosterName}")
         val data = hoster.internalData.split("|")
         val urls = json.decodeFromString<List<String>>(data[0])
-        android.util.Log.d(log, "Raw players list: $urls")
         val lang = data[1]
 
         return urls.parallelMap { playerUrl ->
-            try {
-                val server = when {
-                    playerUrl.contains("sibnet.ru") -> "Sibnet"
-                    playerUrl.contains("sendvid.com") -> "Sendvid"
-                    playerUrl.contains("vidmoly.") -> "VidMoly"
-                    playerUrl.contains("minochinos.com") || playerUrl.contains("vidhide") -> "MinoChinos"
-                    playerUrl.contains("embed4me") || playerUrl.contains("seekstreaming") -> "Embed4me"
-                    else -> "Serveur"
-                }
-                val prefix = "($lang) $server - "
+            val videos = extractVideos(playerUrl, lang, supportedServer)
 
-                val videos = when {
-                    playerUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("vidmoly.") -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("minochinos.com") || playerUrl.contains("vidhide") -> minochinosExtractor.videosFromUrl(playerUrl, prefix)
-                    playerUrl.contains("embed4me") || playerUrl.contains("seekstreaming") -> embed4meExtractor.videosFromUrl(playerUrl, prefix)
-                    else -> emptyList()
-                }
-
-                if (videos.isEmpty() && server != "Serveur") {
-                    android.util.Log.d(log, "Extractor returned empty for: $server -> $playerUrl")
-                }
-
-                videos.map { video ->
-                    video.withDefaultHeaders(baseUrl).copy(videoTitle = coreCleanQuality(video.videoTitle))
-                }
-            } catch (e: Exception) {
-                android.util.Log.e(log, "Exception extracting $playerUrl", e)
+            if (videos.isEmpty()) {
                 emptyList()
+            } else {
+                videos
             }
-        }.flatten().coreSortVideos().also {
-            android.util.Log.d(log, "Final sorted videos list: ${it.map { v -> v.videoTitle + " -> " + v.videoUrl }}")
-        }
+        }.flatten().coreSortVideos()
     }
 
     // ============================ Utils =============================

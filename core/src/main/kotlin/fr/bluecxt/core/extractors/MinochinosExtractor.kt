@@ -1,21 +1,21 @@
-package eu.kanade.tachiyomi.lib.minochinosextractor
+package fr.bluecxt.core.extractors
 
 import android.util.Log
-import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
-import eu.kanade.tachiyomi.lib.unpacker.autoUnpacker
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.parallelCatchingFlatMap
 import keiyoushi.utils.useAsJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
-class MinoChinosExtractor(private val client: OkHttpClient) {
+class MinochinosExtractor(private val client: OkHttpClient) {
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
-    suspend fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val response = client.newCall(GET(url)).awaitSuccess()
         val document = response.useAsJsoup()
 
@@ -32,8 +32,8 @@ class MinoChinosExtractor(private val client: OkHttpClient) {
         Log.d("MinoChinosExtractor", "Links JSON: $linksJson")
         if (linksJson.isEmpty()) return emptyList()
 
-        val videoEntries = linkRegex.findAll(linksJson).map { 
-            it.groupValues[1] to it.groupValues[2] 
+        val videoEntries = linkRegex.findAll(linksJson).map {
+            it.groupValues[1] to it.groupValues[2]
         }.filter { (key, _) -> key == "hls3" }.toList()
 
         return videoEntries.parallelCatchingFlatMap { (key, videoUrl) ->
@@ -49,13 +49,6 @@ class MinoChinosExtractor(private val client: OkHttpClient) {
             playlistUtils.extractFromHls(
                 fixedUrl,
                 referer = url,
-                videoNameGen = { quality ->
-                    if (prefix.isNotBlank()) {
-                        "$prefix$quality"
-                    } else {
-                        "MinoChinos - $quality"
-                    }
-                },
             )
         }
     }

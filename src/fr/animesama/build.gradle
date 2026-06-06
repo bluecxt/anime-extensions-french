@@ -5,12 +5,3 @@ ext {
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib:sibnetextractor'))
-    implementation(project(':lib:sendvidextractor'))
-    implementation(project(':lib:vidmolyextractor'))
-    implementation(project(':lib:minochinosextractor'))
-    implementation(project(':lib:embed4meextractor'))
-    implementation(project(':lib:playlistutils'))
-}
