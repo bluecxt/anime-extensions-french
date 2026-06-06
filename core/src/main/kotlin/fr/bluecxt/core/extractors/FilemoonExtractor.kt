@@ -1,72 +1,160 @@
 package fr.bluecxt.core.extractors
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import fr.bluecxt.core.FILEMOON_LOG
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.network.WebViewSniffer
 import fr.bluecxt.core.utils.PlaylistUtils
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.json.JSONObject
+import okhttp3.Request
+import uy.kohesive.injekt.injectLazy
+import java.io.ByteArrayInputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class FilemoonExtractor(private val client: OkHttpClient) {
 
+    private val context: Application by injectLazy()
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
     fun videosFromUrl(url: String, headers: Headers? = null): List<ExtractedSource> {
         val httpUrl = url.toHttpUrl()
         val host = httpUrl.host
-        val id = httpUrl.pathSegments.last()
 
-        val baseHeaders = (headers?.newBuilder() ?: Headers.Builder())
-            .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-            .set("Referer", "https://$host/")
-            .build()
+        Log.d(FILEMOON_LOG, "🚀 [START] Début de l'extraction pour: $url")
 
-        return try {
-            // 1. On récupère les détails pour trouver l'URL de l'iframe réelle (nzn3.org, etc.)
-            val detailsUrl = "https://$host/api/videos/$id/embed/details"
-            val detailsResponse = client.newCall(GET(detailsUrl, baseHeaders)).execute()
+        // 1. Sniffing du flux m3u8 via WebView
+        val m3u8Url = sniffM3u8(url)
 
-            val targetUrl = if (detailsResponse.isSuccessful) {
-                val json = JSONObject(detailsResponse.body.string())
-                json.optString("embed_frame_url", url)
-            } else {
-                url
-            }
+        return if (m3u8Url != null) {
+            Log.d(FILEMOON_LOG, "✅ [MATCH] Flux intercepté: $m3u8Url")
 
-            Log.d(FILEMOON_LOG, "Sniffing sur : $url")
+            val finalHeaders = (headers?.newBuilder() ?: Headers.Builder())
+                .set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0")
+                .set("Origin", "https://$host")
+                .set("Referer", "https://$host/")
+                .build()
 
-            // 2. On lance le sniffing sur l'URL de base (le bouton Play y sera accessible via injection d'iframe)
-            val m3u8Url = WebViewSniffer.sniff(client, url, {
-                it.contains(".m3u8", ignoreCase = true) && !it.contains("iframes", ignoreCase = true)
-            })
-
-            if (m3u8Url != null) {
-                Log.d(FILEMOON_LOG, "Succès ! m3u8 trouvé : $m3u8Url")
-
-                // On utilise les headers du domaine de l'iframe pour le CDN
-                val finalHeaders = baseHeaders.newBuilder()
-                    .set("Origin", "https://${targetUrl.toHttpUrl().host}")
-                    .set("Referer", "https://${targetUrl.toHttpUrl().host}/")
-                    .build()
-
-                playlistUtils.extractFromHls(
-                    playlistUrl = m3u8Url,
-                    referer = "https://${targetUrl.toHttpUrl().host}/",
-                    masterHeaders = finalHeaders,
-                    videoHeaders = finalHeaders,
-                )
-            } else {
-                Log.e(FILEMOON_LOG, "Échec de l'interception m3u8 (Timeout)")
-                emptyList()
-            }
-        } catch (e: Exception) {
-            Log.e(FILEMOON_LOG, "Erreur Filemoon: ${e.message}")
+            playlistUtils.extractFromHls(
+                playlistUrl = m3u8Url,
+                referer = "https://$host/",
+                masterHeaders = finalHeaders,
+                videoHeaders = finalHeaders,
+            )
+        } else {
+            Log.e(FILEMOON_LOG, "❌ [ERROR] Échec de l'interception (Timeout ou blocage)")
             emptyList()
         }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun sniffM3u8(url: String, timeoutSeconds: Long = 35): String? {
+        val latch = CountDownLatch(1)
+        var interceptedUrl: String? = null
+        var webView: WebView? = null
+
+        handler.post {
+            try {
+                val view = WebView(context)
+                webView = view
+
+                CookieManager.getInstance().setAcceptCookie(true)
+                CookieManager.getInstance().setAcceptThirdPartyCookies(view, true)
+
+                with(view.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+                    mediaPlaybackRequiresUserGesture = false
+                }
+
+                view.webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(cm: android.webkit.ConsoleMessage?): Boolean {
+                        Log.d(FILEMOON_LOG, "🌐 [JS] ${cm?.message()}")
+                        return true
+                    }
+                }
+
+                view.webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        val reqUrl = request?.url?.toString() ?: ""
+
+                        // Capture du graal (.m3u8)
+                        if (reqUrl.contains(".m3u8") && !reqUrl.contains("iframes")) {
+                            interceptedUrl = reqUrl
+                            latch.countDown()
+                            return super.shouldInterceptRequest(view, request)
+                        }
+
+                        // Debug des étapes de sécurité Filemoon
+                        if (reqUrl.contains("access/challenge")) Log.d(FILEMOON_LOG, "🔐 [SEC] Calcul du PoW détecté...")
+                        if (reqUrl.contains("access/attest")) Log.d(FILEMOON_LOG, "🔓 [SEC] PoW Validé par le serveur !")
+
+                        // Injection du clic dans l'iframe au vol
+                        val isIframe = (reqUrl.contains("/e/") || reqUrl.contains("/k8hn/") || reqUrl.contains("nzn3.org")) &&
+                            !reqUrl.contains("/api/") && !reqUrl.contains("assets")
+
+                        if (isIframe && reqUrl != url) {
+                            try {
+                                Log.d(FILEMOON_LOG, "💉 [INJECT] Préparation de l'iframe: $reqUrl")
+                                val response = client.newCall(Request.Builder().url(reqUrl).build()).execute()
+                                if (response.header("Content-Type")?.contains("text/html") == true) {
+                                    val html = response.body.string()
+                                    val injectedHtml = html.replace(
+                                        "</body>",
+                                        """
+                                        <script>
+                                            console.log("AutoClick: Scanning for play button...");
+                                            const interval = setInterval(() => {
+                                                const btn = document.querySelector('button.captcha-gate__play') || document.querySelector('.play-button');
+                                                if (btn) {
+                                                    console.log("AutoClick: Button found, clicking!");
+                                                    btn.click();
+                                                    clearInterval(interval);
+                                                }
+                                            }, 500);
+                                        </script>
+                                        </body>
+                                        """.trimIndent(),
+                                    )
+                                    return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(injectedHtml.toByteArray()))
+                                }
+                            } catch (e: Exception) {
+                                Log.e(FILEMOON_LOG, "⚠️ [INJECT] Erreur injection: ${e.message}")
+                            }
+                        }
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
+                    override fun onPageFinished(view: WebView?, finishedUrl: String?) {
+                        Log.d(FILEMOON_LOG, "📄 [LOAD] Page principale chargée.")
+                    }
+                }
+                view.loadUrl(url)
+            } catch (e: Exception) {
+                Log.e(FILEMOON_LOG, "💥 [CRASH] WebView: ${e.message}")
+                latch.countDown()
+            }
+        }
+
+        latch.await(timeoutSeconds, TimeUnit.SECONDS)
+        handler.post {
+            webView?.stopLoading()
+            webView?.destroy()
+        }
+        return interceptedUrl
     }
 }
