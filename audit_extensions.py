@@ -52,7 +52,8 @@ def prepare_apk_dir():
     
     found_any = False
     for apk in apks:
-        if "androidTest" in apk: continue
+        if "androidTest" in apk:
+            continue
         shutil.copy(apk, AUDIT_APK_DIR)
         found_any = True
     return found_any
@@ -84,9 +85,12 @@ def run_inspector():
     finally:
         # Nettoyage systématique
         print("\n🧹 Nettoyage des fichiers temporaires...")
-        if os.path.exists(INSPECTOR_JAR): os.remove(INSPECTOR_JAR)
-        if os.path.exists(tmp_dir): shutil.rmtree(tmp_dir)
-        if os.path.exists(AUDIT_APK_DIR): shutil.rmtree(AUDIT_APK_DIR)
+        if os.path.exists(INSPECTOR_JAR):
+            os.remove(INSPECTOR_JAR)
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
+        if os.path.exists(AUDIT_APK_DIR):
+            shutil.rmtree(AUDIT_APK_DIR)
 
 def run_all():
     success, reason = run_inspector()
