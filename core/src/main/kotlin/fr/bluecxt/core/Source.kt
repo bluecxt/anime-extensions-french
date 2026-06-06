@@ -53,7 +53,7 @@ abstract class Source :
 
     val preferences: SharedPreferences by getPreferencesLazy()
 
-    val json: Json = Json {
+    open val json: Json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
     }

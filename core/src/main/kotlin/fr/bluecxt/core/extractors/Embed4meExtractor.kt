@@ -1,7 +1,7 @@
-package eu.kanade.tachiyomi.lib.embed4meextractor
+package fr.bluecxt.core.extractors
 
-import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.POST
+import fr.bluecxt.core.model.ExtractedSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -21,7 +21,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
 
     private val json: Json by injectLazy()
 
-    fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
+    fun videosFromUrl(url: String): List<ExtractedSource> {
         val decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
         val videoId = when {
             decodedUrl.contains("#") -> decodedUrl.substringAfterLast("#").trim()
@@ -45,31 +45,30 @@ class Embed4meExtractor(private val client: OkHttpClient) {
         return try {
             val response = client.newCall(eu.kanade.tachiyomi.network.GET(apiUrl, headers)).execute()
             val responseBody = response.body.string().trim()
-            
+
             android.util.Log.d("Embed4me", "API Response length: ${responseBody.length}")
-            
+
             val decryptedJsonStr = decryptAesCbc(responseBody, "kiemtienmua911ca", "1234567890oiuytr")
             if (decryptedJsonStr == null) {
                 android.util.Log.d("Embed4me", "Decrypted string is null")
                 return emptyList()
             }
-            
+
             android.util.Log.d("Embed4me", "Decrypted JSON: $decryptedJsonStr")
-            
+
             val dataObj = json.parseToJsonElement(decryptedJsonStr).jsonObject
             val cfUrl = dataObj["cf"]?.jsonPrimitive?.content ?: ""
             val sourceUrl = dataObj["source"]?.jsonPrimitive?.content ?: ""
-            
+
             // Prefer sourceUrl if it contains .m3u8, as cfUrl might be a .txt manifest causing app issues
             val videoUrl = if (sourceUrl.contains(".m3u8")) sourceUrl else cfUrl.ifEmpty { sourceUrl }
-            
+
             if (videoUrl.isNotEmpty()) {
                 val videoHeaders = headers.newBuilder()
                     .set("Referer", "${parsedUrl.scheme}://${parsedUrl.host}/")
                     .set("Origin", "${parsedUrl.scheme}://${parsedUrl.host}")
                     .build()
-                val title = if (prefix.isNotEmpty()) prefix.trim().removeSuffix("-").trim() else "Embed4me"
-                listOf(Video(videoUrl = videoUrl, videoTitle = title, headers = videoHeaders))
+                listOf(ExtractedSource(url = videoUrl, headers = videoHeaders))
             } else {
                 android.util.Log.d("Embed4me", "No videoUrl found. cfUrl: $cfUrl, sourceUrl: $sourceUrl")
                 emptyList()
@@ -80,26 +79,24 @@ class Embed4meExtractor(private val client: OkHttpClient) {
         }
     }
 
-    private fun decryptAesCbc(hexData: String, keyStr: String, ivStr: String): String? {
-        return try {
-            val cleanHex = hexData.trim().replace("\"", "")
-            val data = hexStringToByteArray(cleanHex)
-            
-            val keyBytes = keyStr.toByteArray(Charsets.UTF_8)
-            val ivBytes = ivStr.toByteArray(Charsets.UTF_8)
-            
-            val secretKey = SecretKeySpec(keyBytes, "AES")
-            val ivParameterSpec = IvParameterSpec(ivBytes)
-            
-            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec)
-            
-            val decryptedBytes = cipher.doFinal(data)
-            String(decryptedBytes, Charsets.UTF_8)
-        } catch (e: Exception) {
-            android.util.Log.d("Embed4me", "Decryption error: ${e.message}")
-            null
-        }
+    private fun decryptAesCbc(hexData: String, keyStr: String, ivStr: String): String? = try {
+        val cleanHex = hexData.trim().replace("\"", "")
+        val data = hexStringToByteArray(cleanHex)
+
+        val keyBytes = keyStr.toByteArray(Charsets.UTF_8)
+        val ivBytes = ivStr.toByteArray(Charsets.UTF_8)
+
+        val secretKey = SecretKeySpec(keyBytes, "AES")
+        val ivParameterSpec = IvParameterSpec(ivBytes)
+
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec)
+
+        val decryptedBytes = cipher.doFinal(data)
+        String(decryptedBytes, Charsets.UTF_8)
+    } catch (e: Exception) {
+        android.util.Log.d("Embed4me", "Decryption error: ${e.message}")
+        null
     }
 
     private fun hexStringToByteArray(s: String): ByteArray {

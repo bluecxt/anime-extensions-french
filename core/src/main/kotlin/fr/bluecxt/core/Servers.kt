@@ -1,11 +1,11 @@
 package fr.bluecxt.core
 
+import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.WaveplayerExtractor
-import fr.bluecxt.core.extractors.Embed4me
 import fr.bluecxt.core.model.VideoServer
 
 val DEFAULT_SERVER = listOf("Sibnet", "Sendvid", "Vidmoly")
@@ -52,7 +52,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
     "Embed4me" -> VideoServer(
         name = "Embed4me",
         hosts = listOf("*embed4me*"),
-        extractor = { url -> Embed4me(source.client).videosFromUrl(url) },
+        extractor = { url -> Embed4meExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
