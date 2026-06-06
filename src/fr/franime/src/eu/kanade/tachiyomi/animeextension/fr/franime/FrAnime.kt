@@ -13,11 +13,6 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
@@ -25,7 +20,6 @@ import fr.bluecxt.core.addBaseUrlPreference
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
@@ -33,6 +27,8 @@ import uy.kohesive.injekt.injectLazy
 class FrAnime : Source() {
 
     override val name = "FrAnime"
+
+    private val supportedServer = listOf("Sibnet", "Sendvid", "Vidmoly", "vido", "filemoon")
 
     override val baseUrl by lazy {
         preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
@@ -89,8 +85,8 @@ class FrAnime : Source() {
 
         private const val PREF_SERVER_KEY = "preferred_server"
         private const val PREF_SERVER_TITLE = "Serveur préféré"
-        private val SERVER_ENTRIES = arrayOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon")
-        private val SERVER_VALUES = arrayOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon")
+        private val SERVER_ENTRIES = arrayOf("Vidmoly", "Sibnet", "Sendvid", "Filemoon")
+        private val SERVER_VALUES = arrayOf("Vidmoly", "Sibnet", "Sendvid", "Filemoon")
         private const val PREF_SERVER_DEFAULT = "Vidmoly"
 
         const val PREFIX_SEARCH = "id:"
@@ -188,7 +184,7 @@ class FrAnime : Source() {
 
         tmdbMetadata?.summary?.let { anime.description = it }
         tmdbMetadata?.releaseDate?.let { date ->
-            anime.description = "Date de sortie : $date\\n\\n${anime.description ?: ""}"
+            anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
         }
 
         tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
@@ -349,13 +345,7 @@ class FrAnime : Source() {
 
         val langLabel = if (lang == "vo") "VOSTFR" else "VF"
 
-        val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-        val sibnetExtractor by lazy { SibnetExtractor(client) }
-        val vkExtractor by lazy { VkExtractor(client, headers) }
-        val vidMolyExtractor by lazy { VidMolyExtractor(client) }
-        val filemoonExtractor by lazy { FilemoonExtractor(client) }
-
-        return players.withIndex().filter { !it.value.equals("TELECHARGEMENT UNIQUE", true) }.map { (playerIdx, playerName) ->
+        return players.withIndex().filter { !it.value.equals("TELECHARGEMENT UNIQUE", true) }.flatMap { (playerIdx, _) ->
             try {
                 val responseBody = client.newCall(GET("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)).execute().body.string()
 
@@ -369,29 +359,11 @@ class FrAnime : Source() {
                     playerUrl = decryptFrAnime(responseBody) ?: responseBody
                 }
 
-                val server = when (playerName.lowercase()) {
-                    "sendvid" -> "Sendvid"
-                    "sibnet" -> "Sibnet"
-                    "vk" -> "VK"
-                    "vidmoly" -> "Vidmoly"
-                    "filemoon" -> "Filemoon"
-                    else -> playerName.replaceFirstChar { it.uppercase() }
-                }
-                val prefix = "($langLabel) $server - "
-
-                when (playerName.lowercase()) {
-                    "sendvid" -> sendvidExtractor.videosFromUrl(playerUrl, prefix)
-                    "sibnet" -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-                    "vk" -> vkExtractor.videosFromUrl(playerUrl, prefix)
-                    "vidmoly" -> vidMolyExtractor.videosFromUrl(playerUrl, prefix)
-                    "filemoon" -> filemoonExtractor.videosFromUrl(playerUrl, prefix)
-                    else -> emptyList()
-                }
+                // Utilise le core pour extraire les vidéos
+                extractVideos(playerUrl, langLabel, supportedServer)
             } catch (e: Exception) {
-                emptyList<Video>()
+                emptyList()
             }
-        }.flatten().map { video ->
-            Video(videoUrl = video.videoUrl, videoTitle = coreCleanQuality(video.videoTitle), headers = video.headers, subtitleTracks = video.subtitleTracks, audioTracks = video.audioTracks)
         }.coreSortVideos()
     }
 

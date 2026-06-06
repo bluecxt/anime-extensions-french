@@ -13,7 +13,7 @@
 - [ ] torrentio
 - [ ] torrentio anime
 - [ ] adkami
-- [ ] animesama
+- [x] animesama
 - [ ] animoflix
 - [ ] franime
 - [ ] frenchanime

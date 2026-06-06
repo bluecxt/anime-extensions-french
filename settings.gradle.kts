@@ -7,6 +7,7 @@ loadIndividualExtension("fr", "waveanime")
 loadIndividualExtension("fr", "southtv")
 loadIndividualExtension("fr", "lesporoiniens")
 loadIndividualExtension("fr", "animesama")
+loadIndividualExtension("fr", "franime")
 // loadIndividualExtension("all", "jellyfin")
 
 /**
