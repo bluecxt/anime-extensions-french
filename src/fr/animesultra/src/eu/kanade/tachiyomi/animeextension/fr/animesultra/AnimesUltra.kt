@@ -46,7 +46,6 @@ class AnimesUltra : Source() {
     }
     override val lang = "fr"
     override val supportsLatest = true
-    override val client = network.client
 
     override val json: Json by injectLazy()
 

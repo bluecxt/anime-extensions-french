@@ -37,7 +37,6 @@ class AnimeUltime : Source() {
     override val baseUrl by lazy { preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!! }
     override val lang = "fr"
     override val supportsLatest = false
-    override val client: OkHttpClient = network.client
     override val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

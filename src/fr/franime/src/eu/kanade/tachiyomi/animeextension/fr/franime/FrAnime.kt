@@ -38,7 +38,7 @@ class FrAnime : Source() {
         preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
     }
 
-    override val client = network.client.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()

@@ -49,7 +49,7 @@ class ADKami : Source() {
     }
 
     override val client: OkHttpClient by lazy {
-        network.client.newBuilder()
+        super.client.newBuilder()
             .addInterceptor(CloudflareInterceptor(network.client))
             .protocols(listOf(Protocol.HTTP_1_1))
             .build()

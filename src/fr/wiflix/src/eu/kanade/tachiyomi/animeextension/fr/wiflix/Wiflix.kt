@@ -55,8 +55,6 @@ class Wiflix : Source() {
 
     override val supportsLatest = false
 
-    override val client = network.client
-
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")

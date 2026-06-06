@@ -137,6 +137,8 @@ class AnimeSamaFan : Source() {
     }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        val query = query.trim()
+
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
             val response = client.newCall(GET("$baseUrl/anime/$id", headers)).execute()
