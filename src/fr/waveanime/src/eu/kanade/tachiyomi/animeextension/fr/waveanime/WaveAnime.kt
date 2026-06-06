@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.extractors.WaveplayerExtractor
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -224,7 +225,7 @@ class WaveAnime : Source() {
     // ============================ Video Links =============================
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "WavePlayer (DASH)", internalData = episode.url))
 
-    private val wavePlayerExtractor by lazy { fr.bluecxt.core.extractors.WavePlayerExtractor(client, headers) }
+    private val waveplayerExtractor by lazy { WaveplayerExtractor(client, headers) }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val episodeUrl = hoster.internalData
@@ -261,7 +262,7 @@ class WaveAnime : Source() {
         } catch (_: Exception) {}
 
         // Utilise l'extracteur du Core (maintenant simplifié)
-        val rawSources = wavePlayerExtractor.videosFromUrl(masterUrl, baseUrl + episodeUrl, tracks)
+        val rawSources = waveplayerExtractor.videosFromUrl(masterUrl, baseUrl + episodeUrl, tracks)
 
         return rawSources.map { source ->
             source.buildFromSource(lang = null, name = "(DASH) WavePlayer")

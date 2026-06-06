@@ -5,7 +5,7 @@ import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
-class WavePlayerExtractor(private val client: OkHttpClient, private val headers: Headers) {
+class WaveplayerExtractor(private val client: OkHttpClient, private val headers: Headers) {
     fun videosFromUrl(
         masterUrl: String,
         refererUrl: String,
