@@ -54,7 +54,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Embed4me" -> VideoServer(
         name = "Embed4me",
-        hosts = listOf("*embed4me*"),
+        hosts = listOf("lplayer.embed4me.*"),
         extractor = { url -> Embed4meExtractor(source.client).videosFromUrl(url) },
     )
 

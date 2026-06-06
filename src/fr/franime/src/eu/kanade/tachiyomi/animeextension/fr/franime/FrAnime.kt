@@ -32,7 +32,7 @@ class FrAnime : Source() {
         "Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Vk", "Okru",
         "Dailymotion", "Youtube", "Minochinos", "YourUpload", "Myru",
         "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
-        "S44", "Playtube", "Lpayer", "Oneupload", "Smoothpre"
+        "S44", "Playtube", "Embed4me", "Oneupload", "Smoothpre"
     )
 
     override val baseUrl by lazy {
