@@ -15,12 +15,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.addBaseUrlPreference
-import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
 class WaveAnime : Source() {
@@ -82,7 +83,7 @@ class WaveAnime : Source() {
         val items = document.select("div.component.serie-card").map { element ->
             val link = element.selectFirst("a")!!
             SAnime.create().apply {
-                url = link.safeRelativePath()
+                url = link.safeUrl()
                 title = element.attr("title")
                 thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
             }
@@ -103,7 +104,7 @@ class WaveAnime : Source() {
         val items = document.select("div.component.serie-card").map { element ->
             val link = element.selectFirst("a")!!
             SAnime.create().apply {
-                url = link.safeRelativePath()
+                url = link.safeUrl()
                 title = element.attr("title")
                 thumbnail_url = element.selectFirst("div.poster img")?.attr("abs:src")
             }
@@ -333,5 +334,12 @@ class WaveAnime : Source() {
                     qualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
         )
+    }
+
+    // ============================ Utils =============================
+    private fun Element.safeUrl(): String {
+        val url = this.attr("abs:href").toHttpUrlOrNull() ?: return ""
+        val query = url.encodedQuery
+        return if (query == null) url.encodedPath else "${url.encodedPath}?$query"
     }
 }
