@@ -6,6 +6,7 @@ import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
+import fr.bluecxt.core.extractors.VkExtractor
 import fr.bluecxt.core.extractors.WaveplayerExtractor
 import fr.bluecxt.core.model.VideoServer
 
@@ -56,6 +57,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Embed4me",
         hosts = listOf("lplayer.embed4me.*"),
         extractor = { url -> Embed4meExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Vk" -> VideoServer(
+        name = "Vk",
+        hosts = listOf(""), //vk.com the majority of urls look down
+        extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
     )
 
     else -> null
