@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.cloudflareinterceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.luluextractor.LuluExtractor
@@ -50,7 +49,6 @@ class ADKami : Source() {
 
     override val client: OkHttpClient by lazy {
         super.client.newBuilder()
-            .addInterceptor(CloudflareInterceptor(network.client))
             .protocols(listOf(Protocol.HTTP_1_1))
             .build()
     }

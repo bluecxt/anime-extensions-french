@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.CloudflareInterceptor
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -767,6 +768,7 @@ abstract class Source :
 
     override val client: okhttp3.OkHttpClient by lazy {
         network.client.newBuilder()
+            .addInterceptor(CloudflareInterceptor(network.client))
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())

@@ -1,6 +1,7 @@
 package fr.bluecxt.core
 
 import fr.bluecxt.core.extractors.Embed4meExtractor
+import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
@@ -27,14 +28,16 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         extractor = { url -> SendvidExtractor(source.client, source.headers).videosFromUrl(url) },
     )
 
-    "WavePlayer" -> VideoServer(
+    "Waveplayer" -> VideoServer(
         name = "WavePlayer",
-        hosts = listOf("waveanime.fr"),
-        extractor = { url ->
-            // WavePlayer est spécial, l'appel sera géré manuellement dans WaveAnime
-            // à cause de la gestion complexe des sous-titres, mais on l'inscrit ici pour l'architecture
-            emptyList()
-        },
+        hosts = listOf(""),
+        extractor = { url -> WaveplayerExtractor(source.client, source.headers).videosFromUrl(url, "") },
+    )
+
+    "GoogleDrive" -> VideoServer(
+        name = "GoogleDrive",
+        hosts = listOf("drive.*.google.com"),
+        extractor = { id -> GoogleDriveExtractor(source.client).videosFromUrl(id) },
     )
 
     "Vidmoly" -> VideoServer(

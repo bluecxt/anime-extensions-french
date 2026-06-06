@@ -28,7 +28,12 @@ class FrAnime : Source() {
 
     override val name = "FrAnime"
 
-    private val supportedServer = listOf("Sibnet", "Sendvid", "Vidmoly", "vido", "filemoon")
+    private val supportedServer = listOf(
+        "Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Vk", "Okru",
+        "Dailymotion", "Youtube", "Minochinos", "YourUpload", "Myru",
+        "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
+        "S44", "Playtube", "Lpayer", "Oneupload", "Smoothpre"
+    )
 
     override val baseUrl by lazy {
         preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
