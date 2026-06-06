@@ -76,7 +76,7 @@ class AnimeUltime : Source() {
         val animes = searchData.map {
             SAnime.create().apply {
                 title = it.title
-                thumbnail_url = it.imgUrl.replace("_thindex", "")
+                thumbnail_url = it.img_url.replace("_thindex", "")
                 url = it.url.toHttpUrl().encodedPath
             }
         }
@@ -84,7 +84,7 @@ class AnimeUltime : Source() {
     }
 
     @Serializable
-    data class SearchResponse(val title: String, val imgUrl: String, val url: String)
+    data class SearchResponse(val title: String, val img_url: String, val url: String)
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
