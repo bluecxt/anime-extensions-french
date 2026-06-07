@@ -8,8 +8,7 @@ const val HUB_SEASON_NUMBER = -2.0
 
 const val SERVER_LOG: String = "serverLog"
 
-const val WEBVIEW_SNIFFER: String = "webviewSniffer"
-
 // extractor logs
 
 const val FILEMOON_LOG: String = "FilemoonLog"
+const val OKRU_LOG: String = "OkruLog"

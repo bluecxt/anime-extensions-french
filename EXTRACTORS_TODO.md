@@ -12,6 +12,7 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [x] **VidMolyExtractor** (`vidmoly.me`, `vidmoly.to`, `vidmoly.biz`, `vidmoly.net`)
 - [x] **VkExtractor** (`vk.com`, `vk.ru`)
 - [x] **WaveplayerExtractor** (`waveanime.fr`)
+- [x] **OkruExtractor** (`ok.ru`, `odnoklassniki.ru`)
 
 ## ❌ Extracteurs Restants
 - [ ] **DoodExtractor** (`doodstream.com`, `dood.to`, `dood.watch`, `dood.so`, `dood.la`, `dood.wf`, `dood.pm`, `d0000d.com`, `doods.pro`)
@@ -19,7 +20,6 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [ ] **StreamTapeExtractor** (`streamtape.com`, `shavetape.com`)
 - [ ] **VidoExtractor** (`vidoza.net`, `vido.lol`, `vido.tv`)
 - [ ] **LuluExtractor** (`luluvdo.com`, `luluvid.com`, `vidsonic.net`, `lulustream.com`, `vidzy.tv`, `vidnest.net`)
-- [ ] **OkruExtractor** (`ok.ru`, `odnoklassniki.ru`)
 - [ ] **StreamDavExtractor** (`streamdav.com`)
 - [ ] **StreamHideVidExtractor** (`streamhide.to`, `guccihide.com`)
 - [ ] **StreamHubExtractor** (`streamhub.gg`)

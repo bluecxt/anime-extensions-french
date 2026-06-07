@@ -22,6 +22,7 @@ import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
+import kotlin.math.abs
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
@@ -156,14 +157,23 @@ abstract class Source :
     protected fun List<Video>.coreSortVideos(): List<Video> {
         val voices = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val player = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
+        val prefQualStr = preferences.getString(CommonPreferences.PREF_QUALITY_KEY, "Highest")!!
+        val prefQualInt = prefQualStr.toIntOrNull()
 
-        val pQualityRegex = Regex("""(\d+)p""")
+        // On cherche le nombre entre le " - " et le "p"
+        val qualityRegex = Regex("""\s-\s(\d+)p""")
 
         return this.sortedWith(
             compareByDescending<Video> { it.videoTitle.contains(voices, true) }
                 .thenByDescending { it.videoTitle.contains(player, true) }
-                .thenByDescending {
-                    pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                .thenByDescending { video ->
+                    val actualQual = qualityRegex.find(video.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+                    if (prefQualInt == null) {
+                        actualQual
+                    } else {
+                        1000000 - abs(actualQual - prefQualInt)
+                    }
                 },
         )
     }

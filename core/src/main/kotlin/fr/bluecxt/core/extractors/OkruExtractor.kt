@@ -1,9 +1,10 @@
-package eu.kanade.tachiyomi.lib.okruextractor
+package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.PlaylistUtils
 import okhttp3.OkHttpClient
 
 class OkruExtractor(private val client: OkHttpClient) {
@@ -23,52 +24,44 @@ class OkruExtractor(private val client: OkHttpClient) {
         return qualities.find { it.first == quality }?.second ?: quality
     }
 
-    fun videosFromUrl(url: String, prefix: String = "", fixQualities: Boolean = true): List<Video> {
+    fun videosFromUrl(url: String): List<ExtractedSource> {
         val document = client.newCall(GET(url)).execute().asJsoup()
         val videoString = document.selectFirst("div[data-options]")
             ?.attr("data-options")
-            ?: return emptyList<Video>()
+            ?: return emptyList<ExtractedSource>()
 
         return when {
             "ondemandHls" in videoString -> {
                 val playlistUrl = videoString.extractLink("ondemandHls")
-                playlistUtils.extractFromHls(playlistUrl, videoNameGen = { "Okru:$it".addPrefix(prefix) })
+                playlistUtils.extractFromHls(playlistUrl)
             }
+
             "ondemandDash" in videoString -> {
                 val playlistUrl = videoString.extractLink("ondemandDash")
-                playlistUtils.extractFromDash(playlistUrl, videoNameGen = { it -> "Okru:$it".addPrefix(prefix) })
+                playlistUtils.extractFromDash(playlistUrl)
             }
-            else -> videosFromJson(videoString, prefix, fixQualities)
+
+            else -> videosFromJson(videoString)
         }
     }
 
-    private fun String.addPrefix(prefix: String) =
-        prefix.takeIf(String::isNotBlank)
-            ?.let { "$prefix $this" }
-            ?: this
+    private fun String.extractLink(attr: String) = substringAfter("$attr\\\":\\\"")
+        .substringBefore("\\\"")
+        .replace("\\\\u0026", "&")
 
-    private fun String.extractLink(attr: String) =
-        substringAfter("$attr\\\":\\\"")
-            .substringBefore("\\\"")
-            .replace("\\\\u0026", "&")
-
-    private fun videosFromJson(videoString: String, prefix: String = "", fixQualities: Boolean = true): List<Video> {
+    private fun videosFromJson(videoString: String): List<ExtractedSource> {
         val arrayData = videoString.substringAfter("\\\"videos\\\":[{\\\"name\\\":\\\"")
             .substringBefore("]")
 
         return arrayData.split("{\\\"name\\\":\\\"").reversed().mapNotNull {
             val videoUrl = it.extractLink("url")
-            val quality = it.substringBefore("\\\"").let {
-                if (fixQualities) {
-                    fixQuality(it)
-                } else {
-                    it
-                }
-            }
-            val videoQuality = "Okru:$quality".addPrefix(prefix)
+            val quality = it.substringBefore("\\\"").let { fixQuality(it) }
 
             if (videoUrl.startsWith("https://")) {
-                Video(videoUrl = videoUrl, videoTitle = videoQuality)
+                ExtractedSource(
+                    url = videoUrl,
+                    quality = quality,
+                )
             } else {
                 null
             }

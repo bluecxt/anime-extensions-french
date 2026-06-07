@@ -4,6 +4,7 @@ import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
+import fr.bluecxt.core.extractors.OkruExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
@@ -32,7 +33,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     // "Waveplayer" -> VideoServer(
     //     name = "WavePlayer",
-    //     hosts = listOf(""),
+    //     hosts = listOf("waveanime.fr"),
     //     extractor = { url -> WaveplayerExtractor(source.client, source.headers).videosFromUrl(url, "") },
     // )
 
@@ -44,32 +45,38 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidmoly" -> VideoServer(
         name = "Vidmoly",
-        hosts = listOf("vidmoly.*"),
+        hosts = listOf("vidmoly.me", "vidmoly.to", "vidmoly.biz", "vidmoly.net"),
         extractor = { url -> VidmolyExtractor(source.client, source.headers).videosFromUrl(url) },
     )
 
     "Minochinos" -> VideoServer(
         name = "Minochinos",
-        hosts = listOf("minochinos.com"),
+        hosts = listOf("minochinos.com", "vidhide.com"),
         extractor = { url -> MinochinosExtractor(source.client).videosFromUrl(url) },
     )
 
     "Embed4me" -> VideoServer(
         name = "Embed4me",
-        hosts = listOf("lplayer.embed4me.*"),
+        hosts = listOf("*embed4me.*", "seekstreaming.com"),
         extractor = { url -> Embed4meExtractor(source.client).videosFromUrl(url) },
     )
 
-    // "Vk" -> VideoServer(
+    // "Vk" -> VideoServer( // the majority of urls look down
     //     name = "Vk",
-    //     hosts = listOf(""), // vk.com the majority of urls look down
+    //     hosts = listOf("vk.com", "vk.ru"),
     //     extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
     // )
 
     "Filemoon" -> VideoServer(
         name = "Filemoon",
-        hosts = listOf("filemoon.to"),
+        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org"),
         extractor = { url -> FilemoonExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Okru" -> VideoServer(
+        name = "Okru",
+        hosts = listOf("ok.ru", "odnoklassniki.ru"),
+        extractor = { url -> OkruExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
