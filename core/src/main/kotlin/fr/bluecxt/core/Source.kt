@@ -46,15 +46,16 @@ abstract class Source :
         baseUrlDefault: String,
         supportedServers: List<String>,
         defaultServer: String? = null,
+        supportedEntries: Array<String> = arrayOf("VOSTFR", "VF"),
     ) {
         addBaseUrlPreference(preferences, baseUrlDefault, key = CommonPreferences.PREF_URL_KEY)
 
         androidx.preference.ListPreference(context).apply {
             key = CommonPreferences.PREF_VOICES_KEY
             title = "Préférence des voix"
-            entries = arrayOf("Préférer VOSTFR", "Préférer VF")
-            entryValues = arrayOf("VOSTFR", "VF")
-            setDefaultValue("VOSTFR")
+            entries = supportedEntries
+            entryValues = supportedEntries
+            setDefaultValue("VF")
             summary = "%s"
             setOnPreferenceChangeListener { _, _ -> true }
         }.also(::addPreference)

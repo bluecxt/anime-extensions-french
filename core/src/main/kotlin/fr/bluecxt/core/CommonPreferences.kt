@@ -48,6 +48,11 @@ interface CommonPreferences : ConfigurableAnimeSource {
     val defaultQuality: String get() = "Highest"
 
     /**
+     * Voix supportés
+     */
+    val supportedVoice: Array<String> get() = arrayOf("VOSTFR", "VF")
+
+    /**
      * Récupère l'URL de base actuelle (soit celle modifiée par l'utilisateur, soit celle par défaut).
      */
     val currentBaseUrl: String
@@ -65,8 +70,8 @@ interface CommonPreferences : ConfigurableAnimeSource {
         ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
             title = "Préférence des voix"
-            entries = arrayOf("Préférer VOSTFR", "Préférer VF")
-            entryValues = arrayOf("VOSTFR", "VF")
+            entries = supportedVoice
+            entryValues = supportedVoice
             setDefaultValue("VOSTFR")
             summary = "%s"
             setOnPreferenceChangeListener { _, _ -> true }
