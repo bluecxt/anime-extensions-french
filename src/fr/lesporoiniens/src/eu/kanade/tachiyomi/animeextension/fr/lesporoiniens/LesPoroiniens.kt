@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
@@ -31,12 +32,24 @@ import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LesPoroiniens : Source() {
+class LesPoroiniens :
+    Source(),
+    CommonPreferences {
 
     override val name = "Les Poroïniens"
-    override val baseUrl = "https://lesporoiniens.org"
+
+    override val defaultBaseUrl = "https://lesporoiniens.org"
+    override val supportedServers = listOf("Google Drive")
+    override val showQualityPreference = false
+
+    override val baseUrl by lazy { currentBaseUrl }
+
     override val lang = "fr"
     override val supportsLatest = false
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
@@ -171,7 +184,6 @@ class LesPoroiniens : Source() {
             } else {
                 0
             }
-            val seasonNum = ep.getSeasonNumber()
 
             episodes.add(
                 SEpisode.create().apply {
@@ -245,7 +257,6 @@ class LesPoroiniens : Source() {
 
     companion object {
         private val DATE_FORMAT by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.FRANCE) }
-        private val QUALITY_CLEAN_REGEX = Regex("""(?<=\d{3,4}p)\)""")
         private val SLUG_REGEX_1 = Regex("[\\u0300-\\u036f]")
         private val SLUG_REGEX_2 = Regex("[^a-z0-9]")
         private val SLUG_REGEX_3 = Regex("_+")

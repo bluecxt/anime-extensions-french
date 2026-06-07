@@ -1,5 +1,6 @@
 package fr.bluecxt.core
 
+import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -31,6 +32,22 @@ interface CommonPreferences : ConfigurableAnimeSource {
     val forceShowServerPreference: Boolean? get() = null
 
     /**
+     * Affiche ou non le menu de sélection de la qualité préférée.
+     * true (défaut) : Affiché
+     */
+    val showQualityPreference: Boolean get() = true
+
+    /**
+     * Qualités proposées par défaut si showQualityPreference est vrai.
+     */
+    val supportedQualities: Array<String> get() = arrayOf("Highest", "1080", "720", "480")
+
+    /**
+     * Qualité par défaut.
+     */
+    val defaultQuality: String get() = "Highest"
+
+    /**
      * Récupère l'URL de base actuelle (soit celle modifiée par l'utilisateur, soit celle par défaut).
      */
     val currentBaseUrl: String
@@ -41,8 +58,9 @@ interface CommonPreferences : ConfigurableAnimeSource {
      */
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val source = this as Source
+        val prefs = source.preferences
 
-        screen.addBaseUrlPreference(source.preferences, defaultBaseUrl, key = PREF_URL_KEY)
+        screen.addBaseUrlPreference(prefs, defaultBaseUrl, key = PREF_URL_KEY)
 
         ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
@@ -53,6 +71,18 @@ interface CommonPreferences : ConfigurableAnimeSource {
             summary = "%s"
             setOnPreferenceChangeListener { _, _ -> true }
         }.also(screen::addPreference)
+
+        if (showQualityPreference) {
+            ListPreference(screen.context).apply {
+                key = PREF_QUALITY_KEY
+                title = "Qualité préférée"
+                entries = supportedQualities.map { q -> if (q.all { it.isDigit() }) "${q}p" else q }.toTypedArray()
+                entryValues = supportedQualities
+                setDefaultValue(defaultQuality)
+                summary = "%s"
+                setOnPreferenceChangeListener { _, _ -> true }
+            }.also(screen::addPreference)
+        }
 
         val showServerPref = forceShowServerPreference ?: (supportedServers.size > 1)
         if (showServerPref) {
@@ -81,6 +111,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
     companion object {
         const val PREF_URL_KEY = "preferred_baseUrl"
         const val PREF_VOICES_KEY = "preferred_voices"
+        const val PREF_QUALITY_KEY = "preferred_quality"
         const val PREF_SERVER_KEY = "preferred_server"
         const val PREF_DISABLE_FILEMOON_KEY = "disable_filemoon"
     }

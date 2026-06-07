@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.fr.southtv
 
-import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -9,12 +8,11 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.withDefaultHeaders
-import okhttp3.Headers
 import okhttp3.Request
 
 private const val TMDB_ID_SOUTHPARK = 2190
@@ -46,12 +44,22 @@ private val mediaList = listOf(
     MediaInfo("South Park le Film", "films/Filmsouthpark.mp4", TMDB_ID_SOUTHPARKMOVIE, isMovie = true),
 )
 
-class SouthTV : Source() {
+class SouthTV :
+    Source(),
+    CommonPreferences {
 
     override val name = "SouthTV"
-    override val baseUrl = "https://southtv.fr"
+    override val defaultBaseUrl = "https://southtv.fr"
+    override val supportedServers = listOf("SouthTV")
+    override val showQualityPreference = false // On masque car SouthTV est fixe
+
+    override val baseUrl by lazy { currentBaseUrl }
     override val lang = "fr"
     override val supportsLatest = false
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     // ============================== Popular ===============================
 
@@ -81,7 +89,6 @@ class SouthTV : Source() {
         val (type, id) = getTmdbID(anime.url) ?: return anime
         val seasonNumber = anime.url.substringAfter("#s=").toIntOrNull()
         val meta = fetchTmdbMetadataById(id, type, if (seasonNumber != null) seasonNumber else 1) ?: return anime
-        val (title, thumb, summary) = meta.episodeSummaries[0] ?: Triple(null, null, null)
 
         if (seasonNumber != null) {
             anime.title = "${anime.title} Saison $seasonNumber"

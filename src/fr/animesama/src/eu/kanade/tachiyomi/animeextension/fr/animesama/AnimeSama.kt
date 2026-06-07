@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 import android.util.Log
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -15,10 +13,10 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.addBaseUrlPreference
 import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.withDefaultHeaders
 import kotlinx.serialization.encodeToString
@@ -29,20 +27,27 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class AnimeSama : Source() {
+class AnimeSama :
+    Source(),
+    CommonPreferences {
 
     private val log = "AnimeSamaDebug"
 
-    private val supportedServer = listOf("Sibnet", "Sendvid", "Vidmoly", "Embed4me", "Minochinos")
-
     override val name = "Anime-Sama"
 
-    override val baseUrl: String
-        get() = preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
+    // CONFIGURATION
+    override val defaultBaseUrl = "https://anime-sama.to"
+    override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Embed4me", "Minochinos")
+    override val showQualityPreference = true
+    override val supportedQualities = arrayOf("1080", "720", "480", "360")
 
+    override val baseUrl by lazy { currentBaseUrl }
     override val lang = "fr"
-
     override val supportsLatest = true
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
@@ -339,10 +344,11 @@ class AnimeSama : Source() {
             }
         }
 
-        val players = VOICES_VALUES.toList().parallelMap {
+        val langValues = listOf("vostfr", "vf", "va", "vcn", "vj", "vkr", "vqc")
+        val players = langValues.parallelMap {
             fetchPlayers("$baseUrl$seasonRootPath/$it")
         }
-        val episodes = playersToEpisodes(players, anime, "$seasonRootPath/")
+        val episodes = playersToEpisodes(players, anime, "$seasonRootPath/", langValues)
         return if (movie == null) episodes.reversed() else listOf(episodes[movie])
     }
 
@@ -386,10 +392,11 @@ class AnimeSama : Source() {
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val playerUrls = json.decodeFromString<List<List<String>>>(episode.url)
         val hosters = mutableListOf<Hoster>()
+        val langValues = listOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
 
         playerUrls.forEachIndexed { i, it ->
             if (it.isEmpty()) return@forEachIndexed
-            val lang = VOICES_VALUES[i].uppercase()
+            val lang = langValues[i]
             // Internal data: JSON array of URLs for this language | lang tag
             hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(it) + "|" + lang))
         }
@@ -402,20 +409,14 @@ class AnimeSama : Source() {
         val lang = data[1]
 
         return urls.parallelMap { playerUrl ->
-            val videos = extractVideos(playerUrl, lang, supportedServer)
-
-            if (videos.isEmpty()) {
-                emptyList()
-            } else {
-                videos
-            }
+            extractVideos(playerUrl, lang, supportedServers)
         }.flatten().coreSortVideos()
     }
 
     // ============================ Utils =============================
     override fun List<Hoster>.sortHosters(): List<Hoster> {
-        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!.uppercase()
-        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+        val voices = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!.uppercase()
+        val player = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "Sibnet")!!
 
         return this.sortedWith(
             compareByDescending<Hoster> { it.hosterName.equals(voices, true) }
@@ -576,6 +577,7 @@ class AnimeSama : Source() {
         list: List<List<List<String>>>,
         anime: SAnime,
         animeUrlPath: String,
+        langValues: List<String>,
     ): List<SEpisode> {
         val maxEpisodes = list.fold(0) { acc, it -> maxOf(acc, it.size) }
 
@@ -712,7 +714,7 @@ class AnimeSama : Source() {
 
         val movieNames = if (isMovie) {
             val urlsToTry = mutableListOf("$baseUrl$animeUrlPath")
-            VOICES_VALUES.forEach { urlsToTry.add("$baseUrl$animeUrlPath$it/") }
+            langValues.forEach { urlsToTry.add("$baseUrl$animeUrlPath$it/") }
 
             var names = emptyList<String>()
             for (url in urlsToTry) {
@@ -809,7 +811,7 @@ class AnimeSama : Source() {
                 name = "$finalPrefix$baseName"
                 url = json.encodeToString(players)
                 episode_number = epNum.toFloat()
-                scanlator = players.mapIndexedNotNull { i, it -> if (it.isNotEmpty()) VOICES_VALUES[i] else null }
+                scanlator = players.mapIndexedNotNull { i, it -> if (it.isNotEmpty()) langValues[i] else null }
                     .joinToString().uppercase()
                 preview_url = if (isSpecialVersion) null else epPreview ?: tmdbMetadata?.posterUrl
                 summary = if (isSpecialVersion) null else epSummary
@@ -879,70 +881,8 @@ class AnimeSama : Source() {
         return List(urls[0].size) { i -> urls.mapNotNull { it.getOrNull(i) }.distinct() }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, PREF_URL_TITLE, PREF_URL_KEY, PREF_URL_SUMMARY)
-
-        ListPreference(screen.context).apply {
-            key = PREF_QUALITY_KEY
-            title = "Preferred quality"
-            entries = arrayOf("1080p", "720p", "480p", "360p")
-            entryValues = arrayOf("1080", "720", "480", "360")
-            setDefaultValue(PREF_QUALITY_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = "Voices preference"
-            entries = VOICES
-            entryValues = VOICES_VALUES
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_PLAYER_KEY
-            title = "Default player"
-            entries = PLAYERS
-            entryValues = PLAYERS_VALUES
-            setDefaultValue(PREF_PLAYER_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-    }
-
     companion object {
         const val PREFIX_SEARCH = "id:"
-
         private val offsetCache = mutableMapOf<String, Pair<Int, Int>>()
-
-        private const val PREF_URL_KEY = "base_url_pref"
-        private const val PREF_URL_TITLE = "Base URL"
-        private const val PREF_URL_DEFAULT = "https://anime-sama.to"
-        private const val PREF_URL_SUMMARY = "See https://anime-sama.pw"
-
-        private val voicesMap = mapOf(
-            "Prefer VOSTFR" to "vostfr",
-            "Prefer VF" to "vf",
-            "Prefer VA" to "va",
-            "Prefer VCN" to "vcn",
-            "Prefer VJ" to "vj",
-            "Prefer VKR" to "vkr",
-            "Prefer VQC" to "vqc",
-        )
-        private val VOICES = voicesMap.keys.toTypedArray()
-        private val VOICES_VALUES = voicesMap.values.toTypedArray()
-
-        private val playersMap = mapOf(
-            "Sendvid" to "sendvid",
-            "Sibnet" to "sibnet",
-            "VidMoly" to "vidmoly",
-            "MinoChinos" to "minochinos",
-            "Embed4me" to "embed4me",
-        )
-        private val PLAYERS = playersMap.keys.toTypedArray()
-        private val PLAYERS_VALUES = playersMap.values.toTypedArray()
-
-        private const val PREF_QUALITY_KEY = "preferred_quality"
-        private const val PREF_QUALITY_DEFAULT = "1080"
     }
 }

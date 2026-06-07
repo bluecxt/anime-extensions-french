@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.fr.waveanime
 
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -12,57 +10,36 @@ import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.addBaseUrlPreference
 import fr.bluecxt.core.extractors.WaveplayerExtractor
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 
-class WaveAnime : Source() {
+class WaveAnime :
+    Source(),
+    CommonPreferences {
 
     override val name = "WaveAnime"
 
-    override val baseUrl by lazy {
-        preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
-    }
+    // CONFIGURATION
+    override val defaultBaseUrl = "https://waveanime.fr"
+    override val supportedServers = listOf("WavePlayer")
+    override val showQualityPreference = true
+    override val supportedQualities = arrayOf("Highest", "1440", "1080", "720", "480", "360")
+
+    override val baseUrl by lazy { currentBaseUrl }
 
     override val lang = "fr"
 
     override val supportsLatest = true
 
-    companion object {
-        private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://waveanime.fr"
-
-        private const val PREF_QUALITY_KEY = "preferred_quality"
-        private const val PREF_QUALITY_TITLE = "Qualité préférée"
-        private val QUALITY_ENTRIES = arrayOf("Highest", "1440p", "1080p", "720p", "480p", "360p")
-        private val QUALITY_VALUES = arrayOf("Highest", "1440", "1080", "720", "480", "360")
-        private const val PREF_QUALITY_DEFAULT = "Highest"
-    }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
-
-        ListPreference(screen.context).apply {
-            key = PREF_QUALITY_KEY
-            title = PREF_QUALITY_TITLE
-            entries = QUALITY_ENTRIES
-            entryValues = QUALITY_VALUES
-            setDefaultValue(PREF_QUALITY_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_QUALITY_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        super<CommonPreferences>.setupPreferenceScreen(screen)
     }
 
     @Serializable

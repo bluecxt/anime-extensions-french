@@ -3,5 +3,5 @@ package fr.bluecxt.core
 interface TmdbSource {
     val client: OkHttpClient
 
-    // le reste
+    
 }

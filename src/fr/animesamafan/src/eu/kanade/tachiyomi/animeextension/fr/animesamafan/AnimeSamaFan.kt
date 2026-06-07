@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesamafan
 
 import android.util.Log
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -12,15 +10,14 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.CommonPreferences
+import fr.bluecxt.core.CommonPreferences.Companion.PREF_URL_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
 import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.json.Json
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -28,23 +25,31 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.injectLazy
 
-class AnimeSamaFan : Source() {
+class AnimeSamaFan :
+    Source(),
+    CommonPreferences {
     override val name = "Anime-Sama-Fan"
+
+    override val defaultBaseUrl = "https://animesama.co"
+    override val supportedServers = listOf("Sibnet", "Sendvid")
+
     override val baseUrl by lazy {
-        val url = preferences.getString("base_url", "https://animesama.co")!!
-            .removeSuffix("/")
+        val url = currentBaseUrl.removeSuffix("/")
         val finalUrl = if (url.startsWith("http")) url else "https://$url"
         Log.d("AnimeSamaFan", "Base URL: $finalUrl")
         finalUrl
     }
+
     override val lang = "fr"
 
     override val supportsLatest = true
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
+
     private val seasonRegex = Regex("""saison-(\d+)""")
     private val epNumRegex = Regex("[^0-9.]")
-
-    private val allowedServers = listOf("Sibnet", "Sendvid")
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -440,7 +445,7 @@ class AnimeSamaFan : Source() {
             val embeddedPlayerUrl = extractEmbeddedPlayerUrl(document)
             val hasKnownPlayerIframe = document.select("iframe")
                 .flatMap { listOf(it.attr("abs:src"), it.attr("abs:data-src")) }
-                .any { src -> src.isNotBlank() && getServerName(src, allowedServers) != null }
+                .any { src -> src.isNotBlank() && getServerName(src, supportedServers) != null }
 
             if (hasKnownPlayerIframe || embeddedPlayerUrl != null) {
                 return listOf(
@@ -520,40 +525,18 @@ class AnimeSamaFan : Source() {
         }
 
         return playerUrls.parallelMap { playerUrl ->
-            extractVideos(playerUrl, langLabel, allowedServers)
+            extractVideos(playerUrl, langLabel, supportedServers)
         }.flatten().coreSortVideos()
     }
 
     override fun List<Hoster>.sortHosters(): List<Hoster> {
-        val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
-        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
+        val prefVoice = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
+        val player = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "Sibnet")!!
 
         return this.sortedWith(
             compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) }
                 .thenByDescending { it.hosterName.contains(player, true) },
         )
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, "https://animesama.co", key = "base_url")
-
-        ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = "Préférence des voix"
-            entries = arrayOf("Préférer VOSTFR", "Préférer VF")
-            entryValues = arrayOf("VOSTFR", "VF")
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_PLAYER_KEY
-            title = "Serveur préféré"
-            entries = arrayOf("Sibnet", "Sendvid")
-            entryValues = arrayOf("sibnet", "sendvid")
-            setDefaultValue(PREF_PLAYER_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
     }
 
     companion object {
