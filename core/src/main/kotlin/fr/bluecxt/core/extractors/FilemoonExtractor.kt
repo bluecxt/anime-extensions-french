@@ -104,15 +104,17 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                         if (reqUrl.contains("access/attest")) Log.d(FILEMOON_LOG, "🔓 [SEC] PoW Validé par le serveur !")
 
                         // Injection du clic dans l'iframe au vol
-                        val isIframe = (reqUrl.contains("/e/") || reqUrl.contains("/k8hn/") || reqUrl.contains("nzn3.org")) &&
-                            !reqUrl.contains("/api/") && !reqUrl.contains("assets")
+                        val isPotentialHtml = (reqUrl.contains("/e/") || reqUrl.contains("/k8hn/") || reqUrl.contains("nzn3.org")) &&
+                            !reqUrl.contains("/api/") && !reqUrl.contains("assets") &&
+                            !reqUrl.endsWith(".js") && !reqUrl.endsWith(".css") && !reqUrl.endsWith(".png")
 
-                        if (isIframe && reqUrl != url) {
+                        if (isPotentialHtml && reqUrl != url) {
                             try {
-                                Log.d(FILEMOON_LOG, "💉 [INJECT] Préparation de l'iframe: $reqUrl")
                                 val response = client.newCall(Request.Builder().url(reqUrl).build()).execute()
                                 if (response.header("Content-Type")?.contains("text/html") == true) {
+                                    Log.d(FILEMOON_LOG, "💉 [INJECT] Iframe HTML identifiée : $reqUrl")
                                     val html = response.body.string()
+
                                     val injectedHtml = html.replace(
                                         "</body>",
                                         """

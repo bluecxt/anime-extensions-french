@@ -65,7 +65,7 @@ abstract class Source :
         val sourceQuality = this.quality
         val sourceUrl = this.url
 
-        return Video(
+        val finalVideo = Video(
             videoUrl = sourceUrl,
             videoTitle = buildString {
                 if (!lang.isNullOrBlank()) append("($lang) ")
@@ -76,16 +76,30 @@ abstract class Source :
             subtitleTracks = this.subtitleTracks,
             audioTracks = this.audioTracks,
         ).withDefaultHeaders(sourceUrl)
+
+        Log.d(SERVER_LOG, "title = ${finalVideo.videoTitle} url = ${finalVideo.videoUrl}") // headers = ${finalVideo.headers}
+
+        return finalVideo
     }
 
     suspend fun extractVideos(playerUrl: String, lang: String, allowedServers: List<String>): List<Video> {
-        val servers = allowedServers.mapNotNull { getVideoServer(this, it) }
+        val isFilemoonDisabled = preferences.getBoolean(CommonPreferences.PREF_DISABLE_FILEMOON_KEY, false)
+
+        val filteredAllowedServers = if (isFilemoonDisabled) {
+            allowedServers.filterNot { it.equals("Filemoon", ignoreCase = true) }
+        } else {
+            allowedServers
+        }
+
+        val servers = filteredAllowedServers.mapNotNull { getVideoServer(this, it) }
 
         val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
 
         val rawSources = runCatching {
             server.extractor(playerUrl)
         }.getOrDefault(emptyList())
+
+        Log.d(SERVER_LOG, "name = ${server.name} data =  $rawSources")
 
         return rawSources.map { it.buildFromSource(lang, server.name) }
     }

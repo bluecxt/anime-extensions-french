@@ -1,10 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.fr.franime
 
-import android.app.Application
-import android.content.SharedPreferences
-import android.util.Base64
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.franime.dto.Anime
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -14,29 +9,32 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import fr.bluecxt.core.CommonPreferences
+import fr.bluecxt.core.CommonPreferences.Companion.PREF_URL_KEY
+import fr.bluecxt.core.CommonPreferences.Companion.PREF_VOICES_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class FrAnime : Source() {
+class FrAnime :
+    Source(),
+    CommonPreferences {
 
     override val name = "FrAnime"
 
     private val supportedServer = listOf(
-        "Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Vk", "Okru",
-        "Dailymotion", "Youtube", "Minochinos", "YourUpload", "Myru",
+        "Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Embed4me", "Minochinos",
+        "Dailymotion", "Youtube", "YourUpload", "Myru", "Okru",
         "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
-        "S44", "Playtube", "Embed4me", "Oneupload", "Smoothpre"
+        "S44", "Playtube", "Oneupload", "Smoothpre",
     )
 
     override val baseUrl by lazy {
-        preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
+        preferences.getString(PREF_URL_KEY, "https://franime.fr")!!
     }
 
     override val client = super.client.newBuilder()
@@ -79,46 +77,11 @@ class FrAnime : Source() {
     override val json: Json by injectLazy()
 
     companion object {
-        private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://franime.fr"
-
-        private const val PREF_VOICES_KEY = "preferred_voices"
-        private const val PREF_VOICES_TITLE = "Préférence des voix"
-        private val VOICES_ENTRIES = arrayOf("Préférer VOSTFR", "Préférer VF")
-        private val VOICES_VALUES = arrayOf("VOSTFR", "VF")
-        private const val PREF_VOICES_DEFAULT = "VOSTFR"
-
-        private const val PREF_SERVER_KEY = "preferred_server"
-        private const val PREF_SERVER_TITLE = "Serveur préféré"
-        private val SERVER_ENTRIES = arrayOf("Vidmoly", "Sibnet", "Sendvid", "Filemoon")
-        private val SERVER_VALUES = arrayOf("Vidmoly", "Sibnet", "Sendvid", "Filemoon")
-        private const val PREF_SERVER_DEFAULT = "Vidmoly"
-
         const val PREFIX_SEARCH = "id:"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
-
-        ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = PREF_VOICES_TITLE
-            entries = VOICES_ENTRIES
-            entryValues = VOICES_VALUES
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, _ -> true }
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_SERVER_KEY
-            title = PREF_SERVER_TITLE
-            entries = SERVER_ENTRIES
-            entryValues = SERVER_VALUES
-            setDefaultValue(PREF_SERVER_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, _ -> true }
-        }.also(screen::addPreference)
+        screen.setupCommonPreferences("https://franime.fr", supportedServer, "Vidmoly")
     }
 
     private val database by lazy {
@@ -333,7 +296,7 @@ class FrAnime : Source() {
     }
 
     override fun List<Hoster>.sortHosters(): List<Hoster> {
-        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
+        val voices = preferences.getString(PREF_VOICES_KEY, "VOSTFR")!!
         return this.sortedByDescending { it.hosterName.contains(voices, true) }
     }
 
@@ -457,7 +420,7 @@ class FrAnime : Source() {
     private fun decryptFrAnime(encrypted: String): String? {
         if (encrypted.isEmpty()) return null
         val hexData = try {
-            String(Base64.decode(encrypted, Base64.DEFAULT))
+            String(android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT))
         } catch (e: Exception) {
             return null
         }

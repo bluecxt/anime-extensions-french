@@ -1,6 +1,7 @@
 package fr.bluecxt.core
 
 import fr.bluecxt.core.extractors.Embed4meExtractor
+import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
@@ -29,11 +30,11 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         extractor = { url -> SendvidExtractor(source.client, source.headers).videosFromUrl(url) },
     )
 
-    "Waveplayer" -> VideoServer(
-        name = "WavePlayer",
-        hosts = listOf(""),
-        extractor = { url -> WaveplayerExtractor(source.client, source.headers).videosFromUrl(url, "") },
-    )
+    // "Waveplayer" -> VideoServer(
+    //     name = "WavePlayer",
+    //     hosts = listOf(""),
+    //     extractor = { url -> WaveplayerExtractor(source.client, source.headers).videosFromUrl(url, "") },
+    // )
 
     "GoogleDrive" -> VideoServer(
         name = "GoogleDrive",
@@ -59,10 +60,16 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         extractor = { url -> Embed4meExtractor(source.client).videosFromUrl(url) },
     )
 
-    "Vk" -> VideoServer(
-        name = "Vk",
-        hosts = listOf(""), //vk.com the majority of urls look down
-        extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
+    // "Vk" -> VideoServer(
+    //     name = "Vk",
+    //     hosts = listOf(""), // vk.com the majority of urls look down
+    //     extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
+    // )
+
+    "Filemoon" -> VideoServer(
+        name = "Filemoon",
+        hosts = listOf("filemoon.to"),
+        extractor = { url -> FilemoonExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
