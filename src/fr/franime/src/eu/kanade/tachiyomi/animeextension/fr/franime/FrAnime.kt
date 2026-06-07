@@ -29,9 +29,6 @@ class FrAnime :
     override val defaultBaseUrl = "https://franime.fr"
     override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Vk", "Embed4me", "Minochinos", "Okru")
 
-    // "Dailymotion", "Youtube", "YourUpload", "Myru", ,
-    // "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
-    // "S44", "Playtube", "Oneupload", "Smoothpre",
     override val defaultServer = "Vidmoly"
 
     override val baseUrl by lazy { currentBaseUrl }
