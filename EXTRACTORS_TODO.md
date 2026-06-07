@@ -2,7 +2,7 @@
 
 Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 
-## ✅ Extracteurs Déjà Faits (Dans le Core)
+## ✅ Extracteurs Déjà Faits
 - [x] **Embed4meExtractor** (`embed4me.com`, `seekstreaming.com`)
 - [x] **FilemoonExtractor** (`filemoon.to`, `filemoon.sx`, `filemoon.ps`, `filemoon.eu`, `nzn3.org`)
 - [x] **GoogleDriveExtractor** (`drive.google.com`)
@@ -13,7 +13,7 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [x] **VkExtractor** (`vk.com`, `vk.ru`)
 - [x] **WaveplayerExtractor** (`waveanime.fr`)
 
-## ❌ Extracteurs Restants (À faire 1 par 1)
+## ❌ Extracteurs Restants
 - [ ] **DoodExtractor** (`doodstream.com`, `dood.to`, `dood.watch`, `dood.so`, `dood.la`, `dood.wf`, `dood.pm`, `d0000d.com`, `doods.pro`)
 - [ ] **VoeExtractor** (`voe.sx`, `voe.un`, `voe.am`, `voe.py`, `voe.to`, `bryantenunder.com`, `vickisaveworker.com`)
 - [ ] **StreamTapeExtractor** (`streamtape.com`, `shavetape.com`)
