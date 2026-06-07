@@ -17,6 +17,8 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
+import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.filterSmartMetadata
 import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.withDefaultHeaders
 import kotlinx.serialization.encodeToString

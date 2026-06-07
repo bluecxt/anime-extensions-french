@@ -13,6 +13,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.CommonPreferences.Companion.PREF_VOICES_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.fetchTmdbMetadata
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -240,8 +241,11 @@ class FrAnime :
             val tmdbMetadata = if (isKai) null else fetchTmdbMetadata(tmdbSearchTitle, tmdbSNum)
 
             val rawEpisodes = season.episodes.mapIndexedNotNull { eIndex, episode ->
-                val hasPlayers = episode.languages.vo.players.isNotEmpty() || episode.languages.vf.players.isNotEmpty()
-                if (!hasPlayers) return@mapIndexedNotNull null
+                val availableLangs = mutableListOf<String>()
+                if (episode.languages.vo.players.isNotEmpty()) availableLangs.add("VOSTFR")
+                if (episode.languages.vf.players.isNotEmpty()) availableLangs.add("VF")
+
+                if (availableLangs.isEmpty()) return@mapIndexedNotNull null
 
                 SEpisode.create().apply {
                     val epNumber = eIndex + 1
@@ -250,6 +254,7 @@ class FrAnime :
                     epTitle = epTitle.replace("Épisode", "Episode", true)
                     name = if (isSingleEpisode) searchTitle else epTitle
                     episode_number = epNumber.toFloat()
+                    scanlator = availableLangs.joinToString(", ")
                 }
             }
 
@@ -277,7 +282,6 @@ class FrAnime :
                     it.name = "$prefix$searchTitle".trim()
                 }
                 if (sNumFromUrl == null && seasonsToProcess.size > 1) it.episode_number = globalEpisodeNumber++
-                it.scanlator = "Season $seasonNumber"
             }
             allEpisodes.addAll(mappedEpisodes)
         }
@@ -385,7 +389,7 @@ class FrAnime :
     }
 
     private fun pagesToAnimesPage(pages: List<Anime>, page: Int): AnimesPage {
-        val chunks = pages.chunked(50)
+        val chunks = pages.chunked(20)
         val hasNextPage = chunks.size > page
         val entries = pageToSAnimes(chunks.getOrNull(page - 1) ?: emptyList())
         return AnimesPage(entries, hasNextPage)
