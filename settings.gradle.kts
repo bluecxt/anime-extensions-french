@@ -8,6 +8,8 @@ loadIndividualExtension("fr", "southtv")
 loadIndividualExtension("fr", "lesporoiniens")
 loadIndividualExtension("fr", "animesama")
 loadIndividualExtension("fr", "franime")
+loadIndividualExtension("all", "torrentio")
+loadIndividualExtension("all", "torrentioanime")
 // loadIndividualExtension("all", "jellyfin")
 
 /**

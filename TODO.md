@@ -10,8 +10,8 @@
 - [x] waveanime
 - [x] southtv
 - [x] lesporoiniens
-- [ ] torrentio
-- [ ] torrentio anime
+- [x] torrentio
+- [x] torrentio anime
 - [ ] adkami
 - [x] animesama
 - [ ] animoflix

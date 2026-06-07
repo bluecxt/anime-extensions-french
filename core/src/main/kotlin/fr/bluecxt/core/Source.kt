@@ -381,6 +381,7 @@ abstract class Source :
     // ============================== Telemetry engine ==============================
 
     protected val context: Application by injectLazy()
+    protected val handler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     override val client: okhttp3.OkHttpClient by lazy {
         network.client.newBuilder()
