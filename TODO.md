@@ -14,7 +14,7 @@
 - [x] torrentio anime
 - [ ] adkami
 - [x] animesama
-- [ ] animoflix
+- [x] animoflix
 - [x] franime
 - [ ] frenchanime
 - [ ] frenchmanga

@@ -11,17 +11,14 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
-import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
-import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
-import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.fetchTmdbMovieMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -36,37 +33,23 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class AnimoFlix : Source() {
+class AnimoFlix :
+    Source(),
+    CommonPreferences {
+
     override val name = "AnimoFlix"
-    override val baseUrl by lazy {
-        preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
-    }
+
     override val lang = "fr"
+
     override val supportsLatest = true
 
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-    private val streamTapeExtractor by lazy { StreamTapeExtractor(client) }
-    private val doodExtractor by lazy { DoodExtractor(client) }
-    private val vidoExtractor by lazy { VidoExtractor(client) }
-    private val voeExtractor by lazy { VoeExtractor(client, headers) }
+    override val supportedServers = listOf("Sibnet", "Sendvid", "Mymail")
+
+    override val defaultBaseUrl = "https://animoflix.to"
+
+    override val baseUrl by lazy { currentBaseUrl }
 
     companion object {
-        private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://animoflix.to"
-
-        private const val PREF_VOICES_KEY = "preferred_voices"
-        private const val PREF_VOICES_TITLE = "Préférence des voix"
-        private val VOICES_ENTRIES = arrayOf("Préférer VOSTFR", "Préférer VF")
-        private val VOICES_VALUES = arrayOf("VOSTFR", "VF")
-        private const val PREF_VOICES_DEFAULT = "VOSTFR"
-
-        private const val PREF_SERVER_KEY = "preferred_server"
-        private const val PREF_SERVER_TITLE = "Serveur préféré"
-        private val SERVER_ENTRIES = arrayOf("Sibnet", "Sendvid", "Voe", "Streamtape", "Doodstream", "Vidoza")
-        private val SERVER_VALUES = arrayOf("sibnet", "sendvid", "voe", "streamtape", "dood", "vidoza")
-        private const val PREF_SERVER_DEFAULT = "sibnet"
-
         private val seasonRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)|(\d+)$""")
         private val epNumRegex = Regex("""(\d+(?:\.\d+)?)""")
         private val qualityNumRegex = Regex("""(\d+)p""")
@@ -75,33 +58,7 @@ class AnimoFlix : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
-
-        ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = PREF_VOICES_TITLE
-            entries = VOICES_ENTRIES
-            entryValues = VOICES_VALUES
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_SERVER_KEY
-            title = PREF_SERVER_TITLE
-            entries = SERVER_ENTRIES
-            entryValues = SERVER_VALUES
-            setDefaultValue(PREF_SERVER_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_SERVER_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
+        super<CommonPreferences>.setupPreferenceScreen(screen)
     }
 
     private fun parseSeasonNumber(title: String): Double {
@@ -516,49 +473,15 @@ class AnimoFlix : Source() {
         val lang = hoster.hosterName
         val url = hoster.hosterUrl
 
-        try {
-            val response = client.newCall(GET(url, headers)).execute()
-            val doc = response.asJsoup()
-            doc.select("select#lecteurSelect option").forEach { option ->
-                val serverUrl = option.attr("value")
-                val serverName = when {
-                    serverUrl.contains("sibnet.ru") -> "Sibnet"
-                    serverUrl.contains("sendvid.com") -> "Sendvid"
-                    serverUrl.contains("streamtape") || serverUrl.contains("shavetape") -> "Streamtape"
-                    serverUrl.contains("dood") -> "Doodstream"
-                    serverUrl.contains("vidoza.net") -> "Vidoza"
-                    serverUrl.contains("voe.sx") -> "Voe"
-                    else -> option.text().trim().replace(lecteurRegex, "")
-                }
-                val prefix = "($lang) $serverName - "
-                when {
-                    serverUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                    serverUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                    serverUrl.contains("streamtape") || serverUrl.contains("shavetape") -> streamTapeExtractor.videoFromUrl(serverUrl, prefix)?.let { videoList.add(it) }
-                    serverUrl.contains("dood") -> doodExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                    serverUrl.contains("vidoza.net") -> vidoExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                    serverUrl.contains("voe.sx") -> voeExtractor.videosFromUrl(serverUrl, prefix).forEach { videoList.add(it) }
-                }
-            }
-        } catch (e: Exception) {}
+        val response = client.newCall(GET(url, headers)).execute()
+        val document = response.asJsoup()
 
-        return videoList.map { it.copy(videoTitle = cleanQuality(it.videoTitle), resolution = qualityNumRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull()) }.sortVideos()
-    }
-
-    private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "").replace(Regex("(?i)(Sendvid|Sibnet|Voe|Streamtape|Doodstream|Vidoza):default"), "")
-            .replace(" - - ", " - ").trim().removeSuffix("-").trim()
-        val servers = listOf("Sibnet", "Sendvid", "Streamtape", "Doodstream", "Vidoza", "Voe")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(lecteurRegex, "").replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
-    }
-
-    override fun List<Video>.sortVideos(): List<Video> {
-        val prefVoice = preferences.getString("preferred_voices", "VOSTFR")!!
-        return this.sortedWith(compareBy({ it.videoTitle.contains(prefVoice, true) }, { it.resolution ?: 0 })).reversed()
+        return document.select("select#lecteurSelect option").flatMap { option ->
+            extractVideos(
+                playerUrl = option.attr("value"),
+                lang,
+                supportedServers,
+            )
+        }.coreSortVideos()
     }
 }

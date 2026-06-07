@@ -4,6 +4,7 @@ import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
+import fr.bluecxt.core.extractors.MymailExtractor
 import fr.bluecxt.core.extractors.OkruExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
@@ -77,6 +78,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Okru",
         hosts = listOf("ok.ru", "odnoklassniki.ru"),
         extractor = { url -> OkruExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Mymail" -> VideoServer(
+        name = "Mymail",
+        hosts = listOf("my.mail.ru"),
+        extractor = { url -> MymailExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
