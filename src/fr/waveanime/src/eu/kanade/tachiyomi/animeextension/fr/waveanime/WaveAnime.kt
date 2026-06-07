@@ -30,7 +30,7 @@ class WaveAnime :
     // CONFIGURATION
     override val defaultBaseUrl = "https://waveanime.fr"
     override val supportedServers = listOf("WavePlayer")
-    override val showQualityPreference = true
+    override val forceShowQualityPreference = true
     override val supportedQualities = arrayOf("Highest", "1440", "1080", "720", "480", "360")
 
     override val baseUrl by lazy { currentBaseUrl }

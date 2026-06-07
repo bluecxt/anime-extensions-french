@@ -52,7 +52,8 @@ class SouthTV :
     override val name = "SouthTV"
     override val defaultBaseUrl = "https://southtv.fr"
     override val supportedServers = listOf("SouthTV")
-    override val showQualityPreference = false // On masque car SouthTV est fixe
+    override val forceShowQualityPreference = false
+    override val forceShowVoicesPreference = false
 
     override val baseUrl by lazy { currentBaseUrl }
     override val lang = "fr"

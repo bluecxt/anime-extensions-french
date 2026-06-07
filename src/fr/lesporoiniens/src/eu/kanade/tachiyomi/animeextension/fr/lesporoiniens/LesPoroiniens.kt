@@ -41,7 +41,7 @@ class LesPoroiniens :
 
     override val defaultBaseUrl = "https://lesporoiniens.org"
     override val supportedServers = listOf("Google Drive")
-    override val showQualityPreference = false
+    override val forceShowQualityPreference = false
 
     override val baseUrl by lazy { currentBaseUrl }
 

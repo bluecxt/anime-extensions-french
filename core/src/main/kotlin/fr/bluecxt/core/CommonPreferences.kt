@@ -5,6 +5,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
+import fr.bluecxt.core.addBaseUrlPreference
 
 interface CommonPreferences : ConfigurableAnimeSource {
 
@@ -26,19 +27,27 @@ interface CommonPreferences : ConfigurableAnimeSource {
     /**
      * Force ou masque l'affichage du menu "Serveur préféré".
      * null (défaut) : Affiche si supportedServers.size > 1
-     * true : Toujours afficher
-     * false : Toujours masquer
      */
     val forceShowServerPreference: Boolean? get() = null
 
     /**
-     * Affiche ou non le menu de sélection de la qualité préférée.
-     * true (défaut) : Affiché
+     * Langues (voix) supportées par l'extension.
      */
-    val showQualityPreference: Boolean get() = true
+    val supportedVoices: Array<String> get() = arrayOf("VOSTFR", "VF")
 
     /**
-     * Qualités proposées par défaut si showQualityPreference est vrai.
+     * Langue par défaut.
+     */
+    val defaultVoice: String get() = "VOSTFR"
+
+    /**
+     * Force ou masque l'affichage du menu "Préférence des voix".
+     * null (défaut) : Affiche si supportedVoices.size > 1
+     */
+    val forceShowVoicesPreference: Boolean? get() = null
+
+    /**
+     * Qualités supportées par l'extension.
      */
     val supportedQualities: Array<String> get() = arrayOf("Highest", "1080", "720", "480")
 
@@ -48,9 +57,10 @@ interface CommonPreferences : ConfigurableAnimeSource {
     val defaultQuality: String get() = "Highest"
 
     /**
-     * Voix supportés
+     * Force ou masque l'affichage du menu "Qualité préférée".
+     * null (défaut) : Affiche si supportedQualities.size > 1
      */
-    val supportedVoice: Array<String> get() = arrayOf("VOSTFR", "VF")
+    val forceShowQualityPreference: Boolean? get() = null
 
     /**
      * Récupère l'URL de base actuelle (soit celle modifiée par l'utilisateur, soit celle par défaut).
@@ -66,18 +76,23 @@ interface CommonPreferences : ConfigurableAnimeSource {
         val prefs = source.preferences
 
         screen.addBaseUrlPreference(prefs, defaultBaseUrl, key = PREF_URL_KEY)
+        // Gestion des Langues
+        val showVoices = forceShowVoicesPreference ?: (supportedVoices.size > 1)
+        if (showVoices) {
+            ListPreference(screen.context).apply {
+                key = PREF_VOICES_KEY
+                title = "Préférence des voix"
+                entries = supportedVoices.map { if (it == "VOSTFR" || it == "VF") "Préférer $it" else it }.toTypedArray()
+                entryValues = supportedVoices
+                setDefaultValue(defaultVoice)
+                summary = "%s"
+                setOnPreferenceChangeListener { _, _ -> true }
+            }.also(screen::addPreference)
+        }
 
-        ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = "Préférence des voix"
-            entries = supportedVoice
-            entryValues = supportedVoice
-            setDefaultValue("VOSTFR")
-            summary = "%s"
-            setOnPreferenceChangeListener { _, _ -> true }
-        }.also(screen::addPreference)
-
-        if (showQualityPreference) {
+        // Gestion de la Qualité
+        val showQuality = forceShowQualityPreference ?: (supportedQualities.size > 1)
+        if (showQuality) {
             ListPreference(screen.context).apply {
                 key = PREF_QUALITY_KEY
                 title = "Qualité préférée"
@@ -89,6 +104,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
             }.also(screen::addPreference)
         }
 
+        // Gestion du Serveur
         val showServerPref = forceShowServerPreference ?: (supportedServers.size > 1)
         if (showServerPref) {
             ListPreference(screen.context).apply {

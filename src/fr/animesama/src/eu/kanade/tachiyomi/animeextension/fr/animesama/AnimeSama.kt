@@ -39,8 +39,7 @@ class AnimeSama :
 
     override val defaultBaseUrl = "https://anime-sama.to"
     override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Embed4me", "Minochinos")
-    override val supportedVoice = arrayOf("VOSTFR", "VF", "VA")
-    override val showQualityPreference = true
+    override val supportedVoices = arrayOf("VOSTFR", "VF", "VA")
 
     override val baseUrl by lazy { currentBaseUrl }
     override val lang = "fr"
