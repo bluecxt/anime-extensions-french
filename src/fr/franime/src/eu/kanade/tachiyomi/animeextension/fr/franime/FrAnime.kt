@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.CommonPreferences.Companion.PREF_URL_KEY
 import fr.bluecxt.core.CommonPreferences.Companion.PREF_VOICES_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
@@ -26,15 +25,18 @@ class FrAnime :
 
     override val name = "FrAnime"
 
-    private val supportedServer = listOf(
-        "Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Embed4me", "Minochinos",
-    )
-    // "S44", "Playtube", "Oneupload", "Smoothpre",
-    // "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
-    // "Dailymotion", "Youtube", "YourUpload", "Myru", "Okru",
+    override val defaultBaseUrl = "https://franime.fr"
+    override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Vk", "Embed4me", "Minochinos")
 
-    override val baseUrl by lazy {
-        preferences.getString(PREF_URL_KEY, "https://franime.fr")!!
+    // "Dailymotion", "Youtube", "YourUpload", "Myru", "Okru",
+    // "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
+    // "S44", "Playtube", "Oneupload", "Smoothpre",
+    override val defaultServer = "Vidmoly"
+
+    override val baseUrl by lazy { currentBaseUrl }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
     }
 
     override val client = super.client.newBuilder()
@@ -78,10 +80,6 @@ class FrAnime :
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.setupCommonPreferences("https://franime.fr", supportedServer, "Vidmoly")
     }
 
     private val database by lazy {
@@ -150,10 +148,19 @@ class FrAnime :
             if (tmdbMetadata != null) break
         }
 
-        tmdbMetadata?.summary?.let { anime.description = it }
-        tmdbMetadata?.releaseDate?.let { date ->
-            anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
-        }
+        anime.description = buildString {
+            animeData?.let {
+                if (!tmdbMetadata?.releaseDate.isNullOrBlank()) {
+                    append("Date de sortie : ${tmdbMetadata!!.releaseDate}\n")
+                } else if (!it.startDate.isNullOrBlank()) {
+                    append("Date de sortie : ${it.startDate}\n")
+                }
+                append("Note : ${it.note} / 10\n\n")
+            }
+
+            val synopsis = tmdbMetadata?.summary ?: animeData?.description?.replace("\\n", "\n")
+            append(synopsis ?: "")
+        }.trim()
 
         tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
@@ -328,7 +335,7 @@ class FrAnime :
                 }
 
                 // Utilise le core pour extraire les vidéos
-                extractVideos(playerUrl, langLabel, supportedServer)
+                extractVideos(playerUrl, langLabel, supportedServers)
             } catch (e: Exception) {
                 emptyList()
             }
@@ -394,9 +401,9 @@ class FrAnime :
             genre = anime.genres.joinToString()
             status = parseStatus(anime.status, anime.seasons.size, anime.seasons.size)
             description = buildString {
-                if (anime.startDate != null && anime.startDate.isNotBlank()) append("Diffusion : ${anime.startDate}\\n")
-                if (anime.format.isNotBlank()) append("Format : ${anime.format}\\n")
-                append("Note : ${anime.note} / 10\\n\\n")
+                if (!anime.startDate.isNullOrBlank()) append("Date de sortie : ${anime.startDate}\n")
+                if (anime.format.isNotBlank()) append("Format : ${anime.format}\n")
+                append("Note : ${anime.note} / 10\n\n")
                 append(anime.description)
             }
             setUrlWithoutDomain("/anime/${anime.id}")

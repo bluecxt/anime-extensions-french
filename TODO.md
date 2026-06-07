@@ -15,7 +15,7 @@
 - [ ] adkami
 - [x] animesama
 - [ ] animoflix
-- [ ] franime
+- [x] franime
 - [ ] frenchanime
 - [ ] frenchmanga
 - [ ] movix

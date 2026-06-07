@@ -392,35 +392,41 @@ abstract class Source :
         .trim()
         .replace(Regex("\\s+"), " ")
 
-    private fun isTitleSimilar(q1: String, q2: String): Boolean {
+    private fun calculateSimilarityScore(query: String, candidate: String): Int {
         fun normalize(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
             .replace(Regex("[^\\p{L}\\p{N}\\s]"), "")
             .replace(Regex("\\p{M}"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
 
-        val s1 = normalize(q1)
-        val s2 = normalize(q2)
+        val s1 = normalize(query)
+        val s2 = normalize(candidate)
+        if (s1.isBlank() || s2.isBlank()) return 0
+        if (s1 == s2) return 100
 
         val flat1 = s1.replace(" ", "")
         val flat2 = s2.replace(" ", "")
+        if (flat1 == flat2) return 95
 
-        if (flat1.isBlank() || flat2.isBlank()) return false
-
-        // Direct containment (handles most cases)
-        if (flat1.contains(flat2) || flat2.contains(flat1)) return true
+        // Si l'un contient l'autre, on pénalise la différence de longueur
+        if (s1.contains(s2) || s2.contains(s1)) {
+            val longer = maxOf(s1.length, s2.length)
+            val shorter = minOf(s1.length, s2.length)
+            return Math.max(0, 85 - (longer - shorter) * 5)
+        }
 
         // Word-based matching for translated titles
         val words1 = s1.split(" ").filter { it.length >= 2 }
         val words2 = s2.split(" ").filter { it.length >= 2 }
-
-        if (words1.isEmpty() || words2.isEmpty()) return false
+        if (words1.isEmpty() || words2.isEmpty()) return 0
 
         val matchingWords = words1.count { w1 -> words2.any { w2 -> w1 == w2 } }
-        val score = matchingWords.toDouble() / maxOf(words1.size, words2.size)
+        val wordScore = (matchingWords.toDouble() / maxOf(words1.size, words2.size) * 70).toInt()
 
-        return score >= 0.5
+        return wordScore
     }
+
+    private fun isTitleSimilar(q1: String, q2: String): Boolean = calculateSimilarityScore(q1, q2) >= 50
 
     /**
      * Fetches metadata from TMDB specifically for a movie.
@@ -518,11 +524,10 @@ abstract class Source :
                 return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
             }
 
-            // Separate results into Animation and Other, but only if they are similar
-            var bestAnimationMatch: JSONObject? = null
-            var maxAnimationVotes = -1
-            var bestOtherMatch: JSONObject? = null
-            var maxOtherVotes = -1
+            var bestMatch: JSONObject? = null
+            var highestScore = -1
+            var maxVotes = -1
+            var bestIsAnimation = false
 
             val targetType = when (type?.lowercase()) {
                 "movie", "film" -> "movie"
@@ -539,27 +544,23 @@ abstract class Source :
                 val resultTitle = res.optString("name").ifBlank { res.optString("title") }
                 val resultOriginalTitle = res.optString("original_name").ifBlank { res.optString("original_title") }
 
-                var isSimilar = isTitleSimilar(query, resultTitle) || (resultOriginalTitle.isNotBlank() && isTitleSimilar(query, resultOriginalTitle))
+                val score = maxOf(calculateSimilarityScore(query, resultTitle), calculateSimilarityScore(query, resultOriginalTitle))
 
-                if (!isSimilar) {
-                    // Try fetching alternative titles for better Romanized matching
+                if (score < 50) {
+                    // Try alternative titles only if main titles fail
                     val bestId = res.getInt("id")
                     val altUrl = "$tmdbBaseUrl/$mType/$bestId/alternative_titles?api_key=$tmdbApiKey"
+                    var altScore = 0
                     try {
                         val altRes = client.newCall(GET(altUrl)).execute().use { it.body.string() }
                         val altArray = JSONObject(altRes).getJSONArray("results")
                         for (j in 0 until altArray.length()) {
                             val alt = altArray.getJSONObject(j).optString("title")
-                            if (isTitleSimilar(query, alt)) {
-                                isSimilar = true
-                                break
-                            }
+                            altScore = maxOf(altScore, calculateSimilarityScore(query, alt))
                         }
-                    } catch (_: Exception) {
-                    }
+                    } catch (_: Exception) {}
+                    if (altScore < 50) continue
                 }
-
-                if (!isSimilar) continue
 
                 val votes = res.optInt("vote_count", 0)
                 val genreIds = res.optJSONArray("genre_ids")
@@ -567,26 +568,31 @@ abstract class Source :
                     (0 until ids.length()).any { ids.getInt(it) == 16 } // 16 = Animation
                 } ?: false
 
-                if (isAnimation) {
-                    if (votes > maxAnimationVotes) {
-                        maxAnimationVotes = votes
-                        bestAnimationMatch = res
-                    }
-                } else {
-                    if (votes > maxOtherVotes) {
-                        maxOtherVotes = votes
-                        bestOtherMatch = res
+                // Logique de sélection : Score > Animation > Votes
+                val finalScore = maxOf(score, 50) // Placeholder if altScore was used
+                if (finalScore > highestScore) {
+                    highestScore = finalScore
+                    maxVotes = votes
+                    bestIsAnimation = isAnimation
+                    bestMatch = res
+                } else if (finalScore == highestScore) {
+                    if (isAnimation && !bestIsAnimation) {
+                        bestIsAnimation = true
+                        maxVotes = votes
+                        bestMatch = res
+                    } else if (isAnimation == bestIsAnimation && votes > maxVotes) {
+                        maxVotes = votes
+                        bestMatch = res
                     }
                 }
             }
 
-            val bestMatch = bestAnimationMatch ?: bestOtherMatch
             if (bestMatch == null) {
                 return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
             }
 
-            val id = bestMatch.getInt("id")
-            val mediaType = bestMatch.optString("media_type", targetType ?: "tv")
+            val id = bestMatch!!.getInt("id")
+            val mediaType = bestMatch!!.optString("media_type", targetType ?: "tv")
 
             return constructMetadata(id, mediaType, season, lang)
         } catch (_: Exception) {

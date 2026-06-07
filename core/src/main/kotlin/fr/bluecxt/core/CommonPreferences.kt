@@ -7,16 +7,44 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 
 interface CommonPreferences : ConfigurableAnimeSource {
 
-    fun PreferenceScreen.setupCommonPreferences(
-        baseUrlDefault: String,
-        supportedServers: List<String>,
-        defaultServer: String? = null,
-    ) {
-        val source = this@CommonPreferences as Source
+    /**
+     * URL de base par défaut de l'extension (valeur d'usine).
+     */
+    val defaultBaseUrl: String
 
-        addBaseUrlPreference(source.preferences, baseUrlDefault, key = PREF_URL_KEY)
+    /**
+     * Liste des serveurs supportés par l'extension.
+     */
+    val supportedServers: List<String>
 
-        ListPreference(context).apply {
+    /**
+     * Serveur préféré par défaut (si non défini, prend le premier de la liste).
+     */
+    val defaultServer: String? get() = supportedServers.firstOrNull()
+
+    /**
+     * Force ou masque l'affichage du menu "Serveur préféré".
+     * null (défaut) : Affiche si supportedServers.size > 1
+     * true : Toujours afficher
+     * false : Toujours masquer
+     */
+    val forceShowServerPreference: Boolean? get() = null
+
+    /**
+     * Récupère l'URL de base actuelle (soit celle modifiée par l'utilisateur, soit celle par défaut).
+     */
+    val currentBaseUrl: String
+        get() = (this as Source).preferences.getString(PREF_URL_KEY, defaultBaseUrl) ?: defaultBaseUrl
+
+    /**
+     * Implémentation automatique du menu de réglages.
+     */
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val source = this as Source
+
+        screen.addBaseUrlPreference(source.preferences, defaultBaseUrl, key = PREF_URL_KEY)
+
+        ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
             title = "Préférence des voix"
             entries = arrayOf("Préférer VOSTFR", "Préférer VF")
@@ -24,29 +52,29 @@ interface CommonPreferences : ConfigurableAnimeSource {
             setDefaultValue("VOSTFR")
             summary = "%s"
             setOnPreferenceChangeListener { _, _ -> true }
-        }.also(::addPreference)
+        }.also(screen::addPreference)
 
-        if (supportedServers.isNotEmpty()) {
-            ListPreference(context).apply {
+        val showServerPref = forceShowServerPreference ?: (supportedServers.size > 1)
+        if (showServerPref) {
+            ListPreference(screen.context).apply {
                 key = PREF_SERVER_KEY
                 title = "Serveur préféré"
                 entries = supportedServers.toTypedArray()
                 entryValues = supportedServers.toTypedArray()
-                setDefaultValue(defaultServer ?: supportedServers.firstOrNull() ?: "")
+                setDefaultValue(defaultServer ?: "")
                 summary = "%s"
                 setOnPreferenceChangeListener { _, _ -> true }
-            }.also(::addPreference)
+            }.also(screen::addPreference)
         }
 
-        // Option spécifique pour Filemoon si présent dans la liste
         if (supportedServers.any { it.equals("Filemoon", ignoreCase = true) }) {
-            SwitchPreferenceCompat(context).apply {
+            SwitchPreferenceCompat(screen.context).apply {
                 key = PREF_DISABLE_FILEMOON_KEY
                 title = "Désactiver le lecteur Filemoon"
                 summary = "Filemoon utilise un système de sécurité (PoW) qui peut ralentir les appareils peu puissants. Désactivez-le si vous rencontrez des lags."
                 setDefaultValue(false)
                 setOnPreferenceChangeListener { _, _ -> true }
-            }.also(::addPreference)
+            }.also(screen::addPreference)
         }
     }
 
