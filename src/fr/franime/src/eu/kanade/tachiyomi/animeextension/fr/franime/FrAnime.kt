@@ -28,10 +28,10 @@ class FrAnime :
 
     private val supportedServer = listOf(
         "Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Embed4me", "Minochinos",
-        "Dailymotion", "Youtube", "YourUpload", "Myru", "Okru",
-        "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
-        "S44", "Playtube", "Oneupload", "Smoothpre",
     )
+    // "S44", "Playtube", "Oneupload", "Smoothpre",
+    // "Bingezove", "Dingtezuni", "Mivalyo", "Tomacloud", "Rise",
+    // "Dailymotion", "Youtube", "YourUpload", "Myru", "Okru",
 
     override val baseUrl by lazy {
         preferences.getString(PREF_URL_KEY, "https://franime.fr")!!
