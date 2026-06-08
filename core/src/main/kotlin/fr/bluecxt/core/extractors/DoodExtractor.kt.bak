@@ -23,25 +23,19 @@ class DoodExtractor(private val client: OkHttpClient) {
             val content = response.body.string()
             if (!content.contains("'/pass_md5/")) return null
 
-            // Obtener la calidad del título de la página
+            // Get the quality from the page title
             val extractedQuality = Regex("\\d{3,4}p")
                 .find(content.substringAfter("<title>").substringBefore("</title>"))
                 ?.groupValues
                 ?.getOrNull(0)
 
-            // Determinar la calidad a usar
-            val newQuality = listOfNotNull(
-                prefix,
-                "Doodstream " + (extractedQuality ?: (if (redirect) "mirror" else "")),
-            ).joinToString(" - ")
-
-            // Obtener el hash MD5
+            // Get the MD5 hash
             val md5 = doodHost + (Regex("/pass_md5/[^']*").find(content)?.value ?: return null)
             val token = md5.substringAfterLast("/")
             val randomString = createHashTable()
             val expiry = System.currentTimeMillis()
 
-            // Obtener la URL del video
+            // Get the video URL
             val videoUrlStart = client.newCall(
                 GET(
                     md5,
@@ -49,7 +43,11 @@ class DoodExtractor(private val client: OkHttpClient) {
                 ),
             ).execute().body.string()
             val videoUrl = "$videoUrlStart$randomString?token=$token&expiry=$expiry"
-            Video(videoUrl = videoUrl, videoTitle = newQuality, headers = doodHeaders(doodHost), subtitleTracks = externalSubs)
+            Video(
+            	videoUrl = videoUrl,
+                headers = doodHeaders(doodHost),
+                subtitleTracks = externalSubs
+            )
         }.getOrNull()
     }
 
@@ -62,7 +60,7 @@ class DoodExtractor(private val client: OkHttpClient) {
         return video?.let(::listOf) ?: emptyList()
     }
 
-    // Método para generar una cadena aleatoria
+    // Method to generate a random string
     private fun createHashTable(length: Int = 10): String {
         val alphabet = ('A'..'Z') + ('a'..'z') + ('0'..'9')
         return buildString {
@@ -72,12 +70,12 @@ class DoodExtractor(private val client: OkHttpClient) {
         }
     }
 
-    // Método para obtener la base de la URL
+    // Method to get the base URL
     private fun getBaseUrl(url: String): String = URI(url).let {
         "${it.scheme}://${it.host}"
     }
 
-    // Método para obtener headers personalizados
+    // Method to get custom headers
     private fun doodHeaders(host: String) = Headers.Builder().apply {
         add("User-Agent", "Aniyomi")
         add("Referer", "https://$host/")
