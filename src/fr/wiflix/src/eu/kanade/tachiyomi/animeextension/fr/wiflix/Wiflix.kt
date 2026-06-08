@@ -57,40 +57,37 @@ class Wiflix : Source() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
-        .add("Referer", "$baseUrl/")
 
     override val json: Json by injectLazy()
 
     // ============================== Search ================================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+        val requestHeaders = headers.newBuilder()
+            .set("User-Agent", DEFAULT_USER_AGENT)
+            .build()
+
+        val userHash = client.newCall(GET(baseUrl, requestHeaders)).execute().asJsoup().select("script")
+            .firstOrNull { it.data().contains("dle_login_hash") }
+
+        val hash = userHash?.data()?.substringAfter("var dle_login_hash = '")?.substringBefore("';") ?: ""
+
+        Log.d(log, "hash = $hash")
+
         val url = "$baseUrl/index.php".toHttpUrl().newBuilder()
             .addQueryParameter("controller", "ajax")
             .addQueryParameter("mod", "search")
             .build()
 
-        val requestHeaders = headers.newBuilder()
-            .set("User-Agent", DEFAULT_USER_AGENT)
-            .set("Accept", "*/*")
-            .set("Accept-Language", "fr,fr-FR;q=0.9")
-            .set("Accept-Encoding", "identity")
-            .set("Referer", "$baseUrl/")
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("Origin", baseUrl)
-            .set("DNT", "1")
-            .set("Sec-GPC", "1")
-            .set("Alt-Used", "flemmix.win")
-            .set("Connection", "keep-alive")
-            .set("Sec-Fetch-Dest", "empty")
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Site", "same-origin")
-            .build()
-
         val formBody = FormBody.Builder()
             .add("query", query)
             .add("skin", "flemmixnew")
-            .add("user_hash", "14eb8ac2f7a4034b330ba5749c65ece40bb94912") // pour l'instant sa marche mais faudra peut être le rendre dynamique
+            .add("user_hash", hash)
             .build()
+
+        for (i in 0 until formBody.size) {
+            Log.d(log, "Param: ${formBody.name(i)} -> ${formBody.value(i)}")
+        }
 
         return POST(url.toString(), requestHeaders, formBody)
     }
@@ -122,7 +119,6 @@ class Wiflix : Source() {
             SAnime.create().apply {
                 title = element.selectFirst("a.mov-t")?.text() ?: "failed selector"
                 url = element.selectFirst("a.mov-t")?.safeRelativePath() ?: ""
-                Log.d(log, url)
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: "https://http.cat/404.jpg"
             }
         }
