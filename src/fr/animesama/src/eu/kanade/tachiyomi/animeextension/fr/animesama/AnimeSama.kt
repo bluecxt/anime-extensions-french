@@ -83,7 +83,6 @@ class AnimeSama :
             }.build()
 
             SAnime.create().apply {
-                // Title is in .card-title (h2), not h1
                 val rawTitle = a.select(".card-title").text().trim()
                 title = rawTitle
                     .substringBefore(" - Saison")
@@ -191,16 +190,20 @@ class AnimeSama :
         val originalTitleFromUrl = anime.url.substringAfter("|", "").takeIf { it.isNotBlank() }
         val titleToSearch = originalTitleFromUrl ?: absoluteFullTitle
 
+        // Fallback: extract from URL slug (often more accurate than the displayed H1)
+        val urlSlugTitle = pathSegments.getOrNull(1)?.replace("-", " ")?.trim()
+
         val tmdbMetadata = when {
             // Extract season number from URL fragment if available
             anime.url.contains("#s") -> {
                 val sNumStr = anime.url.substringAfter("#s", "").substringBefore("|")
                 val sNum = sNumStr.toDoubleOrNull()
                 // -2.0 is a bypass code, we need real number for TMDB
-                if (sNum != null && sNum > 0) fetchTmdbMetadata(seriesTitle, sNum.toInt(), "tv") else fetchSmartTmdbMetadata(titleToSearch)
+                val meta = if (sNum != null && sNum > 0) fetchTmdbMetadata(seriesTitle, sNum.toInt(), "tv") else fetchSmartTmdbMetadata(titleToSearch)
+                meta ?: urlSlugTitle?.let { fetchSmartTmdbMetadata(it) }
             }
 
-            else -> fetchSmartTmdbMetadata(titleToSearch)
+            else -> fetchSmartTmdbMetadata(titleToSearch) ?: urlSlugTitle?.let { fetchSmartTmdbMetadata(it) }
         }
 
         // REPO_RULES: Optimize long titles for grid view
@@ -356,7 +359,7 @@ class AnimeSama :
         if (title.isBlank()) return null
 
         val seasonRegex = Regex("""(?i)(.*?)\s+(?:Saison|Season)\s*(\d+)""")
-        val oavRegex = Regex("""(?i)(.*?)\s+(?:OAV|OVA|Special|Director's Cut|\bKai$)""")
+        val oavRegex = Regex("""(?i)(.*?)\s+(?:OAV|OVA|Special|Director's Cut|\bKai(?:\s+saison\s+\d+)?)$""")
         val movieRegex = Regex("""(?i)(.*?)\s+(?:FILM|MOVIE)""")
 
         return when {
@@ -371,7 +374,7 @@ class AnimeSama :
                 val match = oavRegex.find(title)!!
                 val cleanTitle = match.groupValues[1].trim()
                 // REPO_RULES: Kai and Director's cut should use Season 1 metadata
-                val isTrueSpecial = !title.contains("Kai", true) && !title.contains("Director's Cut", true)
+                val isTrueSpecial = !title.contains(Regex("""(?i)\bKai(?:\s+saison\s+\d+)?$""")) && !title.contains("Director's Cut", true)
                 val seasonToFetch = if (isTrueSpecial) 0 else 1
                 val meta = fetchTmdbMetadata(cleanTitle, seasonToFetch, "tv")
                 meta?.let { filterSmartMetadata(it, isSpecialSeason = isTrueSpecial) }
@@ -497,7 +500,7 @@ class AnimeSama :
                 else -> {
                     val baseNum = seasonNumMatch?.value?.toDoubleOrNull() ?: 1.0
                     when {
-                        seasonName.contains(Regex("""(?i)\bKai\b""")) || seasonName.contains("Director's Cut", true) -> -1.0
+                        seasonName.contains(Regex("""(?i)\bKai(?:\s+saison\s+\d+)?$""")) || seasonName.contains("Director's Cut", true) -> -1.0
                         else -> baseNum
                     }
                 }
@@ -588,7 +591,7 @@ class AnimeSama :
 
         // REPO_RULES: Standard terminology for AniZen grouping
         val isSpecial = effectiveTitle.contains("Special", true) ||
-            effectiveTitle.contains(Regex("""(?i)\bKai\b""")) ||
+            effectiveTitle.contains(Regex("""(?i)\bKai(\s+saison\s+\d+)?$""")) ||
             effectiveTitle.contains("Director's Cut", true)
         val isOav = effectiveTitle.contains("OAV", true) || effectiveTitle.contains("OVA", true) || isSpecial
         val isMovie = effectiveTitle.contains("FILM", true) || effectiveTitle.contains("MOVIE", true) || animeUrlPath.contains("film", true) || animeUrlPath.contains("movie", true)
@@ -685,8 +688,12 @@ class AnimeSama :
         }
 
         // Fetch primary metadata
-        val tmdbMetadata = fetchSmartTmdbMetadata(effectiveTitle)
+        val urlSlugTitle = animeUrlPath.split("/").filter { it.isNotBlank() }.getOrNull(1)?.replace("-", " ")?.trim()
+        val tmdbMetadata = fetchSmartTmdbMetadata(effectiveTitle) ?: urlSlugTitle?.let { fetchSmartTmdbMetadata(it) }
+
         var tmdbEpCount = tmdbMetadata?.episodeSummaries?.size ?: 0
+        val isSpecialVersion = effectiveTitle.contains(Regex("""(?i)\bKai(?:\s+saison\s+\d+)?$""")) || effectiveTitle.contains("Director's Cut", true)
+        android.util.Log.d(log, "playersToEpisodes: title='$effectiveTitle', slug='$urlSlugTitle', tmdbFound=${tmdbMetadata != null}, tmdbEpCount=$tmdbEpCount, isKai=$isSpecialVersion")
 
         val tmdbS1Metadata = if (sNum > 1 && !isOav && !isMovie && siteOffset > 0) {
             fetchTmdbMetadata(baseTitle, 1)
@@ -706,11 +713,9 @@ class AnimeSama :
             isMovie -> "[Movie] "
             isOav && isSpecial -> "[Special] "
             isOav -> "[OAV] "
-            sNum > 1 || (sNum == 1 && maxEpisodes > tmdbEpCount) -> "[S$sNum] "
+            sNum > 1 || (sNum == 1 && tmdbEpCount > 0 && maxEpisodes > tmdbEpCount) -> "[S$sNum] "
             else -> ""
         }
-
-        val isSpecialVersion = effectiveTitle.contains(Regex("""(?i)\bKai\b""")) || effectiveTitle.contains("Director's Cut", true)
 
         val movieNames = if (isMovie) {
             val urlsToTry = mutableListOf("$baseUrl$animeUrlPath")
