@@ -10,6 +10,7 @@ import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VkExtractor
+import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.WaveplayerExtractor
 import fr.bluecxt.core.model.VideoServer
 
@@ -84,6 +85,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Mymail",
         hosts = listOf("my.mail.ru"),
         extractor = { url -> MymailExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Dood" -> VideoServer(
+        name = "Dood",
+        hosts = listOf("doodstream.com", "dood.*", "d0000d.com", "doods.*", "playmogo.com"),
+        extractor = { url -> DoodExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null

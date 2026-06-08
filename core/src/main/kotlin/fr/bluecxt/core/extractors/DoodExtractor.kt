@@ -16,7 +16,37 @@ class DoodExtractor(private val client: OkHttpClient) {
             .toString()
             .removeSuffix("/")
 
-        
+        val content = response.body.string()
+        if (!content.contains("'/pass_md5/")) return emptyList()
+
+        val extractedQuality = Regex("\\d{3,4}p")
+            .find(content.substringAfter("<title>").substringBefore("</title>"))
+            ?.groupValues
+            ?.getOrNull(0)
+
+        val md5 = doodHost + (Regex("/pass_md5/[^']*").find(content)?.value ?: return null)
+        val token = md5.substringAfterLast("/")
+        val randomString = createHashTable()
+        val expiry = System.currentTimeMillis()
+
+        val videoUrlStart = client.newCall(GET(md5, Headers.headersOf("referer", newUrl))).execute().body.string()
+
+        val videoUrl = "$videoUrlStart$randomString?token=$token&expiry=$expiry"
+
+        return listOf(ExtractedSource(
+            url = videoUrl,
+            quality = extractedQuality
+        ))
     }
 
+
+    // Method to generate a random string
+    private fun createHashTable(length: Int = 10): String {
+        val alphabet = ('A'..'Z') + ('a'..'z') + ('0'..'9')
+        return buildString {
+            repeat(length) {
+                append(alphabet.random())
+            }
+        }
+    }
 }
