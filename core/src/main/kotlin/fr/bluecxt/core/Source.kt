@@ -39,41 +39,6 @@ abstract class Source :
         coerceInputValues = true
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        // Default empty implementation, extensions will call addCommonPreferences
-    }
-
-    protected fun PreferenceScreen.addCommonPreferences(
-        baseUrlDefault: String,
-        supportedServers: List<String>,
-        defaultServer: String? = null,
-        supportedEntries: Array<String> = arrayOf("VOSTFR", "VF"),
-    ) {
-        addBaseUrlPreference(preferences, baseUrlDefault, key = CommonPreferences.PREF_URL_KEY)
-
-        androidx.preference.ListPreference(context).apply {
-            key = CommonPreferences.PREF_VOICES_KEY
-            title = "Préférence des voix"
-            entries = supportedEntries
-            entryValues = supportedEntries
-            setDefaultValue("VF")
-            summary = "%s"
-            setOnPreferenceChangeListener { _, _ -> true }
-        }.also(::addPreference)
-
-        if (supportedServers.size > 1) {
-            androidx.preference.ListPreference(context).apply {
-                key = CommonPreferences.PREF_SERVER_KEY
-                title = "Serveur préféré"
-                entries = supportedServers.toTypedArray()
-                entryValues = supportedServers.toTypedArray()
-                setDefaultValue(defaultServer ?: supportedServers.firstOrNull() ?: "")
-                summary = "%s"
-                setOnPreferenceChangeListener { _, _ -> true }
-            }.also(::addPreference)
-        }
-    }
-
     // ============================ Utils =============================
 
     fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
@@ -474,6 +439,9 @@ abstract class Source :
     override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
     override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException()
     override fun List<Video>.sortVideos(): List<Video> = this
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        // Default empty implementation, extensions will call super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     companion object {
         const val PREF_VOICES_KEY = "preferred_voices"

@@ -1,5 +1,6 @@
 package fr.bluecxt.core
 
+import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
@@ -10,11 +11,20 @@ import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VkExtractor
-import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.WaveplayerExtractor
 import fr.bluecxt.core.model.VideoServer
 
-val DEFAULT_SERVER = listOf("Sibnet", "Sendvid", "Vidmoly")
+val DEFAULT_SERVER = listOf(
+    "Sibnet",
+    "Sendvid",
+    "Vidmoly",
+    "Minochinos",
+    "Embed4me",
+    "Filemoon",
+    "Okru",
+    "Mymail",
+    "Dood",
+)
 
 /**
  * Factory pour créer les objets serveurs à la demande.

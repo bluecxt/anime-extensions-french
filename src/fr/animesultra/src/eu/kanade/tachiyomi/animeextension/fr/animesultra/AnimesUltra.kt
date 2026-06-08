@@ -82,10 +82,10 @@ class AnimesUltra : Source() {
         .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
-
-        androidx.preference.ListPreference(screen.context).apply {
+        override fun setupPreferenceScreen(screen: PreferenceScreen) {
+            screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
+    
+            androidx.preference.ListPreference(screen.context).apply {
             key = PREF_VOICES_KEY
             title = "Préférence des voix"
             entries = VOICES_ENTRIES

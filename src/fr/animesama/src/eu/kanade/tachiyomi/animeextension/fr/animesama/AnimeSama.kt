@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
@@ -32,8 +33,6 @@ import uy.kohesive.injekt.injectLazy
 class AnimeSama :
     Source(),
     CommonPreferences {
-
-    private val log = "AnimeSamaDebug"
 
     override val name = "Anime-Sama"
 
@@ -445,18 +444,18 @@ class AnimeSama :
         }
 
         val animeUrl = hubUrl.toHttpUrl()
-        Log.d(log, "animeUrl = $animeUrl")
+        Log.d(ANIMESAMA_LOG, "animeUrl = $animeUrl")
 
         // Clean animeName to avoid "Anime Saison 1 Saison 1"
         val rawTitle = (animeDoc.selectFirst("div.my-2 > h1")?.text() ?: "").trim()
-        Log.d(log, "rawtitle = $rawTitle")
+        Log.d(ANIMESAMA_LOG, "rawtitle = $rawTitle")
         val attributesRegex = Regex("""(?i)\s*(?:-\s*)?(?:Saison|Season|Film|Movie|OAV|OVA|Partie|Part)\b.*""")
         val intermediateTitle = rawTitle.replace(attributesRegex, "").trim()
 
         val editionRegex = Regex("""(?i)\s*(?:-\s*)?(?:\bKai|\bDirector's Cut)$""")
         val animeName = intermediateTitle.replace(editionRegex, "").trim()
 
-        android.util.Log.d(log, "fetchAnimeSeasons: Extracted animeName: '$animeName'")
+        android.util.Log.d(ANIMESAMA_LOG, "fetchAnimeSeasons: Extracted animeName: '$animeName'")
 
         val scripts = animeDoc.select("script").toString()
         val uncommented = commentRegex.replace(scripts, "")
@@ -475,14 +474,14 @@ class AnimeSama :
 
                 val isSubSeason = stem.contains("/") && !isLangOnly
                 if (!isSubSeason) {
-                    android.util.Log.d(log, "fetchAnimeSeasons: Filtering out Hub self-ref: $stem")
+                    android.util.Log.d(ANIMESAMA_LOG, "fetchAnimeSeasons: Filtering out Hub self-ref: $stem")
                 }
                 isSubSeason
             }
             .distinctBy {
                 val stem = it.groupValues[2].trim().removeSuffix("/")
                     .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
-                android.util.Log.d(log, "fetchAnimeSeasons: Match - Name: ${it.groupValues[1]}, Stem: ${it.groupValues[2]}, BaseStem: $stem")
+                android.util.Log.d(ANIMESAMA_LOG, "fetchAnimeSeasons: Match - Name: ${it.groupValues[1]}, Stem: ${it.groupValues[2]}, BaseStem: $stem")
                 stem
             }
 
@@ -542,7 +541,7 @@ class AnimeSama :
                 .replace(Regex("""(?i)Partie\s*(\d+)"""), "Part $1")
                 .trim()
 
-            android.util.Log.d(log, "fetchAnimeSeasons: Season - Final Title: '$finalTitle', URL: '$url'")
+            android.util.Log.d(ANIMESAMA_LOG, "fetchAnimeSeasons: Season - Final Title: '$finalTitle', URL: '$url'")
 
             SAnime.create().apply {
                 this.title = finalTitle
@@ -693,7 +692,7 @@ class AnimeSama :
 
         var tmdbEpCount = tmdbMetadata?.episodeSummaries?.size ?: 0
         val isSpecialVersion = effectiveTitle.contains(Regex("""(?i)\bKai(?:\s+saison\s+\d+)?$""")) || effectiveTitle.contains("Director's Cut", true)
-        android.util.Log.d(log, "playersToEpisodes: title='$effectiveTitle', slug='$urlSlugTitle', tmdbFound=${tmdbMetadata != null}, tmdbEpCount=$tmdbEpCount, isKai=$isSpecialVersion")
+        android.util.Log.d(ANIMESAMA_LOG, "playersToEpisodes: title='$effectiveTitle', slug='$urlSlugTitle', tmdbFound=${tmdbMetadata != null}, tmdbEpCount=$tmdbEpCount, isKai=$isSpecialVersion")
 
         val tmdbS1Metadata = if (sNum > 1 && !isOav && !isMovie && siteOffset > 0) {
             fetchTmdbMetadata(baseTitle, 1)

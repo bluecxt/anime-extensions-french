@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.addBaseUrlPreference
 import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.fetchTmdbMovieMetadata
 import kotlinx.coroutines.Dispatchers

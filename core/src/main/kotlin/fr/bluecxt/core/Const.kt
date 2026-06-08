@@ -16,3 +16,5 @@ const val OKRU_LOG: String = "OkruLog"
 // Extension logs
 
 const val ANIMOFLIX_LOG: String = "AnimoflixLog"
+const val ANIMESAMA_LOG: String = "AnimesamaLog"
+const val WIFLIX_LOG: String = "WiflixLog"

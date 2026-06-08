@@ -5,7 +5,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
-import fr.bluecxt.core.addBaseUrlPreference
+import keiyoushi.utils.addEditTextPreference
 
 interface CommonPreferences : ConfigurableAnimeSource {
 
@@ -17,7 +17,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
     /**
      * Liste des serveurs supportés par l'extension.
      */
-    val supportedServers: List<String>
+    val supportedServers: List<String> get() = DEFAULT_SERVER
 
     /**
      * Serveur préféré par défaut (si non défini, prend le premier de la liste).
@@ -69,13 +69,18 @@ interface CommonPreferences : ConfigurableAnimeSource {
         get() = (this as Source).preferences.getString(PREF_URL_KEY, defaultBaseUrl) ?: defaultBaseUrl
 
     /**
+     * le text affiché en dessous de base_url_pref
+     */
+    val baseUrlSummary: String? get() = null
+
+    /**
      * Implémentation automatique du menu de réglages.
      */
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val source = this as Source
         val prefs = source.preferences
 
-        screen.addBaseUrlPreference(prefs, defaultBaseUrl, key = PREF_URL_KEY)
+        screen.addBaseUrlPreference(prefs, defaultBaseUrl, key = PREF_URL_KEY, summary = baseUrlSummary)
         // Gestion des Langues
         val showVoices = forceShowVoicesPreference ?: (supportedVoices.size > 1)
         if (showVoices) {
@@ -127,6 +132,53 @@ interface CommonPreferences : ConfigurableAnimeSource {
                 setOnPreferenceChangeListener { _, _ -> true }
             }.also(screen::addPreference)
         }
+    }
+
+    /**
+     * Adds an EditTextPreference for managing the extension's base URL.
+     * Automatically cleans the input (trim and trailing slash removal).
+     * If the field is cleared, it resets the preference to the default URL.
+     */
+    private fun PreferenceScreen.addBaseUrlPreference(
+        preferences: SharedPreferences,
+        defaultUrl: String,
+        title: String = "Base URL",
+        key: String = "base_url_pref",
+        summary: String? = null,
+        onComplete: (String) -> Unit = {},
+    ) {
+        val currentUrl = preferences.getString(key, defaultUrl) ?: defaultUrl
+
+        addEditTextPreference(
+            key = key,
+            title = title,
+            summary = if (summary.isNullOrBlank()) currentUrl else "Actual URL $currentUrl\n$summary",
+            default = defaultUrl,
+            getSummary = { newValue ->
+                if (summary.isNullOrBlank()) {
+                    if (newValue.isBlank()) defaultUrl else newValue
+                } else {
+                    summary
+                }
+            },
+            onChange = { _, newValue ->
+                val cleanUrl = newValue.trim().removeSuffix("/")
+
+                if (newValue.isBlank()) {
+                    // Reset à la valeur par défaut
+                    preferences.edit().remove(key).apply()
+                    onComplete(defaultUrl)
+                    true
+                } else if (cleanUrl.isNotEmpty()) {
+                    // Enregistrement de la nouvelle URL nettoyée
+                    preferences.edit().putString(key, cleanUrl).apply()
+                    onComplete(cleanUrl)
+                    true
+                } else {
+                    false
+                }
+            },
+        )
     }
 
     companion object {
