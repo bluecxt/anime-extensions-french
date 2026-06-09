@@ -2,7 +2,7 @@ package fr.bluecxt.core
 
 import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.Embed4meExtractor
-import fr.bluecxt.core.extractors.Genericm3u8Extractor
+import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.MymailExtractor
@@ -20,11 +20,10 @@ val DEFAULT_SERVER = listOf(
     "Vidmoly",
     "Minochinos",
     "Embed4me",
-    "Genericm3u8",
+    "Filemoon",
     "Okru",
     "Mymail",
     "Dood",
-    "Vidara",
 )
 
 /**
@@ -80,10 +79,10 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
     //     extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
     // )
 
-    "Genericm3u8" -> VideoServer(
-        name = "Genericm3u8",
-        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "vidara.*"),
-        extractor = { url -> Genericm3u8Extractor(source.client).videosFromUrl(url) },
+    "Filemoon" -> VideoServer(
+        name = "Filemoon",
+        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org"),
+        extractor = { url -> FilemoonExtractor(source.client).videosFromUrl(url) },
     )
 
     "Okru" -> VideoServer(

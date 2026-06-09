@@ -10,9 +10,8 @@ const val SERVER_LOG: String = "serverLog"
 
 // extractor logs
 
-const val GENERIC_M3U8_LOG: String = "Genericm3u8Log"
+const val FILEMOON_LOG: String = "FilemoonLog"
 const val OKRU_LOG: String = "OkruLog"
-const val VIDARA_LOG: String = "VidaraLog"
 
 // Extension logs
 

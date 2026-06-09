@@ -243,7 +243,6 @@ class Wiflix :
             async {
                 val onclick = link.attr("onclick")
                 val videoUrl = onclick.substringAfter("'").substringBefore("'")
-                Log.d(WIFLIX_LOG, videoUrl)
                 extractVideos(videoUrl, lang, supportedServers)
             }
         }.awaitAll().flatten().coreSortVideos()

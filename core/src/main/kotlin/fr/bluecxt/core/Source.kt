@@ -63,10 +63,10 @@ abstract class Source :
     }
 
     suspend fun extractVideos(playerUrl: String, lang: String, allowedServers: List<String>): List<Video> {
-        val isGenericm3u8Disabled = preferences.getBoolean(CommonPreferences.PREF_DISABLE_GENERIC_M3U8_KEY, false)
+        val isFilemoonDisabled = preferences.getBoolean(CommonPreferences.PREF_DISABLE_FILEMOON_KEY, false)
 
-        val filteredAllowedServers = if (isGenericm3u8Disabled) {
-            allowedServers.filterNot { it.equals("Genericm3u8", ignoreCase = true) }
+        val filteredAllowedServers = if (isFilemoonDisabled) {
+            allowedServers.filterNot { it.equals("Filemoon", ignoreCase = true) }
         } else {
             allowedServers
         }
@@ -78,7 +78,7 @@ abstract class Source :
             server.extractor(playerUrl)
         }.getOrDefault(emptyList())
 
-        Log.d(SERVER_LOG, "name = ${server.name}")
+        Log.d(SERVER_LOG, "name = ${server.name} data =  $rawSources")
 
         return rawSources.map { it.buildFromSource(lang, server.name) }
     }

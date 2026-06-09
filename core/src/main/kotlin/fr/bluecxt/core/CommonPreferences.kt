@@ -123,11 +123,11 @@ interface CommonPreferences : ConfigurableAnimeSource {
             }.also(screen::addPreference)
         }
 
-        if (supportedServers.any { it.equals("Genericm3u8", ignoreCase = true) }) {
+        if (supportedServers.any { it.equals("Filemoon", ignoreCase = true) }) {
             SwitchPreferenceCompat(screen.context).apply {
-                key = PREF_DISABLE_GENERIC_M3U8_KEY
-                title = "Désactiver le lecteur Genericm3u8"
-                summary = "Genericm3u8 utilise un système de sécurité (PoW) qui peut ralentir les appareils peu puissants. Désactivez-le si vous rencontrez des lags."
+                key = PREF_DISABLE_FILEMOON_KEY
+                title = "Désactiver le lecteur Filemoon"
+                summary = "Filemoon utilise un système de sécurité (PoW) qui peut ralentir les appareils peu puissants. Désactivez-le si vous rencontrez des lags."
                 setDefaultValue(false)
                 setOnPreferenceChangeListener { _, _ -> true }
             }.also(screen::addPreference)
@@ -186,6 +186,6 @@ interface CommonPreferences : ConfigurableAnimeSource {
         const val PREF_VOICES_KEY = "preferred_voices"
         const val PREF_QUALITY_KEY = "preferred_quality"
         const val PREF_SERVER_KEY = "preferred_server"
-        const val PREF_DISABLE_GENERIC_M3U8_KEY = "disable_Genericm3u8"
+        const val PREF_DISABLE_FILEMOON_KEY = "disable_filemoon"
     }
 }
