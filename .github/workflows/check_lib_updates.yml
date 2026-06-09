@@ -1,4 +1,4 @@
-name: Check Upstream Lib Changes
+name: Check Upstream Changes
 
 on:
   schedule:
@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-lib:
-    name: Check lib/ changes
+  check-yuzono-lib:
+    name: Check Yuzono lib/ changes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout local repo
@@ -42,7 +42,7 @@ jobs:
 
           if [ "$CURRENT_SHA" == "$LAST_SHA" ]; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "### ✅ Upstream HEAD est inchangé depuis la dernière exécution." >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ Yuzono HEAD est inchangé depuis la dernière exécution." >> $GITHUB_STEP_SUMMARY
           else
             # Optimisation : Clone partiel pour inspecter les changements sans télécharger les fichiers
             git clone --filter=blob:none --no-checkout $UPSTREAM_URL repo
@@ -58,24 +58,23 @@ jobs:
               if [ -n "$DIFF" ]; then
                 echo "changed=true" >> $GITHUB_OUTPUT
                 
-                # Extraction des noms de modules uniques (ex: lib/amazonextractor/...) -> amazonextractor
+                # Extraction des noms de modules uniques
                 MODIFIED_MODULES=$(echo "$DIFF" | cut -d'/' -f2 | sort -u | tr '\n' ' ' | sed 's/ $//')
                 echo "modules=$MODIFIED_MODULES" >> $GITHUB_OUTPUT
 
-                echo "### ⚠️ Changements détectés dans lib/ !" >> $GITHUB_STEP_SUMMARY
-                echo "Depuis la dernière exécution ($LAST_SHA), les modules suivants ont été modifiés sur l'upstream :" >> $GITHUB_STEP_SUMMARY
+                echo "### ⚠️ Changements détectés dans Yuzono lib/ !" >> $GITHUB_STEP_SUMMARY
+                echo "Depuis la dernière exécution ($LAST_SHA), les modules suivants ont été modifiés :" >> $GITHUB_STEP_SUMMARY
                 echo "" >> $GITHUB_STEP_SUMMARY
                 echo '```' >> $GITHUB_STEP_SUMMARY
                 echo "$DIFF" >> $GITHUB_STEP_SUMMARY
                 echo '```' >> $GITHUB_STEP_SUMMARY
               else
                 echo "changed=false" >> $GITHUB_OUTPUT
-                echo "### ✅ Upstream a été mis à jour, mais aucun changement dans lib/." >> $GITHUB_STEP_SUMMARY
+                echo "### ✅ Yuzono a été mis à jour, mais aucun changement dans lib/." >> $GITHUB_STEP_SUMMARY
               fi
             else
               echo "changed=true" >> $GITHUB_OUTPUT
-              echo "### 🚀 Première exécution détectée." >> $GITHUB_STEP_SUMMARY
-              echo "Le suivi a été initialisé au SHA : $CURRENT_SHA" >> $GITHUB_STEP_SUMMARY
+              echo "### 🚀 Première exécution détectée pour Yuzono." >> $GITHUB_STEP_SUMMARY
             fi
             cd ..
           fi
@@ -90,27 +89,98 @@ jobs:
           MODULES: ${{ steps.detect.outputs.modules }}
         run: |
           DATE=$(date +'%d/%m/%Y')
-          ISSUE_TITLE="[Upstream] Changements lib/ du $DATE"
+          ISSUE_TITLE="[Yuzono] Changements lib/ du $DATE"
           ISSUE_BODY="Les modules suivants dans le dossier \`lib/\` ont été modifiés sur le dépôt upstream (yuzono/anime-extensions) le $DATE :
 
           **Modules concernés :**
           - ${MODULES// /\\n- }
 
-          Veuillez vérifier si ces changements impactent nos extensions locales."
+          Veuillez vérifier l'impact sur nos extensions."
           
-          # Cherche une issue OUVERTE avec un titre similaire (préfixe) pour éviter les doublons le même jour
-          # ou pour regrouper si on lance manuellement plusieurs fois le même jour.
           EXISTING_ISSUE=$(gh issue list --search "$ISSUE_TITLE" --state open --json number --jq '.[0].number')
           
           if [ -z "$EXISTING_ISSUE" ]; then
             gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY" --label "enhancement"
           else
-            gh issue comment "$EXISTING_ISSUE" --body "Nouvelle détection de changements lors d'un second scan aujourd'hui : $ISSUE_BODY"
+            gh issue comment "$EXISTING_ISSUE" --body "Nouvelle détection de changements Yuzono lors d'un second scan aujourd'hui : $ISSUE_BODY"
           fi
 
-      - name: Save new upstream SHA
+      - name: Save new Yuzono SHA
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .last_upstream_sha
           key: upstream-lib-sha-${{ github.workflow }}-${{ github.run_id }}
+
+  check-docchi-players:
+    name: Check Docchi-Players changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout local repo
+        uses: actions/checkout@v4
+
+      - name: Restore last Docchi SHA
+        uses: actions/cache/restore@v4
+        with:
+          path: .last_docchi_sha
+          key: docchi-sha-${{ github.workflow }}
+          restore-keys: |
+            docchi-sha-
+
+      - name: Detect Changes
+        id: detect-docchi
+        run: |
+          DOCCHI_URL="https://github.com/skoruppa/docchi-players.git"
+          
+          # Optimisation maximale : vérification de la cible (main) sans aucun clone
+          CURRENT_SHA=$(git ls-remote $DOCCHI_URL refs/heads/main | cut -f1)
+          
+          if [ -f .last_docchi_sha ]; then
+            LAST_SHA=$(cat .last_docchi_sha)
+          else
+            LAST_SHA=""
+          fi
+
+          echo "Dernier SHA Docchi : ${LAST_SHA:-Aucun}"
+          echo "SHA actuel Docchi  : $CURRENT_SHA"
+
+          if [ "$CURRENT_SHA" == "$LAST_SHA" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "### ✅ Docchi-players (main) est inchangé." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            if [ -n "$LAST_SHA" ]; then
+               echo "### ⚠️ Nouveaux commits détectés sur Docchi-players (main) !" >> $GITHUB_STEP_SUMMARY
+            else
+               echo "### 🚀 Première exécution détectée pour Docchi-players." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          # Mise à jour de l'état local
+          echo "$CURRENT_SHA" > .last_docchi_sha
+
+      - name: Create Issue on Docchi Changes
+        if: steps.detect-docchi.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DATE=$(date +'%d/%m/%Y')
+          ISSUE_TITLE="[Docchi] Nouveaux commits sur main le $DATE"
+          ISSUE_BODY="Une divergence a été détectée sur la branche \`main\` du dépôt **skoruppa/docchi-players**.
+          
+          De nouveaux commits ont été poussés depuis la dernière vérification. Évaluez si une synchronisation contractuelle ou technique est requise de notre côté."
+          
+          EXISTING_ISSUE=$(gh issue list --search "$ISSUE_TITLE" --state open --json number --jq '.[0].number')
+          
+          if [ -z "$EXISTING_ISSUE" ]; then
+            gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY" --label "enhancement"
+          else
+            gh issue comment "$EXISTING_ISSUE" --body "Seconde alerte de modification sur Docchi-players pour cette journée."
+          fi
+
+      - name: Save new Docchi SHA
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .last_docchi_sha
+          key: docchi-sha-${{ github.workflow }}-${{ github.run_id }}
