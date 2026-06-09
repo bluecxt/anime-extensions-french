@@ -1,12 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 💬 Discord
-    url: https://discord.gg/Bx2PhgndEC
-    about: Rejoignez notre communauté pour discuter, obtenir de l'aide ou suggérer des idées.
-  - name: ⚠️ Application issue
-    url: https://github.com/komikku-app/anikku/issues/new/choose
-    about: Les problèmes liés à l'application elle-même doivent être ouverts sur le repo Anikku.
-  - name: 🖥️ Anikku website
-    url: https://anikku-app.github.io/help/
-    about: Guides, dépannage et réponses aux questions courantes.
-
+    - name: 💬 Discord
+      url: https://discord.gg/Bx2PhgndEC
+      about: Rejoignez notre communauté pour discuter, obtenir de l'aide ou suggérer des idées.
+    - name: ⚠️ Application issue
+      url: https://github.com/salmanbappi/AniZen/issues/new/choose
+      about: Les problèmes liés à l'application elle-même doivent être ouverts sur le repo AniZen.
+    - name: 🖥️ AniZen repo
+      url: https://github.com/salmanbappi/AniZen
+      about: Repo officiel de AniZen

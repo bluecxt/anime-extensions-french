@@ -38,7 +38,7 @@ jobs:
               },
               {
                 "type": "body",
-                "regex": ".*\\* (Anikku version|Android version|Device): \\?.*",
+                "regex": ".*\\* (AniZen version|Android version|Device): \\?.*",
                 "message": "Requested information in the template was not filled out."
               },
               {
