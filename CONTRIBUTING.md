@@ -47,7 +47,7 @@ Avant de commencer, veuillez noter que la capacité à utiliser les technologies
 ### Outils
 
 - [Android Studio](https://developer.android.com/studio)
-- Émulateur ou téléphone avec les options de développeur activées et une version récente d'Anikku installée
+- Émulateur ou téléphone avec les options de développeur activées et une version récente d'AniZen installée
 - [Générateur d'icônes](https://as280093.github.io/AndroidAssetStudio/icons-launcher.html)
 - [Tester JSoup](https://try.jsoup.org/)
 
@@ -340,17 +340,17 @@ Cette section doit être réécrite. Venez sur le salon `#programming` de notre 
 
 Pour le développement local, utilisez la configuration de lancement suivante dans Android Studio pour lancer l'application directement dans le panneau de navigation.
 
-Copiez ce qui suit dans `Launch Flags` pour le build Debug d'Anikku :
+Copiez ce qui suit dans `Launch Flags` pour le build Debug d'AniZen :
 
 ```
--W -S -n app.anikku.dev/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
+-W -S -n app.anizen.dev/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
 ```
 
 ## Débogage
 
 ### Débogueur Android
 
-Utilisez `Attach Debugger to Android Process` dans Android Studio pour attacher le débogueur à l'application `app.anikku.dev`.
+Utilisez `Attach Debugger to Android Process` dans Android Studio pour attacher le débogueur à l'application `app.anizen.dev`.
 
 ### Logs
 
