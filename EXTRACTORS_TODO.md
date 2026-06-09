@@ -13,9 +13,9 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [x] **VkExtractor** (`vk.com`, `vk.ru`)
 - [x] **WaveplayerExtractor** (`waveanime.fr`)
 - [x] **OkruExtractor** (`ok.ru`, `odnoklassniki.ru`)
+- [x] **DoodExtractor** (`doodstream.com`, `dood.to`, `dood.watch`, `dood.so`, `dood.la`, `dood.wf`, `dood.pm`, `d0000d.com`, `doods.pro`, `playmogo.com`)
 
 ## ❌ Extracteurs Restants
-- [ ] **DoodExtractor** (`doodstream.com`, `dood.to`, `dood.watch`, `dood.so`, `dood.la`, `dood.wf`, `dood.pm`, `d0000d.com`, `doods.pro`, `playmogo.com`)
 - [ ] **VoeExtractor** (`voe.sx`, `voe.un`, `voe.am`, `voe.py`, `voe.to`, `bryantenunder.com`, `vickisaveworker.com`)
 - [ ] **StreamTapeExtractor** (`streamtape.com`, `shavetape.com`)
 - [ ] **VidoExtractor** (`vidoza.net`, `vido.lol`, `vido.tv`)
