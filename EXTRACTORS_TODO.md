@@ -27,7 +27,6 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [ ] **StreamWishExtractor** (`streamwish.to`, `streamwish.com`, `strwish.com`, `wishembed.to`)
 - [ ] **UpstreamExtractor** (`upstream.to`)
 - [ ] **UqloadExtractor** (`uqload.co`, `uqload.io`)
-- [ ] **VidaraExtractor** (`vidara.cc`, `upns.pro`)
 - [ ] **VidHideExtractor** (`vidhide.pro`, `vidhide.com`)
 - [ ] **VudeoExtractor** (`vudeo.co`, `vudeo.io`)
 - [ ] **MegaCloudExtractor** (`megacloud.tv`)
