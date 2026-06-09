@@ -2,6 +2,8 @@
  * Add or remove modules to load as needed for local development here.
  */
 // loadAllIndividualExtensions()
+loadIndividualExtension("all", "torrentio")
+loadIndividualExtension("all", "torrentioanime")
 loadIndividualExtension("fr", "animesamafan")
 loadIndividualExtension("fr", "waveanime")
 loadIndividualExtension("fr", "southtv")
@@ -9,8 +11,7 @@ loadIndividualExtension("fr", "lesporoiniens")
 loadIndividualExtension("fr", "animesama")
 loadIndividualExtension("fr", "franime")
 loadIndividualExtension("fr", "animoflix")
-loadIndividualExtension("all", "torrentio")
-loadIndividualExtension("all", "torrentioanime")
+loadIndividualExtension("fr", "wiflix")
 // loadIndividualExtension("all", "jellyfin")
 
 /**

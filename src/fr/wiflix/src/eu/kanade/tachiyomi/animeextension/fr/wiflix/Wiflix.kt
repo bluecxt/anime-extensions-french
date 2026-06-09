@@ -10,27 +10,13 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
-import eu.kanade.tachiyomi.lib.embed4meextractor.Embed4meExtractor
-import eu.kanade.tachiyomi.lib.luluextractor.LuluExtractor
-import eu.kanade.tachiyomi.lib.minochinosextractor.MinoChinosExtractor
-import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.streamdavextractor.StreamDavExtractor
-import eu.kanade.tachiyomi.lib.upstreamextractor.UpstreamExtractor
-import eu.kanade.tachiyomi.lib.uqloadextractor.UqloadExtractor
-import eu.kanade.tachiyomi.lib.vidaraextractor.VidaraExtractor
-import eu.kanade.tachiyomi.lib.vidhideextractor.VidHideExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
-import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
-import eu.kanade.tachiyomi.lib.vudeoextractor.VudeoExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.WIFLIX_LOG
 import fr.bluecxt.core.safeRelativePath
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -43,17 +29,25 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class Wiflix : Source() {
-    private val log = "WiflixDebug"
+class Wiflix :
+    Source(),
+    CommonPreferences {
 
     override val name = "Wiflix"
 
-    override val baseUrl: String
-        get() = preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
+    override val defaultBaseUrl = "https://flemmix.team"
+
+    override val baseUrl: String by lazy { currentBaseUrl }
 
     override val lang = "fr"
 
     override val supportsLatest = false
+
+    override val baseUrlSummary = "https://ww1.wiflix-adresses.fun | https://wiflix-news.site"
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
@@ -72,7 +66,7 @@ class Wiflix : Source() {
 
         val hash = userHash?.data()?.substringAfter("var dle_login_hash = '")?.substringBefore("';") ?: ""
 
-        Log.d(log, "hash = $hash")
+        Log.d(WIFLIX_LOG, "hash = $hash")
 
         val url = "$baseUrl/index.php".toHttpUrl().newBuilder()
             .addQueryParameter("controller", "ajax")
@@ -86,7 +80,7 @@ class Wiflix : Source() {
             .build()
 
         for (i in 0 until formBody.size) {
-            Log.d(log, "Param: ${formBody.name(i)} -> ${formBody.value(i)}")
+            Log.d(WIFLIX_LOG, "Param: ${formBody.name(i)} -> ${formBody.value(i)}")
         }
 
         return POST(url.toString(), requestHeaders, formBody)
@@ -129,7 +123,7 @@ class Wiflix : Source() {
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val url = "$baseUrl${anime.url}"
-        Log.d(log, url)
+        Log.d(WIFLIX_LOG, url)
         val response = client.newCall(GET(url)).execute()
         val document = response.asJsoup()
 
@@ -183,27 +177,10 @@ class Wiflix : Source() {
                 },
             )
         }
-
         return episodes
     }
 
     // ============================ Video Links =============================
-
-    private val doodExtractor by lazy { DoodExtractor(client) }
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
-    private val minochinosExtractor by lazy { MinoChinosExtractor(client) }
-    private val embed4meExtractor by lazy { Embed4meExtractor(client) }
-    private val streamDavExtractor by lazy { StreamDavExtractor(client) }
-    private val upstreamExtractor by lazy { UpstreamExtractor(client) }
-    private val uqloadExtractor by lazy { UqloadExtractor(client) }
-    private val vidoExtractor by lazy { VidoExtractor(client) }
-    private val vudeoExtractor by lazy { VudeoExtractor(client) }
-    private val vidHideExtractor by lazy { VidHideExtractor(client, headers) }
-    private val vidaraExtractor by lazy { VidaraExtractor(client) }
-    private val voeExtractor by lazy { VoeExtractor(client, headers) }
-    private val luluExtractor by lazy { LuluExtractor(client, headers) }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val animeUrl = episode.url.substringBefore("#")
@@ -266,102 +243,8 @@ class Wiflix : Source() {
             async {
                 val onclick = link.attr("onclick")
                 val videoUrl = onclick.substringAfter("'").substringBefore("'")
-                videosFromUrl(videoUrl, lang)
+                extractVideos(videoUrl, lang, supportedServers)
             }
         }.awaitAll().flatten().coreSortVideos()
-    }
-
-    private suspend fun videosFromUrl(url: String, lang: String): List<Video> {
-        val videos = when {
-            url.contains("sendvid") -> sendvidExtractor.videosFromUrl(url)
-            url.contains("sibnet") -> sibnetExtractor.videosFromUrl(url)
-            url.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(url)
-            url.contains("minochinos") -> minochinosExtractor.videosFromUrl(url)
-            url.contains("embed4me") -> embed4meExtractor.videosFromUrl(url)
-            url.contains("doods.pro") || url.contains("doodstream") -> doodExtractor.videosFromUrl(url).let { if (it.isEmpty()) emptyList() else it }
-            url.contains("streamdav.com") || url.contains("streamdav") -> streamDavExtractor.videosFromUrl(url)
-            url.contains("upstream.to") || url.contains("upstream") -> upstreamExtractor.videosFromUrl(url)
-            url.contains("uqload.co") || url.contains("uqload") -> uqloadExtractor.videosFromUrl(url)
-            url.contains("vido.lol") || url.contains("vido") -> vidoExtractor.videosFromUrl(url)
-            url.contains("vudeo.co") || url.contains("vudeo") -> vudeoExtractor.videosFromUrl(url)
-            url.contains("streamvid.net") || url.contains("vidhide") -> vidHideExtractor.videosFromUrl(url)
-            url.contains("upns.pro") || url.contains("vidaraa.cc") || url.contains("vidara") -> vidaraExtractor.videosFromUrl(url, "")
-            url.contains("voe.sx") || url.contains("bryantenunder.com") || url.contains("vickisaveworker.com") || url.contains("voe") -> voeExtractor.videosFromUrl(url, "")
-            url.contains("luluvdo.com") || url.contains("luluvid.com") || url.contains("vidsonic.net") || url.contains("lulustream") -> luluExtractor.videosFromUrl(url, "")
-            else -> emptyList()
-        }
-
-        // Rule 2: (Langue) Serveur - Qualité
-        return videos.map {
-            Video(videoUrl = it.videoUrl, videoTitle = "($lang) ${coreCleanQuality(it.videoTitle)}", headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
-        }
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, PREF_URL_TITLE, PREF_URL_KEY, PREF_URL_SUMMARY)
-
-        ListPreference(screen.context).apply {
-            key = PREF_QUALITY_KEY
-            title = "Preferred quality"
-            entries = arrayOf("1080p", "720p", "480p", "360p")
-            entryValues = arrayOf("1080", "720", "480", "360")
-            setDefaultValue(PREF_QUALITY_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = "Voices preference"
-            entries = VOICES
-            entryValues = VOICES_VALUES
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_PLAYER_KEY
-            title = "Default player"
-            entries = PLAYERS
-            entryValues = PLAYERS_VALUES
-            setDefaultValue(PREF_PLAYER_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-    }
-
-    companion object {
-        private const val PREF_URL_KEY = "base_url_pref"
-        private const val PREF_URL_TITLE = "Base URL"
-        private const val PREF_URL_DEFAULT = "https://flemmix.team"
-        private const val PREF_URL_SUMMARY = "https://ww1.wiflix-adresses.fun | https://wiflix-news.site"
-
-        private const val PREF_QUALITY_KEY = "preferred_quality"
-        private const val PREF_QUALITY_DEFAULT = "1080"
-
-        private val voicesMap = mapOf(
-            "Prefer VOSTFR" to "vostfr",
-            "Prefer VF" to "vf",
-        )
-        private val VOICES = voicesMap.keys.toTypedArray()
-        private val VOICES_VALUES = voicesMap.values.toTypedArray()
-
-        private val playersMap = mapOf(
-            "Sendvid" to "sendvid",
-            "Sibnet" to "sibnet",
-            "VidMoly" to "vidmoly",
-            "MinoChinos" to "minochinos",
-            "Embed4me" to "embed4me",
-            "DoodStream" to "doodstream",
-            "LuluStream" to "lulustream",
-            "StreamDav" to "streamdav",
-            "Upstream" to "upstream",
-            "Uqload" to "uqload",
-            "Vidara" to "vidara",
-            "VidHide" to "vidhide",
-            "Vido" to "vido",
-            "Voe" to "voe",
-            "Vudeo" to "vudeo",
-        )
-        private val PLAYERS = playersMap.keys.toTypedArray()
-        private val PLAYERS_VALUES = playersMap.values.toTypedArray()
     }
 }
