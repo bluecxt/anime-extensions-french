@@ -10,6 +10,9 @@ jobs:
   check-yuzono-lib:
     name: Check Yuzono lib/ changes
     runs-on: ubuntu-latest
+    permissions:
+          contents: read
+          issues: write
     steps:
       - name: Checkout local repo
         uses: actions/checkout@v4
@@ -115,6 +118,9 @@ jobs:
   check-docchi-players:
     name: Check Docchi-Players changes
     runs-on: ubuntu-latest
+    permissions:
+          contents: read
+          issues: write
     steps:
       - name: Checkout local repo
         uses: actions/checkout@v4
