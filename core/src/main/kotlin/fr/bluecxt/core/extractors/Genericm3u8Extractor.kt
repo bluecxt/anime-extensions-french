@@ -11,7 +11,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import fr.bluecxt.core.FILEMOON_LOG
+import fr.bluecxt.core.GENERIC_M3U8_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import okhttp3.Headers
@@ -23,7 +23,7 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class FilemoonExtractor(private val client: OkHttpClient) {
+class Genericm3u8Extractor(private val client: OkHttpClient) {
 
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
@@ -33,13 +33,13 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         val httpUrl = url.toHttpUrl()
         val host = httpUrl.host
 
-        Log.d(FILEMOON_LOG, "🚀 [START] Début de l'extraction pour: $url")
+        Log.d(GENERIC_M3U8_LOG, "🚀 [START] Début de l'extraction pour: $url")
 
         // 1. Sniffing du flux m3u8 via WebView
         val m3u8Url = sniffM3u8(url)
 
         return if (m3u8Url != null) {
-            Log.d(FILEMOON_LOG, "✅ [MATCH] Flux intercepté: $m3u8Url")
+            Log.d(GENERIC_M3U8_LOG, "✅ [MATCH] Flux intercepté: $m3u8Url")
 
             val finalHeaders = (headers?.newBuilder() ?: Headers.Builder())
                 .set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0")
@@ -54,7 +54,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                 videoHeaders = finalHeaders,
             )
         } else {
-            Log.e(FILEMOON_LOG, "❌ [ERROR] Échec de l'interception (Timeout ou blocage)")
+            Log.e(GENERIC_M3U8_LOG, "❌ [ERROR] Échec de l'interception (Timeout ou blocage)")
             emptyList()
         }
     }
@@ -83,7 +83,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
 
                 view.webChromeClient = object : WebChromeClient() {
                     override fun onConsoleMessage(cm: android.webkit.ConsoleMessage?): Boolean {
-                        Log.d(FILEMOON_LOG, "🌐 [JS] ${cm?.message()}")
+                        Log.d(GENERIC_M3U8_LOG, "🌐 [JS] ${cm?.message()}")
                         return true
                     }
                 }
@@ -100,8 +100,8 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                         }
 
                         // Debug des étapes de sécurité Filemoon
-                        if (reqUrl.contains("access/challenge")) Log.d(FILEMOON_LOG, "🔐 [SEC] Calcul du PoW détecté...")
-                        if (reqUrl.contains("access/attest")) Log.d(FILEMOON_LOG, "🔓 [SEC] PoW Validé par le serveur !")
+                        if (reqUrl.contains("access/challenge")) Log.d(GENERIC_M3U8_LOG, "🔐 [SEC] Calcul du PoW détecté...")
+                        if (reqUrl.contains("access/attest")) Log.d(GENERIC_M3U8_LOG, "🔓 [SEC] PoW Validé par le serveur !")
 
                         // Injection du clic dans l'iframe au vol
                         val isPotentialHtml = (reqUrl.contains("/e/") || reqUrl.contains("/k8hn/") || reqUrl.contains("nzn3.org")) &&
@@ -112,7 +112,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                             try {
                                 val response = client.newCall(Request.Builder().url(reqUrl).build()).execute()
                                 if (response.header("Content-Type")?.contains("text/html") == true) {
-                                    Log.d(FILEMOON_LOG, "💉 [INJECT] Iframe HTML identifiée : $reqUrl")
+                                    Log.d(GENERIC_M3U8_LOG, "💉 [INJECT] Iframe HTML identifiée : $reqUrl")
                                     val html = response.body.string()
 
                                     val injectedHtml = html.replace(
@@ -135,19 +135,19 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                                     return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(injectedHtml.toByteArray()))
                                 }
                             } catch (e: Exception) {
-                                Log.e(FILEMOON_LOG, "⚠️ [INJECT] Erreur injection: ${e.message}")
+                                Log.e(GENERIC_M3U8_LOG, "⚠️ [INJECT] Erreur injection: ${e.message}")
                             }
                         }
                         return super.shouldInterceptRequest(view, request)
                     }
 
                     override fun onPageFinished(view: WebView?, finishedUrl: String?) {
-                        Log.d(FILEMOON_LOG, "📄 [LOAD] Page principale chargée.")
+                        Log.d(GENERIC_M3U8_LOG, "📄 [LOAD] Page principale chargée.")
                     }
                 }
                 view.loadUrl(url)
             } catch (e: Exception) {
-                Log.e(FILEMOON_LOG, "💥 [CRASH] WebView: ${e.message}")
+                Log.e(GENERIC_M3U8_LOG, "💥 [CRASH] WebView: ${e.message}")
                 latch.countDown()
             }
         }

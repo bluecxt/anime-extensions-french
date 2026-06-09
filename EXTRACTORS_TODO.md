@@ -4,7 +4,7 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 
 ## ✅ Extracteurs Déjà Faits
 - [x] **Embed4meExtractor** (`embed4me.com`, `seekstreaming.com`)
-- [x] **FilemoonExtractor** (`filemoon.to`, `filemoon.sx`, `filemoon.ps`, `filemoon.eu`, `nzn3.org`)
+- [x] **Genericm3u8Extractor** (`filemoon.to`, `filemoon.sx`, `filemoon.ps`, `filemoon.eu`, `nzn3.org`)
 - [x] **GoogleDriveExtractor** (`drive.google.com`)
 - [x] **MinoChinosExtractor** (`minochinos.com`, `vidhide.com`)
 - [x] **SendvidExtractor** (`sendvid.com`)

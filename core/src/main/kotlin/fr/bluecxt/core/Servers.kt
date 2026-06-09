@@ -2,13 +2,14 @@ package fr.bluecxt.core
 
 import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.Embed4meExtractor
-import fr.bluecxt.core.extractors.FilemoonExtractor
+import fr.bluecxt.core.extractors.Genericm3u8Extractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.MymailExtractor
 import fr.bluecxt.core.extractors.OkruExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
+import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VkExtractor
 import fr.bluecxt.core.extractors.WaveplayerExtractor
@@ -20,10 +21,11 @@ val DEFAULT_SERVER = listOf(
     "Vidmoly",
     "Minochinos",
     "Embed4me",
-    "Filemoon",
+    "Genericm3u8",
     "Okru",
     "Mymail",
     "Dood",
+    "Vidara",
 )
 
 /**
@@ -79,10 +81,10 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
     //     extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
     // )
 
-    "Filemoon" -> VideoServer(
-        name = "Filemoon",
-        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org"),
-        extractor = { url -> FilemoonExtractor(source.client).videosFromUrl(url) },
+    "Genericm3u8" -> VideoServer(
+        name = "Genericm3u8",
+        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "vidara.*"),
+        extractor = { url -> Genericm3u8Extractor(source.client).videosFromUrl(url) },
     )
 
     "Okru" -> VideoServer(
@@ -101,6 +103,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Dood",
         hosts = listOf("doodstream.com", "dood.*", "d0000d.com", "doods.*", "playmogo.com"),
         extractor = { url -> DoodExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Vidara" -> VideoServer(
+        name = "Vidara",
+        hosts = listOf("*upns.pro"),
+        extractor = { url -> VidaraExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
