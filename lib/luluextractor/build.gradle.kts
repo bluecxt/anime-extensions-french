@@ -1,3 +1,7 @@
 plugins {
-    id("lib-android")
+    alias(kei.plugins.library)
+}
+
+dependencies {
+    implementation(project(":lib:unpacker"))
 }

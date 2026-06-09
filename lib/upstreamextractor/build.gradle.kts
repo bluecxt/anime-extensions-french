@@ -1,8 +1,8 @@
 plugins {
-    id("lib-android")
+    alias(kei.plugins.library)
 }
 
 dependencies {
     implementation(project(":lib:playlistutils"))
-    implementation(libs.jsunpacker)
+    implementation(project(":lib:unpacker"))
 }
