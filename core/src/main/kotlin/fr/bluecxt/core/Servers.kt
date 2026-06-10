@@ -4,6 +4,7 @@ import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
+import fr.bluecxt.core.extractors.JWplayerExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.MymailExtractor
 import fr.bluecxt.core.extractors.OkruExtractor
@@ -84,6 +85,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org"),
         extractor = { url -> FilemoonExtractor(source.client).videosFromUrl(url) },
     )
+
+    // "JWPlayer" -> VideoServer(
+    //     name = "JWPlayer",
+    //     hosts = emptyList(), // Generic
+    //     extractor = { url -> JWplayerExtractor(source.client).videosFromUrl(url) },
+    // )
 
     "Okru" -> VideoServer(
         name = "Okru",
