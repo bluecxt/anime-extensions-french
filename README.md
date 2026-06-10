@@ -7,6 +7,12 @@
 
 ---
 
+## ⚠️⚠️⚠️ annonce ⚠️⚠️⚠️
+
+les differente extensions peuvent avoir une quantité significative de problème actuellement notamment car je suis en train de travailler sur un refactoring complet des extensions et des extracteurs
+
+---
+
 ## 📌 Configuration du Repository
 
 Pour intégrer ce repository à votre environnement de test, utilisez l'URL de métadonnées brute suivante :
