@@ -23,8 +23,11 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
@@ -54,24 +57,30 @@ class Wiflix :
 
     override val json: Json by injectLazy()
 
+    override val client: okhttp3.OkHttpClient by lazy {
+        super.client.newBuilder()
+            .cookieJar(okhttp3.CookieJar.NO_COOKIES) // todo c'est que pour la recherche pour le reste il faudrait une solution
+            .build()
+    }
+
     // ============================== Search ================================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
-        val requestHeaders = headers.newBuilder()
-            .set("User-Agent", DEFAULT_USER_AGENT)
-            .build()
+        val hashDoc = client.newCall(GET(baseUrl)).execute().asJsoup()
 
-        val userHash = client.newCall(GET(baseUrl, requestHeaders)).execute().asJsoup().select("script")
+        val userHash = hashDoc.select("script")
             .firstOrNull { it.data().contains("dle_login_hash") }
+
+        val scriptElement = hashDoc.select("script").firstOrNull { it.data().contains("h_check") }
+        val scriptData = scriptElement?.data() ?: ""
+
+        Log.d(WIFLIX_LOG, scriptData)
 
         val hash = userHash?.data()?.substringAfter("var dle_login_hash = '")?.substringBefore("';") ?: ""
 
         Log.d(WIFLIX_LOG, "hash = $hash")
 
-        val url = "$baseUrl/index.php".toHttpUrl().newBuilder()
-            .addQueryParameter("controller", "ajax")
-            .addQueryParameter("mod", "search")
-            .build()
+        val url = "$baseUrl/index.php?controller=ajax&mod=search"
 
         val formBody = FormBody.Builder()
             .add("query", query)
@@ -79,11 +88,12 @@ class Wiflix :
             .add("user_hash", hash)
             .build()
 
-        for (i in 0 until formBody.size) {
-            Log.d(WIFLIX_LOG, "Param: ${formBody.name(i)} -> ${formBody.value(i)}")
-        }
+        val finalHeaders = Headers.Builder()
+            .add("Accept", "*/*")
+            .add("Cookie", "h_check=25")
+            .build()
 
-        return POST(url.toString(), requestHeaders, formBody)
+        return POST(url, finalHeaders, formBody)
     }
 
     override fun searchAnimeParse(response: Response): AnimesPage {
