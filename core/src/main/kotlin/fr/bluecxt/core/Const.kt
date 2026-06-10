@@ -11,6 +11,7 @@ const val SERVER_LOG: String = "serverLog"
 // extractor logs
 
 const val FILEMOON_LOG: String = "FilemoonLog"
+const val JWPLAYER_LOG: String = "JWPlayerLog"
 const val OKRU_LOG: String = "OkruLog"
 const val DOOD_LOG: String = "DoodLog"
 
