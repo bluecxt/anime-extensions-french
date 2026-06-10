@@ -1,55 +1,99 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import kotlin.text.RegexOption
 
 class DoodExtractor(private val client: OkHttpClient) {
 
     fun videosFromUrl(url: String): List<ExtractedSource> {
-        // Remplacement des liens d-s.io par le miroir fonctionnel dsvplay.com
-        val cleanUrl = url.replace("d-s.io", "dsvplay.com")
+        val parsedUrl = url.toHttpUrl()
+        val videoId = parsedUrl.encodedPath.removeSuffix("/").substringAfterLast("/")
+        var host = parsedUrl.host
 
-        val response = client.newCall(GET(cleanUrl)).execute()
-        val newUrl = response.request.url.toString()
+        val allowedHosts = listOf("doodstream.com", "myvidplay.com", "playmogo.com")
+        if (host !in allowedHosts) {
+            host = "playmogo.com"
+        }
 
-        val httpUrl = newUrl.toHttpUrl()
-        val doodHost = "${httpUrl.scheme}://${httpUrl.host}"
+        var webUrl = "https://$host/d/$videoId"
+        val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-        val content = response.body.string()
-        if (!content.contains("'/pass_md5/")) return emptyList()
+        try {
+            val headers = Headers.Builder()
+                .add("User-Agent", userAgent)
+                .add("Referer", "https://$host/")
+                .build()
 
-        val extractedQuality = Regex("\\d{3,4}p")
-            .find(content.substringAfter("<title>").substringBefore("</title>"))
-            ?.groupValues
-            ?.getOrNull(0)
+            var response = client.newCall(GET(webUrl, headers)).execute()
+            val actualUrl = response.request.url.toString()
+            var html = response.body.string()
 
-        val md5Url = doodHost + (Regex("/pass_md5/[^']*").find(content)?.value ?: return emptyList())
-        val token = md5Url.substringAfterLast("/")
-        val randomString = createHashTable()
-        val expiry = System.currentTimeMillis()
+            if (actualUrl != webUrl) {
+                host = response.request.url.host
+                webUrl = "https://$host/d/$videoId"
+            }
 
-        val videoHeaders = Headers.Builder()
-            .add("User-Agent", DEFAULT_USER_AGENT)
-            .add("Referer", "$doodHost/")
-            .build()
+            val currentHeaders = headers.newBuilder()
+                .set("Referer", webUrl)
+                .build()
 
-        val videoUrlStart = client.newCall(
-            GET(md5Url, Headers.headersOf("referer", newUrl)),
-        ).execute().body.string()
+            if ("Video not found" in html) return emptyList()
 
-        val videoUrl = "$videoUrlStart$randomString?token=$token&expiry=$expiry"
+            // Check for iframe
+            val iframeMatch = Regex("""<iframe\s*src="([^"]+)""").find(html)
+            if (iframeMatch != null) {
+                val iframeUrl = webUrl.toHttpUrl().resolve(iframeMatch.groupValues[1])?.toString() ?: return emptyList()
+                response = client.newCall(GET(iframeUrl, currentHeaders)).execute()
+                html = response.body.string()
+            } else {
+                val embedUrl = webUrl.replace("/d/", "/e/")
+                response = client.newCall(GET(embedUrl, currentHeaders)).execute()
+                html = response.body.string()
+            }
 
-        return listOf(
-            ExtractedSource(
-                url = videoUrl,
-                quality = extractedQuality,
-                headers = videoHeaders,
-            ),
-        )
+            // Extract quality
+            val qualityMatch = Regex("""\b(360|480|720|1080|1440|2160)[pP]""").find(html)
+            val quality = qualityMatch?.let { "${it.groupValues[1]}p" } ?: "unknown"
+
+            // Extract token and pass URL
+            val mainRegex = Regex(
+                """dsplayer\.hotkeys[^']+'([^']+).+?function\s*makePlay.+?return[^?]+([^"]+)""",
+                RegexOption.DOT_MATCHES_ALL,
+            )
+            val match = mainRegex.find(html) ?: return emptyList()
+
+            val passPath = match.groupValues[1]
+            val token = match.groupValues[2]
+            val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: return emptyList()
+
+            val baseResponse = client.newCall(GET(passUrl, currentHeaders)).execute()
+            val baseUrl = baseResponse.body.string().trim()
+
+            val finalUrl = if (baseUrl.contains("cloudflarestorage.")) {
+                baseUrl
+            } else {
+                baseUrl + createHashTable(10) + token + System.currentTimeMillis()
+            }
+
+            val videoHeaders = Headers.Builder()
+                .set("User-Agent", userAgent)
+                .set("Referer", "https://$host/")
+                .build()
+
+            return listOf(
+                ExtractedSource(
+                    url = finalUrl,
+                    quality = quality,
+                    headers = videoHeaders,
+                ),
+            )
+        } catch (e: Exception) {
+            return emptyList()
+        }
     }
 
     private fun createHashTable(length: Int = 10): String {

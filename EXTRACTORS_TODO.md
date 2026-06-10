@@ -35,3 +35,5 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 
 
 - [ ] **pleins de lecteurs differents** (`https://flemmix.team/film-en-streaming/35774-super-mario-galaxy-le-film.html`)
+
+lire `https://github.com/skoruppa/docchi-players/tree/main`

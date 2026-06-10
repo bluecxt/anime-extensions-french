@@ -99,7 +99,14 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Dood" -> VideoServer(
         name = "Dood",
-        hosts = listOf("doodstream.com", "dood.*", "d0000d.com", "doods.*", "playmogo.com"),
+        hosts = listOf(
+            "dood.watch", "doodstream.com", "dood.to", "dood.so", "dood.cx", "dood.la", "dood.ws",
+            "dood.sh", "doodstream.co", "dood.pm", "dood.wf", "dood.re", "dood.yt", "dooood.com",
+            "dood.stream", "ds2play.com", "doods.pro", "ds2video.com", "d0o0d.com", "do0od.com",
+            "d0000d.com", "d000d.com", "dood.li", "dood.work", "dooodster.com", "vidply.com",
+            "all3do.com", "do7go.com", "doodcdn.io", "doply.net", "vide0.net", "vvide0.com",
+            "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com",
+        ),
         extractor = { url -> DoodExtractor(source.client).videosFromUrl(url) },
     )
 

@@ -36,7 +36,9 @@ fun String.safeRelativePath(base: String): String {
 fun Video.withDefaultHeaders(baseUrl: String): Video {
     val builder = this.headers?.newBuilder() ?: Headers.Builder()
 
-    builder.set("User-Agent", DEFAULT_USER_AGENT)
+    if (this.headers?.get("User-Agent") == null) {
+        builder.set("User-Agent", DEFAULT_USER_AGENT)
+    }
 
     if (this.headers?.get("Referer") == null) {
         builder.set("Referer", "$baseUrl/")

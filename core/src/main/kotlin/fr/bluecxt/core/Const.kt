@@ -12,6 +12,7 @@ const val SERVER_LOG: String = "serverLog"
 
 const val FILEMOON_LOG: String = "FilemoonLog"
 const val OKRU_LOG: String = "OkruLog"
+const val DOOD_LOG: String = "DoodLog"
 
 // Extension logs
 
