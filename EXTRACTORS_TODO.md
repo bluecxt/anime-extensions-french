@@ -14,6 +14,7 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [x] **WaveplayerExtractor** (`waveanime.fr`)
 - [x] **OkruExtractor** (`ok.ru`, `odnoklassniki.ru`)
 - [x] **DoodExtractor** (`doodstream.com`, `dood.to`, `dood.watch`, `dood.so`, `dood.la`, `dood.wf`, `dood.pm`, `d0000d.com`, `doods.pro`, `playmogo.com`)
+- [x] **vidara** (`https://flemmix.team/serie-en-streaming/36073-rick-et-morty-saison-9.html`)
 
 ## ❌ Extracteurs Restants
 - [ ] **VoeExtractor** (`voe.sx`, `voe.un`, `voe.am`, `voe.py`, `voe.to`, `bryantenunder.com`, `vickisaveworker.com`)
@@ -31,9 +32,8 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [ ] **VudeoExtractor** (`vudeo.co`, `vudeo.io`)
 - [ ] **MegaCloudExtractor** (`megacloud.tv`)
 - [ ] **YourUpload**
-- [ ] **vidara** (`https://flemmix.team/serie-en-streaming/36073-rick-et-morty-saison-9.html`)
 
 
-- [ ] **pleins de lecteurs differents** (`https://flemmix.team/film-en-streaming/35774-super-mario-galaxy-le-film.html`)
+- [ ] **pleins de lecteurs differents** (`https://flemmix.city/film-en-streaming/35774-super-mario-galaxy-le-film.html`)
 
 lire `https://github.com/skoruppa/docchi-players/tree/main`

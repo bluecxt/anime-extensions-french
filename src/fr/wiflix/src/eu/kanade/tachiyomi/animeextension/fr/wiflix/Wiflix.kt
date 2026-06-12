@@ -212,20 +212,24 @@ class Wiflix :
                 hosters.add(Hoster(hosterName = "VOSTFR", hosterUrl = "$baseUrl$animeUrl#$fragment-vostfr", lazy = true))
             }
         } else if (fragment == "movie") {
-            if (document.selectFirst("div.tabs-sel.linkstab > a") != null) {
-                hosters.add(Hoster(hosterName = "VF", hosterUrl = "$baseUrl$animeUrl#movie-vf", lazy = true))
+            val selectorVF = "div.tabs-sel > a"
+            val selectorVOSTFR = "div.vostfr-links > a"
+
+            if (document.selectFirst(selectorVF) != null) {
+                hosters.add(Hoster(hosterName = "VF", hosterUrl = "$baseUrl$animeUrl#movie", internalData = "VF", lazy = true))
             }
-            if (document.selectFirst("div.vostfr-links a") != null) {
-                hosters.add(Hoster(hosterName = "VOSTFR", hosterUrl = "$baseUrl$animeUrl#movie-vostfr", lazy = true))
+            if (document.selectFirst(selectorVOSTFR) != null) {
+                hosters.add(Hoster(hosterName = "VOSTFR", hosterUrl = "$baseUrl$animeUrl#movie", internalData = "VOSTFR", lazy = true))
             }
         }
+        Log.d(WIFLIX_LOG, "hosterlist = $hosters")
 
         return hosters
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> = coroutineScope {
         val url = hoster.hosterUrl
-        val lang = hoster.hosterName // "VF" or "VOSTFR"
+        val lang = hoster.internalData // "VF" or "VOSTFR"
         val animeUrl = url.substringBefore("#")
         val fragment = url.substringAfter("#")
 
@@ -244,8 +248,7 @@ class Wiflix :
                 document.select("div.$rel a")
             }
         } else {
-            val isVostfr = fragment.endsWith("-vostfr")
-            val selector = if (isVostfr) "div.vostfr-links a" else "div.tabs-sel.linkstab > a"
+            val selector = if (lang == "VOSTFR") "div.vostfr-links > a" else "div.tabs-sel > a"
             document.select(selector)
         }
 
@@ -253,6 +256,7 @@ class Wiflix :
             async {
                 val onclick = link.attr("onclick")
                 val videoUrl = onclick.substringAfter("'").substringBefore("'")
+                Log.d(WIFLIX_LOG, "url = $videoUrl")
                 extractVideos(videoUrl, lang, supportedServers)
             }
         }.awaitAll().flatten().coreSortVideos()

@@ -14,6 +14,7 @@ const val FILEMOON_LOG: String = "FilemoonLog"
 const val JWPLAYER_LOG: String = "JWPlayerLog"
 const val OKRU_LOG: String = "OkruLog"
 const val DOOD_LOG: String = "DoodLog"
+const val VIDARA_LOG: String = "VidaraLog"
 
 // Extension logs
 

@@ -10,6 +10,8 @@ import fr.bluecxt.core.extractors.MymailExtractor
 import fr.bluecxt.core.extractors.OkruExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
+import fr.bluecxt.core.extractors.StreamixExtractor
+import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VkExtractor
 import fr.bluecxt.core.extractors.WaveplayerExtractor
@@ -25,6 +27,8 @@ val DEFAULT_SERVER = listOf(
     "Okru",
     "Mymail",
     "Dood",
+    "Vidara",
+    "Streamix",
 )
 
 /**
@@ -115,6 +119,18 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com",
         ),
         extractor = { url -> DoodExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Vidara" -> VideoServer(
+        name = "Vidara",
+        hosts = listOf("vidara.so", "vidara.to"),
+        extractor = { url -> VidaraExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Streamix" -> VideoServer(
+        name = "Streamix",
+        hosts = listOf("streamix.so", "stmix.io"),
+        extractor = { url -> StreamixExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
