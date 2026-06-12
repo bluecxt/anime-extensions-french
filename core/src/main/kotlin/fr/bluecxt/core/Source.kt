@@ -39,6 +39,15 @@ abstract class Source :
         coerceInputValues = true
     }
 
+    override val client: okhttp3.OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor(CloudflareInterceptor(network.client))
+            .addInterceptor { chain ->
+                logUsage()
+                chain.proceed(chain.request())
+            }.build()
+    }
+
     // ============================ Utils =============================
 
     fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
@@ -347,15 +356,6 @@ abstract class Source :
 
     protected val context: Application by injectLazy()
     protected val handler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
-
-    override val client: okhttp3.OkHttpClient by lazy {
-        network.client.newBuilder()
-            .addInterceptor(CloudflareInterceptor(network.client))
-            .addInterceptor { chain ->
-                logUsage()
-                chain.proceed(chain.request())
-            }.build()
-    }
 
     private fun logUsage() {
         try {
