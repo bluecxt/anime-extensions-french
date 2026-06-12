@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore last upstream SHA
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .last_upstream_sha
           key: upstream-lib-sha-${{ github.workflow }}
@@ -110,7 +110,7 @@ jobs:
 
       - name: Save new Yuzono SHA
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .last_upstream_sha
           key: upstream-lib-sha-${{ github.workflow }}-${{ github.run_id }}
@@ -126,7 +126,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore last Docchi SHA
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .last_docchi_sha
           key: docchi-sha-${{ github.workflow }}
@@ -186,7 +186,7 @@ jobs:
 
       - name: Save new Docchi SHA
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .last_docchi_sha
           key: docchi-sha-${{ github.workflow }}-${{ github.run_id }}
