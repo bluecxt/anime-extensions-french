@@ -66,7 +66,9 @@ interface CommonPreferences : ConfigurableAnimeSource {
      * Récupère l'URL de base actuelle (soit celle modifiée par l'utilisateur, soit celle par défaut).
      */
     val currentBaseUrl: String
-        get() = (this as Source).preferences.getString(PREF_URL_KEY, defaultBaseUrl) ?: defaultBaseUrl
+        get() = (this as Source).preferences.getString(PREF_URL_KEY, defaultBaseUrl)
+            ?.removeSuffix("/")
+            ?: defaultBaseUrl
 
     /**
      * le text affiché en dessous de base_url_pref
@@ -152,13 +154,20 @@ interface CommonPreferences : ConfigurableAnimeSource {
         addEditTextPreference(
             key = key,
             title = title,
-            summary = if (summary.isNullOrBlank()) currentUrl else "Actual URL $currentUrl\n$summary",
+            summary = buildString {
+                append("Actual URL $currentUrl")
+                if (!summary.isNullOrBlank()) append("\n$summary")
+            },
             default = defaultUrl,
             getSummary = { newValue ->
-                if (summary.isNullOrBlank()) {
-                    if (newValue.isBlank()) defaultUrl else newValue
-                } else {
-                    summary
+                buildString {
+                    append("Actual URL ")
+                    if (!newValue.isNullOrBlank()) {
+                        append(newValue.removeSuffix("/"))
+                    } else {
+                        append(currentUrl)
+                    }
+                    if (!summary.isNullOrBlank()) append("\n$summary")
                 }
             },
             onChange = { _, newValue ->

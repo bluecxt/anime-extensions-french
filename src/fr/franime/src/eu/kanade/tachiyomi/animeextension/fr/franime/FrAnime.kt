@@ -31,7 +31,7 @@ class FrAnime :
 
     override val defaultServer = "Vidmoly"
 
-    override val baseUrl by lazy { currentBaseUrl }
+    override val baseUrl: String get() = currentBaseUrl
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super<CommonPreferences>.setupPreferenceScreen(screen)

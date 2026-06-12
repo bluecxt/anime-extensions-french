@@ -46,7 +46,7 @@ class AnimoFlix :
 
     override val defaultBaseUrl = "https://animoflix.to"
 
-    override val baseUrl by lazy { currentBaseUrl }
+    override val baseUrl: String get() = currentBaseUrl
 
     companion object {
         private val seasonRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)|(\d+)$""")

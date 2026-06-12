@@ -40,7 +40,7 @@ class AnimeSama :
     override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Embed4me", "Minochinos")
     override val supportedVoices = arrayOf("VOSTFR", "VF", "VA")
 
-    override val baseUrl by lazy { currentBaseUrl }
+    override val baseUrl: String get() = currentBaseUrl
     override val lang = "fr"
     override val supportsLatest = true
 

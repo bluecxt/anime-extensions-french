@@ -40,7 +40,7 @@ class Wiflix :
 
     override val defaultBaseUrl = "https://flemmix.team"
 
-    override val baseUrl: String by lazy { currentBaseUrl }
+    override val baseUrl: String get() = currentBaseUrl
 
     override val lang = "fr"
 

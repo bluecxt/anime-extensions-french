@@ -43,7 +43,7 @@ class LesPoroiniens :
     override val supportedServers = listOf("Google Drive")
     override val forceShowQualityPreference = false
 
-    override val baseUrl by lazy { currentBaseUrl }
+    override val baseUrl: String get() = currentBaseUrl
 
     override val lang = "fr"
     override val supportsLatest = false
