@@ -14,6 +14,8 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
+// writed using https://github.com/skoruppa/docchi-players/blob/main/vidara.py
+
 open class VidaraExtractor(private val client: OkHttpClient) {
 
     open val apiPath = "/api/stream"

@@ -9,6 +9,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.text.RegexOption
 
+// writed using https://github.com/skoruppa/docchi-players/blob/main/dood.py
+
 class DoodExtractor(private val client: OkHttpClient) {
 
     fun videosFromUrl(url: String): List<ExtractedSource> {
