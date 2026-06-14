@@ -16,7 +16,6 @@
 - [x] lesporoiniens
 - [x] torrentio
 - [x] torrentio anime
-- [ ] adkami
 - [x] animesama
 - [x] animoflix
 - [x] franime
@@ -25,3 +24,4 @@
 - [ ] movix
 - [ ] voiranime
 - [ ] wiflix
+- [ ] adkami
