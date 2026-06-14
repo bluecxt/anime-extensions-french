@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.VOE_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.detectMp4Resolution
@@ -12,6 +13,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 // writed using https://github.com/skoruppa/docchi-players/blob/main/voe.py
@@ -22,9 +24,11 @@ class VoeExtractor(private val client: OkHttpClient) {
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
+        var currentUrl = url
+        Log.d(VOE_LOG, "url = $currentUrl")
         val headers = Headers.Builder()
             .add("User-Agent", DEFAULT_USER_AGENT)
-            .add("Referer", url)
+            .add("Referer", currentUrl)
             .build()
 
         var response = client.newCall(GET(url, headers)).execute()
@@ -36,23 +40,25 @@ class VoeExtractor(private val client: OkHttpClient) {
                 .find(html)?.groupValues?.get(1)
 
             if (redirectUrl != null) {
+                currentUrl = redirectUrl
                 response = client.newCall(GET(redirectUrl, headers)).execute()
                 html = response.body.string()
             }
         }
 
-        return newMethod(html, headers).ifEmpty {
+        return newMethod(html, headers, currentUrl).ifEmpty {
             fallbackMethod(html, headers)
         }
     }
 
-    private suspend fun newMethod(html: String, headers: Headers): List<ExtractedSource> {
+    private suspend fun newMethod(html: String, headers: Headers, url: String): List<ExtractedSource> {
         val match = Regex("""json">\["([^"]+)"]</script>\s*<script\s*src="([^"]+)""")
             .find(html)
             ?: return emptyList()
 
         val encryptedData = match.groupValues.get(1)
-        val scriptUrl = match.groupValues.get(2)
+        val scriptUrl = url.toHttpUrl().resolve(match.groupValues.get(2))?.toString() ?: return emptyList()
+        Log.d(VOE_LOG, "url un newMethod = $scriptUrl")
 
         val response = client.newCall(GET(scriptUrl, headers)).execute()
         if (!response.isSuccessful) {

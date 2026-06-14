@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.network.CloudflareInterceptor
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.Request
@@ -83,11 +84,13 @@ abstract class Source :
         val servers = filteredAllowedServers.mapNotNull { getVideoServer(this, it) }
         val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
 
-        val rawSources = runCatching {
-            server.extractor(playerUrl)
-        }.getOrDefault(emptyList())
+        val rawSources = withTimeoutOrNull(15000) {
+            runCatching {
+                server.extractor(playerUrl)
+            }.getOrNull()
+        } ?: emptyList()
 
-        Log.d(SERVER_LOG, "name = ${server.name} data =  $rawSources")
+        Log.d(SERVER_LOG, "name = ${server.name} isEmpty ${rawSources.isEmpty()}")
 
         return rawSources.map { it.buildFromSource(lang, server.name) }
     }
