@@ -4,7 +4,6 @@ import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
-import fr.bluecxt.core.extractors.JWplayerExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.MymailExtractor
 import fr.bluecxt.core.extractors.OkruExtractor
@@ -13,8 +12,7 @@ import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.StreamixExtractor
 import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
-import fr.bluecxt.core.extractors.VkExtractor
-import fr.bluecxt.core.extractors.WaveplayerExtractor
+import fr.bluecxt.core.extractors.VoeExtractor
 import fr.bluecxt.core.model.VideoServer
 
 val DEFAULT_SERVER = listOf(
@@ -29,6 +27,7 @@ val DEFAULT_SERVER = listOf(
     "Dood",
     "Vidara",
     "Streamix",
+    "Voe",
 )
 
 /**
@@ -131,6 +130,27 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Streamix",
         hosts = listOf("streamix.so", "stmix.io"),
         extractor = { url -> StreamixExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Voe" -> VideoServer(
+        name = "Voe",
+        hosts = listOf(
+            "voe.sx", "voe-unblock.com", "voe-unblock.net", "voeunblock.com", "un-block-voe.net",
+            "voeunbl0ck.com", "voeunblck.com", "voeunblk.com", "voe-un-block.com", "jonathansociallike.com",
+            "voeun-block.net", "v-o-e-unblock.com", "edwardarriveoften.com", "nathanfromsubject.com",
+            "audaciousdefaulthouse.com", "launchreliantcleaverriver.com", "kennethofficialitem.com",
+            "reputationsheriffkennethsand.com", "fittingcentermondaysunday.com", "lukecomparetwo.com",
+            "housecardsummerbutton.com", "fraudclatterflyingcar.com", "wolfdyslectic.com",
+            "bigclatterhomesguideservice.com", "uptodatefinishconferenceroom.com", "jayservicestuff.com",
+            "realfinanceblogcenter.com", "tinycat-voe-fashion.com", "paulkitchendark.com",
+            "metagnathtuggers.com", "gamoneinterrupted.com", "chromotypic.com", "crownmakermacaronicism.com",
+            "generatesnitrosate.com", "yodelswartlike.com", "figeterpiazine.com", "strawberriesporail.com",
+            "valeronevijao.com", "timberwoodanotia.com", "apinchcaseation.com", "nectareousoverelate.com",
+            "nonesnanking.com", "smoki.cc", "chuckle-tube.com", "goofy-banana.com",
+            "voeunblock1.com", "voeunblock2.com", "voeunblock3.com", "voeunblock4.com", "voeunblock5.com",
+            "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
+        ),
+        extractor = { url -> VoeExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null

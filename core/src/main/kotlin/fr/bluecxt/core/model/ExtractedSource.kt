@@ -6,7 +6,7 @@ import okhttp3.HttpUrl
 
 data class ExtractedSource(
     val url: String,
-    val quality: String? = "", // ex: "720p"
+    val quality: String? = null, // ex: "720p"
     val headers: Headers? = null,
     val subtitleTracks: List<Track> = emptyList(),
     val audioTracks: List<Track> = emptyList(),
