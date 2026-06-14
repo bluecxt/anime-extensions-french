@@ -15,9 +15,9 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [x] **OkruExtractor** (`ok.ru`, `odnoklassniki.ru`)
 - [x] **DoodExtractor** (`doodstream.com`, `dood.to`, `dood.watch`, `dood.so`, `dood.la`, `dood.wf`, `dood.pm`, `d0000d.com`, `doods.pro`, `playmogo.com`)
 - [x] **vidara** (`https://flemmix.team/serie-en-streaming/36073-rick-et-morty-saison-9.html`)
+- [x] **VoeExtractor** (`voe.sx`, `voe.un`, `voe.am`, `voe.py`, `voe.to`, `bryantenunder.com`, `vickisaveworker.com`)
 
 ## ❌ Extracteurs Restants
-- [ ] **VoeExtractor** (`voe.sx`, `voe.un`, `voe.am`, `voe.py`, `voe.to`, `bryantenunder.com`, `vickisaveworker.com`)
 - [ ] **StreamTapeExtractor** (`streamtape.com`, `shavetape.com`)
 - [ ] **VidoExtractor** (`vidoza.net`, `vido.lol`, `vido.tv`)
 - [ ] **LuluExtractor** (`luluvdo.com`, `luluvid.com`, `vidsonic.net`, `lulustream.com`, `vidzy.tv`, `vidnest.net`)
