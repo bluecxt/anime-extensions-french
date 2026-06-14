@@ -71,7 +71,6 @@ class VoeExtractor(private val client: OkHttpClient) {
             .find(scriptContent)
         if (replMatch == null) return emptyList()
         val decoded = voeDecode(encryptedData, replMatch.groupValues.get(1))
-        Log.d(VOE_LOG, "JSON décodé : $decoded")
 
         val streamUrl = listOf("file", "source", "direct_access_url")
             .firstNotNullOfOrNull { key -> decoded?.get(key)?.jsonPrimitive?.content }
