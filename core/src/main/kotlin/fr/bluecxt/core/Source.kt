@@ -84,7 +84,7 @@ abstract class Source :
         val servers = filteredAllowedServers.mapNotNull { getVideoServer(this, it) }
         val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
 
-        val rawSources = withTimeoutOrNull(15000) {
+        val rawSources = withTimeoutOrNull(30000) {
             runCatching {
                 server.extractor(playerUrl)
             }.getOrNull()
