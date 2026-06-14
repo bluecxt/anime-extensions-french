@@ -1,6 +1,7 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.model.ExtractedSource
@@ -15,7 +16,7 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
 
     private val cookieList = client.cookieJar.loadForRequest("https://drive.google.com".toHttpUrl())
 
-    fun videosFromUrl(itemId: String): List<ExtractedSource> {
+    suspend fun videosFromUrl(itemId: String): List<ExtractedSource> {
         val videoList = mutableListOf<ExtractedSource>()
 
         val initialVideoUrl = "https://drive.usercontent.google.com/download?id=$itemId"
@@ -28,7 +29,7 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
 
         val docResp = client.newCall(
             GET(initialVideoUrl, docHeaders),
-        ).execute()
+        ).awaitSuccess()
 
         if (!docResp.peekBody(15).string().equals("<!DOCTYPE html>", true)) {
             videoList.add(

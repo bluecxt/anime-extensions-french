@@ -1,6 +1,7 @@
 package fr.bluecxt.core.utils
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -18,8 +19,8 @@ suspend fun OkHttpClient.detectMp4Resolution(url: String, headers: Headers): Int
             .build()
 
         val response = try {
-            newCall(GET(url, requestHeaders)).execute()
-        } catch (_: IOException) {
+            newCall(GET(url, requestHeaders)).awaitSuccess()
+        } catch (_: Exception) {
             return@withTimeoutOrNull null
         }
 

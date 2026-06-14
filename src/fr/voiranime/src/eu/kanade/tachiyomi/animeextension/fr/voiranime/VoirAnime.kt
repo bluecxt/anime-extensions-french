@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.vkextractor.VkExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.addBaseUrlPreference
@@ -59,7 +60,7 @@ class VoirAnime : Source() {
 
     // ============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/series/?page=$page&order=popular", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/series/?page=$page&order=popular", headers)).awaitSuccess()
         val document = response.asJsoup()
         val items = document.select("div.listupd article.bs").map { element ->
             SAnime.create().apply {
@@ -74,7 +75,7 @@ class VoirAnime : Source() {
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/series/?page=$page&order=update", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/series/?page=$page&order=update", headers)).awaitSuccess()
         val document = response.asJsoup()
         val items = document.select("div.listupd article.bs").map { element ->
             SAnime.create().apply {
@@ -92,7 +93,7 @@ class VoirAnime : Source() {
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
-            val response = client.newCall(GET("$baseUrl/series/$id", headers)).execute()
+            val response = client.newCall(GET("$baseUrl/series/$id", headers)).awaitSuccess()
             val document = response.asJsoup()
             val anime = SAnime.create().apply {
                 title = document.selectFirst("h1.entry-title")?.text() ?: ""
@@ -112,7 +113,7 @@ class VoirAnime : Source() {
                 .headers(headers)
                 .addHeader("X-Requested-With", "XMLHttpRequest")
                 .build(),
-        ).execute()
+        ).awaitSuccess()
         return parseSearchPage(response.body.string())
     }
 
@@ -145,7 +146,7 @@ class VoirAnime : Source() {
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
         val document = response.asJsoup()
 
         anime.title = document.selectFirst("h1.entry-title")?.text() ?: anime.title
@@ -163,7 +164,7 @@ class VoirAnime : Source() {
 
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
         val document = response.asJsoup()
 
         val tmdbMetadata = fetchTmdbMetadata(anime.title)
@@ -196,7 +197,7 @@ class VoirAnime : Source() {
 
     // ============================ Video Links =============================
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val response = client.newCall(GET(baseUrl + episode.url, headers)).execute()
+        val response = client.newCall(GET(baseUrl + episode.url, headers)).awaitSuccess()
         val document = response.asJsoup()
         val lang = if (episode.scanlator == "VF") "VF" else "VOSTFR"
 

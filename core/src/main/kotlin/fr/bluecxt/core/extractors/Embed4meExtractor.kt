@@ -1,6 +1,7 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -21,7 +22,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
 
     private val json: Json by injectLazy()
 
-    fun videosFromUrl(url: String): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
         val videoId = when {
             decodedUrl.contains("#") -> decodedUrl.substringAfterLast("#").trim()
@@ -43,7 +44,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
             .build()
 
         return try {
-            val response = client.newCall(eu.kanade.tachiyomi.network.GET(apiUrl, headers)).execute()
+            val response = client.newCall(eu.kanade.tachiyomi.network.GET(apiUrl, headers)).awaitSuccess()
             val responseBody = response.body.string().trim()
 
             android.util.Log.d("Embed4me", "API Response length: ${responseBody.length}")

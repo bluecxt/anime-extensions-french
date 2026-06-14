@@ -2,6 +2,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
@@ -24,8 +25,8 @@ class OkruExtractor(private val client: OkHttpClient) {
         return qualities.find { it.first == quality }?.second ?: quality
     }
 
-    fun videosFromUrl(url: String): List<ExtractedSource> {
-        val document = client.newCall(GET(url)).execute().asJsoup()
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
+        val document = client.newCall(GET(url)).awaitSuccess().asJsoup()
         val videoString = document.selectFirst("div[data-options]")
             ?.attr("data-options")
             ?: return emptyList<ExtractedSource>()

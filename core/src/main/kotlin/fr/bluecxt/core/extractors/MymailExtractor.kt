@@ -1,6 +1,7 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -10,11 +11,11 @@ class MymailExtractor(private val client: OkHttpClient) {
     private companion object {
         const val API = "https://my.mail.ru/+/video/meta/"
     }
-    fun videosFromUrl(url: String): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val id = url.trimEnd('/').substringAfterLast("/")
         val apiUrl = API + id
 
-        val response = client.newCall(GET(apiUrl)).execute()
+        val response = client.newCall(GET(apiUrl)).awaitSuccess()
         if (!response.isSuccessful) return emptyList()
 
         val json = JSONObject(response.body.string())

@@ -3,6 +3,7 @@ package fr.bluecxt.core.extractors
 import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VOE_LOG
 import fr.bluecxt.core.model.ExtractedSource
@@ -31,7 +32,7 @@ class VoeExtractor(private val client: OkHttpClient) {
             .add("Referer", currentUrl)
             .build()
 
-        var response = client.newCall(GET(url, headers)).execute()
+        var response = client.newCall(GET(url, headers)).awaitSuccess()
         var html = response.body.string()
 
         // Check for redirect
@@ -41,7 +42,7 @@ class VoeExtractor(private val client: OkHttpClient) {
 
             if (redirectUrl != null) {
                 currentUrl = redirectUrl
-                response = client.newCall(GET(redirectUrl, headers)).execute()
+                response = client.newCall(GET(redirectUrl, headers)).awaitSuccess()
                 html = response.body.string()
             }
         }
@@ -60,7 +61,7 @@ class VoeExtractor(private val client: OkHttpClient) {
         val scriptUrl = url.toHttpUrl().resolve(match.groupValues.get(2))?.toString() ?: return emptyList()
         Log.d(VOE_LOG, "url un newMethod = $scriptUrl")
 
-        val response = client.newCall(GET(scriptUrl, headers)).execute()
+        val response = client.newCall(GET(scriptUrl, headers)).awaitSuccess()
         if (!response.isSuccessful) {
             response.close()
             return emptyList()

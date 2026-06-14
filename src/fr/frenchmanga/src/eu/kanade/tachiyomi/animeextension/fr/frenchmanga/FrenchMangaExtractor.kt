@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.animeextension.fr.frenchmanga
 
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -13,7 +14,7 @@ class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl
 
     private val defaultua = DEFAULT_USER_AGENT
 
-    fun videosFromUrl(url: String, prefix: String): List<Video> {
+    suspend fun videosFromUrl(url: String, prefix: String): List<Video> {
         val videos = mutableListOf<Video>()
         val playerUri = try {
             url.toHttpUrl()
@@ -34,7 +35,7 @@ class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl
             .build()
 
         try {
-            val response = client.newCall(GET(url, headers)).execute()
+            val response = client.newCall(GET(url, headers)).awaitSuccess()
             if (!response.isSuccessful) return emptyList()
 
             // Vidzy deep hunt: Simulate the "Download" button to get the real MP4
@@ -45,7 +46,7 @@ class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl
                 listOf("${videoId}_n.html", "${videoId}_o.html", "$videoId.html").forEach { path ->
                     val dlUrl = "https://vidzy.org/d/$path"
                     try {
-                        val dlHtml = client.newCall(GET(dlUrl, headers)).execute().use { it.body.string() }
+                        val dlHtml = client.newCall(GET(dlUrl, headers)).awaitSuccess().use { it.body.string() }
 
                         val op = findTag(dlHtml, "op")
                         val id = findTag(dlHtml, "id")
@@ -58,7 +59,7 @@ class FrenchMangaExtractor(private val client: OkHttpClient, private val siteUrl
                                 .build()
 
                             val postHeaders = headers.newBuilder().add("Referer", dlUrl).build()
-                            client.newCall(Request.Builder().url(dlUrl).post(formBody).headers(postHeaders).build()).execute().use { postRes ->
+                            client.newCall(Request.Builder().url(dlUrl).post(formBody).headers(postHeaders).build()).awaitSuccess().use { postRes ->
                                 if (postRes.isSuccessful) {
                                     val resultHtml = postRes.body.string()
                                     val directLinkMatcher = Pattern.compile("""<a[^>]+href="([^"]+)"[^>]+class="main-button"""").matcher(resultHtml)

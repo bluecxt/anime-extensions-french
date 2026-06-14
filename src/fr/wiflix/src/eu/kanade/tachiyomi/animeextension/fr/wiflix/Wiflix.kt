@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
@@ -134,7 +135,7 @@ class Wiflix :
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val url = "$baseUrl${anime.url}"
         Log.d(WIFLIX_LOG, url)
-        val response = client.newCall(GET(url)).execute()
+        val response = client.newCall(GET(url)).awaitSuccess()
         val document = response.asJsoup()
 
         val description = document.selectFirst("p[itemprop=description]")?.text()
@@ -196,7 +197,7 @@ class Wiflix :
         val animeUrl = episode.url.substringBefore("#")
         val fragment = episode.url.substringAfter("#")
 
-        val response = client.newCall(GET(baseUrl.removeSuffix("/") + animeUrl)).execute()
+        val response = client.newCall(GET(baseUrl.removeSuffix("/") + animeUrl)).awaitSuccess()
         val document = response.asJsoup()
 
         val hosters = mutableListOf<Hoster>()
@@ -233,7 +234,7 @@ class Wiflix :
         val animeUrl = url.substringBefore("#")
         val fragment = url.substringAfter("#")
 
-        val response = client.newCall(GET(animeUrl)).execute()
+        val response = client.newCall(GET(animeUrl)).awaitSuccess()
         val document = response.asJsoup()
 
         val serverLinks = if (fragment.startsWith("group-")) {

@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.DEFAULT_USER_AGENT
@@ -115,7 +116,7 @@ class AnimesUltra : Source() {
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
-        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
         val document = response.asJsoup()
         val items = document.select(".block_area_trending .swiper-slide").map { element ->
             SAnime.create().apply {
@@ -157,12 +158,12 @@ class AnimesUltra : Source() {
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/xfsearch/statut/En%20Cours/page/$page/", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/xfsearch/statut/En%20Cours/page/$page/", headers)).awaitSuccess()
         return parseAnimesPage(response.asJsoup())
     }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query", headers)).awaitSuccess()
         return parseAnimesPage(response.asJsoup())
     }
 
@@ -179,7 +180,7 @@ class AnimesUltra : Source() {
         }
 
         val targetUrl = urlMap.vostfr ?: urlMap.vf ?: return anime
-        val document = client.newCall(GET(baseUrl + targetUrl, headers)).execute().asJsoup()
+        val document = client.newCall(GET(baseUrl + targetUrl, headers)).awaitSuccess().asJsoup()
 
         val pageTitle = document.selectFirst("h2.film-name")?.text() ?: anime.title
         val cleanedTitle = cleanTitle(pageTitle)
@@ -204,10 +205,10 @@ class AnimesUltra : Source() {
         return anime
     }
 
-    private fun discoverVersions(cleanedTitle: String, currentMap: AnimeUrl): AnimeUrl {
+    private suspend fun discoverVersions(cleanedTitle: String, currentMap: AnimeUrl): AnimeUrl {
         val newMap = currentMap.copy()
         try {
-            val searchResponse = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$cleanedTitle", headers)).execute()
+            val searchResponse = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$cleanedTitle", headers)).awaitSuccess()
             val searchDoc = searchResponse.asJsoup()
             searchDoc.select("div.flw-item h3.film-name a").forEach { link ->
                 val foundUrl = link.attr("abs:href").substringAfter(baseUrl)
@@ -242,11 +243,11 @@ class AnimesUltra : Source() {
         val episodesMap = mutableMapOf<String, MutableMap<String, String>>()
         val tmdbMetadata = fetchTmdbMetadata(anime.title)
 
-        val fetch = { path: String?, lang: String ->
+        suspend fun fetch(path: String?, lang: String) {
             if (path != null) {
                 val newsId = getNewsId(path)
                 val ajaxUrl = "$baseUrl/engine/ajax/full-story.php?newsId=$newsId&d=${System.currentTimeMillis()}"
-                val response = client.newCall(GET(ajaxUrl, headers.newBuilder().add("Referer", baseUrl + path).build())).execute()
+                val response = client.newCall(GET(ajaxUrl, headers.newBuilder().add("Referer", baseUrl + path).build())).awaitSuccess()
                 val body = response.body.string()
                 val html = if (body.trim().startsWith("{")) {
                     try {
@@ -304,7 +305,7 @@ class AnimesUltra : Source() {
             val langTag = lang.uppercase()
             val url = if (path.startsWith("http")) path else baseUrl + path
             val response = try {
-                client.newCall(GET(url, headers)).execute()
+                client.newCall(GET(url, headers)).awaitSuccess()
             } catch (_: Exception) {
                 null
             } ?: return@forEach
@@ -342,7 +343,7 @@ class AnimesUltra : Source() {
             try {
                 val newsId = getNewsId(path)
                 val ajaxUrl = "$baseUrl/engine/ajax/full-story.php?newsId=$newsId&d=${System.currentTimeMillis()}"
-                val ajaxBody = client.newCall(GET(ajaxUrl, headers.newBuilder().add("Referer", url).build())).execute().body.string()
+                val ajaxBody = client.newCall(GET(ajaxUrl, headers.newBuilder().add("Referer", url).build())).awaitSuccess().body.string()
                 val html = if (ajaxBody.trim().startsWith("{")) json.decodeFromString<FullStoryResponse>(ajaxBody).html else ajaxBody
                 findHosters(Jsoup.parse(html))
             } catch (_: Exception) {}

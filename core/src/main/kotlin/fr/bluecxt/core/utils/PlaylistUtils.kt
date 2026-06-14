@@ -31,7 +31,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
      * @param audioList initial list of audio tracks
      * @param toStandardQuality function to map resolution to a standard string (e.g. 1080p)
      */
-    fun extractFromHls(
+    suspend fun extractFromHls(
         playlistUrl: String,
         referer: String = playlistUrl.toDefaultReferer(),
         masterHeaders: Headers,
@@ -62,7 +62,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
      * @param audioList initial list of audio tracks
      * @param toStandardQuality function to map resolution to a standard string (e.g. 1080p)
      */
-    fun extractFromHls(
+    suspend fun extractFromHls(
         playlistUrl: String,
         referer: String = playlistUrl.toDefaultReferer(),
         masterHeadersGen: (Headers, String) -> Headers = ::generateMasterHeaders,
@@ -78,7 +78,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         val masterHeaders = masterHeadersGen(headers, referer)
 
         val masterPlaylist = client.newCall(GET(playlistUrl, masterHeaders))
-            .execute().bodyString()
+            .awaitSuccess().bodyString()
 
         // Check if there isn't multiple streams available
         if (PLAYLIST_SEPARATOR !in masterPlaylist) {
@@ -163,7 +163,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
      * @param toStandardQuality function to map resolution to a standard string (e.g. 1080p)
      */
     @Suppress("unused")
-    fun extractFromDash(
+    suspend fun extractFromDash(
         mpdUrl: String,
         mpdHeaders: Headers,
         videoHeaders: Headers,
@@ -195,7 +195,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
      * @param toStandardQuality function to map resolution to a standard string (e.g. 1080p)
      */
     @Suppress("MemberVisibilityCanBePrivate")
-    fun extractFromDash(
+    suspend fun extractFromDash(
         mpdUrl: String,
         referer: String = mpdUrl.toDefaultReferer(),
         mpdHeadersGen: (Headers, String) -> Headers = ::generateMasterHeaders,
@@ -211,7 +211,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         val mpdHeaders = mpdHeadersGen(headers, referer)
 
         val doc = client.newCall(GET(mpdUrl, mpdHeaders))
-            .execute().useAsJsoup()
+            .awaitSuccess().useAsJsoup()
 
         // Get audio tracks
         val audioTracks = audioList + doc.select("Representation[mimetype~=audio]").map { audioSrc ->

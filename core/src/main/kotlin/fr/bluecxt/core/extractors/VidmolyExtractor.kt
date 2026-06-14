@@ -1,6 +1,7 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
@@ -36,12 +37,12 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = comm
         val backupUrl = BASE_URL + iframeUrl.safeRelativePath(BASE_URL)
 
         val deferredOriginal = async {
-            runCatching { client.newCall(GET(iframeUrl, headers)).execute() }.getOrNull()
+            runCatching { client.newCall(GET(iframeUrl, headers)).await() }.getOrNull()
         }
 
         val deferredBackup = async {
             if (backupUrl != iframeUrl) {
-                runCatching { client.newCall(GET(backupUrl, headers)).execute() }.getOrNull()
+                runCatching { client.newCall(GET(backupUrl, headers)).await() }.getOrNull()
             } else {
                 null
             }

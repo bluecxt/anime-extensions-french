@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
 import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.addBaseUrlPreference
@@ -66,7 +67,7 @@ open class FrenchManga(
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/manga-streaming-1/coups-de-cur/page/$page/?m_orderby=views", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/manga-streaming-1/coups-de-cur/page/$page/?m_orderby=views", headers)).awaitSuccess()
         val document = response.asJsoup()
         val animes = document.select("div.short").map { element ->
             SAnime.create().apply {
@@ -110,7 +111,7 @@ open class FrenchManga(
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/manga-streaming/page/$page/", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/manga-streaming/page/$page/", headers)).awaitSuccess()
         val document = response.asJsoup()
         val animes = document.select("div.short").map { element ->
             SAnime.create().apply {
@@ -130,7 +131,7 @@ open class FrenchManga(
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
-            val response = client.newCall(GET("$baseUrl/index.php?newsid=$id", headers)).execute()
+            val response = client.newCall(GET("$baseUrl/index.php?newsid=$id", headers)).awaitSuccess()
             val document = response.asJsoup()
             val anime = SAnime.create().apply {
                 title = document.selectFirst("h1")?.text() ?: ""
@@ -151,7 +152,7 @@ open class FrenchManga(
                 .headers(headers)
                 .addHeader("X-Requested-With", "XMLHttpRequest")
                 .build(),
-        ).execute()
+        ).awaitSuccess()
 
         val document = org.jsoup.Jsoup.parse(response.body.string(), baseUrl)
         val animes = document.select("div.search-item").map { element ->
@@ -182,7 +183,7 @@ open class FrenchManga(
         } catch (_: Exception) {
             listOf(anime.url)
         }
-        val response = client.newCall(GET("$baseUrl/index.php?newsid=${ids.first()}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/index.php?newsid=${ids.first()}", headers)).awaitSuccess()
         val document = response.asJsoup()
 
         anime.description = (document.selectFirst(".fdesc")?.text() ?: document.select(".full-story").text()).trim()
@@ -214,7 +215,7 @@ open class FrenchManga(
         ids.forEach { newsId ->
             val ajaxUrl = "$baseUrl/engine/ajax/manga_episodes_api.php?id=$newsId"
             try {
-                val ajaxResponse = client.newCall(GET(ajaxUrl, headers)).execute()
+                val ajaxResponse = client.newCall(GET(ajaxUrl, headers)).awaitSuccess()
                 val jsonResponse = json.parseToJsonElement(ajaxResponse.body.string()).jsonObject
 
                 listOf("vf", "vostfr").forEach { langType ->

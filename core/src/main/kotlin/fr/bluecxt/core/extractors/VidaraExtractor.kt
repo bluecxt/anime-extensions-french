@@ -2,6 +2,7 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VIDARA_LOG
 import fr.bluecxt.core.model.ExtractedSource
@@ -22,7 +23,7 @@ open class VidaraExtractor(private val client: OkHttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun videosFromUrl(url: String): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val regex = Regex("""/(?:e|v)/([0-9a-zA-Z]+)""")
         val mediaId = regex.find(url)?.groupValues?.get(1) ?: return emptyList()
         Log.d(VIDARA_LOG, "Extracted mediaId: $mediaId")
@@ -45,11 +46,10 @@ open class VidaraExtractor(private val client: OkHttpClient) {
             "device" to "web",
         ).toJsonRequestBody()
 
-        val response = client.newCall(POST(apiUrl, headers, payload)).execute()
-
-        if (!response.isSuccessful) {
-            Log.e(VIDARA_LOG, "API request failed with code: ${response.code}")
-            response.close()
+        val response = try {
+            client.newCall(POST(apiUrl, headers, payload)).awaitSuccess()
+        } catch (e: Exception) {
+            Log.e(VIDARA_LOG, "API request failed: ${e.message}")
             return emptyList()
         }
 

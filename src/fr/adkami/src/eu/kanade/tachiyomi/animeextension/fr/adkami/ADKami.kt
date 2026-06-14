@@ -20,12 +20,14 @@ import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
 import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.addBaseUrlPreference
 import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.withDefaultHeaders
+import keiyoushi.utils.parallelMapNotNull
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -61,13 +63,13 @@ class ADKami : Source() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/video?t=4&order=3&page=$page", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/video?t=4&order=3&page=$page", headers)).awaitSuccess()
         return parseAnimesPage(response)
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/hentai-streaming?page=$page", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/hentai-streaming?page=$page", headers)).awaitSuccess()
         return parseAnimesPage(response)
     }
 
@@ -75,7 +77,7 @@ class ADKami : Source() {
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
-            val response = client.newCall(GET("$baseUrl/hentai/$id", headers)).execute()
+            val response = client.newCall(GET("$baseUrl/hentai/$id", headers)).awaitSuccess()
             val document = response.asJsoup()
             val anime = SAnime.create().apply {
                 title = document.selectFirst(".fiche-info h1")?.text() ?: ""
@@ -89,7 +91,7 @@ class ADKami : Source() {
 
         // Random mode
         if (searchFilters.randomOnly) {
-            val response = client.newCall(GET("$baseUrl/hentai-streaming", headers)).execute()
+            val response = client.newCall(GET("$baseUrl/hentai-streaming", headers)).awaitSuccess()
             return parseAnimesPage(response, "div.hentai-random-block:nth-child(2) > div.h-card")
         }
 
@@ -114,7 +116,7 @@ class ADKami : Source() {
                     .post(body)
                     .headers(ajaxHeaders)
                     .build(),
-            ).execute()
+            ).awaitSuccess()
 
             return parseAnimesPage(response)
         }
@@ -141,7 +143,7 @@ class ADKami : Source() {
             url.addQueryParameter("genres[]", genreId)
         }
 
-        val response = client.newCall(GET(url.build(), headers)).execute()
+        val response = client.newCall(GET(url.build(), headers)).awaitSuccess()
         return parseAnimesPage(response)
     }
 
@@ -237,7 +239,7 @@ class ADKami : Source() {
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
 
         anime.title = document.selectFirst("h1.title-header-video")?.text()?.substringBefore(" - Episode")
@@ -281,7 +283,7 @@ class ADKami : Source() {
 
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
         val episodes = mutableListOf<SEpisode>()
 
@@ -364,7 +366,7 @@ class ADKami : Source() {
             } else {
                 (baseUrl + (if (rawUrl.startsWith("/")) "" else "/") + rawUrl).toHttpUrl()
             }
-            val response = client.newCall(GET(fullUrl.newBuilder().query(null).build(), headers)).execute()
+            val response = client.newCall(GET(fullUrl.newBuilder().query(null).build(), headers)).awaitSuccess()
             val document = response.asJsoup()
             val lang = fullUrl.queryParameter("lang")?.ifBlank { "VOSTFR" } ?: "VOSTFR"
 
@@ -448,10 +450,10 @@ class ADKami : Source() {
 
         return videos.map {
             it.withDefaultHeaders(baseUrl).copy(videoTitle = cleanQuality(it.videoTitle))
-        }.filter { isLinkValid(it) }.sortVideos()
+        }.parallelMapNotNull { if (isLinkValid(it)) it else null }.sortVideos()
     }
 
-    private fun isLinkValid(video: Video): Boolean {
+    private suspend fun isLinkValid(video: Video): Boolean {
         val url = video.videoUrl
         if (url.isBlank()) return false
         if (video.videoTitle.contains("Voe:MP4", ignoreCase = true) || video.videoTitle.contains("Unknown", ignoreCase = true)) return false
@@ -463,7 +465,7 @@ class ADKami : Source() {
                 .headers(video.headers ?: headers)
                 .addHeader("Range", "bytes=0-1")
                 .build()
-            client.newCall(request).execute().use { response ->
+            client.newCall(request).awaitSuccess().use { response ->
                 val code = response.code
                 val contentType = response.header("Content-Type")?.lowercase() ?: ""
                 (response.isSuccessful || code == 403) && !contentType.contains("text/html")

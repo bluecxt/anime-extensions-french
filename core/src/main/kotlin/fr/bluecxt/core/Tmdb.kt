@@ -2,6 +2,7 @@ package fr.bluecxt.core
 
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -91,10 +92,10 @@ fun Source.isTitleSimilar(q1: String, q2: String): Boolean = calculateSimilarity
  * Fetches metadata from TMDB specifically for a movie.
  * Only returns a result if there's exactly one match to ensure accuracy.
  */
-fun Source.fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR"): TmdbMetadata? {
+suspend fun Source.fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR"): TmdbMetadata? {
     val searchUrl = "$TMDB_BASE_URL/search/movie?api_key=$TMDB_API_KEY&query=${URLEncoder.encode(query, "UTF-8")}&language=$lang"
     return try {
-        val response = client.newCall(GET(searchUrl)).execute().use { it.body.string() }
+        val response = client.newCall(GET(searchUrl)).awaitSuccess().use { it.body.string() }
         val json = JSONObject(response)
         val results = json.getJSONArray("results")
         if (json.getInt("total_results") == 1) {
@@ -177,7 +178,7 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
     val searchUrl = "$TMDB_BASE_URL/$searchPath?api_key=$TMDB_API_KEY&query=${URLEncoder.encode(query, "UTF-8")}&language=$lang"
 
     try {
-        val response = client.newCall(GET(searchUrl)).execute().use { it.body.string() }
+        val response = client.newCall(GET(searchUrl)).awaitSuccess().use { it.body.string() }
         val results = JSONObject(response).getJSONArray("results")
         if (results.length() == 0) {
             return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
@@ -211,7 +212,7 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
                 val altUrl = "$TMDB_BASE_URL/$mType/$bestId/alternative_titles?api_key=$TMDB_API_KEY"
                 var altScore = 0
                 try {
-                    val altRes = client.newCall(GET(altUrl)).execute().use { it.body.string() }
+                    val altRes = client.newCall(GET(altUrl)).awaitSuccess().use { it.body.string() }
                     val altArray = JSONObject(altRes).getJSONArray("results")
                     for (j in 0 until altArray.length()) {
                         val alt = altArray.getJSONObject(j).optString("title")
@@ -259,11 +260,11 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
     }
 }
 
-private fun Source.constructMetadata(id: Int, mediaType: String, season: Int, lang: String): TmdbMetadata? {
+private suspend fun Source.constructMetadata(id: Int, mediaType: String, season: Int, lang: String): TmdbMetadata? {
     return try {
         // Fetch full details to get author/artist/studios/status
         val detailUrl = "$TMDB_BASE_URL/$mediaType/$id?api_key=$TMDB_API_KEY&language=$lang&append_to_response=credits"
-        val detailResponse = client.newCall(GET(detailUrl)).execute().use { it.body.string() }
+        val detailResponse = client.newCall(GET(detailUrl)).awaitSuccess().use { it.body.string() }
         val detailJson = JSONObject(detailResponse)
 
         val mainPoster = detailJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
@@ -323,7 +324,7 @@ private fun Source.constructMetadata(id: Int, mediaType: String, season: Int, la
             val originalLang = detailJson.optString("original_language", "ja")
 
             // TV Series - Fetch season data (Requested language first)
-            val langSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$lang")).execute().use { it.body.string() }
+            val langSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$lang")).awaitSuccess().use { it.body.string() }
             val langSeasonJson = JSONObject(langSeasonBody)
             val langEpisodes = langSeasonJson.optJSONArray("episodes") ?: JSONArray()
 
@@ -341,7 +342,7 @@ private fun Source.constructMetadata(id: Int, mediaType: String, season: Int, la
 
             val fallbackEpisodes = if (needsFallback && lang != "en-US") {
                 try {
-                    val enSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=en-US")).execute().use { it.body.string() }
+                    val enSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=en-US")).awaitSuccess().use { it.body.string() }
                     JSONObject(enSeasonBody).optJSONArray("episodes")
                 } catch (_: Exception) {
                     null
@@ -366,7 +367,7 @@ private fun Source.constructMetadata(id: Int, mediaType: String, season: Int, la
 
             val origEpisodes = if (needsOriginal && originalLang != "en" && originalLang != "fr") {
                 try {
-                    val origSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$originalLang")).execute().use { it.body.string() }
+                    val origSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$originalLang")).awaitSuccess().use { it.body.string() }
                     JSONObject(origSeasonBody).optJSONArray("episodes")
                 } catch (_: Exception) {
                     null
@@ -411,7 +412,7 @@ private fun Source.constructMetadata(id: Int, mediaType: String, season: Int, la
                 }
                 if (offset > 0) {
                     try {
-                        val s1Body = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/1?api_key=$TMDB_API_KEY&language=$lang")).execute().use { it.body.string() }
+                        val s1Body = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/1?api_key=$TMDB_API_KEY&language=$lang")).awaitSuccess().use { it.body.string() }
                         val s1Episodes = JSONObject(s1Body).optJSONArray("episodes")
                         if (s1Episodes != null) {
                             for (i in 0 until s1Episodes.length()) {

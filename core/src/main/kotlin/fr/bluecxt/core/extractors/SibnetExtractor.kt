@@ -1,6 +1,7 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
@@ -10,12 +11,12 @@ import okhttp3.OkHttpClient
 
 class SibnetExtractor(private val client: OkHttpClient) {
 
-    fun videosFromUrl(url: String): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val videoList = mutableListOf<ExtractedSource>()
 
         val document = client.newCall(
             GET(url),
-        ).execute().asJsoup()
+        ).awaitSuccess().asJsoup()
         val script = document.selectFirst("script:containsData(player.src)")?.data() ?: return emptyList()
         val slug = script.substringAfter("player.src").substringAfter("src:")
             .substringAfter("\"").substringBefore("\"")

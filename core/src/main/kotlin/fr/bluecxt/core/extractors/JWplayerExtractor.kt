@@ -11,9 +11,13 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.JWPLAYER_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -29,7 +33,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
     private val handler by lazy { Handler(Looper.getMainLooper()) }
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
-    fun videosFromUrl(url: String, headers: Headers? = null): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String, headers: Headers? = null): List<ExtractedSource> = withContext(Dispatchers.IO) {
         val httpUrl = url.toHttpUrl()
         val host = httpUrl.host
 
@@ -38,7 +42,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
         // 1. Sniffing du flux m3u8 via WebView
         val m3u8Url = sniffM3u8(url)
 
-        return if (m3u8Url != null) {
+        if (m3u8Url != null) {
             Log.d(JWPLAYER_LOG, "✅ [MATCH] Flux intercepté: $m3u8Url")
 
             val finalHeaders = (headers?.newBuilder() ?: Headers.Builder())
@@ -60,7 +64,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun sniffM3u8(url: String, timeoutSeconds: Long = 35): String? {
+    private suspend fun sniffM3u8(url: String, timeoutSeconds: Long = 35): String? = withContext(Dispatchers.IO) {
         val latch = CountDownLatch(1)
         var interceptedUrl: String? = null
         var webView: WebView? = null
@@ -110,7 +114,9 @@ class JWplayerExtractor(private val client: OkHttpClient) {
 
                         if (isPotentialHtml && reqUrl != url) {
                             try {
-                                val response = client.newCall(Request.Builder().url(reqUrl).build()).execute()
+                                val response = runBlocking {
+                                    client.newCall(Request.Builder().url(reqUrl).build()).awaitSuccess()
+                                }
                                 if (response.header("Content-Type")?.contains("text/html") == true) {
                                     Log.d(JWPLAYER_LOG, "💉 [INJECT] Iframe HTML identifiée : $reqUrl")
                                     val html = response.body.string()
@@ -157,6 +163,6 @@ class JWplayerExtractor(private val client: OkHttpClient) {
             webView?.stopLoading()
             webView?.destroy()
         }
-        return interceptedUrl
+        interceptedUrl
     }
 }

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.ANIMESAMA_LOG
@@ -157,7 +158,7 @@ class AnimeSama :
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val animeUrlPath = anime.url.substringBefore("#")
-        val response = client.newCall(GET("$baseUrl$animeUrlPath")).execute()
+        val response = client.newCall(GET("$baseUrl$animeUrlPath")).awaitSuccess()
         val doc = response.asJsoup()
 
         val rawUrl = "$baseUrl$animeUrlPath".toHttpUrl()
@@ -176,7 +177,7 @@ class AnimeSama :
             doc
         } else {
             try {
-                client.newCall(GET(hubUrl)).execute().asJsoup()
+                client.newCall(GET(hubUrl)).awaitSuccess().asJsoup()
             } catch (_: Exception) {
                 doc
             }
@@ -304,7 +305,7 @@ class AnimeSama :
     }
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
-        val res = client.newCall(GET("$baseUrl${anime.url}")).execute()
+        val res = client.newCall(GET("$baseUrl${anime.url}")).awaitSuccess()
         return fetchAnimeSeasons(res).onEach { it.fetch_type = FetchType.Episodes }
     }
 
@@ -320,7 +321,7 @@ class AnimeSama :
         // If it's a hub (no season/film/oav in URL) but we are in Episode mode,
         // it means there's only one season, or we want to show the first one.
         if (isHub) {
-            val response = client.newCall(GET("$baseUrl$animeUrlPath/")).execute()
+            val response = client.newCall(GET("$baseUrl$animeUrlPath/")).awaitSuccess()
             val doc = response.asJsoup()
             val scripts = doc.select("script").toString()
             val uncommented = commentRegex.replace(scripts, "")
@@ -622,7 +623,7 @@ class AnimeSama :
             try {
                 val rootPath = animeUrlPath.replace(Regex("/(saison|film|oav|special|hs|kai|partie|part).*"), "")
                 val mainUrl = "$baseUrl$rootPath/"
-                val mainDoc = client.newCall(GET(mainUrl)).execute().use { it.body.string() }
+                val mainDoc = client.newCall(GET(mainUrl)).awaitSuccess().use { it.body.string() }
                 val uncommented = commentRegex.replace(mainDoc, "")
 
                 // Merge redundant panels in offset calculation too
@@ -723,7 +724,7 @@ class AnimeSama :
             var names = emptyList<String>()
             for (url in urlsToTry) {
                 try {
-                    val response = client.newCall(GET(url, headers)).execute()
+                    val response = client.newCall(GET(url, headers)).awaitSuccess()
                     if (!response.isSuccessful) continue
                     val doc = response.body.string()
                     val regex = Regex("""newSPF\s*\(\s*['"](.*?)['"]\s*\)""")
@@ -843,7 +844,7 @@ class AnimeSama :
         val counts = jsPaths.parallelMap { p ->
             try {
                 val docUrl = "$baseUrl$p/episodes.js"
-                val js = client.newCall(GET(docUrl)).execute().use {
+                val js = client.newCall(GET(docUrl)).awaitSuccess().use {
                     if (!it.isSuccessful) null else it.body.string()
                 } ?: return@parallelMap 0
 
@@ -862,10 +863,10 @@ class AnimeSama :
         return counts.firstOrNull { it > 0 } ?: 0
     }
 
-    private fun fetchPlayers(url: String): List<List<String>> {
+    private suspend fun fetchPlayers(url: String): List<List<String>> {
         val cleanUrl = url.substringBefore("#")
         val docUrl = "$cleanUrl/episodes.js"
-        val doc = client.newCall(GET(docUrl)).execute().use {
+        val doc = client.newCall(GET(docUrl)).awaitSuccess().use {
             if (!it.isSuccessful) return emptyList()
             it.body.string()
         }

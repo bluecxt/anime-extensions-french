@@ -1,6 +1,7 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -20,8 +21,8 @@ class VkExtractor(private val client: OkHttpClient, private val headers: Headers
             .build()
     }
 
-    fun videosFromUrl(url: String): List<ExtractedSource> {
-        val data = client.newCall(GET(url, documentHeaders)).execute().body.string()
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
+        val data = client.newCall(GET(url, documentHeaders)).awaitSuccess().body.string()
 
         return REGEX_VIDEO.findAll(data).map {
             val quality = it.groupValues[1]

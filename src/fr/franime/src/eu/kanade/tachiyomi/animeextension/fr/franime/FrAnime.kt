@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.CommonPreferences.Companion.PREF_VOICES_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT
@@ -149,7 +150,7 @@ class FrAnime :
         anime.description = buildString {
             animeData?.let {
                 if (!tmdbMetadata?.releaseDate.isNullOrBlank()) {
-                    append("Date de sortie : ${tmdbMetadata!!.releaseDate}\n")
+                    append("Date de sortie : ${tmdbMetadata.releaseDate}\n")
                 } else if (!it.startDate.isNullOrBlank()) {
                     append("Date de sortie : ${it.startDate}\n")
                 }

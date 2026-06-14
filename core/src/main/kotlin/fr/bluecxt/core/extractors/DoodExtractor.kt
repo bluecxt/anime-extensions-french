@@ -2,6 +2,7 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DOOD_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
@@ -13,7 +14,7 @@ import kotlin.text.RegexOption
 
 class DoodExtractor(private val client: OkHttpClient) {
 
-    fun videosFromUrl(url: String): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val parsedUrl = url.toHttpUrl()
         val videoId = parsedUrl.encodedPath.removeSuffix("/").substringAfterLast("/")
         var host = parsedUrl.host
@@ -33,7 +34,7 @@ class DoodExtractor(private val client: OkHttpClient) {
                 .add("Referer", "https://$host/")
                 .build()
 
-            var response = client.newCall(GET(webUrl, headers)).execute()
+            var response = client.newCall(GET(webUrl, headers)).awaitSuccess()
             val actualUrl = response.request.url.toString()
             var html = response.body.string()
 
@@ -57,12 +58,12 @@ class DoodExtractor(private val client: OkHttpClient) {
             if (iframeMatch != null) {
                 val iframeUrl = webUrl.toHttpUrl().resolve(iframeMatch.groupValues[1])?.toString() ?: return emptyList()
                 Log.d(DOOD_LOG, "Found iframe: $iframeUrl")
-                response = client.newCall(GET(iframeUrl, currentHeaders)).execute()
+                response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccess()
                 html = response.body.string()
             } else {
                 val embedUrl = webUrl.replace("/d/", "/e/")
                 Log.d(DOOD_LOG, "Using embed URL: $embedUrl")
-                response = client.newCall(GET(embedUrl, currentHeaders)).execute()
+                response = client.newCall(GET(embedUrl, currentHeaders)).awaitSuccess()
                 html = response.body.string()
             }
 
@@ -87,7 +88,7 @@ class DoodExtractor(private val client: OkHttpClient) {
             Log.d(DOOD_LOG, "Extracted passPath: $passPath, token: $token")
             val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: return emptyList()
 
-            val baseResponse = client.newCall(GET(passUrl, currentHeaders)).execute()
+            val baseResponse = client.newCall(GET(passUrl, currentHeaders)).awaitSuccess()
             val baseUrl = baseResponse.body.string().trim()
             Log.d(DOOD_LOG, "Base URL response: $baseUrl")
 
