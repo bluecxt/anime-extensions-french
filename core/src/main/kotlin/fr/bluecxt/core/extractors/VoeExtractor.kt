@@ -71,12 +71,13 @@ class VoeExtractor(private val client: OkHttpClient) {
             .find(scriptContent)
         if (replMatch == null) return emptyList()
         val decoded = voeDecode(encryptedData, replMatch.groupValues.get(1))
+        Log.d(VOE_LOG, "JSON décodé : $decoded")
 
         val streamUrl = listOf("file", "source", "direct_access_url")
             .firstNotNullOfOrNull { key -> decoded?.get(key)?.jsonPrimitive?.content }
             ?: return emptyList()
 
-        return if (streamUrl.endsWith(".m3u8")) {
+        return if (streamUrl.substringBefore("?").endsWith(".m3u8", ignoreCase = true)) {
             playlistUtils.extractFromHls(
                 playlistUrl = streamUrl,
                 masterHeaders = headers,
@@ -107,20 +108,20 @@ class VoeExtractor(private val client: OkHttpClient) {
             if (match == null) continue
             val streamUrl = match.groups["url"]?.value ?: continue
             val label = match.groups["label"]?.value
-            val quality = if (label != null) {
-                "${label}p"
-            } else {
-                val mp4Res = client.detectMp4Resolution(streamUrl, headers)
-                if (mp4Res != null) "${mp4Res}p" else null
-            }
 
-            return if (streamUrl.endsWith(".m3u8")) {
+            return if (streamUrl.substringBefore("?").endsWith(".m3u8", ignoreCase = true)) {
                 playlistUtils.extractFromHls(
                     playlistUrl = streamUrl,
                     masterHeaders = headers,
                     videoHeaders = headers,
                 )
             } else {
+                val quality = if (label != null) {
+                    "${label}p"
+                } else {
+                    val mp4Res = client.detectMp4Resolution(streamUrl, headers)
+                    if (mp4Res != null) "${mp4Res}p" else null
+                }
                 listOf(
                     ExtractedSource(
                         url = streamUrl,
