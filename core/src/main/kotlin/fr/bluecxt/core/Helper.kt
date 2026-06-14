@@ -46,13 +46,3 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
 
     return this.copy(headers = builder.build())
 }
-
-fun List<Video>.toExtractedSources(headers: Headers? = null): List<ExtractedSource> = this.map { video ->
-    ExtractedSource(
-        url = video.videoUrl,
-        quality = video.videoTitle,
-        headers = headers,
-        subtitleTracks = video.subtitleTracks,
-        audioTracks = video.audioTracks,
-    )
-}
