@@ -95,9 +95,9 @@ class FilemoonExtractor(private val client: OkHttpClient) {
 
             // 3. Extract sources
             val sources = mutableListOf<Source>()
-            playbackData?.sources?.let { sources.addAll(it) }
+            playbackData.sources?.let { sources.addAll(it) }
 
-            playbackData?.playback?.let {
+            playbackData.playback?.let {
                 try {
                     val decrypted = decryptPlayback(it)
                     val decryptedJson = json.decodeFromString<PlaybackResponse>(decrypted)

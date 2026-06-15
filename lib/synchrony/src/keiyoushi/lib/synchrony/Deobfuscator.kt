@@ -1,6 +1,6 @@
 package keiyoushi.lib.synchrony
 
-import app.cash.quickjs.QuickJs
+import app.cash.zipline.QuickJs
 import keiyoushi.utils.jsonInstance
 import kotlinx.serialization.builtins.serializer
 

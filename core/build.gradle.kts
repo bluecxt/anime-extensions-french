@@ -35,5 +35,6 @@ kotlin {
 }
 
 dependencies {
+    compileOnly(libs.jspecify)
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
 }

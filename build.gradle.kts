@@ -53,7 +53,7 @@ subprojects {
                 txt.required.set(true)
 
                 // Génère un rapport isolé dans le dossier build de chaque extension active
-                html.outputLocation.set(file("${project.buildDir}/outputs/detekt-report.html"))
+                html.outputLocation.set(layout.buildDirectory.file("outputs/detekt-report.html").get().asFile)
             }
         }
     }

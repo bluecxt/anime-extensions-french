@@ -251,8 +251,8 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
             return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
         }
 
-        val id = bestMatch!!.getInt("id")
-        val mediaType = bestMatch!!.optString("media_type", targetType ?: "tv")
+        val id = bestMatch.getInt("id")
+        val mediaType = bestMatch.optString("media_type", targetType ?: "tv")
 
         return constructMetadata(id, mediaType, season, lang)
     } catch (_: Exception) {

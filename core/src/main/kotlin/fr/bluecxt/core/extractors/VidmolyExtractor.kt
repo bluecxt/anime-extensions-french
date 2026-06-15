@@ -17,7 +17,7 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Response
 
-class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = commonEmptyHeaders) {
+class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Headers.EMPTY) {
 
     companion object {
         const val BASE_URL = "https://vidmoly.biz"

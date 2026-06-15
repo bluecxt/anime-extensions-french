@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 import android.util.Log
 import androidx.preference.PreferenceScreen
-import app.cash.quickjs.QuickJs
+import app.cash.zipline.QuickJs
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
