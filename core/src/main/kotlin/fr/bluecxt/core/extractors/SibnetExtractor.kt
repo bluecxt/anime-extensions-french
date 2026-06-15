@@ -3,6 +3,7 @@ package fr.bluecxt.core.extractors
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -27,9 +28,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
             "https://${url.toHttpUrl().host}$slug"
         }
 
-        val headers = Headers.Builder()
-            .add("Referer", url)
-            .build()
+        val headers = defaultHeaders(url)
 
         return listOf(
             ExtractedSource(

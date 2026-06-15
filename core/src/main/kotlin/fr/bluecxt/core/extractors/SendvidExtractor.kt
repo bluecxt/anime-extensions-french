@@ -3,6 +3,7 @@ package fr.bluecxt.core.extractors
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import okhttp3.Headers
@@ -18,9 +19,7 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
         val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: return emptyList()
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
 
-        val headers = Headers.Builder()
-            .add("Referer", httpUrl.toString())
-            .build()
+        val headers = defaultHeaders(httpUrl.toString())
 
         return if (masterUrl.contains(".m3u8")) {
             playlistUtils.extractFromHls(

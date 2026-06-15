@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VOE_LOG
+import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.detectMp4Resolution
@@ -27,10 +28,7 @@ class VoeExtractor(private val client: OkHttpClient) {
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         var currentUrl = url
         Log.d(VOE_LOG, "url = $currentUrl")
-        val headers = Headers.Builder()
-            .add("User-Agent", DEFAULT_USER_AGENT)
-            .add("Referer", currentUrl)
-            .build()
+        val headers = defaultHeaders(currentUrl)
 
         var response = client.newCall(GET(url, headers)).awaitSuccess()
         var html = response.body.string()
