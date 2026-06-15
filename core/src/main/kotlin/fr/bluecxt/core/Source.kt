@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.network.CloudflareInterceptor
+import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -25,7 +26,7 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 
-const val EXTRACTOR_TIMEOUT = 30000L
+val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 5000L else 30000L
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
@@ -93,7 +94,7 @@ abstract class Source :
                 Log.e(SERVER_LOG, "Server failed: ${server.name}: ${error.message}")
             }.getOrNull()
         } ?: run {
-            Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT s): ${server.name}")
+            Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT ms): ${server.name}")
             emptyList()
         }
 
