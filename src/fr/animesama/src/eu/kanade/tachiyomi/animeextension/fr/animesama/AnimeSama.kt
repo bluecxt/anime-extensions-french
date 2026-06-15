@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 import android.util.Log
 import androidx.preference.PreferenceScreen
-import app.cash.zipline.QuickJs
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
@@ -317,11 +318,13 @@ class AnimeSama :
         var currentUrlPath = animeUrlPath
         val rawUrl = "$baseUrl$animeUrlPath".toHttpUrl()
         val isHub = rawUrl.pathSegments.size <= 2
+        Log.d(ANIMESAMA_LOG, "épisode url = $rawUrl")
 
         // If it's a hub (no season/film/oav in URL) but we are in Episode mode,
         // it means there's only one season, or we want to show the first one.
         if (isHub) {
-            val response = client.newCall(GET("$baseUrl$animeUrlPath/")).awaitSuccess()
+            val response = client.newCall(GET("$baseUrl$animeUrlPath/")).await()
+            if (!response.isSuccessful) return emptyList()
             val doc = response.asJsoup()
             val scripts = doc.select("script").toString()
             val uncommented = commentRegex.replace(scripts, "")
@@ -351,6 +354,7 @@ class AnimeSama :
         val players = langValues.parallelMap {
             fetchPlayers("$baseUrl$seasonRootPath/$it")
         }
+        Log.v(ANIMESAMA_LOG, "player list = $players")
         val episodes = playersToEpisodes(players, anime, "$seasonRootPath/", langValues)
         return if (movie == null) episodes.reversed() else listOf(episodes[movie])
     }
@@ -624,6 +628,7 @@ class AnimeSama :
                 val rootPath = animeUrlPath.replace(Regex("/(saison|film|oav|special|hs|kai|partie|part).*"), "")
                 val mainUrl = "$baseUrl$rootPath/"
                 val mainDoc = client.newCall(GET(mainUrl)).awaitSuccess().use { it.body.string() }
+                Log.d(ANIMESAMA_LOG, "url for maindoc = $mainUrl")
                 val uncommented = commentRegex.replace(mainDoc, "")
 
                 // Merge redundant panels in offset calculation too
@@ -866,7 +871,8 @@ class AnimeSama :
     private suspend fun fetchPlayers(url: String): List<List<String>> {
         val cleanUrl = url.substringBefore("#")
         val docUrl = "$cleanUrl/episodes.js"
-        val doc = client.newCall(GET(docUrl)).awaitSuccess().use {
+        val doc = client.newCall(GET(docUrl)).await().use {
+            Log.v(ANIMESAMA_LOG, "fetch player finished ($docUrl) error code = ${it.code}")
             if (!it.isSuccessful) return emptyList()
             it.body.string()
         }
