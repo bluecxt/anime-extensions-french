@@ -12,6 +12,7 @@ import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.StreamixExtractor
 import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
+import fr.bluecxt.core.extractors.VidozaExtractor
 import fr.bluecxt.core.extractors.VoeExtractor
 import fr.bluecxt.core.model.VideoServer
 
@@ -28,6 +29,7 @@ val DEFAULT_SERVER = listOf(
     "Vidara",
     "Streamix",
     "Voe",
+    "Vidoza",
 )
 
 /**
@@ -152,6 +154,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "jessicayeahcatch.com",
         ),
         extractor = { url -> VoeExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Vidoza" -> VideoServer(
+        name = "Vidoza",
+        hosts = listOf("vidoza.net", "vidoza.co", "videzz.net"),
+        extractor = { url -> VidozaExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null

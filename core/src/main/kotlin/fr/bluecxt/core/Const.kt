@@ -16,6 +16,7 @@ const val OKRU_LOG: String = "OkruLog"
 const val DOOD_LOG: String = "DoodLog"
 const val VIDARA_LOG: String = "VidaraLog"
 const val VOE_LOG: String = "VoeLog"
+const val VIDOZA_LOG: String = "VidozaLog"
 
 // Extension logs
 
