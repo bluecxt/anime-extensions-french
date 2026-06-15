@@ -75,7 +75,7 @@ abstract class Source :
         return finalVideo
     }
 
-    suspend fun extractVideos(playerUrl: String, lang: String, allowedServers: List<String>): List<Video> {
+    suspend fun extractVideos(playerUrl: String, lang: String? = null, allowedServers: List<String>): List<Video> {
         val isFilemoonDisabled = preferences.getBoolean(CommonPreferences.PREF_DISABLE_FILEMOON_KEY, false)
 
         val filteredAllowedServers = if (isFilemoonDisabled) {
@@ -90,9 +90,9 @@ abstract class Source :
         val rawSources = withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
             runCatching {
                 server.extractor(playerUrl)
-            }.onFailure { error ->
-                Log.e(SERVER_LOG, "Server failed: ${server.name}: ${error.message}")
-            }.getOrNull()
+            }.onFailure { e ->
+                Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message}")
+            }.getOrDefault(emptyList())
         } ?: run {
             Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT ms): ${server.name}")
             emptyList()

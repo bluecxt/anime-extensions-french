@@ -59,7 +59,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "GoogleDrive" -> VideoServer(
         name = "GoogleDrive",
-        hosts = listOf("drive.*.google.com"),
+        hosts = listOf("drive.usercontent.google.com"),
         extractor = { id -> GoogleDriveExtractor(source.client).videosFromUrl(id) },
     )
 
