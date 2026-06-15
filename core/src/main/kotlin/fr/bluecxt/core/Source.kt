@@ -25,6 +25,8 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 
+const val EXTRACTOR_TIMEOUT = 30000L
+
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
  * Separated from keiyoushi utils to allow custom French logic.
@@ -84,11 +86,16 @@ abstract class Source :
         val servers = filteredAllowedServers.mapNotNull { getVideoServer(this, it) }
         val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
 
-        val rawSources = withTimeoutOrNull(30000) {
+        val rawSources = withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
             runCatching {
                 server.extractor(playerUrl)
+            }.onFailure { error ->
+                Log.e(SERVER_LOG, "Server failed: ${server.name}: ${error.message}")
             }.getOrNull()
-        } ?: emptyList()
+        } ?: run {
+            Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT s): ${server.name}")
+            emptyList()
+        }
 
         Log.d(SERVER_LOG, "name = ${server.name} isEmpty ${rawSources.isEmpty()}")
 

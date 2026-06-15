@@ -46,3 +46,12 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
 
     return this.copy(headers = builder.build())
 }
+
+/**
+ * Simple builder for basic headers
+ */
+fun defaultHeaders(referer: String, userAgent: String = DEFAULT_USER_AGENT): Headers = Headers.Builder()
+    .add("user-Agent", userAgent)
+    .apply {
+        if (!referer.isNullOrBlank()) add("Referer", referer)
+    }.build()
