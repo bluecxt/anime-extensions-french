@@ -31,6 +31,7 @@ val DEFAULT_SERVER = listOf(
     "Streamix",
     "Voe",
     "Vidoza",
+    "Lulu",
 )
 
 /**
