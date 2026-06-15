@@ -1,24 +1,27 @@
-package aniyomi.lib.luluextractor
+package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
-import keiyoushi.lib.autoUnpacker
+import fr.bluecxt.core.defaultHeaders
+import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.bodyString
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.util.regex.Pattern
 
-class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
+// writed using https://github.com/skoruppa/docchi-stremio-addon/blob/main/app/players/lulustream.py
 
-    private val headers = headers.newBuilder()
-        .add("Referer", "https://luluvdo.com/")
-        .add("Origin", "https://luluvdo.com")
-        .build()
+class LuluExtractor(private val client: OkHttpClient) {
 
-    // Credit: https://github.com/skoruppa/docchi-stremio-addon/blob/main/app/players/lulustream.py
-    fun videosFromUrl(url: String, prefix: String): List<Video> {
-        val videos = mutableListOf<Video>()
+    private val headers = defaultHeaders(
+        referer = "https://luluvdo.com/",
+        origin = "https://luluvdo.com",
+    )
+
+    fun videosFromUrl(url: String): List<ExtractedSource> {
+        val videos = mutableListOf<ExtractedSource>()
 
         try {
             val html = client.newCall(GET(url, headers)).execute().bodyString()
@@ -26,7 +29,13 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
             val fixedUrl = fixM3u8Link(m3u8Url)
             val quality = getResolution(fixedUrl)
 
-            videos.add(Video(fixedUrl, "${prefix}Lulu - $quality", fixedUrl, headers))
+            videos.add(
+                ExtractedSource(
+                    url = fixedUrl,
+                    quality = quality,
+                    headers = headers,
+                ),
+            )
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -43,6 +52,7 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
                     .takeIf { it.find() }
                     ?.group(1)
             }
+
             else -> {
                 Pattern.compile("sources: \\[\\{file:\"(https?://[^\"]+)\"")
                     .matcher(html)
@@ -91,7 +101,7 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
         return fixedLink.build().toString()
     }
 
-    private fun getResolution(m3u8Url: String): String = try {
+    private fun getResolution(m3u8Url: String): String? = try {
         val content = client.newCall(GET(m3u8Url, headers)).execute()
             .bodyString()
 
@@ -100,8 +110,7 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
             .takeIf { it.find() }
             ?.group(1)
             ?.let { "${it}p" }
-            ?: "Unknown"
     } catch (_: Exception) {
-        "Unknown"
+        null
     }
 }
