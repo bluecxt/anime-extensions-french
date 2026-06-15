@@ -9,6 +9,8 @@ import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
+// writed using https://github.com/skoruppa/docchi-players/blob/main/vidoza.py
+
 class VidozaExtractor(private val client: OkHttpClient) {
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val parsedUrl = url.toHttpUrl()
