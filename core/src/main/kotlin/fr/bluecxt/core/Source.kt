@@ -26,7 +26,7 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 
-val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 5000L else 30000L
+val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 10000L else 30000L
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
