@@ -39,7 +39,7 @@ class Wiflix :
 
     override val name = "Wiflix"
 
-    override val defaultBaseUrl = "https://flemmix.team"
+    override val defaultBaseUrl = "https://flemmix.city"
 
     override val baseUrl: String get() = currentBaseUrl
 
