@@ -24,4 +24,4 @@
 - [ ] movix
 - [ ] voiranime
 - [ ] wiflix
-- [ ] adkami
+- [x] adkami

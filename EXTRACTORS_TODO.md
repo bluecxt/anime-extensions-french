@@ -20,6 +20,7 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [x] **UqloadExtractor** (`uqload.co`, `uqload.io`)
 
 ## ❌ Extracteurs Restants
+- [ ] **UPnShareExtractor** (`upns.pro`, `rpmhub.site`, `rpmvip.com`) - Très utilisé sur Wiflix
 - [ ] **StreamTapeExtractor** (`streamtape.com`, `shavetape.com`)
 - [ ] **VidoExtractor** (`vidoza.net`, `vido.lol`, `vido.tv`)
 - [ ] **StreamDavExtractor** (`streamdav.com`)

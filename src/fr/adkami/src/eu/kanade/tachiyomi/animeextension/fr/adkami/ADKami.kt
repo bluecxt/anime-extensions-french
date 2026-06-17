@@ -11,20 +11,16 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
-import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.luluextractor.LuluExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
-import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.ADKAMI_LOG
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.withDefaultHeaders
 import keiyoushi.utils.parallelMapNotNull
@@ -39,27 +35,28 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class ADKami : Source() {
+class ADKami :
+    Source(),
+    CommonPreferences {
 
     override val name = "ADKami"
     override val lang = "fr"
     override val supportsLatest = true
 
-    override val baseUrl by lazy {
-        preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
-    }
+    override val defaultBaseUrl = "https://hentai.adkami.com"
+    override val baseUrl: String get() = currentBaseUrl
 
-    override val client: OkHttpClient by lazy {
-        super.client.newBuilder()
-            .protocols(listOf(Protocol.HTTP_1_1))
-            .build()
-    }
+    override val supportedVoices = arrayOf("VOSTFR", "VF", "RAW", "VOSTA")
 
     override val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -68,9 +65,25 @@ class ADKami : Source() {
     }
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): AnimesPage {
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = if (page == 1) {
         val response = client.newCall(GET("$baseUrl/hentai-streaming?page=$page", headers)).awaitSuccess()
-        return parseAnimesPage(response)
+        parseLatestPage(response)
+    } else {
+        val response = client.newCall(GET("$baseUrl/video?t=4&order=3&page=$page", headers)).awaitSuccess()
+        parseAnimesPage(response)
+    }
+
+    private fun parseLatestPage(response: Response): AnimesPage {
+        val document = response.asJsoup()
+        val animes = document.select("div.h-card").map { element: Element ->
+            SAnime.create().apply {
+                val link = element.selectFirst("a")
+                url = link?.safeRelativePath() ?: return@map this
+                title = element.selectFirst(".title")?.text()?.trim() ?: ""
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: ""
+            }
+        }
+        return AnimesPage(animes, true)
     }
 
     // =============================== Search ===============================
@@ -93,32 +106,6 @@ class ADKami : Source() {
         if (searchFilters.randomOnly) {
             val response = client.newCall(GET("$baseUrl/hentai-streaming", headers)).awaitSuccess()
             return parseAnimesPage(response, "div.hentai-random-block:nth-child(2) > div.h-card")
-        }
-
-        // Simple search uses the AJAX API as requested
-        if (query.isNotBlank() && searchFilters.isDefault()) {
-            val body = okhttp3.FormBody.Builder()
-                .add("query", query)
-                .build()
-
-            val ajaxHeaders = headersBuilder()
-                .add("Accept", "*/*")
-                .add("Accept-Language", "fr,fr-FR;q=0.9")
-                .add("X-Requested-With", "XMLHttpRequest")
-                .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-                .add("Origin", baseUrl)
-                .add("Referer", "$baseUrl/hentai-streaming")
-                .build()
-
-            val response = client.newCall(
-                okhttp3.Request.Builder()
-                    .url("$baseUrl/api/search/hentai")
-                    .post(body)
-                    .headers(ajaxHeaders)
-                    .build(),
-            ).awaitSuccess()
-
-            return parseAnimesPage(response)
         }
 
         // Advanced search uses the browse page
@@ -242,9 +229,6 @@ class ADKami : Source() {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
 
-        anime.title = document.selectFirst("h1.title-header-video")?.text()?.substringBefore(" - Episode")
-            ?: document.selectFirst(".fiche-info h1")?.text() ?: ""
-
         val descElement = document.selectFirst("p.m-hidden")
         anime.description = if (descElement != null) {
             val tempDesc = descElement.clone()
@@ -366,174 +350,57 @@ class ADKami : Source() {
             } else {
                 (baseUrl + (if (rawUrl.startsWith("/")) "" else "/") + rawUrl).toHttpUrl()
             }
-            val response = client.newCall(GET(fullUrl.newBuilder().query(null).build(), headers)).awaitSuccess()
-            val document = response.asJsoup()
             val lang = fullUrl.queryParameter("lang")?.ifBlank { "VOSTFR" } ?: "VOSTFR"
 
-            document.select("div.video-iframe").forEach { block ->
-                val encodedUrl = block.attr("data-url")
-                val rawServerName = block.attr("data-name").trim().lowercase()
-
-                val serverName = when {
-                    rawServerName.contains("videoza") || rawServerName.contains("vidoza") -> "Vidoza"
-                    rawServerName.contains("dood") -> "Doodstream"
-                    rawServerName.contains("voe") -> "Voe"
-                    rawServerName.contains("streamtape") -> "Streamtape"
-                    rawServerName.contains("vidmoly") -> "Vidmoly"
-                    rawServerName.contains("lulu") -> "Lulustream"
-                    rawServerName.contains("sibnet") -> "Sibnet"
-                    rawServerName.contains("sendvid") -> "Sendvid"
-                    rawServerName.contains("filemoon") -> "Filemoon"
-                    rawServerName.contains("vk") -> "VK"
-                    else -> rawServerName.replaceFirstChar { it.uppercase() }
-                }
-
-                if (encodedUrl.isNotBlank()) {
-                    val decodedUrl = decodeAdkamiUrl(encodedUrl)
-                    if (decodedUrl != null) {
-                        hosters.add(Hoster(hosterName = "($lang) $serverName", internalData = "$decodedUrl|$lang"))
-                    }
-                }
-            }
+            hosters.add(Hoster(hosterName = lang, hosterUrl = fullUrl.toString()))
         }
         return hosters
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val data = hoster.internalData.split("|")
-        val decodedUrl = data[0]
-        val lang = data[1]
-        val server = hoster.hosterName.substringAfter(") ")
-        val prefix = "($lang) $server - "
+        val lang = hoster.hosterName
+        val url = hoster.hosterUrl
+        Log.d(ADKAMI_LOG, "anime url = $url")
 
-        val sibnetExtractor = SibnetExtractor(client)
-        val doodExtractor = DoodExtractor(client)
-        val voeExtractor = VoeExtractor(client, headers)
-        val vidMolyExtractor = VidMolyExtractor(client, headers)
-        val luluExtractor = LuluExtractor(client, headers)
-        val filemoonExtractor = FilemoonExtractor(client)
-        val streamTapeExtractor = StreamTapeExtractor(client)
-        val vidoExtractor = VidoExtractor(client)
+        val document = client.newCall(GET(url, defaultHeaders(referer = baseUrl))).awaitSuccess().asJsoup()
 
-        val videos = mutableListOf<Video>()
-        try {
-            when {
-                decodedUrl.contains("sibnet") -> videos.addAll(sibnetExtractor.videosFromUrl(decodedUrl, prefix))
-
-                decodedUrl.contains("dood") || decodedUrl.contains("vide0") -> {
-                    val url = decodedUrl.replace("vide0.net", "doodstream.com")
-                        .replace("dood.to", "doodstream.com")
-                    videos.addAll(doodExtractor.videosFromUrl(url, prefix))
-                }
-
-                decodedUrl.contains("voe") -> videos.addAll(voeExtractor.videosFromUrl(decodedUrl, prefix))
-
-                decodedUrl.contains("vidmoly") || decodedUrl.contains("vtbe") -> {
-                    val url = decodedUrl.replace("vtbe.to", "vidmoly.net")
-                    videos.addAll(vidMolyExtractor.videosFromUrl(url, prefix))
-                }
-
-                decodedUrl.contains("luluvid") || decodedUrl.contains("vidnest") || decodedUrl.contains("vidzy") || decodedUrl.contains("lulustream") -> {
-                    val url = decodedUrl.replace("lulustream.com", "luluvid.com")
-                    videos.addAll(luluExtractor.videosFromUrl(url, prefix))
-                }
-
-                decodedUrl.contains("filemoon") -> videos.addAll(filemoonExtractor.videosFromUrl(decodedUrl, prefix))
-
-                decodedUrl.contains("streamtape") -> streamTapeExtractor.videoFromUrl(decodedUrl, prefix)?.let { videos.add(it) }
-
-                decodedUrl.contains("vidoza") -> videos.addAll(vidoExtractor.videosFromUrl(decodedUrl, prefix))
-
-                else -> videos.add(Video(videoUrl = decodedUrl, videoTitle = "$prefix - Original", headers = headers))
-            }
-        } catch (_: Exception) {}
-
-        return videos.map {
-            it.withDefaultHeaders(baseUrl).copy(videoTitle = cleanQuality(it.videoTitle))
-        }.parallelMapNotNull { if (isLinkValid(it)) it else null }.sortVideos()
-    }
-
-    private suspend fun isLinkValid(video: Video): Boolean {
-        val url = video.videoUrl
-        if (url.isBlank()) return false
-        if (video.videoTitle.contains("Voe:MP4", ignoreCase = true) || video.videoTitle.contains("Unknown", ignoreCase = true)) return false
-        if (url.contains(".m3u8")) return true
-
-        return try {
-            val request = Request.Builder()
-                .url(url)
-                .headers(video.headers ?: headers)
-                .addHeader("Range", "bytes=0-1")
-                .build()
-            client.newCall(request).awaitSuccess().use { response ->
-                val code = response.code
-                val contentType = response.header("Content-Type")?.lowercase() ?: ""
-                (response.isSuccessful || code == 403) && !contentType.contains("text/html")
-            }
-        } catch (_: Exception) {
-            false
+        val urls = document.select("div.video-iframe").mapNotNull { iframe ->
+            val encodedUrl = iframe.attr("data-url")
+            Log.d(ADKAMI_LOG, "encoded url = $encodedUrl")
+            decodeAdkamiUrl(encodedUrl)
         }
-    }
+        Log.d(ADKAMI_LOG, "episodes urls = $urls")
 
-    private fun cleanQuality(quality: String): String {
-        val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon", "Voe", "Doodstream", "Dood", "Luluvid", "Streamtape", "Lulustream", "Vidoza")
-        var res = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)(?:/s)?"), "").replace(Regex("\\s*\\(\\d+x\\d+\\)"), "").replace(Regex("(?i):?default|mirror"), "").trim()
-        val langMatch = Regex("\\((VOSTFR|VF|VA|VOSTA|RAW)\\)").find(res)
-        val lang = langMatch?.value ?: "(VOSTFR)"
-        res = res.replace(lang, "").trim()
-        val server = servers.firstOrNull { res.contains(it, ignoreCase = true) } ?: ""
-        res = res.replace(Regex("(?i)$server"), "").trim()
-        var q = res.replace(Regex("^[:\\-\\s]+"), "").trim()
-        if (q.equals(server, true) || q.equals("MP4", true) || q.equals("Original", true)) q = ""
-
-        // Harmonization: Remove server name repetition
-        return when {
-            q.isEmpty() -> "$lang $server".trim()
-            else -> "$lang $server - $q".trim()
-        }.replace(Regex("\\s+"), " ").trim()
-    }
-
-    override fun List<Hoster>.sortHosters(): List<Hoster> {
-        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
-        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
-
-        return this.sortedWith(
-            compareByDescending<Hoster> { it.hosterName.contains("($voices)", true) }
-                .thenByDescending { it.hosterName.contains(player, true) },
-        )
-    }
-
-    override fun List<Video>.sortVideos(): List<Video> {
-        val voices = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
-        val player = preferences.getString(PREF_PLAYER_KEY, PREF_PLAYER_DEFAULT)!!
-
-        return this.sortedWith(
-            compareByDescending<Video> { it.videoTitle.contains("($voices)", true) }
-                .thenByDescending { it.videoTitle.contains(player, true) }
-                .thenByDescending {
-                    Regex("""(\d+)p""").find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                },
-        )
+        return urls.parallelMap { playerUrl ->
+            extractVideos(playerUrl, lang, supportedServers)
+        }.flatten().coreSortVideos()
     }
 
     // ============================ Helpers =============================
-    private fun parseAnimesPage(response: Response, selector: String = ".hentai-block-new > div:nth-child(2) > div.h-card, div.video-item-list, body > div.h-card"): AnimesPage {
+    private fun parseAnimesPage(response: Response, selector: String = "div.video-item-list"): AnimesPage {
         val document = response.asJsoup()
         val animes = document.select(selector).map { element: Element ->
             SAnime.create().apply {
                 val link: Element = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return@map this
                 url = link.safeRelativePath()
                 title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
-                element.selectFirst(".visual img, img")?.let { img ->
-                    val dataOriginal = img.attr("abs:data-original")
-                    thumbnail_url = (if (dataOriginal.isNotBlank()) dataOriginal else img.attr("abs:src")).replace("mini", "cover")
-                }
+                thumbnail_url = maxQuality(element.selectFirst("img")?.attr("data-original") ?: "")
                 url = cleanUrl(url)
             }
         }
         val hasNextPage = document.select("div.pagination a:contains(Suivant), div.pagination a:has(button):not(.actuel), a[rel=next]").isNotEmpty()
 
         return AnimesPage(animes, hasNextPage)
+    }
+
+    private fun maxQuality(img: String): String = buildString {
+        val link = img.toHttpUrl()
+        val imgName = link.pathSegments.last()
+        append(
+            link.newBuilder()
+                .encodedPath("/cover/250/$imgName")
+                .toString(),
+        )
     }
 
     private fun cleanUrl(url: String): String {
@@ -545,7 +412,9 @@ class ADKami : Source() {
     }
 
     private fun decodeAdkamiUrl(encodedUrl: String): String? {
+        Log.d(ADKAMI_LOG, "encoded url = $encodedUrl")
         val part = encodedUrl.substringAfter("embed/", "")
+        Log.d(ADKAMI_LOG, "part = $part")
         if (part.isBlank()) return null
         return try {
             val e = String(Base64.decode(part, Base64.DEFAULT), java.nio.charset.StandardCharsets.ISO_8859_1)
@@ -562,37 +431,7 @@ class ADKami : Source() {
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
-
-        androidx.preference.ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = "Priorité de langue"
-            entries = arrayOf("VOSTFR", "VF", "VOSTA", "RAW")
-            entryValues = arrayOf("VOSTFR", "VF", "VOSTA", "RAW")
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        androidx.preference.ListPreference(screen.context).apply {
-            key = PREF_PLAYER_KEY
-            title = "Serveur préféré"
-            entries = arrayOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Voe", "Doodstream")
-            entryValues = arrayOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Voe", "Doodstream")
-            setDefaultValue(PREF_PLAYER_DEFAULT)
-            summary = "%s"
-        }.also(screen::addPreference)
-    }
-
     companion object {
         const val PREFIX_SEARCH = "id:"
-        private const val PREF_URL_KEY = "preferred_baseUrl_v5"
-        private const val PREF_URL_DEFAULT = "https://hentai.adkami.com"
-
-        private const val PREF_VOICES_KEY = "preferred_voices"
-        private const val PREF_VOICES_DEFAULT = "VOSTFR"
-
-        private const val PREF_PLAYER_KEY = "preferred_player"
-        private const val PREF_PLAYER_DEFAULT = "Vidmoly"
     }
 }

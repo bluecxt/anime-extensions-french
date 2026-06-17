@@ -22,6 +22,7 @@ const val UQLOAD_LOG: String = "UqloadLog"
 // Extension logs
 
 const val ANIMOFLIX_LOG: String = "AnimoflixLog"
+const val ADKAMI_LOG: String = "AdkamiLog"
 const val ANIMESAMA_LOG: String = "AnimesamaLog"
 const val WIFLIX_LOG: String = "WiflixLog"
 const val EXTENSIONTEST_LOG: String = "ExtensionTest"

@@ -13,6 +13,7 @@ loadIndividualExtension("fr", "franime")
 loadIndividualExtension("fr", "animoflix")
 loadIndividualExtension("fr", "wiflix")
 loadIndividualExtension("fr", "extensiontest")
+loadIndividualExtension("fr", "adkami")
 // loadIndividualExtension("all", "jellyfin")
 
 /**
