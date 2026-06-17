@@ -11,6 +11,7 @@ import fr.bluecxt.core.extractors.OkruExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.StreamixExtractor
+import fr.bluecxt.core.extractors.UqloadExtractor
 import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VidozaExtractor
@@ -32,6 +33,7 @@ val DEFAULT_SERVER = listOf(
     "Voe",
     "Vidoza",
     "Lulu",
+    "Uqload",
 )
 
 /**
@@ -168,6 +170,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Lulu",
         hosts = listOf("luluvdo.com", "lulu.st", "luluvid.com"),
         extractor = { url -> LuluExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Uqload" -> VideoServer(
+        name = "Uqload",
+        hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz"),
+        extractor = { url -> UqloadExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null

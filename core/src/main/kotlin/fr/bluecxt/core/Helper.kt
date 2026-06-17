@@ -54,9 +54,11 @@ fun defaultHeaders(
     referer: String = "",
     userAgent: String = DEFAULT_USER_AGENT,
     origin: String = "",
+    accept: String = "",
 ): Headers = Headers.Builder()
     .add("user-Agent", userAgent)
     .apply {
         if (!referer.isBlank()) add("Referer", referer)
-        if (!origin.isBlank()) add("Referer", origin)
+        if (!origin.isBlank()) add("Origin", origin)
+        if (!accept.isBlank()) add("Accept", accept)
     }.build()

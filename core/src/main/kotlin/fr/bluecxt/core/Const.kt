@@ -1,6 +1,6 @@
 package fr.bluecxt.core
 
-const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.3"
+const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
 
 const val HUB_SEASON_NUMBER = -2.0
 
@@ -17,6 +17,7 @@ const val DOOD_LOG: String = "DoodLog"
 const val VIDARA_LOG: String = "VidaraLog"
 const val VOE_LOG: String = "VoeLog"
 const val VIDOZA_LOG: String = "VidozaLog"
+const val UQLOAD_LOG: String = "UqloadLog"
 
 // Extension logs
 
