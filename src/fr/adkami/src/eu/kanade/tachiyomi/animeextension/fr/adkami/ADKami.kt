@@ -366,10 +366,8 @@ class ADKami :
 
         val urls = document.select("div.video-iframe").mapNotNull { iframe ->
             val encodedUrl = iframe.attr("data-url")
-            Log.d(ADKAMI_LOG, "encoded url = $encodedUrl")
             decodeAdkamiUrl(encodedUrl)
         }
-        Log.d(ADKAMI_LOG, "episodes urls = $urls")
 
         return urls.parallelMap { playerUrl ->
             extractVideos(playerUrl, lang, supportedServers)
@@ -412,9 +410,7 @@ class ADKami :
     }
 
     private fun decodeAdkamiUrl(encodedUrl: String): String? {
-        Log.d(ADKAMI_LOG, "encoded url = $encodedUrl")
         val part = encodedUrl.substringAfter("embed/", "")
-        Log.d(ADKAMI_LOG, "part = $part")
         if (part.isBlank()) return null
         return try {
             val e = String(Base64.decode(part, Base64.DEFAULT), java.nio.charset.StandardCharsets.ISO_8859_1)
