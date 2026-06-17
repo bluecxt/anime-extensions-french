@@ -149,8 +149,8 @@ abstract class Source :
         val prefQualStr = preferences.getString(CommonPreferences.PREF_QUALITY_KEY, "Highest")!!
         val prefQualInt = prefQualStr.toIntOrNull()
 
-        // On cherche le nombre entre le " - " et le "p"
-        val qualityRegex = Regex("""\s-\s(\d+)p""")
+        val qualityRegex = Regex("""(\d+)p""")
+        val fpsRegex = Regex("""(\d+)fps""")
 
         return this.sortedWith(
             compareByDescending<Video> { it.videoTitle.contains(voices, true) }
@@ -163,6 +163,9 @@ abstract class Source :
                     } else {
                         1000000 - abs(actualQual - prefQualInt)
                     }
+                }
+                .thenByDescending { video ->
+                    fpsRegex.find(video.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
         )
     }
