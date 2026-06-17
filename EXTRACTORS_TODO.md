@@ -17,6 +17,7 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [x] **vidara** (`https://flemmix.team/serie-en-streaming/36073-rick-et-morty-saison-9.html`)
 - [x] **VoeExtractor** (`voe.sx`, `voe.un`, `voe.am`, `voe.py`, `voe.to`, `bryantenunder.com`, `vickisaveworker.com`)
 - [x] **LuluExtractor** (`luluvdo.com`, `luluvid.com`, `vidsonic.net`, `lulustream.com`, `vidzy.tv`, `vidnest.net`)
+- [x] **UqloadExtractor** (`uqload.co`, `uqload.io`)
 
 ## ❌ Extracteurs Restants
 - [ ] **StreamTapeExtractor** (`streamtape.com`, `shavetape.com`)
@@ -27,7 +28,6 @@ Voici l'état complet de tous les extracteurs utilisés par tes extensions.
 - [ ] **StreamVidExtractor** (`streamvid.net`)
 - [ ] **StreamWishExtractor** (`streamwish.to`, `streamwish.com`, `strwish.com`, `wishembed.to`)
 - [ ] **UpstreamExtractor** (`upstream.to`)
-- [ ] **UqloadExtractor** (`uqload.co`, `uqload.io`)
 - [ ] **VidHideExtractor** (`vidhide.pro`, `vidhide.com`)
 - [ ] **VudeoExtractor** (`vudeo.co`, `vudeo.io`)
 - [ ] **MegaCloudExtractor** (`megacloud.tv`)
