@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.EXTENSIONTEST_LOG
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.extractors.UqloadExtractor
 import keiyoushi.utils.parallelCatchingFlatMap
 import okhttp3.Request
 import okhttp3.Response
@@ -42,15 +43,42 @@ class ExtensionTest :
             SAnime.create().apply {
                 title = "Test Extracteurs"
                 url = "/test-extractors"
-                thumbnail_url = "https://raw.githubusercontent.com/skoruppa/docchi-players/main/repo-icon.png"
-                description = "Extension pour tester les extracteurs."
-                initialized = true
+                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/repo_logo.svg"
             },
         ),
         false,
     )
+// combo 1
+// val char1 = "❱"
+// val char2 = "•"
+//
+// combo 2
+// val char1 = "-"
+// val char2 = "•"
+//
+// combo 3
+// val char1 = "➜"
+// val char2 = "•"
+//
+// combo 4
+// val char1 = "✦"
+// val char2 = "⫻"
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime.apply {
+        description = buildString {
+            val char1 = "✦"
+            val char2 = "⫻"
+            append("Uqload $char1 802p $char2 23.98fps")
+            append("\n")
+            append("Sendvid $char1 1080p $char2 60fps")
+            append("\n")
+            append("Sibnet $char1 720p $char2 60fps")
+            append("\n")
+            append("Vidmoly $char1 1080p")
+            append("\n")
+            append("Vk $char1 60fps")
+        }
+    }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = listOf(
         SEpisode.create().apply {
@@ -65,7 +93,8 @@ class ExtensionTest :
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val testLinks = listOf(
             "Vidoza" to "https://videzz.net/embed-y34qudiino2n.html",
-            "Uqload" to "https://uqload.bz/embed-57iyaik6qohj.html",
+            "Uqload" to "https://uqload.is/embed-hkhff5k2pjp7.html",
+            "UqloadManual" to "https://uqload.is/embed-hkhff5k2pjp7.html",
             "Streamtape" to "https://streamtape.com/e/4RjVoMZ0zWcKQDb/",
             "Lulu" to "https://luluvdo.com/e/5q4zzr3cbn7k",
             "Vidara" to "https://vidara.to/e/E0PwlcdTTVuTZ",
@@ -96,10 +125,16 @@ class ExtensionTest :
 
         return testLinks.parallelCatchingFlatMap { (serverName, url) ->
             Log.d("ExtensionTest", "Testing $serverName with URL: $url")
-            extractVideos(
-                playerUrl = url,
-                allowedServers = supportedServers,
-            )
+            if (serverName == "UqloadManual") {
+                UqloadExtractor(client).videosFromUrl(url).map {
+                    it.copy(quality = null).buildFromSource(null, "Uqload Manual")
+                }
+            } else {
+                extractVideos(
+                    playerUrl = url,
+                    allowedServers = supportedServers,
+                )
+            }
         }
     }
 
