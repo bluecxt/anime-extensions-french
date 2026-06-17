@@ -117,7 +117,14 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             }
 
             val resolution = RESOLUTION_REGEX.find(stream)?.groupValues?.get(1) ?: ""
-            val standardQuality = QUALITY_REGEX.find(resolution)?.groupValues?.get(1) ?: ""
+            val rawQuality = QUALITY_REGEX.find(resolution)?.groupValues?.get(1) ?: ""
+            val quality = toStandardQuality(rawQuality)
+
+            val frameRate = FRAME_RATE_REGEX.find(stream)?.groupValues?.get(1)
+                ?.toDoubleOrNull()
+                ?.let { fps ->
+                    if (fps % 1.0 == 0.0) "${fps.toInt()}fps" else "${fps}fps"
+                }
 
             val bandwidth = BANDWIDTH_REGEX.find(stream)
                 ?.groupValues?.get(1)
@@ -129,7 +136,8 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
 
             bandwidth to ExtractedSource(
                 url = videoUrl,
-                quality = standardQuality + "p",
+                quality = quality,
+                frameRate = frameRate,
                 headers = videoHeadersGen(headers, referer, videoUrl),
                 subtitleTracks = subtitleTracks,
                 audioTracks = audioTracks,
@@ -223,7 +231,6 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             val bandwidth = videoSrc.attr("bandwidth")
             val quality = videoSrc.attr("height")
                 .let(toStandardQuality)
-                .let { "$it (${videoSrc.attr("width")}x${videoSrc.attr("height")})" }
             val videoUrl = videoSrc.text()
             ExtractedSource(
                 url = videoUrl,
@@ -256,7 +263,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
     private fun stnQuality(quality: String): String {
         val intQuality = quality.trim().toIntOrNull() ?: return quality
         val result = STANDARD_QUALITIES.minByOrNull { abs(it - intQuality) } ?: intQuality
-        return "${result}p"
+        return if (abs(result - intQuality) <= 5) "${result}p" else "${intQuality}p"
     }
 
     /**
@@ -310,6 +317,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         private val RESOLUTION_REGEX by lazy { Regex("""RESOLUTION=([xX\d]+)""") }
         private val QUALITY_REGEX by lazy { Regex("""[xX](\d+)""") }
         private val BANDWIDTH_REGEX by lazy { Regex("""BANDWIDTH=(\d+)""") }
+        private val FRAME_RATE_REGEX by lazy { Regex("""FRAME-RATE=([\d.]+)""") }
 
         private val STANDARD_QUALITIES = listOf(144, 240, 360, 480, 720, 1080, 1440, 2160)
     }

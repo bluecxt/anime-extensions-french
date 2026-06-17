@@ -56,6 +56,7 @@ abstract class Source :
 
     fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
         val sourceQuality = this.quality
+        val sourceFrameRate = this.frameRate
         val sourceUrl = this.url
 
         val finalVideo = Video(
@@ -63,7 +64,10 @@ abstract class Source :
             videoTitle = buildString {
                 if (!lang.isNullOrBlank()) append("($lang) ")
                 append(name)
-                if (!sourceQuality.isNullOrBlank()) append(" - $sourceQuality")
+                if (!sourceFrameRate.isNullOrBlank() || !sourceQuality.isNullOrBlank()) append(" ✦ ")
+                if (!sourceQuality.isNullOrBlank()) append("$sourceQuality")
+                if (!sourceFrameRate.isNullOrBlank() && !sourceQuality.isNullOrBlank()) append(" ⫻ ")
+                if (!sourceFrameRate.isNullOrBlank()) append(sourceFrameRate)
             },
             headers = this.headers,
             subtitleTracks = this.subtitleTracks,
