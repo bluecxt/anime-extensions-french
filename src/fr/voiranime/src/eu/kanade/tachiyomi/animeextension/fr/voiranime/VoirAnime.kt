@@ -3,6 +3,7 @@
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import android.util.Base64
+import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -14,8 +15,10 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.VOIRANIME_LOG
+import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -28,28 +31,25 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class VoirAnime : Source() {
+class VoirAnime :
+    Source(),
+    CommonPreferences {
 
     override val name = "VoirAnime"
-    override val baseUrl by lazy { preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!! }
+    override val defaultBaseUrl = "https://voiranime.io"
+    override val baseUrl: String get() = currentBaseUrl
     override val lang = "fr"
     override val supportsLatest = true
 
+    override val supportedServers = listOf("Vidmoly")
+
     override val json: Json by injectLazy()
 
-    private val doodExtractor by lazy { DoodExtractor(client) }
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val voeExtractor by lazy { VoeExtractor(client, headers) }
-    private val vidMolyExtractor by lazy { VidMolyExtractor(client, headers) }
-    private val okruExtractor by lazy { OkruExtractor(client) }
-    private val vkExtractor by lazy { VkExtractor(client, headers) }
-    private val filemoonExtractor by lazy { FilemoonExtractor(client) }
-
-    private val qualityRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
-    private val sizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
-    private val serverDefaultRegex = Regex("(?i)(Sendvid|Sibnet|Doodstream|Voe|Vidmoly|Filemoon|Okru|VK):default")
-    private val pQualityRegex = Regex("""(\d+)p""")
     private val whitespaceRegex = Regex("\\s+")
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     // ============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -190,81 +190,40 @@ class VoirAnime : Source() {
 
     // ============================ Video Links =============================
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val response = client.newCall(GET(baseUrl + episode.url, headers)).awaitSuccess()
-        val document = response.asJsoup()
         val lang = if (episode.scanlator == "VF") "VF" else "VOSTFR"
 
-        return document.select("select.mirror option[data-index]").mapNotNull { element ->
-            val encodedData = element.attr("value")
-            if (encodedData.isBlank()) return@mapNotNull null
-
-            val decodedHtml = try {
-                Base64.decode(encodedData, Base64.DEFAULT).toString(java.nio.charset.StandardCharsets.UTF_8)
-            } catch (_: Exception) {
-                ""
-            }
-
-            val iframeUrl = Jsoup.parse(decodedHtml).selectFirst("iframe")?.attr("src") ?: return@mapNotNull null
-            val absoluteUrl = if (iframeUrl.startsWith("//")) "https:$iframeUrl" else iframeUrl
-
-            val server = when {
-                absoluteUrl.contains("dood") -> "Doodstream"
-                absoluteUrl.contains("sibnet") -> "Sibnet"
-                absoluteUrl.contains("voe") -> "Voe"
-                absoluteUrl.contains("vidmoly") -> "Vidmoly"
-                absoluteUrl.contains("ok.ru") -> "Okru"
-                absoluteUrl.contains("vk.com") -> "VK"
-                absoluteUrl.contains("filemoon") -> "Filemoon"
-                else -> "Serveur"
-            }
-
-            Hoster(hosterName = "($lang) $server", internalData = "$absoluteUrl|$lang|$server")
-        }
+        return listOf(Hoster(hosterName = lang, hosterUrl = episode.url))
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val data = hoster.internalData.split("|")
-        val absoluteUrl = data[0]
-        val lang = data[1]
-        val server = data[2]
-        val prefix = "($lang) $server - "
+        val url = baseUrl + hoster.hosterUrl
+        val lang = hoster.hosterName
 
-        val videos = when (server) {
-            "Doodstream" -> doodExtractor.videosFromUrl(absoluteUrl, prefix)
-            "Sibnet" -> sibnetExtractor.videosFromUrl(absoluteUrl, prefix)
-            "Voe" -> voeExtractor.videosFromUrl(absoluteUrl, prefix)
-            "Vidmoly" -> vidMolyExtractor.videosFromUrl(absoluteUrl, prefix)
-            "Okru" -> okruExtractor.videosFromUrl(absoluteUrl, prefix)
-            "VK" -> vkExtractor.videosFromUrl(absoluteUrl, prefix)
-            "Filemoon" -> filemoonExtractor.videosFromUrl(absoluteUrl, prefix)
-            else -> emptyList()
+        val response = client.newCall(GET(url)).awaitSuccess()
+        val document = response.asJsoup()
+
+        val videos = document.select("select.mirror option[data-index]").mapNotNull { element ->
+            val base64Value = element.attr("value")
+            val decoded = try {
+                Base64.decode(base64Value, Base64.DEFAULT).toString(java.nio.charset.StandardCharsets.UTF_8)
+            } catch (_: Exception) {
+                ""
+            }
+            val iframeUrl = Jsoup.parse(decoded).selectFirst("iframe")?.attr("src") ?: return@mapNotNull null
+            if (iframeUrl.startsWith("//")) {
+                "https:$iframeUrl"
+            } else {
+                iframeUrl
+            }
         }
 
-        return videos.map { video ->
-            Video(videoUrl = video.videoUrl, videoTitle = cleanQuality(video.videoTitle), headers = video.headers, subtitleTracks = video.subtitleTracks, audioTracks = video.audioTracks)
-        }.sortVideos()
-    }
-
-    private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(qualityRegex, "").replace(sizeRegex, "").replace(serverDefaultRegex, "$1").replace(" - - ", " - ").trim().removeSuffix("-").trim()
-        val servers = listOf("Vidmoly", "Sibnet", "Sendvid", "VK", "Filemoon", "Voe", "Doodstream", "Okru")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server", RegexOption.IGNORE_CASE), server).replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(whitespaceRegex, " ").replace(" - - ", " - ").trim()
-    }
-
-    override fun List<Video>.sortVideos(): List<Video> = this.sortedWith(
-        compareBy { pQualityRegex.find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0 },
-    ).reversed()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
+        Log.d(VOIRANIME_LOG, "list url = $videos")
+        return videos.map { playerUrl ->
+            extractVideos(playerUrl, lang, supportedServers)
+        }.flatten().coreSortVideos()
     }
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://voiranime.io"
     }
 }

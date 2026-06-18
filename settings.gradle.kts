@@ -14,6 +14,7 @@ loadIndividualExtension("fr", "animoflix")
 loadIndividualExtension("fr", "wiflix")
 loadIndividualExtension("fr", "extensiontest")
 loadIndividualExtension("fr", "adkami")
+loadIndividualExtension("fr", "voiranime")
 // loadIndividualExtension("all", "jellyfin")
 
 /**
