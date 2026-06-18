@@ -142,7 +142,7 @@ abstract class Source :
                     listOf(
                         ExtractedSource(
                             url = "https://localhost/error",
-                            quality = "Error: ${e.message ?: e.javaClass.simpleName}",
+                            quality = e.message ?: e.javaClass.simpleName,
                         ),
                     )
                 } else {
