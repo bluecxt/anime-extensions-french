@@ -22,6 +22,6 @@
 - [ ] frenchanime
 - [ ] frenchmanga
 - [ ] movix
-- [ ] voiranime
+- [x] voiranime
 - [x] wiflix
 - [x] adkami
