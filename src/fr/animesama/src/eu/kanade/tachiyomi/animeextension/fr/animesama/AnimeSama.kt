@@ -416,6 +416,7 @@ class AnimeSama :
         val lang = data[1]
 
         return urls.parallelMap { playerUrl ->
+            Log.v(ANIMESAMA_LOG, "player url = $playerUrl")
             extractVideos(playerUrl, lang, supportedServers)
         }.flatten().coreSortVideos()
     }

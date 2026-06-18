@@ -18,6 +18,7 @@ import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.network.CloudflareInterceptor
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -26,7 +27,7 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 
-val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 10000L else 30000L
+val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 10000L else 20000L
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
@@ -91,18 +92,18 @@ abstract class Source :
         val servers = filteredAllowedServers.mapNotNull { getVideoServer(this, it) }
         val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
 
-        val rawSources = withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
-            runCatching {
+        val rawSources = try {
+            withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
                 server.extractor(playerUrl)
-            }.onFailure { e ->
-                Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message}")
-            }.getOrDefault(emptyList())
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message ?: e.javaClass.simpleName}", e)
+            emptyList()
         } ?: run {
             Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT ms): ${server.name}")
             emptyList()
         }
-
-        Log.d(SERVER_LOG, "name = ${server.name} isEmpty ${rawSources.isEmpty()}")
 
         return rawSources.map { it.buildFromSource(lang, server.name) }
     }
