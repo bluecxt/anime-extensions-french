@@ -123,7 +123,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             val frameRate = FRAME_RATE_REGEX.find(stream)?.groupValues?.get(1)
                 ?.toDoubleOrNull()
                 ?.let { fps ->
-                    if (fps % 1.0 == 0.0) "${fps.toInt()}fps" else "${fps}fps"
+                    "${fps.toInt()}fps"
                 }
 
             val bandwidth = BANDWIDTH_REGEX.find(stream)
