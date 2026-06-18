@@ -25,10 +25,10 @@ open class VidaraExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val regex = Regex("""/(?:e|v)/([0-9a-zA-Z]+)""")
-        val mediaId = regex.find(url)?.groupValues?.get(1) ?: return emptyList()
+        val mediaId = regex.find(url)?.groupValues?.get(1) ?: throw Exception("Could not extract mediaId for Vidara/Streamix")
         Log.d(VIDARA_LOG, "Extracted mediaId: $mediaId")
 
-        val httpUrl = url.toHttpUrlOrNull() ?: return emptyList()
+        val httpUrl = url.toHttpUrlOrNull() ?: throw Exception("Invalid URL for Vidara/Streamix")
         val host = httpUrl.host
 
         val apiUrl = "https://$host$apiPath"
@@ -46,21 +46,13 @@ open class VidaraExtractor(private val client: OkHttpClient) {
             "device" to "web",
         ).toJsonRequestBody()
 
-        val response = try {
-            client.newCall(POST(apiUrl, headers, payload)).awaitSuccess()
-        } catch (e: Exception) {
-            Log.e(VIDARA_LOG, "API request failed: ${e.message}")
-            return emptyList()
-        }
+        val response = client.newCall(POST(apiUrl, headers, payload)).awaitSuccess()
 
         val responseBody = response.body.string()
         val data = runCatching { json.decodeFromString<VidaraResponse>(responseBody) }.getOrNull()
 
-        val streamingUrl = data?.streaming_url ?: run {
-            Log.e(VIDARA_LOG, "streaming_url not found in response: $responseBody")
-            return emptyList()
-        }
-        Log.d(VIDARA_LOG, "Found streamingUrl: $streamingUrl")
+        val streamingUrl = data?.streaming_url
+            ?: throw Exception("streaming_url not found in Vidara/Streamix response: $responseBody")
 
         val videoHeaders = headers.newBuilder()
             .removeAll("Content-Type")

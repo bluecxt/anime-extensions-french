@@ -3,7 +3,6 @@ package fr.bluecxt.core.extractors
 import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.FILEMOON_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import kotlinx.serialization.SerialName
@@ -45,91 +44,79 @@ class FilemoonExtractor(private val client: OkHttpClient) {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     suspend fun videosFromUrl(url: String, headers: Headers? = null): List<ExtractedSource> {
-        try {
-            Log.d(FILEMOON_LOG, "🚀 [START] Extraction (Programmatic): $url")
+        val userAgent = headers?.get("User-Agent") ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 
-            val userAgent = headers?.get("User-Agent") ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        val initialHeaders = (headers?.newBuilder() ?: Headers.Builder())
+            .set("User-Agent", userAgent)
+            .build()
 
-            val initialHeaders = (headers?.newBuilder() ?: Headers.Builder())
-                .set("User-Agent", userAgent)
-                .build()
+        // 1. Resolve actual host and mediaId
+        val initialResponse = client.newCall(Request.Builder().url(url).headers(initialHeaders).build()).awaitSuccess()
+        val resolvedUrl = initialResponse.request.url
+        var host = resolvedUrl.host
 
-            // 1. Resolve actual host and mediaId
-            val initialResponse = client.newCall(Request.Builder().url(url).headers(initialHeaders).build()).awaitSuccess()
-            val resolvedUrl = initialResponse.request.url
-            var host = resolvedUrl.host
-
-            // Redirect domains (static list from Python)
-            if (host in REDIRECT_DOMAINS || host == "filemoon.to") {
-                host = "streamlyplayer.online"
-            }
-
-            val mediaId = Regex("/(?:e|eyi|d|download|j\\d+)/([0-9a-zA-Z]+)").find(resolvedUrl.toString())?.groupValues?.get(1)
-                ?: return emptyList()
-
-            val apiHeaders = initialHeaders.newBuilder()
-                .set("Referer", url)
-                .set("Origin", "https://$host")
-                .build()
-
-            // 2. Try flows
-            var playbackData: PlaybackResponse? = null
-
-            // Try Legacy Flow first
-            try {
-                Log.d(FILEMOON_LOG, "🔄 Tentative Legacy Flow...")
-                playbackData = doLegacyFlow(host, mediaId, apiHeaders)
-            } catch (e: Exception) {
-                Log.d(FILEMOON_LOG, "⚠️ Legacy Flow failed: ${e.message}")
-            }
-
-            if (playbackData == null || (playbackData.sources.isNullOrEmpty() && playbackData.playback == null)) {
-                try {
-                    Log.d(FILEMOON_LOG, "🔄 Tentative Challenge Flow...")
-                    playbackData = doChallengeFlow(host, mediaId, apiHeaders, resolvedUrl.toString())
-                } catch (e: Exception) {
-                    Log.e(FILEMOON_LOG, "❌ Échec de tous les flows: ${e.message}")
-                    return emptyList()
-                }
-            }
-
-            // 3. Extract sources
-            val sources = mutableListOf<Source>()
-            playbackData.sources?.let { sources.addAll(it) }
-
-            playbackData.playback?.let {
-                try {
-                    val decrypted = decryptPlayback(it)
-                    val decryptedJson = json.decodeFromString<PlaybackResponse>(decrypted)
-                    decryptedJson.sources?.let { sources.addAll(it) }
-                } catch (e: Exception) {
-                    Log.e(FILEMOON_LOG, "❌ Erreur décryptage playback: ${e.message}")
-                }
-            }
-
-            if (sources.isEmpty()) return emptyList()
-
-            val streamUrl = sources.first().url.let {
-                if (it.startsWith("/")) "https://$host$it" else it
-            }
-
-            Log.d(FILEMOON_LOG, "✅ [SUCCESS] Flux trouvé: $streamUrl")
-
-            val finalHeaders = apiHeaders.newBuilder()
-                .set("User-Agent", userAgent)
-                .set("Referer", "https://$host/")
-                .build()
-
-            return playlistUtils.extractFromHls(
-                playlistUrl = streamUrl,
-                referer = "https://$host/",
-                masterHeaders = finalHeaders,
-                videoHeaders = finalHeaders,
-            )
-        } catch (e: Exception) {
-            Log.e(FILEMOON_LOG, "❌ [ERROR] Extraction failed: ${e.message}")
-            return emptyList()
+        // Redirect domains (static list from Python)
+        if (host in REDIRECT_DOMAINS || host == "filemoon.to") {
+            host = "streamlyplayer.online"
         }
+
+        val mediaId = Regex("/(?:e|eyi|d|download|j\\d+)/([0-9a-zA-Z]+)").find(resolvedUrl.toString())?.groupValues?.get(1)
+            ?: throw Exception("Filemoon: Could not extract media ID from $resolvedUrl")
+
+        val apiHeaders = initialHeaders.newBuilder()
+            .set("Referer", url)
+            .set("Origin", "https://$host")
+            .build()
+
+        // 2. Try flows
+        var playbackData: PlaybackResponse? = null
+
+        // Try Legacy Flow first
+        try {
+            playbackData = doLegacyFlow(host, mediaId, apiHeaders)
+        } catch (_: Exception) {
+            // Log.d("Filemoon", "Legacy Flow failed: ${e.message}")
+        }
+
+        if (playbackData == null || (playbackData.sources.isNullOrEmpty() && playbackData.playback == null)) {
+            try {
+                playbackData = doChallengeFlow(host, mediaId, apiHeaders, resolvedUrl.toString())
+            } catch (e: Exception) {
+                throw Exception("Filemoon: All extraction flows failed: ${e.message}", e)
+            }
+        }
+
+        // 3. Extract sources
+        val sources = mutableListOf<Source>()
+        playbackData.sources?.let { sources.addAll(it) }
+
+        playbackData.playback?.let {
+            try {
+                val decrypted = decryptPlayback(it)
+                val decryptedJson = json.decodeFromString<PlaybackResponse>(decrypted)
+                decryptedJson.sources?.let { sources.addAll(it) }
+            } catch (e: Exception) {
+                // Ignore decryption errors for individual playback parts if we have others
+            }
+        }
+
+        if (sources.isEmpty()) throw Exception("Filemoon: No sources found in playback data")
+
+        val streamUrl = sources.first().url.let {
+            if (it.startsWith("/")) "https://$host$it" else it
+        }
+
+        val finalHeaders = apiHeaders.newBuilder()
+            .set("User-Agent", userAgent)
+            .set("Referer", "https://$host/")
+            .build()
+
+        return playlistUtils.extractFromHls(
+            playlistUrl = streamUrl,
+            referer = "https://$host/",
+            masterHeaders = finalHeaders,
+            videoHeaders = finalHeaders,
+        )
     }
 
     private suspend fun doLegacyFlow(host: String, mediaId: String, headers: Headers): PlaybackResponse {

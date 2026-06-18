@@ -1,5 +1,6 @@
 package fr.bluecxt.core.extractors
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
@@ -24,7 +25,7 @@ class VkExtractor(private val client: OkHttpClient, private val headers: Headers
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val data = client.newCall(GET(url, documentHeaders)).awaitSuccess().body.string()
 
-        return REGEX_VIDEO.findAll(data).map {
+        val videos = REGEX_VIDEO.findAll(data).map {
             val quality = it.groupValues[1]
             val videoUrl = it.groupValues[2].replace("\\/", "/")
             ExtractedSource(
@@ -33,6 +34,10 @@ class VkExtractor(private val client: OkHttpClient, private val headers: Headers
                 quality = quality,
             )
         }.toList()
+
+        if (videos.isEmpty()) throw Exception("Vk: No video URLs found in response")
+
+        return videos
     }
 
     companion object {

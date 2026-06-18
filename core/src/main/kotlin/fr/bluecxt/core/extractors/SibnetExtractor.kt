@@ -1,8 +1,10 @@
 package fr.bluecxt.core.extractors
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.SIBNET_LOG
 import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
@@ -13,12 +15,30 @@ import okhttp3.OkHttpClient
 class SibnetExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val videoList = mutableListOf<ExtractedSource>()
+        var document = client.newCall(GET(url)).awaitSuccess().asJsoup()
 
-        val document = client.newCall(
-            GET(url),
-        ).awaitSuccess().asJsoup()
-        val script = document.selectFirst("script:containsData(player.src)")?.data() ?: return emptyList()
+        var script = document.selectFirst("script:containsData(player.src)")?.data()
+
+        if (script == null) {
+            val html = document.html()
+            if (html.contains("Видео недоступно") || html.contains("Video not available")) {
+                throw fr.bluecxt.core.ContentUnavailableException("Sibnet: Video explicitly marked as unavailable")
+            }
+
+            Log.d(SIBNET_LOG, "Player script not found, retrying in 1s...")
+            kotlinx.coroutines.delay(1000)
+            document = client.newCall(GET(url)).awaitSuccess().asJsoup()
+            script = document.selectFirst("script:containsData(player.src)")?.data()
+
+            if (script == null) {
+                val retryHtml = document.html()
+                if (retryHtml.contains("Видео недоступно") || retryHtml.contains("Video not available")) {
+                    throw fr.bluecxt.core.ContentUnavailableException("Sibnet: Video explicitly marked as unavailable")
+                }
+                throw Exception("Could not find player script in Sibnet (Title: ${document.title()})")
+            }
+        }
+
         val slug = script.substringAfter("player.src").substringAfter("src:")
             .substringAfter("\"").substringBefore("\"")
 

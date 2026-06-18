@@ -1,6 +1,5 @@
 package fr.bluecxt.core.extractors
 
-import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
@@ -21,44 +20,34 @@ class LuluExtractor(private val client: OkHttpClient) {
     )
 
     fun videosFromUrl(url: String): List<ExtractedSource> {
-        val videos = mutableListOf<ExtractedSource>()
+        val html = client.newCall(GET(url, headers)).execute().bodyString()
+        val m3u8Url = extractM3u8Url(html)
+        val fixedUrl = fixM3u8Link(m3u8Url)
+        val quality = getResolution(fixedUrl)
 
-        try {
-            val html = client.newCall(GET(url, headers)).execute().bodyString()
-            val m3u8Url = extractM3u8Url(html) ?: return emptyList()
-            val fixedUrl = fixM3u8Link(m3u8Url)
-            val quality = getResolution(fixedUrl)
-
-            videos.add(
-                ExtractedSource(
-                    url = fixedUrl,
-                    quality = quality,
-                    headers = headers,
-                ),
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        return videos
+        return listOf(
+            ExtractedSource(
+                url = fixedUrl,
+                quality = quality ?: "Unknown",
+                headers = headers,
+            ),
+        )
     }
 
-    private fun extractM3u8Url(html: String): String? {
-        return when {
-            html.contains("eval(function(p,a,c,k,e") -> {
-                val unpacked = autoUnpacker(html) ?: return null
-                Pattern.compile("sources:\\[\\{file:\"([^\"]+)\"")
-                    .matcher(unpacked)
-                    .takeIf { it.find() }
-                    ?.group(1)
-            }
+    private fun extractM3u8Url(html: String): String = when {
+        html.contains("eval(function(p,a,c,k,e") -> {
+            val unpacked = autoUnpacker(html) ?: throw Exception("LuluExtractor: Could not unpack script")
+            Pattern.compile("sources:\\[\\{file:\"([^\"]+)\"")
+                .matcher(unpacked)
+                .takeIf { it.find() }
+                ?.group(1) ?: throw Exception("LuluExtractor: Could not find m3u8 in unpacked script")
+        }
 
-            else -> {
-                Pattern.compile("sources: \\[\\{file:\"(https?://[^\"]+)\"")
-                    .matcher(html)
-                    .takeIf { it.find() }
-                    ?.group(1)
-            }
+        else -> {
+            Pattern.compile("sources: \\[\\{file:\"(https?://[^\"]+)\"")
+                .matcher(html)
+                .takeIf { it.find() }
+                ?.group(1) ?: throw Exception("LuluExtractor: Could not find m3u8 in HTML")
         }
     }
 

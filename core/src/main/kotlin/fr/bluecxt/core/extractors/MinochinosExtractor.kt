@@ -21,22 +21,22 @@ class MinochinosExtractor(private val client: OkHttpClient) {
 
         val script = document.select("script").find {
             it.html().contains("eval(function(p,a,c,k,e,d)")
-        }?.html() ?: return emptyList()
+        }?.html() ?: throw Exception("MinoChinos: Could not find packed script")
 
-        val unpacked = autoUnpacker(script) ?: return emptyList()
-        Log.d("MinoChinosExtractor", "Unpacked script: $unpacked")
+        val unpacked = autoUnpacker(script) ?: throw Exception("MinoChinos: Could not unpack script")
 
         // Extract links from the unpacked script
         // var links={"hls3":"...","hls4":"...","hls2":"..."};
         val linksJson = unpacked.substringAfter("var links=", "").substringBefore(";", "")
-        Log.d("MinoChinosExtractor", "Links JSON: $linksJson")
-        if (linksJson.isEmpty()) return emptyList()
+        if (linksJson.isEmpty()) throw Exception("MinoChinos: Could not find links in unpacked script")
 
         val videoEntries = linkRegex.findAll(linksJson).map {
             it.groupValues[1] to it.groupValues[2]
         }.filter { (key, _) -> key == "hls3" }.toList()
 
-        return videoEntries.parallelCatchingFlatMap { (key, videoUrl) ->
+        if (videoEntries.isEmpty()) throw Exception("MinoChinos: No hls3 links found in script")
+
+        val result = videoEntries.parallelCatchingFlatMap { (key, videoUrl) ->
             val fixedUrl = if (videoUrl.startsWith("/")) {
                 val urlObj = url.toHttpUrl()
                 "${urlObj.scheme}://${urlObj.host}$videoUrl"
@@ -44,13 +44,15 @@ class MinochinosExtractor(private val client: OkHttpClient) {
                 videoUrl
             }
 
-            Log.d("MinoChinosExtractor", "Processing $key: $fixedUrl")
-
             playlistUtils.extractFromHls(
                 fixedUrl,
                 referer = url,
             )
         }
+
+        if (result.isEmpty()) throw Exception("MinoChinos: Failed to extract any videos from links")
+
+        return result
     }
 
     companion object {

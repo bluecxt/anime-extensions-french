@@ -30,9 +30,9 @@ class UqloadExtractor(private val client: OkHttpClient) {
 
         val soup = client.newCall(GET(trueUrl, headers)).await().asJsoup()
 
-        val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: return emptyList()
+        val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: throw Exception("Could not find script with video data in Uqload")
 
-        val unpackedJs = autoUnpacker(script) ?: return emptyList()
+        val unpackedJs = autoUnpacker(script) ?: throw Exception("Could not unpack script in Uqload")
 
         val m3u8Master = Regex("""sources:\s*\[\{\s*file:\s*"([^"]+)"""").find(unpackedJs)?.groupValues?.get(1)
 
@@ -70,6 +70,6 @@ class UqloadExtractor(private val client: OkHttpClient) {
             }
         }
 
-        return emptyList()
+        throw Exception("Uqload: No video sources found (HLS or MP4)")
     }
 }

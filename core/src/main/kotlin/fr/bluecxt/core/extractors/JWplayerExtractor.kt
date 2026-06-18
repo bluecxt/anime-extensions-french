@@ -12,7 +12,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.JWPLAYER_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import kotlinx.coroutines.Dispatchers
@@ -37,14 +36,10 @@ class JWplayerExtractor(private val client: OkHttpClient) {
         val httpUrl = url.toHttpUrl()
         val host = httpUrl.host
 
-        Log.d(JWPLAYER_LOG, "🚀 [START] Début de l'extraction pour: $url")
-
         // 1. Sniffing du flux m3u8 via WebView
         val m3u8Url = sniffM3u8(url)
 
         if (m3u8Url != null) {
-            Log.d(JWPLAYER_LOG, "✅ [MATCH] Flux intercepté: $m3u8Url")
-
             val finalHeaders = (headers?.newBuilder() ?: Headers.Builder())
                 .set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0")
                 .set("Origin", "https://$host")
@@ -58,8 +53,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                 videoHeaders = finalHeaders,
             )
         } else {
-            Log.e(JWPLAYER_LOG, "❌ [ERROR] Échec de l'interception (Timeout ou blocage)")
-            emptyList()
+            throw Exception("JWPlayer: Failed to intercept m3u8 URL (Timeout or block)")
         }
     }
 
@@ -86,10 +80,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                 }
 
                 view.webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(cm: android.webkit.ConsoleMessage?): Boolean {
-                        Log.d(JWPLAYER_LOG, "🌐 [JS] ${cm?.message()}")
-                        return true
-                    }
+                    override fun onConsoleMessage(cm: android.webkit.ConsoleMessage?): Boolean = true
                 }
 
                 view.webViewClient = object : WebViewClient() {
@@ -103,10 +94,6 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                             return super.shouldInterceptRequest(view, request)
                         }
 
-                        // Debug des étapes de sécurité
-                        if (reqUrl.contains("access/challenge")) Log.d(JWPLAYER_LOG, "🔐 [SEC] Calcul du PoW détecté...")
-                        if (reqUrl.contains("access/attest")) Log.d(JWPLAYER_LOG, "🔓 [SEC] PoW Validé par le serveur !")
-
                         // Injection du clic dans l'iframe au vol
                         val isPotentialHtml = (reqUrl.contains("/e/") || reqUrl.contains("/k8hn/") || reqUrl.contains("nzn3.org")) &&
                             !reqUrl.contains("/api/") && !reqUrl.contains("assets") &&
@@ -118,18 +105,15 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                                     client.newCall(Request.Builder().url(reqUrl).build()).awaitSuccess()
                                 }
                                 if (response.header("Content-Type")?.contains("text/html") == true) {
-                                    Log.d(JWPLAYER_LOG, "💉 [INJECT] Iframe HTML identifiée : $reqUrl")
                                     val html = response.body.string()
 
                                     val injectedHtml = html.replace(
                                         "</body>",
                                         """
                                         <script>
-                                            console.log("AutoClick: Scanning for play button...");
                                             const interval = setInterval(() => {
                                                 const btn = document.querySelector('button.captcha-gate__play') || document.querySelector('.play-button');
                                                 if (btn) {
-                                                    console.log("AutoClick: Button found, clicking!");
                                                     btn.click();
                                                     clearInterval(interval);
                                                 }
@@ -141,19 +125,14 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                                     return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(injectedHtml.toByteArray()))
                                 }
                             } catch (e: Exception) {
-                                Log.e(JWPLAYER_LOG, "⚠️ [INJECT] Erreur injection: ${e.message}")
+                                // Ignore injection errors
                             }
                         }
                         return super.shouldInterceptRequest(view, request)
                     }
-
-                    override fun onPageFinished(view: WebView?, finishedUrl: String?) {
-                        Log.d(JWPLAYER_LOG, "📄 [LOAD] Page principale chargée.")
-                    }
                 }
                 view.loadUrl(url)
             } catch (e: Exception) {
-                Log.e(JWPLAYER_LOG, "💥 [CRASH] WebView: ${e.message}")
                 latch.countDown()
             }
         }

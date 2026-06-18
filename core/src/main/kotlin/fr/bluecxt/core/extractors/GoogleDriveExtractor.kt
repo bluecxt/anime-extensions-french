@@ -1,5 +1,6 @@
 package fr.bluecxt.core.extractors
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
@@ -59,6 +60,9 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
                 ),
             )
         }
+
+        if (videoList.isEmpty()) throw Exception("GoogleDrive: No video sources found")
+
         return videoList
     }
 

@@ -1,11 +1,11 @@
 package fr.bluecxt.core.extractors
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.OkHttpClient
 import org.json.JSONObject
-import uy.kohesive.injekt.injectLazy
 
 class MymailExtractor(private val client: OkHttpClient) {
     private companion object {
@@ -16,10 +16,10 @@ class MymailExtractor(private val client: OkHttpClient) {
         val apiUrl = API + id
 
         val response = client.newCall(GET(apiUrl)).awaitSuccess()
-        if (!response.isSuccessful) return emptyList()
+        val responseBody = response.body.string()
 
-        val json = JSONObject(response.body.string())
-        val videosArray = json.optJSONArray("videos") ?: return emptyList()
+        val json = JSONObject(responseBody)
+        val videosArray = json.optJSONArray("videos") ?: throw Exception("Could not find video data in Mymail response")
 
         val results = mutableListOf<ExtractedSource>()
 
@@ -39,6 +39,9 @@ class MymailExtractor(private val client: OkHttpClient) {
                 ),
             )
         }
+
+        if (results.isEmpty()) throw Exception("Mymail: No video sources found")
+
         return results.reversed()
     }
 }

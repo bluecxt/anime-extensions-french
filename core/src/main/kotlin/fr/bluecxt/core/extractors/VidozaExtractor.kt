@@ -47,12 +47,11 @@ class VidozaExtractor(private val client: OkHttpClient) {
             }
 
             else -> {
-                Log.w(VIDOZA_LOG, "no link found")
-                return emptyList()
+                throw Exception("Vidoza: No video links found in HTML")
             }
         }
 
-        return matches.mapNotNull { match ->
+        val videoList = matches.mapNotNull { match ->
             val url = match.groupValues.get(1)
             val quality = match.groupValues.get(2)
             ExtractedSource(
@@ -61,5 +60,9 @@ class VidozaExtractor(private val client: OkHttpClient) {
                 headers = headers,
             )
         }
+
+        if (videoList.isEmpty()) throw Exception("Vidoza: Failed to parse video links from matches")
+
+        return videoList
     }
 }

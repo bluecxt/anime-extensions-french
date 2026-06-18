@@ -19,6 +19,9 @@ import fr.bluecxt.core.network.CloudflareInterceptor
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -26,8 +29,15 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
+import kotlin.random.Random
 
 val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 10000L else 20000L
+
+/**
+ * Global semaphore to limit the number of concurrent extractions.
+ * Prevents overwhelming video servers and local DNS/OkHttp connection pools.
+ */
+private val extractionSemaphore = Semaphore(4)
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
@@ -46,6 +56,12 @@ abstract class Source :
 
     override val client: okhttp3.OkHttpClient by lazy {
         network.client.newBuilder()
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    maxRequests = 64
+                    maxRequestsPerHost = 20
+                },
+            )
             .addInterceptor(CloudflareInterceptor(network.client))
             .addInterceptor { chain ->
                 logUsage()
@@ -93,16 +109,58 @@ abstract class Source :
         val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
 
         val rawSources = try {
-            withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
-                server.extractor(playerUrl)
+            extractionSemaphore.withPermit {
+                withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
+                    delay(Random.nextLong(0, 500))
+                    server.extractor(playerUrl)
+                }
             }
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message ?: e.javaClass.simpleName}", e)
-            emptyList()
+            if (e is kotlinx.coroutines.CancellationException) {
+                Log.d(SERVER_LOG, "Job was cancelled by the app for ${server.name}")
+                throw e
+            }
+
+            if (e is ContentUnavailableException) {
+                Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")
+                emptyList()
+            } else if (e is RateLimitException) {
+                Log.w(SERVER_LOG, "Rate limited on ${server.name}: ${e.message}")
+                if (keiyoushi.core.BuildConfig.DEBUG) {
+                    listOf(
+                        ExtractedSource(
+                            url = "https://localhost/ratelimit",
+                            quality = "Rate Limited: ${server.name}",
+                        ),
+                    )
+                } else {
+                    emptyList()
+                }
+            } else {
+                Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message ?: e.javaClass.simpleName}", e)
+                if (keiyoushi.core.BuildConfig.DEBUG) {
+                    listOf(
+                        ExtractedSource(
+                            url = "https://localhost/error",
+                            quality = "Error: ${e.message ?: e.javaClass.simpleName}",
+                        ),
+                    )
+                } else {
+                    emptyList()
+                }
+            }
         } ?: run {
             Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT ms): ${server.name}")
-            emptyList()
+            if (keiyoushi.core.BuildConfig.DEBUG) {
+                listOf(
+                    ExtractedSource(
+                        url = "https://localhost/timeout",
+                        quality = "Timeout (${EXTRACTOR_TIMEOUT}ms)",
+                    ),
+                )
+            } else {
+                emptyList()
+            }
         }
 
         return rawSources.map { it.buildFromSource(lang, server.name) }

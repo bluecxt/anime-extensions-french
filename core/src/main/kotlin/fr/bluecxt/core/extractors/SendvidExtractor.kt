@@ -1,5 +1,6 @@
 package fr.bluecxt.core.extractors
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
@@ -14,9 +15,9 @@ import okhttp3.OkHttpClient
 class SendvidExtractor(private val client: OkHttpClient, private val headers: Headers) {
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
-    suspend fun videosFromUrl(url: String, prefix: String = ""): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val document = client.newCall(GET(url, headers)).awaitSuccess().asJsoup()
-        val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: return emptyList()
+        val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: throw Exception("Could not find video source in Sendvid")
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
 
         val headers = defaultHeaders(httpUrl.toString())

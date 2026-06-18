@@ -4,9 +4,10 @@ const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleW
 
 const val HUB_SEASON_NUMBER = -2.0
 
-// All log ids
+// utils logs
 
 const val SERVER_LOG: String = "serverLog"
+const val PLAYLIST_LOG: String = "PlaylistLog"
 
 // extractor logs
 

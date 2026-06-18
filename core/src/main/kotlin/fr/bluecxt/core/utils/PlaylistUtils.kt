@@ -1,10 +1,12 @@
 package fr.bluecxt.core.utils
 
 import android.net.Uri
+import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.PLAYLIST_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.UrlUtils
 import keiyoushi.utils.bodyString
@@ -77,9 +79,23 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
     ): List<ExtractedSource> {
         val masterHeaders = masterHeadersGen(headers, referer)
 
-        val masterPlaylist = client.newCall(GET(playlistUrl, masterHeaders))
-            .awaitSuccess().bodyString()
-
+        var masterPlaylist = ""
+        var attempts = 0
+        while (attempts < 3) {
+            try {
+                masterPlaylist = client.newCall(GET(playlistUrl, masterHeaders))
+                    .awaitSuccess().bodyString()
+                break
+            } catch (e: Exception) {
+                attempts++
+                if (attempts >= 3) {
+                    Log.e(PLAYLIST_LOG, "Failed to fetch HLS playlist after 3 attempts: $playlistUrl", e)
+                    throw e
+                }
+                Log.w(PLAYLIST_LOG, "HLS fetch failed (attempt $attempts), retrying in 1s... (${e.message})")
+                kotlinx.coroutines.delay(1000)
+            }
+        }
         // Check if there isn't multiple streams available
         if (PLAYLIST_SEPARATOR !in masterPlaylist) {
             return listOf(

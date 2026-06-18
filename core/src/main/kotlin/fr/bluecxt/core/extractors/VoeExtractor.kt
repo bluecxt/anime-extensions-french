@@ -45,9 +45,13 @@ class VoeExtractor(private val client: OkHttpClient) {
             }
         }
 
-        return newMethod(html, headers, currentUrl).ifEmpty {
+        val results = newMethod(html, headers, currentUrl).ifEmpty {
             fallbackMethod(html, headers)
         }
+
+        if (results.isEmpty()) throw Exception("Voe: Failed to extract video using both new and fallback methods")
+
+        return results
     }
 
     private suspend fun newMethod(html: String, headers: Headers, url: String): List<ExtractedSource> {
