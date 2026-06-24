@@ -19,7 +19,7 @@
 - [x] animesama
 - [x] animoflix
 - [x] franime
-- [ ] frenchanime
+- [x] frenchanime
 - [ ] frenchmanga
 - [ ] movix
 - [x] voiranime

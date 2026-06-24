@@ -7,25 +7,11 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
-import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.luluextractor.LuluExtractor
-import eu.kanade.tachiyomi.lib.okruextractor.OkruExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.streamhidevidextractor.StreamHideVidExtractor
-import eu.kanade.tachiyomi.lib.streamhubextractor.StreamHubExtractor
-import eu.kanade.tachiyomi.lib.streamvidextractor.StreamVidExtractor
-import eu.kanade.tachiyomi.lib.streamwishextractor.StreamWishExtractor
-import eu.kanade.tachiyomi.lib.upstreamextractor.UpstreamExtractor
-import eu.kanade.tachiyomi.lib.uqloadextractor.UqloadExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
-import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
-import eu.kanade.tachiyomi.lib.vudeoextractor.VudeoExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.json.Json
 import okhttp3.Request
@@ -33,19 +19,39 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+// import eu.kanade.tachiyomi.lib.streamhidevidextractor.StreamHideVidExtractor
+// import eu.kanade.tachiyomi.lib.streamhubextractor.StreamHubExtractor
+// import eu.kanade.tachiyomi.lib.streamvidextractor.StreamVidExtractor
+// import eu.kanade.tachiyomi.lib.streamwishextractor.StreamWishExtractor
+// import eu.kanade.tachiyomi.lib.upstreamextractor.UpstreamExtractor
+// import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
 
-class FrenchAnime : Source() {
+class FrenchAnime :
+    Source(),
+    CommonPreferences {
 
     override val name = "French Anime"
-    override val baseUrl: String
-        get() = preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
+    override val defaultBaseUrl = "https://french-anime.com"
+    override val baseUrl: String get() = currentBaseUrl
     override val lang = "fr"
     override val supportsLatest = true
+
+    override val supportedServers = listOf(
+        "Filemoon",
+        "Lulu",
+        "Dood",
+        "Uqload",
+        "Vidoza",
+        "Sibnet",
+        "Vidmoly",
+        "Voe",
+        "Vudeo",
+    )
 
     override val json: Json by injectLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
+        super<CommonPreferences>.setupPreferenceScreen(screen)
     }
 
     // ============================== Popular ===============================
@@ -149,108 +155,26 @@ class FrenchAnime : Source() {
     }
 
     // ============================ Video Links =============================
-    private val doodExtractor by lazy { DoodExtractor(client) }
-    private val upstreamExtractor by lazy { UpstreamExtractor(client) }
-    private val vudeoExtractor by lazy { VudeoExtractor(client) }
-    private val uqloadExtractor by lazy { UqloadExtractor(client) }
-    private val streamHideVidExtractor by lazy { StreamHideVidExtractor(client, headers) }
-    private val streamVidExtractor by lazy { StreamVidExtractor(client) }
-    private val vidoExtractor by lazy { VidoExtractor(client) }
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val okruExtractor by lazy { OkruExtractor(client) }
-    private val streamHubExtractor by lazy { StreamHubExtractor(client) }
-    private val vidmolyExtractor by lazy { VidMolyExtractor(client) }
-    private val voeExtractor by lazy { VoeExtractor(client, headers) }
-    private val filemoonExtractor by lazy { FilemoonExtractor(client) }
-    private val luluExtractor by lazy { LuluExtractor(client, headers) }
-    private val streamWishExtractor by lazy { StreamWishExtractor(client, headers) }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val parts = episode.url.split("|")
         val lang = parts.getOrNull(0) ?: "VOSTFR"
         val rawUrl = parts.getOrNull(1) ?: episode.url
 
-        val hosters = mutableListOf<Hoster>()
-        rawUrl.split(",").filter { it.isNotBlank() }.forEach { playerUrl ->
-            val server = when {
-                playerUrl.contains("filemoon") -> "Filemoon"
-                playerUrl.contains("lulu") || playerUrl.contains("vidzy") || playerUrl.contains("vidnest") -> "Lulu"
-                playerUrl.contains("wish") -> "StreamWish"
-                playerUrl.contains("dood") || playerUrl.contains("d0000d") -> "Doodstream"
-                playerUrl.contains("upstream") -> "Upstream"
-                playerUrl.contains("vudeo") -> "Vudeo"
-                playerUrl.contains("uqload") -> "Uqload"
-                playerUrl.contains("guccihide") || playerUrl.contains("streamhide") -> "StreamHide"
-                playerUrl.contains("streamvid") -> "StreamVid"
-                playerUrl.contains("vido") -> "Vidoza"
-                playerUrl.contains("sibnet") -> "Sibnet"
-                playerUrl.contains("ok.ru") -> "Okru"
-                playerUrl.contains("streamhub.gg") -> "StreamHub"
-                playerUrl.contains("vidmoly") -> "Vidmoly"
-                playerUrl.contains("voe.sx") -> "Voe"
-                else -> "Serveur"
-            }
-            hosters.add(Hoster(hosterName = "($lang) $server", internalData = "$playerUrl|$lang|$server"))
-        }
-        return hosters
+        return listOf(
+            Hoster(
+                hosterName = lang,
+                hosterUrl = rawUrl,
+            ),
+        )
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val data = hoster.internalData.split("|")
-        val playerUrl = data[0]
-        val lang = data[1]
-        val server = data[2]
-        val prefix = "($lang) $server - "
+        val rawUrl = hoster.hosterUrl
+        val lang = hoster.hosterName
 
-        val videos = when (server) {
-            "Filemoon" -> filemoonExtractor.videosFromUrl(playerUrl, prefix)
-            "Lulu" -> luluExtractor.videosFromUrl(playerUrl, prefix)
-            "StreamWish" -> streamWishExtractor.videosFromUrl(playerUrl, videoNameGen = { quality -> "$prefix$quality" })
-            "Doodstream" -> doodExtractor.videosFromUrl(playerUrl, prefix)
-            "Upstream" -> upstreamExtractor.videosFromUrl(playerUrl, prefix)
-            "Vudeo" -> vudeoExtractor.videosFromUrl(playerUrl, prefix)
-            "Uqload" -> uqloadExtractor.videosFromUrl(playerUrl, prefix)
-            "StreamHide" -> streamHideVidExtractor.videosFromUrl(playerUrl) { quality -> "$prefix$quality" }
-            "StreamVid" -> streamVidExtractor.videosFromUrl(playerUrl, prefix)
-            "Vidoza" -> vidoExtractor.videosFromUrl(playerUrl, prefix)
-            "Sibnet" -> sibnetExtractor.videosFromUrl(playerUrl, prefix)
-            "Okru" -> okruExtractor.videosFromUrl(playerUrl, prefix)
-            "StreamHub" -> streamHubExtractor.videosFromUrl(playerUrl, prefix)
-            "Vidmoly" -> vidmolyExtractor.videosFromUrl(playerUrl, prefix)
-            "Voe" -> voeExtractor.videosFromUrl(playerUrl, prefix)
-            else -> emptyList()
-        }
-
-        return videos.map {
-            Video(videoUrl = it.videoUrl, videoTitle = cleanQuality(it.videoTitle), headers = it.headers, subtitleTracks = it.subtitleTracks, audioTracks = it.audioTracks)
-        }.sortVideos()
-    }
-
-    private fun cleanQuality(quality: String): String {
-        var cleaned = quality.replace(Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s"), "")
-            .replace(Regex("\\s*\\(\\d+x\\d+\\)"), "")
-            .replace(Regex("(?i)(?:Sendvid|Sibnet|Doodstream|Voe):default"), "")
-            .replace(" - - ", " - ")
-            .trim()
-            .removeSuffix("-")
-            .trim()
-
-        val servers = listOf("Lulu", "Sibnet", "Voe", "Doodstream", "Sendvid", "Vidmoly", "Filemoon", "Upstream", "Vudeo", "Uqload", "StreamHide", "StreamVid", "Vidoza", "StreamHub", "StreamWish")
-        for (server in servers) {
-            cleaned = cleaned.replace(Regex("(?i)$server\\s*-\\s*$server(?!:)", RegexOption.IGNORE_CASE), server)
-            cleaned = cleaned.replace(Regex("(?i)$server:", RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.replace(Regex("\\s+"), " ").replace(" - - ", " - ").trim()
-    }
-
-    override fun List<Video>.sortVideos(): List<Video> = this.sortedWith(
-        compareBy {
-            Regex("""(\d+)p""").find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        },
-    ).reversed()
-
-    companion object {
-        private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://french-anime.com"
+        return rawUrl.split(",").filter { it.isNotBlank() }.flatMap { playerUrl ->
+            extractVideos(playerUrl, lang, supportedServers)
+        }.coreSortVideos()
     }
 }

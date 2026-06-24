@@ -1,9 +1,9 @@
 package fr.bluecxt.core.extractors
 
-import fr.bluecxt.core.model.ExtractedSource
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -27,7 +27,7 @@ class VudeoExtractor(private val client: OkHttpClient) {
             .map { videoUrl ->
                 ExtractedSource(
                     url = videoUrl,
-                    headers = headers
+                    headers = headers,
                 )
             }
     }

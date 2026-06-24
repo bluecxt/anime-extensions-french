@@ -35,7 +35,7 @@ val DEFAULT_SERVER = listOf(
     "Vidoza",
     "Lulu",
     "Uqload",
-    "Vudeo"
+    "Vudeo",
 )
 
 /**
