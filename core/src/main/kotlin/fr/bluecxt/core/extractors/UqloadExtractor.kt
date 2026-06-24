@@ -28,7 +28,13 @@ class UqloadExtractor(private val client: OkHttpClient) {
 
         val streamingHeaders = defaultHeaders(referer = "${parsedUrl.scheme}://${parsedUrl.host}")
 
-        val soup = client.newCall(GET(trueUrl, headers)).await().asJsoup()
+        val response = client.newCall(GET(trueUrl, headers)).await()
+        val finalUrl = response.request.url
+        val path = finalUrl.encodedPath
+        if (path == "/" || path.isEmpty()) {
+            throw fr.bluecxt.core.ContentUnavailableException("Uqload: Video not found (redirected to host homepage: ${finalUrl.host})")
+        }
+        val soup = response.asJsoup()
 
         val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: throw Exception("Could not find script with video data in Uqload")
 
