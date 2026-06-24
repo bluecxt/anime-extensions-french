@@ -3,6 +3,7 @@ ext {
     extClass = '.FrenchAnime'
     baseUrl = 'https://french-anime.com'
     extVersionCode = 41
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

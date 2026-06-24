@@ -8,8 +8,10 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
+import fr.bluecxt.core.SelectorException
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.safeRelativePath
@@ -60,7 +62,7 @@ class FrenchAnime :
         val document = response.asJsoup()
         val animes = document.select("div#dle-content > div.mov").map { element ->
             SAnime.create().apply {
-                val link = element.selectFirst("a[href]")!!
+                val link = element.selectFirst("a[href]") ?: throw SelectorException("link not found")
                 url = link.safeRelativePath()
 
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
@@ -80,13 +82,22 @@ class FrenchAnime :
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query&search_start=$page", headers)).execute()
         val document = response.asJsoup()
-        val animes = document.select("div#dle-content > div.mov").map { element ->
+        val animes = document.select("div#dle-content > div.mov").mapNotNull { element ->
             SAnime.create().apply {
-                val link = element.selectFirst("a[href]")!!
+                val link = element.selectFirst("a[href]") ?: throw SelectorException("link not found")
                 url = link.safeRelativePath()
 
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
-                title = "${link.text()} ${element.selectFirst("span.block-sai")?.text() ?: ""}".trim()
+
+                val details = element.selectFirst("span.block-sai")?.text()?.trim() ?: ""
+                val season = details.filter { it.isDigit() }?.toIntOrNull()
+                val lang = Regex("(?i)vostfr|vf").find(details)?.value?.uppercase()
+
+                title = buildString {
+                    append(link.text())
+                    if (season != null) append(season)
+                    if (lang != null) append(lang)
+                }
             }
         }
         val hasNextPage = document.selectFirst("span.navigation > span:not(.nav_ext) + a") != null
@@ -99,7 +110,6 @@ class FrenchAnime :
         val document = response.asJsoup()
 
         val h1 = document.selectFirst("h1")
-        anime.title = h1?.text()?.trim() ?: anime.title
         anime.thumbnail_url = document.selectFirst("#posterimg")?.absUrl("src") ?: anime.thumbnail_url
 
         val movList = document.select("ul.mov-list li")
@@ -109,27 +119,22 @@ class FrenchAnime :
         anime.genre = movList.select("div.mov-label:contains(GENRE:) + div.mov-desc a").joinToString { it.text() }
         anime.artist = movList.select("div.mov-label:contains(RÉALISATEUR:) + div.mov-desc").text().ifBlank { null }
 
-        // TMDB Metadata
-        val tmdbMetadata = fetchTmdbMetadata(anime.title)
-        tmdbMetadata?.summary?.let { anime.description = it }
-
         return anime
     }
 
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
         val episodeList = mutableListOf<SEpisode>()
         val lang = if (document.baseUri().contains("-vf")) "VF" else "VOSTFR"
 
         val epsData = document.selectFirst("div.eps")?.text() ?: return emptyList()
 
-        val tmdbMetadata = fetchTmdbMetadata(anime.title)
         val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
         val sNumMatch = sNumRegex.find(anime.title)
         val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
+        val sPrefix = if (sNumMatch != null && sNum > 1) "[S$sNum] " else ""
 
         epsData.split(" ").filter { it.isNotBlank() }.forEach {
             val data = it.split("!", limit = 2)
@@ -142,11 +147,6 @@ class FrenchAnime :
                     this.name = "${sPrefix}Episode $epNumStr"
                     this.url = "$lang|${data[1]}"
                     this.scanlator = lang
-
-                    // TMDB Metadata
-                    val epMeta = tmdbMetadata?.episodeSummaries?.get(epNum)
-                    preview_url = epMeta?.second
-                    summary = epMeta?.third
                 },
             )
         }
