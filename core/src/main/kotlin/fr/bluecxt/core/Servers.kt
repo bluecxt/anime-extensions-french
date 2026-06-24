@@ -170,7 +170,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Lulu" -> VideoServer(
         name = "Lulu",
-        hosts = listOf("luluvdo.com", "lulu.st", "luluvid.com"),
+        hosts = listOf("luluvdo.com", "lulu.st", "luluvid.com", "luluvdoo.com"),
         extractor = { url -> LuluExtractor(source.client).videosFromUrl(url) },
     )
 

@@ -14,3 +14,8 @@ class RateLimitException(message: String) : Exception(message)
  * Generic but descriptive exception for failures during the extraction process (parsing errors, script missing, etc.)
  */
 class ExtractionException(message: String) : Exception(message)
+
+/**
+ * Selector exception
+ */
+class SelectorException(message: String) : Exception(message)
