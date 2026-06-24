@@ -8,22 +8,20 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
-import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.fetchTmdbMetadata
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.Request
@@ -35,26 +33,31 @@ import uy.kohesive.injekt.injectLazy
 open class FrenchManga(
     override val name: String = "French-Manga",
     protected open val prefUrlDefault: String = "https://w16.french-manga.net",
-) : Source() {
+) : Source(),
+    CommonPreferences {
 
-    override val baseUrl by lazy {
-        preferences.getString(prefUrlKey, prefUrlDefault)!!.removeSuffix("/")
-    }
+    override val defaultBaseUrl = prefUrlDefault
+
+    override val baseUrl: String get() = currentBaseUrl
 
     override val lang = "fr"
 
     override val supportsLatest = true
 
-    protected open val prefUrlKey = "preferred_baseUrl_${name.lowercase().replace(" ", "_")}"
+    override val supportedServers = listOf(
+        "Filemoon",
+        "Lulu",
+        "Dood",
+        "Voe",
+        "Sibnet",
+        "Vidmoly",
+    )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super<CommonPreferences>.setupPreferenceScreen(screen)
+    }
 
     override val json: Json by injectLazy()
-
-    private val fmExtractor by lazy { FrenchMangaExtractor(network.client, baseUrl) }
-    private val doodExtractor by lazy { DoodExtractor(client) }
-    private val voeExtractor by lazy { VoeExtractor(client, headers) }
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val vidMolyExtractor by lazy { VidMolyExtractor(client, headers) }
-    private val filemoonExtractor by lazy { FilemoonExtractor(client) }
 
     @Serializable
     data class AnimeUrl(
@@ -63,7 +66,7 @@ open class FrenchManga(
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("Cookie", "skin_name=MGV1") // Force stable interface
+        .add("Cookie", "skin_name=MGV1")
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -186,6 +189,9 @@ open class FrenchManga(
         val response = client.newCall(GET("$baseUrl/index.php?newsid=${ids.first()}", headers)).awaitSuccess()
         val document = response.asJsoup()
 
+        anime.artist = document.selectFirst("li:contains(Studio)")?.ownText()?.trim() ?: ""
+        anime.author = document.select("li:contains(Director) a").joinToString { it.text().trim() }
+        anime.title = document.selectFirst("#s-title")?.text() ?: anime.title
         anime.description = (document.selectFirst(".fdesc")?.text() ?: document.select(".full-story").text()).trim()
         anime.genre = document.select(".genres a, .full-inf li:contains(Genre) a").joinToString { it.text() }
         anime.thumbnail_url = document.selectFirst(".fposter img")?.attr("abs:src") ?: anime.thumbnail_url
@@ -210,7 +216,7 @@ open class FrenchManga(
         val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
         val sNumMatch = sNumRegex.find(anime.title)
         val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
+        val sPrefix = if (sNumMatch != null && sNum > 1) "[S$sNum] " else ""
 
         ids.forEach { newsId ->
             val ajaxUrl = "$baseUrl/engine/ajax/manga_episodes_api.php?id=$newsId"
@@ -263,113 +269,39 @@ open class FrenchManga(
         val epData = json.parseToJsonElement(episode.url).jsonObject
         val langs = epData["langs"]?.jsonObject ?: return emptyList()
 
-        val hosters = mutableListOf<Hoster>()
-
-        langs.forEach { (langType, langHosters) ->
-            langHosters.jsonObject.forEach { (_, hosterUrlElement) ->
-                val hosterUrl = hosterUrlElement.toString().trim('"')
-                val lang = langType.uppercase()
-
-                val server = when {
-                    hosterUrl.contains("vidzy") -> "Vidzy"
-                    hosterUrl.contains("luluvid") || hosterUrl.contains("vidnest") || hosterUrl.contains("lulu") -> "Lulu"
-                    hosterUrl.contains("dood") -> "Doodstream"
-                    hosterUrl.contains("voe") -> "Voe"
-                    hosterUrl.contains("sibnet") -> "Sibnet"
-                    hosterUrl.contains("vidmoly") -> "Vidmoly"
-                    hosterUrl.contains("filemoon") -> "Filemoon"
-                    else -> "Serveur"
-                }
-
-                hosters.add(Hoster(hosterName = "($lang) $server", internalData = "$hosterUrl|$lang|$server"))
-            }
+        return langs.map { (langType, langHosters) ->
+            val urls = langHosters.jsonObject.values.map { it.jsonPrimitive.content }
+            Hoster(
+                hosterName = langType.uppercase(),
+                hosterUrl = json.encodeToString(urls),
+            )
         }
-        return hosters
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val data = hoster.internalData.split("|")
-        val hosterUrl = data[0]
-        val lang = data[1]
-        val server = data[2]
-        val prefix = "($lang) $server - "
+        val playerUrls = json.decodeFromString<List<String>>(hoster.hosterUrl)
+        val lang = hoster.hosterName
 
-        val videos = when (server) {
-            "Vidzy", "Lulu" -> fmExtractor.videosFromUrl(hosterUrl, prefix)
-            "Doodstream" -> doodExtractor.videosFromUrl(hosterUrl, prefix)
-            "Voe" -> voeExtractor.videosFromUrl(hosterUrl, prefix)
-            "Sibnet" -> sibnetExtractor.videosFromUrl(hosterUrl, prefix)
-            "Vidmoly" -> vidMolyExtractor.videosFromUrl(hosterUrl, prefix)
-            "Filemoon" -> filemoonExtractor.videosFromUrl(hosterUrl, prefix)
-            else -> emptyList()
-        }
-
-        return videos.map { video ->
-            Video(videoUrl = video.videoUrl, videoTitle = cleanQuality(video.videoTitle), headers = video.headers, subtitleTracks = video.subtitleTracks, audioTracks = video.audioTracks)
-        }.sortVideos()
+        return playerUrls.flatMap { playerUrl ->
+            extractVideos(playerUrl, lang, supportedServers)
+        }.coreSortVideos()
     }
 
-    private fun cleanQuality(quality: String): String = quality.replace(qualityRegex, "")
-        .replace(sizeRegex, "")
-        .replace(sendvidRegex, "")
-        .replace(sibnetRegex, "")
-        .replace(doodRegex, "")
-        .replace(voeRegex, "")
-        .replace(vidzyRegex, "")
-        .replace(luluRegex, "")
-        .replace(hdRegex, "1080p")
-        .replace(hyphenRegex, " - ")
-        .replace(hyphenRegex2, " - ")
-        .trim()
-        .removeSuffix("-")
-        .trim()
+    override fun getAnimeUrl(anime: SAnime): String {
+        val ids = try {
+            json.decodeFromString<AnimeUrl>(anime.url).ids
+        } catch (_: Exception) {
+            listOf(anime.url)
+        }
+        return "$baseUrl/index.php?newsid=${ids.first()}"
+    }
+
+    // ============================ Utils =============================
 
     private fun cleanTitle(title: String): String = title.replace(cleanRegex, "").trim()
-
     private val cleanRegex = Regex("(?i)\\s*\\((VF|VOSTFR|VF\\+VOSTFR|VOST|UNCUT)\\)")
-    private val qualityRegex = Regex("(?i)\\s*-\\s*\\d+(?:\\.\\d+)?\\s*(?:MB|GB|KB)/s")
-    private val sizeRegex = Regex("\\s*\\(\\d+x\\d+\\)")
-    private val sendvidRegex = Regex("(?i)Sendvid:default")
-    private val sibnetRegex = Regex("(?i)Sibnet:default")
-    private val doodRegex = Regex("(?i)Doodstream:default")
-    private val voeRegex = Regex("(?i)Voe:default")
-    private val vidzyRegex = Regex("(?i)Vidzy:default")
-    private val luluRegex = Regex("(?i)Lulu:default")
-    private val hdRegex = Regex("(?i)\\bHD\\b")
-    private val hyphenRegex = Regex(" - - ")
-    private val hyphenRegex2 = Regex("\\s*-\\s*-\\s*")
-
-    override fun List<Video>.sortVideos(): List<Video> {
-        val prefVoice = preferences.getString(PREF_VOICES_KEY, PREF_VOICES_DEFAULT)!!
-        return this.sortedWith(
-            compareByDescending<Video> { it.videoTitle.contains("Vidzy", true) } // Priority Vidzy
-                .thenByDescending { it.videoTitle.contains(prefVoice, true) }
-                .thenByDescending { it.videoTitle.contains("1080") || it.videoTitle.contains("720") },
-        )
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addBaseUrlPreference(preferences, prefUrlDefault, key = prefUrlKey)
-
-        androidx.preference.ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = "Voices preference"
-            entries = VOICES_ENTRIES
-            entryValues = VOICES_VALUES
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
-    }
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        private const val PREF_VOICES_KEY = "preferred_voices"
-        private val VOICES_ENTRIES = arrayOf("Prefer VOSTFR", "Prefer VF")
-        private val VOICES_VALUES = arrayOf("VOSTFR", "VF")
-        private const val PREF_VOICES_DEFAULT = "VOSTFR"
     }
 }

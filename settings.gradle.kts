@@ -16,6 +16,7 @@ loadIndividualExtension("fr", "extensiontest")
 loadIndividualExtension("fr", "adkami")
 loadIndividualExtension("fr", "voiranime")
 loadIndividualExtension("fr", "frenchanime")
+loadIndividualExtension("fr", "frenchmanga")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================

@@ -20,7 +20,7 @@
 - [x] animoflix
 - [x] franime
 - [x] frenchanime
-- [ ] frenchmanga
+- [x] frenchmanga
 - [ ] movix
 - [x] voiranime
 - [x] wiflix
