@@ -48,6 +48,7 @@ class FrenchAnime :
         "Vidmoly",
         "Voe",
         "Vudeo",
+        "Vido",
     )
 
     override val json: Json by injectLazy()
@@ -90,7 +91,7 @@ class FrenchAnime :
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
 
                 val details = element.selectFirst("span.block-sai")?.text()?.trim() ?: ""
-                val season = details.filter { it.isDigit() }?.toIntOrNull()
+                val season = details.filter { it.isDigit() }.toIntOrNull()
                 val lang = Regex("(?i)vostfr|vf").find(details)?.value?.uppercase()
 
                 title = buildString {
