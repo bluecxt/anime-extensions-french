@@ -44,14 +44,18 @@ class DoodExtractor(private val client: OkHttpClient) {
             .set("Referer", webUrl)
             .build()
 
-        if ("Video not found" in html) {
-            throw Exception("Doodstream: Video not found")
+        if ("Video not found" in html || "Video not found | DoodStream" in html || html.contains("video you are looking for is not found", ignoreCase = true)) {
+            throw fr.bluecxt.core.ContentUnavailableException("Doodstream: Video not found")
         }
 
         // Check for iframe
         val iframeMatch = Regex("""<iframe\s*src="([^"]+)""").find(html)
         if (iframeMatch != null) {
-            val iframeUrl = webUrl.toHttpUrl().resolve(iframeMatch.groupValues[1])?.toString() ?: throw Exception("Doodstream: Could not resolve iframe URL")
+            val src = iframeMatch.groupValues[1]
+            if (src == "/e/" || src == "/e") {
+                throw fr.bluecxt.core.ContentUnavailableException("Doodstream: Video not found")
+            }
+            val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: throw Exception("Doodstream: Could not resolve iframe URL")
             response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccess()
             html = response.body.string()
         } else {
@@ -62,7 +66,7 @@ class DoodExtractor(private val client: OkHttpClient) {
 
         // Extract quality
         val qualityMatch = Regex("""\b(360|480|720|1080|1440|2160)[pP]""").find(html)
-        val quality = qualityMatch?.let { "${it.groupValues[1]}p" } ?: "unknown"
+        val quality = qualityMatch?.let { "${it.groupValues[1]}p" }
 
         // Extract token and pass URL
         val mainRegex = Regex(
