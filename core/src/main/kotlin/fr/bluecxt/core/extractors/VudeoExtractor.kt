@@ -1,15 +1,16 @@
-package aniyomi.lib.vudeoextractor
+package fr.bluecxt.core.extractors
 
-import eu.kanade.tachiyomi.animesource.model.Video
+import fr.bluecxt.core.model.ExtractedSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.network.awaitSuccess
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 class VudeoExtractor(private val client: OkHttpClient) {
-    fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
-        val doc = client.newCall(GET(url)).execute()
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
+        val doc = client.newCall(GET(url)).awaitSuccess()
             .asJsoup()
 
         val sources = doc.selectFirst("script:containsData(sources: [)")?.data()
@@ -24,7 +25,10 @@ class VudeoExtractor(private val client: OkHttpClient) {
             .split(',')
             .filter { it.startsWith("https") } // remove invalid links
             .map { videoUrl ->
-                Video(videoUrl, "${prefix}Vudeo", videoUrl, headers)
+                ExtractedSource(
+                    url = videoUrl,
+                    headers = headers
+                )
             }
     }
 }

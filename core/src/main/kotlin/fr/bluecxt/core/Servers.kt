@@ -16,6 +16,7 @@ import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VidozaExtractor
 import fr.bluecxt.core.extractors.VoeExtractor
+import fr.bluecxt.core.extractors.VudeoExtractor
 import fr.bluecxt.core.model.VideoServer
 
 val DEFAULT_SERVER = listOf(
@@ -34,6 +35,7 @@ val DEFAULT_SERVER = listOf(
     "Vidoza",
     "Lulu",
     "Uqload",
+    "Vudeo"
 )
 
 /**
@@ -155,7 +157,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "nonesnanking.com", "smoki.cc", "chuckle-tube.com", "goofy-banana.com",
             "voeunblock1.com", "voeunblock2.com", "voeunblock3.com", "voeunblock4.com", "voeunblock5.com",
             "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
-            "jessicayeahcatch.com",
+            "jessicayeahcatch.com", "kathyinformationwhether.com",
         ),
         extractor = { url -> VoeExtractor(source.client).videosFromUrl(url) },
     )
@@ -176,6 +178,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Uqload",
         hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz"),
         extractor = { url -> UqloadExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Vudeo" -> VideoServer(
+        name = "Vudeo",
+        hosts = listOf("vudeo.co"),
+        extractor = { url -> VudeoExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
