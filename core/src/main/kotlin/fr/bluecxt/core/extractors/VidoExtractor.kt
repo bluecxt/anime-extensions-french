@@ -1,8 +1,10 @@
-package aniyomi.lib.vidoextractor
+package fr.bluecxt.core.extractors
 
-import aniyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.PlaylistUtils
 import okhttp3.OkHttpClient
 
 class VidoExtractor(private val client: OkHttpClient) {
@@ -13,10 +15,10 @@ class VidoExtractor(private val client: OkHttpClient) {
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
-    fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
-        val document = client.newCall(GET(url)).execute().body.string()
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
+        val document = client.newCall(GET(url)).awaitSuccess().body.string()
         val id = REGEX_ID.find(document)?.groupValues?.get(1)
         val masterUrl = "$VIDO_URL/hls/$id/master.m3u8"
-        return playlistUtils.extractFromHls(masterUrl, videoNameGen = { "${prefix}Vido - ($it)" })
+        return playlistUtils.extractFromHls(masterUrl)
     }
 }

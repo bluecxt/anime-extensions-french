@@ -14,6 +14,7 @@ import fr.bluecxt.core.extractors.StreamixExtractor
 import fr.bluecxt.core.extractors.UqloadExtractor
 import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
+import fr.bluecxt.core.extractors.VidoExtractor
 import fr.bluecxt.core.extractors.VidozaExtractor
 import fr.bluecxt.core.extractors.VoeExtractor
 import fr.bluecxt.core.extractors.VudeoExtractor
@@ -184,6 +185,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Vudeo",
         hosts = listOf("vudeo.co"),
         extractor = { url -> VudeoExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Vido" -> VideoServer(
+        name = "Vido",
+        hosts = listOf("Vido.*"),
+        extractor = { url -> VidoExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
