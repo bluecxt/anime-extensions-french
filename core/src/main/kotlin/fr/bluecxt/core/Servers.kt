@@ -1,5 +1,6 @@
 package fr.bluecxt.core
 
+import fr.bluecxt.core.extractors.AbyssExtractor
 import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
@@ -78,6 +79,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Minochinos",
         hosts = listOf("minochinos.com", "vidhide.com"),
         extractor = { url -> MinochinosExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Abyss" -> VideoServer(
+        name = "Abyss",
+        hosts = listOf("abysscdn.com", "hydraxcdn.biz", "short.icu", "embedplayabyss.top"),
+        extractor = { url -> AbyssExtractor(source.client).videosFromUrl(url) },
     )
 
     "Embed4me" -> VideoServer(
