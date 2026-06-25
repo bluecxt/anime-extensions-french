@@ -366,7 +366,7 @@ class ADKami :
 
         return urls.parallelMap { playerUrl ->
             extractVideos(playerUrl, lang, supportedServers)
-        }.flatten().coreSortVideos()
+        }.flatten()
     }
 
     // ============================ Helpers =============================

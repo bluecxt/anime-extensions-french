@@ -54,6 +54,16 @@ abstract class Source :
         coerceInputValues = true
     }
 
+    override val baseUrl: String
+        get() = (this as? CommonPreferences)?.currentBaseUrl
+            ?: throw IllegalStateException("baseUrl must be overridden or CommonPreferences must be implemented")
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        if (this is CommonPreferences) {
+            this.setupCommonPreferences(screen)
+        }
+    }
+
     override val client: okhttp3.OkHttpClient by lazy {
         network.client.newBuilder()
             .dispatcher(
@@ -202,7 +212,7 @@ abstract class Source :
     /**
      * Standardized video sorting based on user preferences.
      */
-    protected fun List<Video>.coreSortVideos(): List<Video> {
+    override fun List<Video>.sortVideos(): List<Video> {
         val voices = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val player = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
         val prefQualStr = preferences.getString(CommonPreferences.PREF_QUALITY_KEY, "Highest")!!
@@ -517,16 +527,6 @@ abstract class Source :
     override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
     override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
     override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException()
-    override fun List<Video>.sortVideos(): List<Video> = this
-    override val baseUrl: String
-        get() = (this as? CommonPreferences)?.currentBaseUrl
-            ?: throw IllegalStateException("baseUrl must be overridden or CommonPreferences must be implemented")
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        if (this is CommonPreferences) {
-            this.setupCommonPreferences(screen)
-        }
-    }
 
     companion object {
         const val PREF_VOICES_KEY = "preferred_voices"

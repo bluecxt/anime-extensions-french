@@ -475,6 +475,6 @@ class AnimoFlix :
                 lang,
                 supportedServers,
             )
-        }.coreSortVideos()
+        }
     }
 }

@@ -335,7 +335,7 @@ class FrAnime :
             } catch (e: Exception) {
                 emptyList()
             }
-        }.coreSortVideos()
+        }
     }
 
     private fun normalize(s: String): String = s.lowercase()

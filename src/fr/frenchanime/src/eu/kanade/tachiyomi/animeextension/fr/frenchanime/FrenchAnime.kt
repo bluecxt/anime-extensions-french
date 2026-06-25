@@ -172,6 +172,6 @@ class FrenchAnime :
 
         return rawUrl.split(",").filter { it.isNotBlank() }.flatMap { playerUrl ->
             extractVideos(playerUrl, lang, supportedServers)
-        }.coreSortVideos()
+        }
     }
 }

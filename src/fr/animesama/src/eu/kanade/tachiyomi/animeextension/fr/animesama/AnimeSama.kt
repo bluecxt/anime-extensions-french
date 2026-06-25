@@ -413,7 +413,7 @@ class AnimeSama :
         return urls.parallelMap { playerUrl ->
             Log.v(ANIMESAMA_LOG, "player url = $playerUrl")
             extractVideos(playerUrl, lang, supportedServers)
-        }.flatten().coreSortVideos()
+        }.flatten()
     }
 
     // ============================ Utils =============================

@@ -526,7 +526,7 @@ class AnimeSamaFan :
 
         return playerUrls.parallelMap { playerUrl ->
             extractVideos(playerUrl, langLabel, supportedServers)
-        }.flatten().coreSortVideos()
+        }.flatten()
     }
 
     override fun List<Hoster>.sortHosters(): List<Hoster> {

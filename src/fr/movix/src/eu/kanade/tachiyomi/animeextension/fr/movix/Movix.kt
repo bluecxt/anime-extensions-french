@@ -657,7 +657,7 @@ class Movix : Source() {
             }
         }.flatten().distinctBy { it.videoUrl }.map { video ->
             video.withDefaultHeaders(baseUrl).copy(videoTitle = coreCleanQuality(video.videoTitle))
-        }.coreSortVideos().also { videos ->
+        }.also { videos ->
             val logMessage = videos.joinToString { v -> "${v.videoTitle} -> ${v.videoUrl}" }
             android.util.Log.d("MovixDebug", "Final sorted videos list: [$logMessage]")
         }

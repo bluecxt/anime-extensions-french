@@ -240,6 +240,4 @@ class WaveAnime :
             source.buildFromSource(lang = null, name = "(DASH) WavePlayer")
         }
     }
-
-    override fun List<Video>.sortVideos(): List<Video> = this
 }

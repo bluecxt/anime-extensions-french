@@ -254,6 +254,6 @@ class Wiflix :
                 Log.d(WIFLIX_LOG, "url = $videoUrl")
                 extractVideos(videoUrl, lang, supportedServers)
             }
-        }.awaitAll().flatten().coreSortVideos()
+        }.awaitAll().flatten()
     }
 }

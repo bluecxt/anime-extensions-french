@@ -429,7 +429,7 @@ class AnimesUltra : Source() {
                 videoTitle = cleanedTitle,
                 resolution = QUALITY_REGEX.find(cleanedTitle)?.groupValues?.get(1)?.toIntOrNull(),
             )
-        }.distinctBy { it.videoUrl }.coreSortVideos()
+        }.distinctBy { it.videoUrl }
 
         if (finalVideos.isEmpty()) {
             android.util.Log.d("AnimesUltraDebug", "No videos found for $langTag")
@@ -448,9 +448,7 @@ class AnimesUltra : Source() {
         return cleaned.replace(WHITESPACE_REGEX, " ").replace(" - - ", " - ").trim()
     }
 
-    override fun List<Video>.sortVideos(): List<Video> = this.coreSortVideos()
-
-    private val sibnetExtractor by lazy { SibnetExtractor(client) }
+private val sibnetExtractor by lazy { SibnetExtractor(client) }
     private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
     private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
     private val vidstreamExtractor by lazy { VidstreamExtractor(client) }

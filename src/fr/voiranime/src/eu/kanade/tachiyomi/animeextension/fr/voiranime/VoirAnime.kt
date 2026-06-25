@@ -216,7 +216,7 @@ class VoirAnime :
         Log.d(VOIRANIME_LOG, "list url = $videos")
         return videos.map { playerUrl ->
             extractVideos(playerUrl, lang, supportedServers)
-        }.flatten().coreSortVideos()
+        }.flatten()
     }
 
     companion object {

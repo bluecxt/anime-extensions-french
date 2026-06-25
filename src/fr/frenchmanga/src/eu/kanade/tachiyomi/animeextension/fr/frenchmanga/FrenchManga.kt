@@ -278,7 +278,7 @@ open class FrenchManga(
 
         return playerUrls.flatMap { playerUrl ->
             extractVideos(playerUrl, lang, supportedServers)
-        }.coreSortVideos()
+        }
     }
 
     override fun getAnimeUrl(anime: SAnime): String {
