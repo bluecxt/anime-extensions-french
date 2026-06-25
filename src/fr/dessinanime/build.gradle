@@ -1,0 +1,10 @@
+apply plugin: 'com.android.application'
+
+ext {
+    extName = 'dessinanime'
+    extClass = '.dessinanime'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

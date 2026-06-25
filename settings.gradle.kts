@@ -17,6 +17,7 @@ loadIndividualExtension("fr", "adkami")
 loadIndividualExtension("fr", "voiranime")
 loadIndividualExtension("fr", "frenchanime")
 loadIndividualExtension("fr", "frenchmanga")
+loadIndividualExtension("fr", "dessinanime")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
