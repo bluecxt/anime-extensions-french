@@ -35,10 +35,7 @@ class ExtensionTest :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 
-    // We fake a single anime for testing
-    override fun popularAnimeRequest(page: Int): Request = Request.Builder().url(defaultBaseUrl).build()
-
-    override fun popularAnimeParse(response: Response): AnimesPage = AnimesPage(
+    override suspend fun getPopularAnime(page: Int): AnimesPage = AnimesPage(
         listOf(
             SAnime.create().apply {
                 title = "Test Extracteurs"
