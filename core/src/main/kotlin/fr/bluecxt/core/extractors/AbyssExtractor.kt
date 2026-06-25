@@ -19,6 +19,8 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+// writed using https://github.com/skoruppa/docchi-players/blob/main/abysse.py
+
 class AbyssExtractor(private val client: OkHttpClient) {
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
