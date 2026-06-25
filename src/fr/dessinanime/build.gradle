@@ -1,8 +1,8 @@
 apply plugin: 'com.android.application'
 
 ext {
-    extName = 'dessinanime'
-    extClass = '.dessinanime'
+    extName = 'Dessin Anime'
+    extClass = '.DessinAnime'
     extVersionCode = 1
     isNsfw = false
 }

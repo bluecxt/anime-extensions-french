@@ -1,0 +1,69 @@
+{
+  "SORT_FIELDS": [
+    ["Popularité", "popularity"],
+    ["Note", "rating"],
+    ["Date de sortie", "releaseDate"],
+    ["Date d'ajout", "createdAt"]
+  ],
+  "SORT_ORDERS": [
+    ["Décroissant", "desc"],
+    ["Croissant", "asc"]
+  ],
+  "MEDIA_TYPES": [
+    ["Tous", ""],
+    ["Films", "MOVIE"],
+    ["Séries TV", "TV"]
+  ],
+  "CATEGORIES": [
+    ["Tous", ""],
+    ["Anime", "ANIME"],
+    ["Cartoon", "CARTOON"],
+    ["Non animé", "NOT_ANIMATED"],
+    ["Inconnu", "UNKNOWN"]
+  ],
+  "STATUSES": [
+    ["Tous", ""],
+    ["Sorti", "Released"],
+    ["Annulé", "Canceled"],
+    ["Série en cours", "Returning Series"],
+    ["Terminé", "Ended"]
+  ],
+  "GENRES": [
+    ["Tous", ""],
+    ["Action & Adventure (Série TV)", "20"],
+    ["Science-Fiction & Fantastique (Série TV)", "31"],
+    ["Kids (Série TV)", "27"],
+    ["Familial (Film)", "8"],
+    ["Animation (Film)", "3"],
+    ["Comédie (Film)", "4"],
+    ["Familial (Série TV)", "26"],
+    ["Action (Film)", "1"],
+    ["Animation (Série TV)", "21"],
+    ["Comédie (Série TV)", "22"],
+    ["Drame (Série TV)", "25"],
+    ["Crime (Film)", "5"],
+    ["Documentaire (Film)", "6"],
+    ["Drame (Film)", "7"],
+    ["Histoire (Film)", "10"],
+    ["Horreur (Film)", "11"],
+    ["Musique (Film)", "12"],
+    ["Mystère (Film)", "13"],
+    ["Romance (Film)", "14"],
+    ["Science-Fiction (Film)", "15"],
+    ["Téléfilm (Film)", "16"],
+    ["Thriller (Film)", "17"],
+    ["Guerre (Film)", "18"],
+    ["Western (Film)", "19"],
+    ["Documentaire (Série TV)", "24"],
+    ["Mystère (Série TV)", "28"],
+    ["News (Série TV)", "29"],
+    ["Reality (Série TV)", "30"],
+    ["Soap (Série TV)", "32"],
+    ["Talk (Série TV)", "33"],
+    ["War & Politics (Série TV)", "34"],
+    ["Western (Série TV)", "35"],
+    ["Crime (Série TV)", "23"],
+    ["Aventure (Film)", "2"],
+    ["Fantastique (Film)", "9"]
+  ]
+}
