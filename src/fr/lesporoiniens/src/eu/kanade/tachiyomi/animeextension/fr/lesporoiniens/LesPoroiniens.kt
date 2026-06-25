@@ -43,14 +43,8 @@ class LesPoroiniens :
     override val supportedServers = listOf("Google Drive")
     override val forceShowQualityPreference = false
 
-    override val baseUrl: String get() = currentBaseUrl
-
     override val lang = "fr"
     override val supportsLatest = false
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)

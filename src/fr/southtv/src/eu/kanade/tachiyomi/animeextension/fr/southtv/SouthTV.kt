@@ -55,15 +55,10 @@ class SouthTV :
     override val forceShowQualityPreference = false
     override val forceShowVoicesPreference = false
 
-    override val baseUrl: String get() = currentBaseUrl
     override val lang = "fr"
     override val supportsLatest = false
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
-
-    // ============================== Popular ===============================
+// ============================== Popular ===============================
 
     override suspend fun getPopularAnime(page: Int): AnimesPage = AnimesPage(getAnimeList(), false)
 

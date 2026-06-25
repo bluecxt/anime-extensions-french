@@ -33,15 +33,9 @@ class WaveAnime :
     override val forceShowQualityPreference = true
     override val supportedQualities = arrayOf("Highest", "1440", "1080", "720", "480", "360")
 
-    override val baseUrl: String get() = currentBaseUrl
-
     override val lang = "fr"
 
     override val supportsLatest = true
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
 
     @Serializable
     data class TracksResponse(

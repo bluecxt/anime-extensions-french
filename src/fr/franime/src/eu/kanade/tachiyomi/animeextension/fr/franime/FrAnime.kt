@@ -32,12 +32,6 @@ class FrAnime :
 
     override val defaultServer = "Vidmoly"
 
-    override val baseUrl: String get() = currentBaseUrl
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
-
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()

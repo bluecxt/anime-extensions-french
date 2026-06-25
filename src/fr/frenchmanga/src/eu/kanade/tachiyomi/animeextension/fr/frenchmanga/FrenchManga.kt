@@ -38,8 +38,6 @@ open class FrenchManga(
 
     override val defaultBaseUrl = prefUrlDefault
 
-    override val baseUrl: String get() = currentBaseUrl
-
     override val lang = "fr"
 
     override val supportsLatest = true
@@ -52,10 +50,6 @@ open class FrenchManga(
         "Sibnet",
         "Vidmoly",
     )
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
 
     override val json: Json by injectLazy()
 

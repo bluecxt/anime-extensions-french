@@ -48,10 +48,6 @@ class AnimeSamaFan :
 
     override val supportsLatest = true
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
-
     private val seasonRegex = Regex("""saison-(\d+)""")
     private val epNumRegex = Regex("[^0-9.]")
 

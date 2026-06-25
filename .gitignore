@@ -47,3 +47,4 @@ issue/
 .editorconfig
 .gitattributes
 ktlintCodeStyle.xml
+gradle.properties

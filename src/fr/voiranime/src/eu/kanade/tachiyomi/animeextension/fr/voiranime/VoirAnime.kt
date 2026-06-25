@@ -37,7 +37,7 @@ class VoirAnime :
 
     override val name = "VoirAnime"
     override val defaultBaseUrl = "https://voiranime.io"
-    override val baseUrl: String get() = currentBaseUrl
+
     override val lang = "fr"
     override val supportsLatest = true
 
@@ -47,11 +47,7 @@ class VoirAnime :
 
     private val whitespaceRegex = Regex("\\s+")
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
-
-    // ============================== Popular & Latest ===============================
+// ============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/series/?page=$page&order=popular", headers)).awaitSuccess()
         val document = response.asJsoup()

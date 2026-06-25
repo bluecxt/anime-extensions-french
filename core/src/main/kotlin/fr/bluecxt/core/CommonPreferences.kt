@@ -76,9 +76,9 @@ interface CommonPreferences : ConfigurableAnimeSource {
     val baseUrlSummary: String? get() = null
 
     /**
-     * Implémentation automatique du menu de réglages.
+     * Implémentation automatique du menu de réglages communs.
      */
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+    fun setupCommonPreferences(screen: PreferenceScreen) {
         val source = this as Source
         val prefs = source.preferences
 

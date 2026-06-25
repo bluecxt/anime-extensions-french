@@ -34,7 +34,7 @@ class FrenchAnime :
 
     override val name = "French Anime"
     override val defaultBaseUrl = "https://french-anime.com"
-    override val baseUrl: String get() = currentBaseUrl
+
     override val lang = "fr"
     override val supportsLatest = true
 
@@ -53,11 +53,7 @@ class FrenchAnime :
 
     override val json: Json by injectLazy()
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
-
-    // ============================== Popular ===============================
+// ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/animes-vostfr/page/$page/", headers)).execute()
         val document = response.asJsoup()

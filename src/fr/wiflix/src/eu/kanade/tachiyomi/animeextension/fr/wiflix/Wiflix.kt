@@ -41,17 +41,11 @@ class Wiflix :
 
     override val defaultBaseUrl = "https://flemmix.city"
 
-    override val baseUrl: String get() = currentBaseUrl
-
     override val lang = "fr"
 
     override val supportsLatest = false
 
     override val baseUrlSummary = "https://ww1.wiflix-adresses.fun | https://wiflix-news.site"
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)

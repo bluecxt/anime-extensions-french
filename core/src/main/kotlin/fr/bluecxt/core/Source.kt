@@ -518,8 +518,14 @@ abstract class Source :
     override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
     override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException()
     override fun List<Video>.sortVideos(): List<Video> = this
+    override val baseUrl: String
+        get() = (this as? CommonPreferences)?.currentBaseUrl
+            ?: throw IllegalStateException("baseUrl must be overridden or CommonPreferences must be implemented")
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        // Default empty implementation, extensions will call super<CommonPreferences>.setupPreferenceScreen(screen)
+        if (this is CommonPreferences) {
+            this.setupCommonPreferences(screen)
+        }
     }
 
     companion object {

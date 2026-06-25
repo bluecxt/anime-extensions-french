@@ -46,18 +46,12 @@ class AnimoFlix :
 
     override val defaultBaseUrl = "https://animoflix.to"
 
-    override val baseUrl: String get() = currentBaseUrl
-
     companion object {
         private val seasonRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)|(\d+)$""")
         private val epNumRegex = Regex("""(\d+(?:\.\d+)?)""")
         private val qualityNumRegex = Regex("""(\d+)p""")
         private val lecteurRegex = Regex("(?i)Lecteur\\s*\\d+\\s*-?\\s*")
         private val cleanTitleRegex = Regex("(?i)(?:Saison|Season)\\s*\\d+|FILM|MOVIE|OAV|OVA|\\(TV\\)|\\(Film\\)|\\(OAV\\)|\\(OVA\\)|\\s+\\d+$")
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
     }
 
     private fun parseSeasonNumber(title: String): Double {

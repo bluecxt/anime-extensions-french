@@ -44,7 +44,6 @@ class ADKami :
     override val supportsLatest = true
 
     override val defaultBaseUrl = "https://hentai.adkami.com"
-    override val baseUrl: String get() = currentBaseUrl
 
     override val supportedVoices = arrayOf("VOSTFR", "VF", "RAW", "VOSTA")
 
@@ -54,11 +53,7 @@ class ADKami :
         .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super<CommonPreferences>.setupPreferenceScreen(screen)
-    }
-
-    // ============================== Popular ===============================
+// ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/video?t=4&order=3&page=$page", headers)).awaitSuccess()
         return parseAnimesPage(response)
