@@ -37,7 +37,7 @@
 # KOTLINX.SERIALIZATION - Support global
 # ===========================================================================
 
--keepattributes *Annotation*,InnerClasses
+-keepattributes Signature,*Annotation*,InnerClasses
 -keepattributes EnclosingMethod
 
 # Les classes @Serializable dans les extensions elles-mêmes
@@ -72,6 +72,11 @@
 # ===========================================================================
 
 -keep class uy.kohesive.injekt.** { *; }
+
+# Injekt lit le type générique de ses objets FullTypeReference au runtime
+# via javaClass.getGenericSuperclass(). R8 doit donc garder ces sous-classes
+# anonymes avec leur attribut Signature.
+-keep class * extends uy.kohesive.injekt.api.FullTypeReference { *; }
 
 # ===========================================================================
 # LIB EXTRACTORS (lib-multisrc et extracteurs individuels dans /lib/)

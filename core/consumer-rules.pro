@@ -112,9 +112,14 @@
 # 6. KOTLINX.SERIALIZATION - Règles génériques
 # ===========================================================================
 
-# Garde les noms de classe pour kotlinx.serialization
--keepattributes *Annotation*
--keepattributes InnerClasses
+# Garde les signatures génériques (obligatoire pour Injekt TypeReference et kotlinx.serialization)
+-keepattributes Signature,*Annotation*,InnerClasses
+
+# Injekt construit ses clés via object : FullTypeReference<T>() et lit
+# javaClass.getGenericSuperclass() au runtime. En mode R8 optimisé, garder
+# l'attribut Signature ne suffit pas si ces sous-classes anonymes ne sont
+# pas elles-mêmes protégées.
+-keep class * extends uy.kohesive.injekt.api.FullTypeReference { *; }
 
 # Sérializers générés par le plugin
 -keepclassmembers @kotlinx.serialization.Serializable class ** {
