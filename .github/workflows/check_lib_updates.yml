@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout local repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Restore last upstream SHA
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .last_upstream_sha
           key: upstream-lib-sha-${{ github.workflow }}
@@ -127,7 +127,7 @@ jobs:
 
       - name: Save new upstream SHA
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .last_upstream_sha
           key: upstream-lib-sha-${{ github.workflow }}-${{ github.run_id }}
@@ -140,10 +140,10 @@ jobs:
           issues: write
     steps:
       - name: Checkout local repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Restore last Docchi SHA
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .last_docchi_sha
           key: docchi-sha-${{ github.workflow }}
@@ -243,7 +243,7 @@ jobs:
 
       - name: Save new Docchi SHA
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .last_docchi_sha
           key: docchi-sha-${{ github.workflow }}-${{ github.run_id }}
