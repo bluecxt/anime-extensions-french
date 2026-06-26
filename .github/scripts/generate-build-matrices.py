@@ -88,10 +88,24 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
 def get_all_modules() -> tuple[list[str], list[str]]:
     modules = []
     deleted = []
-    for lang in Path("src").iterdir():
-        for extension in lang.iterdir():
-            modules.append(f":src:{lang.name}:{extension.name}")
-            deleted.append(f"{lang.name}.{extension.name}")
+    try:
+        projects_output = run_command("./gradlew -q projects")
+        for line in projects_output.splitlines():
+            if line.startswith("project ':src:"):
+                parts = line.split("'", 2)
+                if len(parts) >= 3:
+                    project_path = parts[1]
+                    if project_path.count(":") == 3:
+                        modules.append(project_path)
+                        subparts = project_path.split(":")
+                        lang = subparts[2]
+                        extension = subparts[3]
+                        deleted.append(f"{lang}.{extension}")
+    except Exception:
+        for lang in Path("src").iterdir():
+            for extension in lang.iterdir():
+                modules.append(f":src:{lang.name}:{extension.name}")
+                deleted.append(f"{lang.name}.{extension.name}")
     return modules, deleted
 
 def main() -> NoReturn:
