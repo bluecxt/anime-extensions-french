@@ -115,6 +115,9 @@ jobs:
         with:
           cache-read-only: ${{ matrix.chunk.number > 1 }}
 
+      - name: Clean up runner gradle.properties
+        run: rm -f ~/.gradle/gradle.properties
+
       - name: Prepare signing key
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
