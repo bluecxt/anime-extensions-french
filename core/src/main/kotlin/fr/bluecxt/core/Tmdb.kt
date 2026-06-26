@@ -228,8 +228,8 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
                 (0 until ids.length()).any { ids.getInt(it) == 16 } // 16 = Animation
             } ?: false
 
-            // Logique de sélection : Score > Animation > Votes
-            val finalScore = maxOf(score, 50)
+            // Logique de sélection : Score (avec bonus animation) > Animation > Votes
+            val finalScore = maxOf(score, 50) + (if (isAnimation) 25 else 0)
             if (finalScore > highestScore) {
                 highestScore = finalScore
                 maxVotes = votes
