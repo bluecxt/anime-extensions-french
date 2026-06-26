@@ -11,13 +11,18 @@
 
 les differente extensions peuvent avoir une quantité significative de problème actuellement notamment car je suis en train de travailler sur un refactoring complet des extensions et des extracteurs
 
+btw pour tester la version preview
+```http
+https://bluecxt.github.io/anime-extensions-french/alpha/index.min.json
+```
+
 ---
 
 ## 📌 Configuration du Repository
 
 Pour intégrer ce repository à votre environnement de test, utilisez l'URL de métadonnées brute suivante :
 
-```text
+```http
 https://raw.githubusercontent.com/bluecxt/anime-extensions-french/repo/index.min.json
 ```
 
