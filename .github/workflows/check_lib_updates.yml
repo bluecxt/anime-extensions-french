@@ -15,7 +15,7 @@ jobs:
           issues: write
     steps:
       - name: Checkout local repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Restore last upstream SHA
         uses: actions/cache/restore@v4
@@ -140,7 +140,7 @@ jobs:
           issues: write
     steps:
       - name: Checkout local repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Restore last Docchi SHA
         uses: actions/cache/restore@v4
