@@ -39,7 +39,7 @@ jobs:
 
       - name: Prepare signing key
         env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY: ${{ secrets.ALPHA_SIGNING_KEY }}
         run: |
           if [ -n "$SIGNING_KEY" ]; then
             echo "$SIGNING_KEY" | base64 -d > signingkey.jks
@@ -48,9 +48,9 @@ jobs:
 
       - name: Build extensions
         env:
-          ALIAS: ${{ secrets.ALIAS }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ALIAS: ${{ secrets.ALPHA_ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.ALPHA_KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ALPHA_KEY_PASSWORD }}
           TMDB_API: ${{ secrets.TMDB_API }}
         run: |
           ./gradlew assembleRelease && ls src/*/*/build/outputs/apk/release/*.apk
