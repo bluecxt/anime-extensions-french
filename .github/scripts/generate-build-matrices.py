@@ -28,6 +28,8 @@ def run_command(command: str) -> str:
     return result.stdout.strip()
 
 def get_module_list(ref: str) -> tuple[list[str], list[str]]:
+    if ref == "all":
+        return get_all_modules()
     diff_output = run_command(f"git diff --name-status {ref}").splitlines()
     
     changed_files = [
