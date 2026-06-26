@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.fetchTmdbMetadata
@@ -294,7 +295,7 @@ class AnimeSama :
         // Set season number for proper app state
         if (!isHub) {
             // AniZen bypass: Force -2.0 to totally disable auto-labeling and use our provided title
-            anime.season_number = -2.0
+            anime.season_number = HUB_SEASON_NUMBER
         }
 
         return anime
