@@ -54,6 +54,11 @@ abstract class Source :
         coerceInputValues = true
     }
 
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
+        .set("User-Agent", DEFAULT_USER_AGENT)
+
     override val baseUrl: String
         get() = (this as? CommonPreferences)?.currentBaseUrl
             ?: throw IllegalStateException("baseUrl must be overridden or CommonPreferences must be implemented")
