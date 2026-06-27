@@ -31,6 +31,7 @@
 
 # Garde aussi les AnimeSources (interface)
 -keep class * implements eu.kanade.tachiyomi.animesource.AnimeSource { *; }
+-keep class eu.kanade.tachiyomi.animeextension.** implements eu.kanade.tachiyomi.animesource.AnimeSourceFactory { *; }
 -keep class * implements eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource { *; }
 
 # ===========================================================================
@@ -48,6 +49,14 @@
 
 # Kotlin Metadata (nécessaire pour la sérialisation)
 -keep class kotlin.Metadata { *; }
+
+# L'inspecteur convertit les APK via dex2jar puis exécute les classes sur JVM.
+# On protège uniquement les lambdas générées par les delegates Injekt requis
+# à l'instanciation. Ne pas garder toutes les lambdas globalement : Servers.kt
+# contient une lambda par extracteur et cela empêcherait R8 de supprimer les
+# extracteurs non utilisés.
+-keep class **$special$$inlined$injectLazy$* extends kotlin.jvm.internal.Lambda { *; }
+-keep class **$special$$inlined$getPreferencesLazy$* extends kotlin.jvm.internal.Lambda { *; }
 
 # ===========================================================================
 # KOTLIN COROUTINES
