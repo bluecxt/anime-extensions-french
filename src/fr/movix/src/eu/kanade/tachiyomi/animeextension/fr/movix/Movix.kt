@@ -563,7 +563,7 @@ class Movix : Source() {
             allEpisodes.addAll(mappedEpisodes)
         }
 
-        return allEpisodes.reversed()
+        return allEpisodes.asReversed()
     }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {

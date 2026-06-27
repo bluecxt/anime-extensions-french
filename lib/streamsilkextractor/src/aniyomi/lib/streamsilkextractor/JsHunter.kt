@@ -49,7 +49,7 @@ class JsHunter(private val hunterJS: String) {
         val g = str.toList()
         val h = g.take(e)
         val i = g.take(f)
-        val dList = d.reversed().toList()
+        val dList = d.asReversed().toList()
         var j = 0.0
         for ((c, b) in dList.withIndex()) {
             if (b in h) {

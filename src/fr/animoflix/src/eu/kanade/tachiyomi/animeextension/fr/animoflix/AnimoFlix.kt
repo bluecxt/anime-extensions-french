@@ -368,14 +368,14 @@ class AnimoFlix :
 
                         parseEpisodesFromSeasonPage(seasonResponse.asJsoup(), seasonName, seasonCards.size, anime.title, seasonUrl)
                     }
-                }.awaitAll().flatten().reversed()
+                }.awaitAll().flatten().asReversed()
             }
         } else {
             // SEASON MODE
             val sSegment = anime.url.trim('/').split("/").lastOrNull() ?: ""
             val totalSeasons = document.select(".seasons-grid a.season-card").size.let { if (it == 0) 1 else it }
             val baseTitle = document.selectFirst("h1.anime-title-pro, h1")?.text() ?: anime.title
-            parseEpisodesFromSeasonPage(document, sSegment, totalSeasons, baseTitle, anime.url).reversed()
+            parseEpisodesFromSeasonPage(document, sSegment, totalSeasons, baseTitle, anime.url).asReversed()
         }
     }
 

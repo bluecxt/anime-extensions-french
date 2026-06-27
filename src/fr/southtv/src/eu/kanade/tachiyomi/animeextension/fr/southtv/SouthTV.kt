@@ -137,7 +137,7 @@ class SouthTV :
 
         return List(count) { index ->
             createEpisode(anime.url, seasonNumber ?: 1, index + 1, meta)
-        }.reversed()
+        }.asReversed()
     }
 
     private fun createEpisode(animeUrl: String, seasonNumber: Int, episodeNumber: Int, meta: TmdbMetadata?): SEpisode {

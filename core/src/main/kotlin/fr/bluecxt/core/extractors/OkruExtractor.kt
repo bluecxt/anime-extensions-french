@@ -55,7 +55,7 @@ class OkruExtractor(private val client: OkHttpClient) {
         val arrayData = videoString.substringAfter("\\\"videos\\\":[{\\\"name\\\":\\\"")
             .substringBefore("]")
 
-        return arrayData.split("{\\\"name\\\":\\\"").reversed().mapNotNull {
+        return arrayData.split("{\\\"name\\\":\\\"").asReversed().mapNotNull {
             val videoUrl = it.extractLink("url")
             val quality = it.substringBefore("\\\"").let { fixQuality(it) }
 

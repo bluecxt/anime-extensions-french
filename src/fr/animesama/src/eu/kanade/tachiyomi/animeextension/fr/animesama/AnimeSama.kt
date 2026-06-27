@@ -352,7 +352,7 @@ class AnimeSama :
         }
         Log.v(ANIMESAMA_LOG, "player list = $players")
         val episodes = playersToEpisodes(players, anime, "$seasonRootPath/", langValues)
-        return if (movie == null) episodes.reversed() else listOf(episodes[movie])
+        return if (movie == null) episodes.asReversed() else listOf(episodes[movie])
     }
 
     private suspend fun fetchSmartTmdbMetadata(title: String): TmdbMetadata? {

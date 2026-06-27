@@ -486,7 +486,7 @@ class Torrentio : Source() {
                             }
                         }
                     }
-                }.reversed()
+                }.asReversed()
             }
 
             "movie" -> {
@@ -500,7 +500,7 @@ class Torrentio : Source() {
                             preview_url = meta.episodeThumbUrl
                         }
                     },
-                ).reversed()
+                ).asReversed()
             }
 
             else -> emptyList()

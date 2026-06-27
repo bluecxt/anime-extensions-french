@@ -48,7 +48,7 @@ class VidGuardExtractor(private val client: OkHttpClient) {
                 String(Base64.decode((it + padding).toByteArray(Charsets.UTF_8), Base64.DEFAULT))
             }
             .dropLast(5)
-            .reversed()
+            .asReversed()
             .toCharArray()
             .apply {
                 for (i in indices step 2) {

@@ -148,7 +148,7 @@ class FrenchAnime :
             )
         }
 
-        return episodeList.reversed()
+        return episodeList.asReversed()
     }
 
     // ============================ Video Links =============================

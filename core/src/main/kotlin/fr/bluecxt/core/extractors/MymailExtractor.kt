@@ -42,6 +42,6 @@ class MymailExtractor(private val client: OkHttpClient) {
 
         if (results.isEmpty()) throw Exception("Mymail: No video sources found")
 
-        return results.reversed()
+        return results.asReversed()
     }
 }

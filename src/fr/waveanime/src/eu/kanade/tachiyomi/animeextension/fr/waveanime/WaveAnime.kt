@@ -191,7 +191,7 @@ class WaveAnime :
             episodes[0].name = "Film"
         }
 
-        return episodes.reversed()
+        return episodes.asReversed()
     }
 
     // ============================ Video Links =============================

@@ -228,7 +228,7 @@ class DessinAnime :
                 },
             )
         }
-        return episodes.sortedWith(compareBy { it.episode_number }).reversed()
+        return episodes.sortedWith(compareBy { it.episode_number }).asReversed()
     }
 
     // ============================ Hosters =============================

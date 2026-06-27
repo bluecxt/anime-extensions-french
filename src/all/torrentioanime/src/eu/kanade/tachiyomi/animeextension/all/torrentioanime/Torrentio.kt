@@ -330,7 +330,7 @@ class Torrentio : Source() {
                             }
                             preview_url = alEp?.thumbnail ?: episode?.image
                         }
-                    }.orEmpty().reversed()
+                    }.orEmpty().asReversed()
             }
 
             "MOVIE" -> {
@@ -348,7 +348,7 @@ class Torrentio : Source() {
                         date_upload = dateUpload
                         preview_url = anilistDetails?.coverImage?.extraLarge
                     },
-                ).reversed()
+                ).asReversed()
             }
 
             else -> emptyList()

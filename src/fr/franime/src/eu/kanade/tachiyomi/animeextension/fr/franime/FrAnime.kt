@@ -86,7 +86,7 @@ class FrAnime :
     override fun popularAnimeParse(response: Response) = throw UnsupportedOperationException()
     override fun popularAnimeRequest(page: Int) = throw UnsupportedOperationException()
 
-    override suspend fun getLatestUpdates(page: Int) = pagesToAnimesPage(database.reversed(), page)
+    override suspend fun getLatestUpdates(page: Int) = pagesToAnimesPage(database.asReversed(), page)
     override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -277,7 +277,7 @@ class FrAnime :
             }
             allEpisodes.addAll(mappedEpisodes)
         }
-        return allEpisodes.reversed()
+        return allEpisodes.asReversed()
     }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {

@@ -166,7 +166,7 @@ class Wiflix :
                         this.url = "$animeUrl#group-$epNum"
                         prepareNewEpisode(this, anime)
                     }
-                }.reversed()
+                }.asReversed()
         }
 
         // Movie case (Rule 1: [Movie] prefix)
