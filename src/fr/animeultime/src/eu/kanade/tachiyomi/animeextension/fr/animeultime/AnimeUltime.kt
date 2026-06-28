@@ -82,18 +82,11 @@ class AnimeUltime :
             val document = response.asJsoup()
 
             document.select("div.slides li").mapNotNull { element ->
-                val id = element.selectFirst("div.box-hover")?.attr("onmousemove") ?: "".filter { it.isDigit() }.toIntOrNull()
-                if (id == null) {
-                    return@mapNotNull null
-                }
-                val title = element.selectFirst(".box-text p")?.text() ?: element.selectFirst("p")?.text() ?: ""
-                val imgUrl = element.selectFirst("img")?.attr("src")?.takeIf { it.isNotEmpty() } ?: ""
-                val hrefUrl = element.selectFirst("a")?.attr("abs:href") ?: ""
                 SearchResponseItem(
-                    id = id,
-                    title = title,
-                    img_url = imgUrl,
-                    url = hrefUrl,
+                    id = element.selectFirst("div.box-hover")?.attr("onmousemove")?.filter { it.isDigit() }?.toIntOrNull() ?: return@mapNotNull null,
+                    title = element.selectFirst(".box-text p")?.text() ?: element.selectFirst("p")?.text() ?: "",
+                    img_url = element.selectFirst("img")?.attr("src")?.takeIf { it.isNotEmpty() } ?: "",
+                    url = element.selectFirst("a")?.attr("abs:href") ?: "",
                     searchType = categorie,
                 )
             }
