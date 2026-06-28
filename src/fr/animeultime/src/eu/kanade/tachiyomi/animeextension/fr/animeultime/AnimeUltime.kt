@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.SearchResponseItem
 import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.Track
 import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.UrlContent
 import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.VideoPlayerResponse
+import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.decodeFromStringFixed
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -122,7 +123,7 @@ class AnimeUltime :
             val response = client.post("$baseUrl/SeriesResults.html", headers, formBody)
             val responseBody = response.body.string()
             Log.d(ANIMEULTIME_LOG, "recherche dans $categorie réussie au post body = $responseBody")
-            val searchResponse = json.decodeFromString<List<SearchResponse>>(responseBody)
+            val searchResponse = json.decodeFromStringFixed<List<SearchResponse>>(responseBody)
             searchResponse.map { responseItem ->
                 SearchResponseItem(
                     id = responseItem.id,
@@ -216,7 +217,7 @@ class AnimeUltime :
 
         val response = client.post("$baseUrl/VideoPlayer.html", headers, formBody)
 
-        val data = json.decodeFromString<PlayList>(response.body.string())
+        val data = json.decodeFromStringFixed<PlayList>(response.body.string())
 
         val episodesGroupes = data.playlist.groupBy { it.title }
 
@@ -241,7 +242,7 @@ class AnimeUltime :
 
         val responseBody = response.body.string()
 
-        val data = json.decodeFromString<AlbumResponse>(responseBody)
+        val data = json.decodeFromStringFixed<AlbumResponse>(responseBody)
 
         val title = data.title
 
@@ -294,7 +295,7 @@ class AnimeUltime :
 
             val responseBody = response.body.string()
 
-            val data = json.decodeFromString<VideoPlayerResponse>(responseBody)
+            val data = json.decodeFromStringFixed<VideoPlayerResponse>(responseBody)
 
             val fansub = parse(data.fansub_link).selectFirst("a")?.text()
 
@@ -316,7 +317,7 @@ class AnimeUltime :
         )
 
     private suspend fun getVideoListAlbum(hoster: Hoster): List<Video> {
-        val track = json.decodeFromString<Track>(hoster.internalData)
+        val track = json.decodeFromStringFixed<Track>(hoster.internalData)
         return listOf(
             Video(
                 videoUrl = track.url,
@@ -328,7 +329,7 @@ class AnimeUltime :
 
     private suspend fun getVideoListVideo(hoster: Hoster): List<Video> {
         val fansub = hoster.hosterName
-        val data = json.decodeFromString<VideoPlayerResponse>(hoster.internalData)
+        val data = json.decodeFromStringFixed<VideoPlayerResponse>(hoster.internalData)
 
         val mp4Url = data.videoData.mp4?.url ?: ""
         Log.d(ANIMEULTIME_LOG, "url = $mp4Url")
