@@ -56,6 +56,8 @@ class AnimeUltime :
     override val defaultBaseUrl: String = "https://v5.anime-ultime.net"
     override val lang = "fr"
     override val supportsLatest = true
+    override val supportedServers = emptyList<String>()
+    override val supportedVoices = emptyArray<String>()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("X-Requested-With", "XMLHttpRequest")
