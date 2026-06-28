@@ -21,7 +21,9 @@
 - [x] franime
 - [x] frenchanime
 - [x] frenchmanga
-- [ ] movix
 - [x] voiranime
 - [x] wiflix
 - [x] adkami
+- [x] animeultime
+- [ ] movix
+- [ ] anime ultra
