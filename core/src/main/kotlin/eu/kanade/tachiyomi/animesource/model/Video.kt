@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.animesource.model
 
-import android.net.Uri
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -45,52 +44,6 @@ open class Video(
 
     var type: VideoType = VideoType.VIDEO
     var mimeType: String? = null
-
-    // TODO(1.6): Remove after ext lib bump
-    @Deprecated("Use videoTitle instead", ReplaceWith("videoTitle"))
-    val quality: String
-        get() = videoTitle
-
-    // TODO(1.6): Remove after ext lib bump
-    val url: String
-        get() = videoPageUrl
-
-    // TODO(1.6): Remove after ext lib bump
-    var videoPageUrl: String = ""
-
-    // TODO(1.6): Remove after ext lib bump
-    constructor(
-        url: String,
-        quality: String,
-        videoUrl: String?,
-        headers: Headers? = null,
-        subtitleTracks: List<Track> = emptyList(),
-        audioTracks: List<Track> = emptyList(),
-    ) : this(
-        videoTitle = quality,
-        videoUrl = videoUrl ?: "null",
-        headers = headers,
-        subtitleTracks = subtitleTracks,
-        audioTracks = audioTracks,
-    ) {
-        this.videoPageUrl = url
-    }
-
-    // TODO(1.6): Remove after ext lib bump
-    @Suppress("UNUSED_PARAMETER")
-    constructor(
-        url: String,
-        quality: String,
-        videoUrl: String?,
-        uri: Uri? = null,
-        headers: Headers? = null,
-    ) : this(
-        videoTitle = quality,
-        videoUrl = videoUrl ?: "null",
-        headers = headers,
-    ) {
-        this.videoPageUrl = url
-    }
 
     @Transient
     @Volatile
@@ -139,7 +92,6 @@ open class Video(
     ).also {
         it.type = this.type
         it.mimeType = this.mimeType
-        it.videoPageUrl = this.videoPageUrl
     }
 
     fun copy(
@@ -159,7 +111,6 @@ open class Video(
         initialized: Boolean = this.initialized,
         type: VideoType = this.type,
         mimeType: String? = this.mimeType,
-        videoPageUrl: String = this.videoPageUrl,
     ): Video = Video(
         videoUrl = videoUrl,
         videoTitle = videoTitle,
@@ -178,7 +129,6 @@ open class Video(
     ).also {
         it.type = type
         it.mimeType = mimeType
-        it.videoPageUrl = videoPageUrl
     }
 
     enum class State {
@@ -211,8 +161,6 @@ data class SerializableVideo(
     val initialized: Boolean = false,
     val type: VideoType = VideoType.VIDEO,
     var mimeType: String? = null,
-    // TODO(1.6): Remove after ext lib bump
-    val videoPageUrl: String = "",
 ) {
 
     companion object {
@@ -235,7 +183,6 @@ data class SerializableVideo(
                     vid.initialized,
                     vid.type,
                     vid.mimeType,
-                    vid.videoPageUrl,
                 )
             },
         )
@@ -262,7 +209,6 @@ data class SerializableVideo(
                 ).apply {
                     type = sVid.type
                     mimeType = sVid.mimeType
-                    videoPageUrl = sVid.videoPageUrl
                 }
             }
     }
