@@ -30,6 +30,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup.parse
+import org.jsoup.select.QueryParser
 import java.net.URLEncoder
 
 class DessinAnime :
@@ -135,11 +136,17 @@ class DessinAnime :
         val seasons = soup.select("a.bg-card")
         val isHub = if (seasons.size > 1) true else false
         val isSeason = if (seasons.size == 0 && !document.contains("Film")) true else false
+        Log.d(DESSINANIME_LOG, "season numbers = ${seasons.size}, isHub = $isHub, isSeason = $isSeason")
 
         if (!isSeason) {
+            val images = soup.select("img[alt]")
+            val thumbnail: String = images.firstOrNull { img ->
+                val alt = img.attr("alt")
+                alt == anime.title || alt == "Season poster"
+            }?.attr("abs:src") ?: POSTER_PLACEHOLDER
             anime.apply {
                 description = soup.selectFirst("meta[name=description]")?.attr("content") ?: ""
-                thumbnail_url = soup.selectFirst("img[alt=${anime.title}], amg[alt=Season poster]")?.attr("abs:src") ?: anime.title
+                thumbnail_url = thumbnail
                 genre = soup.select("span.text-foreground.rounded-full:not(:has(svg))").map { it.text() }.joinToString()
                 initialized = true
             }
@@ -198,14 +205,10 @@ class DessinAnime :
         val episodes = if (episodeList.isNotEmpty()) {
             episodeList.mapNotNull { element ->
                 val epName = element.selectFirst("p.text-sm")?.text()?.substringBefore("(")?.trim()
-                Log.d(DESSINANIME_LOG, "epname = $epName")
                 val link = element.safeRelativePath().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                Log.d(DESSINANIME_LOG, "link = $link")
                 val sNum = "$baseUrl$link".toHttpUrl().pathSegments.getOrNull(2)?.toIntOrNull() ?: 1
-                Log.d(DESSINANIME_LOG, "epname = $epName")
                 SEpisode.create().apply {
                     episode_number = link.removeSuffix("/").substringAfterLast("/").toFloatOrNull() ?: 1f
-                    Log.d(DESSINANIME_LOG, "ep number = $episode_number, url = $link")
                     name = buildString {
                         if (sNum > 1) append("[S$sNum] ")
                         append("Episode ${episode_number.toInt()}")
