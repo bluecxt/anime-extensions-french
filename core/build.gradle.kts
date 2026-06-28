@@ -51,4 +51,7 @@ kotlin {
 dependencies {
     compileOnly(libs.jspecify)
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    compileOnly("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    compileOnly("io.mockk:mockk:1.13.8")
 }
