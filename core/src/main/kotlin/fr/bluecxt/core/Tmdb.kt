@@ -3,12 +3,13 @@ package fr.bluecxt.core
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import keiyoushi.core.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.text.Normalizer
 
-private const val TMDB_API_KEY = "24621da8ae19dce721e59eff2ab479bb"
+private val TMDB_API_KEY = BuildConfig.TMDB_API
 private const val TMDB_BASE_URL = "https://api.themoviedb.org/3"
 private val tmdbCache = mutableMapOf<String, TmdbMetadata?>()
 

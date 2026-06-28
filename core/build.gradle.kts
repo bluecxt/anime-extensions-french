@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.library")
     id("keiyoushi.lint")
@@ -19,6 +21,16 @@ android {
     defaultConfig {
         minSdk = AndroidConfig.minSdk
         consumerProguardFiles("consumer-rules.pro")
+
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { stream ->
+                localProperties.load(stream)
+            }
+        }
+        val tmdbApi = System.getenv("TMDB_API") ?: localProperties.getProperty("TMDB_API", "")
+        buildConfigField("String", "TMDB_API", "\"$tmdbApi\"")
     }
 
     namespace = "keiyoushi.core"
