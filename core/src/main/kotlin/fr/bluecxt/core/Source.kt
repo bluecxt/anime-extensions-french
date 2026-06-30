@@ -31,7 +31,7 @@ import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 import kotlin.random.Random
 
-val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 10000L else 20000L
+val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 30000L else 60000L
 
 /**
  * Global semaphore to limit the number of concurrent extractions.

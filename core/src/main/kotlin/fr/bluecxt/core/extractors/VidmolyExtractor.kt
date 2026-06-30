@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.ContentUnavailableException
+import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDMOLY_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.safeRelativePath
@@ -12,6 +14,7 @@ import fr.bluecxt.core.utils.PlaylistUtils
 import keiyoushi.utils.commonEmptyHeaders
 import keiyoushi.utils.parallelCatchingFlatMap
 import keiyoushi.utils.useAsJsoup
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.selects.select
@@ -50,32 +53,37 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
             }
         }
 
-        Log.d(VIDMOLY_LOG, "Step 1: Start request for $iframeUrl")
-        val response = select<Response?> {
-            deferredOriginal.onAwait { res ->
-                if (res?.isSuccessful == true) {
-                    deferredBackup.cancel()
-                    res
-                } else {
-                    deferredBackup.await()
-                }
+        Log.d(VIDMOLY_LOG, "Step 1: Start request for $iframeUrl and $backupUrl")
+        val origAsync = async { fetchAndParse(deferredOriginal) }
+        val backAsync = async { fetchAndParse(deferredBackup) }
+
+        val orig = origAsync.await()
+        val back = backAsync.await()
+
+        val document = when {
+            orig?.selectFirst("div#loading") != null -> orig
+
+            back?.selectFirst("div#loading") != null -> back
+
+            orig?.selectFirst("h2:contains(Sorry)") != null -> {
+                Log.d(VIDMOLY_LOG, "$iframeUrl contains Sorry")
+                throw ContentUnavailableException("Vidmoly: Video officially not found (Sorry detected) for $iframeUrl")
             }
-            deferredBackup.onAwait { res ->
-                if (res?.isSuccessful == true) {
-                    deferredOriginal.cancel()
-                    res
-                } else {
-                    deferredOriginal.await()
-                }
+
+            back?.selectFirst("h2:contains(Sorry)") != null -> {
+                Log.d(VIDMOLY_LOG, "$backupUrl contains Sorry")
+                throw ContentUnavailableException("Vidmoly: Video officially not found (Sorry detected) for $backupUrl")
+            }
+
+            back != null -> back
+
+            orig != null -> orig
+
+            else -> {
+                Log.d(VIDMOLY_LOG, "Failed to get response for $iframeUrl and $backupUrl")
+                throw ExtractionException("Both sources returned null")
             }
         }
-
-        if (response == null || !response.isSuccessful) {
-            throw Exception("Vidmoly: Failed to get response for $iframeUrl")
-        }
-
-        Log.d(VIDMOLY_LOG, "Step 2: Response ok, parsing HTML for $iframeUrl")
-        val document = response.use { it.asJsoup() }
 
         Log.d(VIDMOLY_LOG, "Step 3: HTML parsed, checking script for $iframeUrl")
         val script = document.selectFirst("script:containsData(sources)")?.data()
@@ -108,5 +116,17 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
                 throw e
             }
         }
+    }
+
+    private suspend fun fetchAndParse(deferred: Deferred<Response?>): org.jsoup.nodes.Document? = try {
+        val res = deferred.await()
+        if (res != null && (res.isSuccessful || res.code == 404)) {
+            res.use { it.asJsoup() }
+        } else {
+            res?.close()
+            null
+        }
+    } catch (e: Exception) {
+        null
     }
 }

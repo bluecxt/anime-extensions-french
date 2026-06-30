@@ -4,6 +4,7 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.SIBNET_LOG
 import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
@@ -22,7 +23,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
         if (script == null) {
             val html = document.html()
             if (html.contains("Видео недоступно") || html.contains("Video not available")) {
-                throw fr.bluecxt.core.ContentUnavailableException("Sibnet: Video explicitly marked as unavailable")
+                throw ContentUnavailableException("html contains Video not available")
             }
 
             Log.d(SIBNET_LOG, "Player script not found, retrying in 1s...")
