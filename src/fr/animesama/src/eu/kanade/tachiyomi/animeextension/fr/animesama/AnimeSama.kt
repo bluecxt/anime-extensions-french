@@ -886,7 +886,8 @@ class AnimeSama :
         }
 
         if (urls.isEmpty() || urls[0].isEmpty()) return emptyList()
-        return List(urls[0].size) { i -> urls.mapNotNull { it.getOrNull(i) }.distinct() }
+        val maxEpisodes = urls.maxOfOrNull { it.size } ?: 0
+        return List(maxEpisodes) { i -> urls.mapNotNull { it.getOrNull(i) }.distinct() }
     }
 
     companion object {
