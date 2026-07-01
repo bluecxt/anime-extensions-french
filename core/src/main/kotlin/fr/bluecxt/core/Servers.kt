@@ -165,7 +165,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "nonesnanking.com", "smoki.cc", "chuckle-tube.com", "goofy-banana.com",
             "voeunblock1.com", "voeunblock2.com", "voeunblock3.com", "voeunblock4.com", "voeunblock5.com",
             "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
-            "jessicayeahcatch.com", "kathyinformationwhether.com",
+            "jessicayeahcatch.com", "kathyinformationwhether.com", "ralphysuccessfull.org", "bryantenunder.com",
         ),
         extractor = { url -> VoeExtractor(source.client).videosFromUrl(url) },
     )
@@ -178,13 +178,19 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Lulu" -> VideoServer(
         name = "Lulu",
-        hosts = listOf("luluvdo.com", "lulu.st", "luluvid.com", "luluvdoo.com"),
+        hosts = listOf(
+            "luluvdo.com", "lulu.st", "luluvid.com", "luluvdoo.com",
+            "ryderjet.com", "vtbe.to", "savefiles.com", "dhcplay.com",
+            "filelions.live", "filelions.online", "filelions.to", "kinoger.be",
+            "vidhidehub.com", "vidhidevip.com", "vidhidepre.com", "smoothpre.com",
+            "dhtpre.com", "peytonepre.com", "movearnpre.com", "dintezuvio.com",
+        ),
         extractor = { url -> LuluExtractor(source.client).videosFromUrl(url) },
     )
 
     "Uqload" -> VideoServer(
         name = "Uqload",
-        hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz"),
+        hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz", "uqload.io", "uqload.cx"),
         extractor = { url -> UqloadExtractor(source.client).videosFromUrl(url) },
     )
 
