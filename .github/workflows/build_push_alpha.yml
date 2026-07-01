@@ -91,13 +91,20 @@ jobs:
           ref: ${{ github.ref }}
           persist-credentials: false
 
-      - name: Checkout repo branch
+      - name: Checkout repo branch (alpha)
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         continue-on-error: true
         with:
-          ref: repo_alpha
-          path: repo
+          ref: gh-pages
+          path: temp_gh_pages
           persist-credentials: false
+
+      - name: Copy existing alpha repo
+        run: |
+          if [ -d "temp_gh_pages/alpha" ]; then
+            cp -r temp_gh_pages/alpha repo
+          fi
+          rm -rf temp_gh_pages
 
       - name: Create repo artifacts
         env:
