@@ -6,6 +6,7 @@ const val HUB_SEASON_NUMBER = -2.0
 
 // utils logs
 
+const val TMDB_LOG: String = "tmdbLog"
 const val SERVER_LOG: String = "serverLog"
 const val PLAYLIST_LOG: String = "PlaylistLog"
 

@@ -1,15 +1,21 @@
 package fr.bluecxt.core
 
+import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.TMDB_LOG
 import keiyoushi.core.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.text.Normalizer
 
-private val TMDB_API_KEY = BuildConfig.TMDB_API
+private val TMDB_API_KEY = BuildConfig.TMDB_API.also {
+    if (it.isBlank()) {
+        Log.w(TMDB_LOG, "TMDB API Key is blank! TMDB metadata queries will fail.")
+    }
+}
 private const val TMDB_BASE_URL = "https://api.themoviedb.org/3"
 private val tmdbCache = mutableMapOf<String, TmdbMetadata?>()
 

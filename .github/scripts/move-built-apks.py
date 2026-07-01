@@ -40,12 +40,14 @@ if REPO_APK_DIR.exists():
 # 2. Move new APKs
 if ARTIFACTS_DIR.exists():
     for apk in ARTIFACTS_DIR.glob("**/*.apk"):
-        if "-release.apk" not in apk.name and "-debug.apk" not in apk.name:
+        if "-release.apk" not in apk.name and "-debug.apk" not in apk.name and "-dev.apk" not in apk.name:
             continue
             
         apk_name = apk.name
         if apk_name.endswith("-debug.apk"):
             apk_name = apk_name.replace("-debug.apk", ".apk")
+        elif apk_name.endswith("-dev.apk"):
+            apk_name = apk_name.replace("-dev.apk", ".apk")
         elif apk_name.endswith("-release.apk"):
              apk_name = apk_name.replace("-release.apk", ".apk")
 

@@ -91,6 +91,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro"
             vcsInfo.include = false
         }
+        dev {
+            initWith debug
+            minifyEnabled = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro"
+            signingConfig = signingConfigs.release
+            matchingFallbacks = ['debug', 'release']
+        }
     }
 
     dependenciesInfo {
