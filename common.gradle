@@ -82,6 +82,17 @@ android {
             keyAlias = localProperties.getProperty("ALIAS") ?: System.getenv("ALIAS")
             keyPassword = localProperties.getProperty("KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
         }
+        dev {
+            def devAlias = localProperties.getProperty("DEV_ALIAS") ?: System.getenv("DEV_ALIAS")
+            if (devAlias != null && !devAlias.isEmpty()) {
+                storeFile = rootProject.file("signingkey.jks")
+                storePassword = localProperties.getProperty("KEY_STORE_PASSWORD") ?: System.getenv("KEY_STORE_PASSWORD")
+                keyAlias = devAlias
+                keyPassword = localProperties.getProperty("KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
+            } else {
+                initWith debug
+            }
+        }
     }
 
     buildTypes {
@@ -95,7 +106,7 @@ android {
             initWith debug
             minifyEnabled = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro"
-            signingConfig = signingConfigs.release
+            signingConfig = signingConfigs.dev
             matchingFallbacks = ['debug', 'release']
         }
     }

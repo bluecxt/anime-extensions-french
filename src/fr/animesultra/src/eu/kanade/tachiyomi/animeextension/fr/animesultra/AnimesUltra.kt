@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.ANIMESULTRA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
@@ -42,7 +43,7 @@ class AnimesUltra :
     override val supportsLatest = true
 
     companion object {
-        private val CLEAN_REGEX = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL|Saison|Season)\\b)")
+        private val CLEAN_REGEX = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL)\\b)")
         private val WHITESPACE_REGEX = Regex("\\s+")
         private val NEWS_ID_REGEX = Regex("""/(\d+)-""")
         private val QUALITY_REGEX = Regex("""(\d+)p""")
@@ -143,7 +144,20 @@ class AnimesUltra :
         anime.url = json.encodeToString(urlMap)
 
         // TMDB Metadata
-        val tmdbMetadata = fetchTmdbMetadata(cleanedTitle)
+        val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
+        val sNumMatch = sNumRegex.find(pageTitle)
+        val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val cleanTitleForTmdb = cleanedTitle.replace(sNumRegex, "").replace(CLEAN_REGEX, "").replace(WHITESPACE_REGEX, " ").trim()
+        Log.d(ANIMESULTRA_LOG, "getAnimeDetails: pageTitle='$pageTitle', extracted season=$sNum, cleanTitleForTmdb='$cleanTitleForTmdb'")
+
+        val isMovie = pageTitle.contains("Film", ignoreCase = true) || pageTitle.contains("Movie", ignoreCase = true)
+        val tmdbMetadata = if (isMovie) {
+            val movieTitle = cleanTitleForTmdb.replace(Regex("(?i)\\s*-\\s*(?:Films?|Movies?)\\s*\\d*"), "")
+                .replace(Regex("(?i)\\s*(?:Films?|Movies?)\\s*\\d*"), "").trim()
+            fetchTmdbMetadata(movieTitle, type = "movie")
+        } else {
+            fetchTmdbMetadata(cleanTitleForTmdb, sNum, "tv")
+        }
         tmdbMetadata?.summary?.let { anime.description = it }
 
         return anime
@@ -185,7 +199,22 @@ class AnimesUltra :
         }
 
         val episodesMap = mutableMapOf<String, MutableMap<String, String>>()
-        val tmdbMetadata = fetchTmdbMetadata(anime.title)
+
+        val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
+        val sNumMatch = sNumRegex.find(anime.title)
+        val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
+
+        val cleanTitleForTmdb = anime.title.replace(sNumRegex, "").replace(CLEAN_REGEX, "").replace(WHITESPACE_REGEX, " ").trim()
+        Log.d(ANIMESULTRA_LOG, "getEpisodeList: anime.title='${anime.title}', extracted season=$sNum, prefix='$sPrefix', cleanTitleForTmdb='$cleanTitleForTmdb'")
+        val isMovie = anime.title.contains("Film", ignoreCase = true) || anime.title.contains("Movie", ignoreCase = true)
+        val tmdbMetadata = if (isMovie) {
+            val movieTitle = cleanTitleForTmdb.replace(Regex("(?i)\\s*-\\s*(?:Films?|Movies?)\\s*\\d*"), "")
+                .replace(Regex("(?i)\\s*(?:Films?|Movies?)\\s*\\d*"), "").trim()
+            fetchTmdbMetadata(movieTitle, type = "movie")
+        } else {
+            fetchTmdbMetadata(cleanTitleForTmdb, sNum, "tv")
+        }
 
         suspend fun fetch(path: String?, lang: String) {
             if (path != null) {
@@ -214,15 +243,9 @@ class AnimesUltra :
         fetch(urlMap.vostfr, "VOSTFR")
         fetch(urlMap.vf, "VF")
 
-        val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
-        val sNumMatch = sNumRegex.find(anime.title)
-        val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
-
         return episodesMap.map { (num, langUrls) ->
             SEpisode.create().apply {
                 val numInt = num.toIntOrNull() ?: 1
-                name = "${sPrefix}Episode $num"
                 episode_number = num.toFloatOrNull() ?: 0f
                 url = buildJsonObject { langUrls.forEach { (l, u) -> put(l.lowercase(), u) } }.toString()
                 scanlator = langUrls.keys.joinToString(", ") { it.uppercase() }
@@ -231,6 +254,14 @@ class AnimesUltra :
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(numInt)
                 preview_url = epMeta?.second
                 summary = epMeta?.third
+
+                val tmdbName = epMeta?.first
+                val baseName = when {
+                    tmdbName == null -> "Episode $num"
+                    tmdbName.contains(Regex("(?i)Episode\\s*$num")) -> tmdbName
+                    else -> "Episode $num - $tmdbName"
+                }
+                name = "$sPrefix$baseName"
             }
         }.sortedByDescending { it.episode_number }
     }
