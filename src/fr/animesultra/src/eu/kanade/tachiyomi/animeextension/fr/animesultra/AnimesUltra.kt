@@ -1,30 +1,21 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesultra
 
 import android.util.Log
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animeextension.fr.animesultra.extractors.VidstreamExtractor
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.lib.doodextractor.DoodExtractor
-import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.megacloudextractor.MegaCloudExtractor
-import eu.kanade.tachiyomi.lib.okruextractor.OkruExtractor
-import eu.kanade.tachiyomi.lib.sendvidextractor.SendvidExtractor
-import eu.kanade.tachiyomi.lib.sibnetextractor.SibnetExtractor
-import eu.kanade.tachiyomi.lib.vidmolyextractor.VidMolyExtractor
-import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.addBaseUrlPreference
+import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -37,33 +28,20 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 
-class AnimesUltra : Source() {
+class AnimesUltra :
+    Source(),
+    CommonPreferences {
 
     override val name = "AnimesUltra"
-    override val baseUrl by lazy {
-        preferences.getString(PREF_URL_KEY, PREF_URL_DEFAULT)!!
-    }
+    override val defaultBaseUrl = "https://ww.animesultra.org"
+    override val supportedServers = listOf("UltraCDN", "Vidmoly", "Sibnet", "Sendvid")
+    override val supportedVoices = arrayOf("VOSTFR", "VF")
+
     override val lang = "fr"
     override val supportsLatest = true
 
-    override val json: Json by injectLazy()
-
     companion object {
-        private const val PREF_URL_KEY = "preferred_baseUrl"
-        private const val PREF_URL_DEFAULT = "https://ww.animesultra.org"
-
-        private const val PREF_VOICES_KEY = "preferred_voices"
-        private val VOICES_ENTRIES = arrayOf("Préférer VOSTFR", "Préférer VF")
-        private val VOICES_VALUES = arrayOf("VOSTFR", "VF")
-        private const val PREF_VOICES_DEFAULT = "VOSTFR"
-
-        private const val PREF_SERVER_KEY = "preferred_server"
-        private val SERVER_ENTRIES = arrayOf("UltraCDN", "Vidmoly", "Sibnet", "Sendvid")
-        private val SERVER_VALUES = arrayOf("ultracdn", "vidmoly", "sibnet", "sendvid")
-        private const val PREF_SERVER_DEFAULT = "ultracdn"
-
         private val CLEAN_REGEX = Regex("(?i)\\s*(\\((?:VF|VOSTFR|AU|DLL)\\)|\\b(?:VF|VOSTFR|AU|DLL|Saison|Season)\\b)")
         private val WHITESPACE_REGEX = Regex("\\s+")
         private val NEWS_ID_REGEX = Regex("""/(\d+)-""")
@@ -78,40 +56,6 @@ class AnimesUltra : Source() {
 
     @Serializable
     data class FullStoryResponse(val status: Boolean = false, val html: String = "")
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
-        .add("Referer", "$baseUrl/")
-
-        override fun setupPreferenceScreen(screen: PreferenceScreen) {
-            screen.addBaseUrlPreference(preferences, PREF_URL_DEFAULT, key = PREF_URL_KEY)
-    
-            androidx.preference.ListPreference(screen.context).apply {
-            key = PREF_VOICES_KEY
-            title = "Préférence des voix"
-            entries = VOICES_ENTRIES
-            entryValues = VOICES_VALUES
-            setDefaultValue(PREF_VOICES_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_VOICES_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
-
-        androidx.preference.ListPreference(screen.context).apply {
-            key = PREF_SERVER_KEY
-            title = "Serveur préféré"
-            entries = SERVER_ENTRIES
-            entryValues = SERVER_VALUES
-            setDefaultValue(PREF_SERVER_DEFAULT)
-            summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_SERVER_KEY, newValue as String).apply()
-                true
-            }
-        }.also(screen::addPreference)
-    }
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -401,22 +345,11 @@ class AnimesUltra : Source() {
 
                 else -> embedUrl
             }
-            val prefix = "($langTag) $serverName - "
 
             android.util.Log.d("AnimesUltraDebug", "Processing $serverName: $absoluteUrl")
 
             try {
-                when {
-                    absoluteUrl.contains("sibnet.ru") -> sibnetExtractor.videosFromUrl(absoluteUrl, prefix)
-
-                    absoluteUrl.contains("vidmoly") -> vidmolyExtractor.videosFromUrl(absoluteUrl, prefix)
-
-                    absoluteUrl.contains("sendvid.com") -> sendvidExtractor.videosFromUrl(absoluteUrl, prefix)
-
-                    else -> vidstreamExtractor.videosFromUrl(absoluteUrl).map {
-                        it.copy(videoTitle = "($langTag) ${it.videoTitle.replace("UltraCDN", serverName)}")
-                    }
-                }
+                extractVideos(absoluteUrl, langTag, supportedServers)
             } catch (e: Exception) {
                 android.util.Log.e("AnimesUltraDebug", "Error extracting $serverName", e)
                 emptyList()
@@ -447,9 +380,4 @@ class AnimesUltra : Source() {
         }
         return cleaned.replace(WHITESPACE_REGEX, " ").replace(" - - ", " - ").trim()
     }
-
-private val sibnetExtractor by lazy { SibnetExtractor(client) }
-    private val vidmolyExtractor by lazy { VidMolyExtractor(client, headers) }
-    private val sendvidExtractor by lazy { SendvidExtractor(client, headers) }
-    private val vidstreamExtractor by lazy { VidstreamExtractor(client) }
 }

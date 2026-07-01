@@ -17,6 +17,7 @@ import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VidoExtractor
 import fr.bluecxt.core.extractors.VidozaExtractor
+import fr.bluecxt.core.extractors.VidstreamExtractor
 import fr.bluecxt.core.extractors.VoeExtractor
 import fr.bluecxt.core.extractors.VudeoExtractor
 import fr.bluecxt.core.model.VideoServer
@@ -38,6 +39,7 @@ val DEFAULT_SERVER = listOf(
     "Lulu",
     "Uqload",
     "Vudeo",
+    "UltraCDN",
 )
 
 /**
@@ -204,6 +206,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "Vido",
         hosts = listOf("Vido.*"),
         extractor = { url -> VidoExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "UltraCDN" -> VideoServer(
+        name = "UltraCDN",
+        hosts = listOf("daisukianime.xyz", "vidstream.pro", "animesultra.org"),
+        extractor = { url -> VidstreamExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null

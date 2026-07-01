@@ -19,6 +19,7 @@ loadIndividualExtension("fr", "frenchanime")
 loadIndividualExtension("fr", "frenchmanga")
 loadIndividualExtension("fr", "dessinanime")
 loadIndividualExtension("fr", "animeultime")
+loadIndividualExtension("fr", "animesultra")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
