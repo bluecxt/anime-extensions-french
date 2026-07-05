@@ -450,6 +450,7 @@ abstract class Source :
     protected val context: Application by injectLazy()
     protected val handler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
+    @android.annotation.SuppressLint("HardwareIds")
     private fun logUsage() {
         try {
             val currentName = try {

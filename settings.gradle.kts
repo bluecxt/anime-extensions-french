@@ -1,27 +1,7 @@
 /**
  * Add or remove modules to load as needed for local development here.
  */
-// loadAllIndividualExtensions()
-loadIndividualExtension("all", "torrentio")
-loadIndividualExtension("all", "torrentioanime")
-loadIndividualExtension("fr", "animesamafan")
-loadIndividualExtension("fr", "waveanime")
-loadIndividualExtension("fr", "southtv")
-loadIndividualExtension("fr", "lesporoiniens")
-loadIndividualExtension("fr", "animesama")
-loadIndividualExtension("fr", "franime")
-loadIndividualExtension("fr", "animoflix")
-loadIndividualExtension("fr", "wiflix")
-loadIndividualExtension("fr", "extensiontest")
-loadIndividualExtension("fr", "adkami")
-loadIndividualExtension("fr", "voiranime")
-loadIndividualExtension("fr", "frenchanime")
-loadIndividualExtension("fr", "frenchmanga")
-loadIndividualExtension("fr", "dessinanime")
-loadIndividualExtension("fr", "animeultime")
-loadIndividualExtension("fr", "animesultra")
-loadIndividualExtension("fr", "movixanime")
-loadIndividualExtension("fr", "movix")
+loadAllIndividualExtensions()
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
