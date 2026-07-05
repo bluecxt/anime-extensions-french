@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.animeextension.fr.extensiontest
 
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -19,6 +20,10 @@ class ExtensionTestService(
     override val supportsLatest: Boolean = false,
 ) : AnimeExtensionService {
 
+    override val headers: Headers by lazy {
+        Headers.Builder().build()
+    }
+
     override suspend fun getLatestUpdates(page: Int): AnimesPage = getPopularAnime(page)
 
     override suspend fun getPopularAnime(page: Int): AnimesPage = AnimesPage(
@@ -31,6 +36,19 @@ class ExtensionTestService(
         ),
         false,
     )
+
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage = AnimesPage(
+        listOf(
+            SAnime.create().apply {
+                title = "Resultat recherche: $query"
+                url = "/test-extractors"
+                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/repo_logo.svg"
+            },
+        ),
+        false,
+    )
+
+    override fun getFilterList(): AnimeFilterList = AnimeFilterList()
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime.apply {
         description = buildString {

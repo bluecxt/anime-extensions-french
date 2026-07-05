@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test
 
 abstract class BaseExtensionTest(
     private val service: AnimeExtensionService,
+    private val searchQuery: String? = null,
 ) {
     @BeforeEach
     fun setUpMocks() {
@@ -46,6 +47,15 @@ abstract class BaseExtensionTest(
             assertFalse(latest.animes.isEmpty(), "Le catalogue latest est vide.")
             testAnime = latest.animes.first()
             println("-> Animé (Latest) : ${testAnime.title}")
+        }
+
+        // 1c. Search (if searchQuery is not null)
+        if (searchQuery != null) {
+            println("--- TEST RECHERCHE ---")
+            val searchResult = service.getSearchAnime(1, searchQuery, service.getFilterList())
+            assertFalse(searchResult.animes.isEmpty(), "La recherche pour '$searchQuery' a renvoyé un résultat vide.")
+            testAnime = searchResult.animes.first()
+            println("-> Animé (Search) : ${testAnime.title}")
         }
 
         // 2. Details

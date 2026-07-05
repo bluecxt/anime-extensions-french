@@ -9,4 +9,5 @@ class ExtensionTestTest :
             client = OkHttpClient(),
             supportsLatest = true,
         ),
+        searchQuery = "Test",
     )

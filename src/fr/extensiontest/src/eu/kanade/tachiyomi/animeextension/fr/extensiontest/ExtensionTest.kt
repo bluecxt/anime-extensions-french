@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
+import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 
@@ -29,6 +30,8 @@ class ExtensionTest :
     override val lang = "fr"
     override val supportsLatest = false
 
+    override fun headersBuilder(): Headers.Builder = service.headers.newBuilder()
+
     private val service by lazy {
         ExtensionTestService(
             client = client,
@@ -40,6 +43,12 @@ class ExtensionTest :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 
     override suspend fun getPopularAnime(page: Int): AnimesPage = service.getPopularAnime(page)
+
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = service.getLatestUpdates(page)
+
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage = service.getSearchAnime(page, query, filters)
+
+    override fun getFilterList(): AnimeFilterList = service.getFilterList()
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime = service.getAnimeDetails(anime)
 
