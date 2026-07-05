@@ -9,13 +9,8 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.utils.buildFromSource
 import okhttp3.Request
 import okhttp3.Response
-import fr.bluecxt.core.model.Anime as CoreAnime
-import fr.bluecxt.core.model.Episode as CoreEpisode
-import fr.bluecxt.core.model.Hoster as CoreHoster
-import fr.bluecxt.core.model.Video as CoreVideo
 
 class ExtensionTest :
     Source(),
@@ -38,65 +33,22 @@ class ExtensionTest :
         ExtensionTestService(
             client = client,
             extractVideos = { url ->
-                extractVideos(playerUrl = url, allowedServers = supportedServers).map { extSource ->
-                    CoreVideo(url = extSource.videoUrl ?: "", title = extSource.videoTitle ?: "Video", headers = extSource.headers)
-                }
+                extractVideos(playerUrl = url, allowedServers = supportedServers)
             },
         )
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 
-    override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val coreAnimes = service.getPopularAnime(page)
-        val sAnimes = coreAnimes.map { coreAnime ->
-            SAnime.create().apply {
-                title = coreAnime.title
-                url = coreAnime.url
-                thumbnail_url = coreAnime.thumbnailUrl
-            }
-        }
-        return AnimesPage(sAnimes, false)
-    }
+    override suspend fun getPopularAnime(page: Int): AnimesPage = service.getPopularAnime(page)
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val coreAnime = CoreAnime(title = anime.title, url = anime.url)
-        val updatedCore = service.getAnimeDetails(coreAnime)
-        return anime.apply {
-            description = updatedCore.description
-        }
-    }
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = service.getAnimeDetails(anime)
 
-    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val coreAnime = CoreAnime(title = anime.title, url = anime.url)
-        return service.getEpisodeList(coreAnime).map { coreEpisode ->
-            SEpisode.create().apply {
-                name = coreEpisode.name
-                url = coreEpisode.url
-                episode_number = coreEpisode.episodeNumber
-            }
-        }
-    }
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = service.getEpisodeList(anime)
 
-    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val coreEpisode = CoreEpisode(name = episode.name, url = episode.url, episodeNumber = episode.episode_number)
-        return service.getHosterList(coreEpisode).map { coreHoster ->
-            Hoster(hosterName = coreHoster.name, internalData = coreHoster.url)
-        }
-    }
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = service.getHosterList(episode)
 
-    override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val coreHoster = CoreHoster(name = hoster.hosterName, url = hoster.internalData)
-        val coreVideos = service.getVideoList(coreHoster)
-        return coreVideos.map { coreVideo ->
-            val extSource = fr.bluecxt.core.model.ExtractedSource(
-                url = coreVideo.url,
-                quality = coreVideo.title,
-                headers = coreVideo.headers,
-            )
-            extSource.buildFromSource(null, coreVideo.title)
-        }
-    }
+    override suspend fun getVideoList(hoster: Hoster): List<Video> = service.getVideoList(hoster)
 
     // Dummy implementations for unused methods
     override fun latestUpdatesParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)

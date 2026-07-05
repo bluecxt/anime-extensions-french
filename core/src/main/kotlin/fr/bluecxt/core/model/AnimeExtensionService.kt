@@ -1,11 +1,17 @@
 package fr.bluecxt.core.model
 
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
+
 interface AnimeExtensionService {
     val supportsLatest: Boolean
-    suspend fun getPopularAnime(page: Int): List<Anime>
-    suspend fun getLatestUpdates(page: Int): List<Anime>
-    suspend fun getAnimeDetails(anime: Anime): Anime
-    suspend fun getEpisodeList(anime: Anime): List<Episode>
-    suspend fun getHosterList(episode: Episode): List<Hoster>
+    suspend fun getPopularAnime(page: Int): AnimesPage
+    suspend fun getLatestUpdates(page: Int): AnimesPage
+    suspend fun getAnimeDetails(anime: SAnime): SAnime
+    suspend fun getEpisodeList(anime: SAnime): List<SEpisode>
+    suspend fun getHosterList(episode: SEpisode): List<Hoster>
     suspend fun getVideoList(hoster: Hoster): List<Video>
 }

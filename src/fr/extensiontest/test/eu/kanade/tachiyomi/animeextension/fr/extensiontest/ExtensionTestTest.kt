@@ -1,9 +1,10 @@
 package eu.kanade.tachiyomi.animeextension.fr.extensiontest
 
+import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.getVideoServer
 import fr.bluecxt.core.test.BaseExtensionTest
 import okhttp3.OkHttpClient
-import fr.bluecxt.core.model.Video as CoreVideo
+import fr.bluecxt.core.utils.buildFromSource as buildVideoFromSource
 
 class ExtensionTestTest :
     BaseExtensionTest(
@@ -24,10 +25,10 @@ class ExtensionTestTest :
                 if (server != null) {
                     try {
                         server.extractor(url).map { extSource ->
-                            CoreVideo(url = extSource.url, title = extSource.quality ?: "Video", headers = extSource.headers)
+                            extSource.buildVideoFromSource(null, server.name)
                         }
                     } catch (e: Exception) {
-                        listOf(CoreVideo(url = url, title = "Error ${server.name}: ${e.message}"))
+                        listOf(Video(videoUrl = url, videoTitle = "Error ${server.name}: ${e.message}"))
                     }
                 } else {
                     emptyList()

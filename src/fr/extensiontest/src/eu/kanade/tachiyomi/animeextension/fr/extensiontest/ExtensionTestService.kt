@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.animeextension.fr.extensiontest
 
-import fr.bluecxt.core.model.Anime
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.model.AnimeExtensionService
-import fr.bluecxt.core.model.Episode
-import fr.bluecxt.core.model.Hoster
-import fr.bluecxt.core.model.Video
+import fr.bluecxt.core.utils.buildFromSource
 import okhttp3.OkHttpClient
 
 class ExtensionTestService(
@@ -13,17 +15,20 @@ class ExtensionTestService(
     override val supportsLatest: Boolean = false,
 ) : AnimeExtensionService {
 
-    override suspend fun getLatestUpdates(page: Int): List<Anime> = getPopularAnime(page)
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = getPopularAnime(page)
 
-    override suspend fun getPopularAnime(page: Int): List<Anime> = listOf(
-        Anime(
-            title = "Test Extracteurs",
-            url = "/test-extractors",
-            thumbnailUrl = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/repo_logo.svg",
+    override suspend fun getPopularAnime(page: Int): AnimesPage = AnimesPage(
+        listOf(
+            SAnime.create().apply {
+                title = "Test Extracteurs"
+                url = "/test-extractors"
+                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/repo_logo.svg"
+            },
         ),
+        false,
     )
 
-    override suspend fun getAnimeDetails(anime: Anime): Anime = anime.apply {
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime.apply {
         description = buildString {
             val char1 = "✦"
             val char2 = "⫻"
@@ -39,16 +44,16 @@ class ExtensionTestService(
         }
     }
 
-    override suspend fun getEpisodeList(anime: Anime): List<Episode> = listOf(
-        Episode(
-            name = "Episode Test - Extracteurs",
-            url = "/episode-test",
-            episodeNumber = 1f,
-        ),
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = listOf(
+        SEpisode.create().apply {
+            name = "Episode Test - Extracteurs"
+            url = "/episode-test"
+            episode_number = 1f
+        },
     )
 
-    override suspend fun getHosterList(episode: Episode): List<Hoster> = listOf(
-        Hoster(name = "Tests", url = "all_tests"),
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(
+        Hoster(hosterName = "Tests", internalData = "all_tests"),
     )
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
@@ -88,12 +93,11 @@ class ExtensionTestService(
             print("Testing $serverName with URL: $url")
             val videos = if (serverName == "UqloadManual") {
                 try {
-                    // Call the real UqloadExtractor directly on JVM!
                     fr.bluecxt.core.extractors.UqloadExtractor(client).videosFromUrl(url).map { extSource ->
-                        Video(url = extSource.url, title = extSource.quality ?: "Uqload Manual", headers = extSource.headers)
+                        extSource.buildFromSource(null, "Uqload Manual")
                     }
                 } catch (e: Exception) {
-                    listOf(Video(url = url, title = "Error Uqload Manual: ${e.message}"))
+                    listOf(Video(videoUrl = url, videoTitle = "Error Uqload Manual: ${e.message}"))
                 }
             } else {
                 extractVideos(url)
@@ -103,7 +107,7 @@ class ExtensionTestService(
             } else {
                 println()
                 for (video in videos) {
-                    println("  >>> ${video.title} : ${video.url}")
+                    println("  >>> ${video.videoTitle} : ${video.videoUrl}")
                 }
             }
             videos
