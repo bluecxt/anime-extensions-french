@@ -55,7 +55,7 @@ class FrenchAnime :
 
 // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/animes-vostfr/page/$page/", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/animes-vostfr/page/$page/", headers)).awaitSuccess()
         val document = response.asJsoup()
         val animes = document.select("div#dle-content > div.mov").map { element ->
             SAnime.create().apply {
@@ -71,13 +71,13 @@ class FrenchAnime :
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/page/$page/", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/page/$page/", headers)).awaitSuccess()
         return getPopularAnime(page) // Reuse logic
     }
 
     // =============================== Search ===============================
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query&search_start=$page", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query&search_start=$page", headers)).awaitSuccess()
         val document = response.asJsoup()
         val animes = document.select("div#dle-content > div.mov").mapNotNull { element ->
             SAnime.create().apply {
@@ -103,7 +103,7 @@ class FrenchAnime :
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
 
         val h1 = document.selectFirst("h1")

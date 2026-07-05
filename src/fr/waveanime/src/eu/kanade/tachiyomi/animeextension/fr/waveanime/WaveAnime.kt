@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
@@ -45,7 +46,7 @@ class WaveAnime :
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/catalog")).execute()
+        val response = client.newCall(GET("$baseUrl/catalog")).awaitSuccess()
         return parseAnimePage(response)
     }
 
@@ -72,7 +73,7 @@ class WaveAnime :
     // ============================== Popular ===============================
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl")).execute()
+        val response = client.newCall(GET("$baseUrl")).awaitSuccess()
         return parseAnimePage(response)
     }
 
@@ -81,13 +82,13 @@ class WaveAnime :
         val url = "$baseUrl/catalog".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .build()
-        val response = client.newCall(GET(url, headers)).execute()
+        val response = client.newCall(GET(url, headers)).awaitSuccess()
         return parseAnimePage(response)
     }
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
         val document = response.asJsoup()
 
         val info = document.selectFirst("div.serie-info")
@@ -140,7 +141,7 @@ class WaveAnime :
 
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET(baseUrl + anime.url, headers)).execute()
+        val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
         val document = response.asJsoup()
         val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
         val episodes = mutableListOf<SEpisode>()
@@ -201,7 +202,7 @@ class WaveAnime :
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val episodeUrl = hoster.internalData
-        val response = client.newCall(GET(baseUrl + episodeUrl, headers)).execute()
+        val response = client.newCall(GET(baseUrl + episodeUrl, headers)).awaitSuccess()
         val document = response.asJsoup()
         val html = document.toString()
 
@@ -216,7 +217,7 @@ class WaveAnime :
         // Fetch tracks (subtitles) via API WaveAnime
         val tracks = mutableListOf<Track>()
         try {
-            val tracksResponse = client.newCall(GET("$baseUrl/api/episodes/tracks?episodeId=$episodeId", headers)).execute()
+            val tracksResponse = client.newCall(GET("$baseUrl/api/episodes/tracks?episodeId=$episodeId", headers)).awaitSuccess()
             if (tracksResponse.isSuccessful) {
                 val data = json.decodeFromString<TracksResponse>(tracksResponse.body.string())
                 data.subtitles.forEach { (key, value) ->

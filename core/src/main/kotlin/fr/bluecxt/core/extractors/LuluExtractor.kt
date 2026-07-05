@@ -1,6 +1,7 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
@@ -23,9 +24,9 @@ class LuluExtractor(private val client: OkHttpClient) {
         )
     }
 
-    fun videosFromUrl(url: String): List<ExtractedSource> {
+    suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val headers = getHeaders(url)
-        val html = client.newCall(GET(url, headers)).execute().bodyString()
+        val html = client.newCall(GET(url, headers)).awaitSuccess().bodyString()
         val m3u8Url = extractM3u8Url(html)
         val fixedUrl = fixM3u8Link(m3u8Url)
         val quality = getResolution(fixedUrl, headers)
@@ -95,8 +96,8 @@ class LuluExtractor(private val client: OkHttpClient) {
         return fixedLink.build().toString()
     }
 
-    private fun getResolution(m3u8Url: String, headers: Headers): String? = try {
-        val content = client.newCall(GET(m3u8Url, headers)).execute()
+    private suspend fun getResolution(m3u8Url: String, headers: Headers): String? = try {
+        val content = client.newCall(GET(m3u8Url, headers)).awaitSuccess()
             .bodyString()
 
         Pattern.compile("RESOLUTION=\\d+x(\\d+)")

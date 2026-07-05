@@ -258,7 +258,7 @@ class Torrentio : Source() {
         val cache = cinemetaCache
         if (cache != null && cache.first == imdbId) return cache.second
 
-        val responseString = client.newCall(GET("https://cinemeta-live.strem.io/meta/$type/$imdbId.json")).execute().body.string()
+        val responseString = client.newCall(GET("https://cinemeta-live.strem.io/meta/$type/$imdbId.json")).awaitSuccess().body.string()
         val episodeList = json.decodeFromString<EpisodeList>(responseString)
         cinemetaCache = imdbId to episodeList
         return episodeList
@@ -308,7 +308,7 @@ class Torrentio : Source() {
         """.trimIndent()
 
         val content = runCatching {
-            json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).execute().body.string())
+            json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).awaitSuccess().body.string())
         }.getOrNull()?.data?.urlV2?.node?.content
 
         anime.title = content?.title ?: ""
@@ -378,7 +378,7 @@ class Torrentio : Source() {
         val type = parts[1].lowercase()
 
         val episodeList = if (type == "movie") {
-            val responseString = client.newCall(episodeListRequest(anime)).execute().body.string()
+            val responseString = client.newCall(episodeListRequest(anime)).awaitSuccess().body.string()
             json.decodeFromString<EpisodeList>(responseString)
         } else {
             fetchCinemeta(imdbId, "series")
@@ -395,7 +395,7 @@ class Torrentio : Source() {
         val tmdbSeasonsMeta = if (imdbId.isNotBlank()) {
             val tmdbIdUrl = "https://api.themoviedb.org/3/find/$imdbId?api_key=24621da8ae19dce721e59eff2ab479bb&external_source=imdb_id"
             val tmdbIdData = runCatching {
-                val idRes = client.newCall(GET(tmdbIdUrl)).execute().use { it.body.string() }
+                val idRes = client.newCall(GET(tmdbIdUrl)).awaitSuccess().use { it.body.string() }
                 val idJson = org.json.JSONObject(idRes)
                 val movieResults = idJson.optJSONArray("movie_results")
                 val tvResults = idJson.optJSONArray("tv_results")
@@ -552,7 +552,7 @@ class Torrentio : Source() {
             append(episode.url)
         }.removeSuffix("|")
 
-        val responseString = client.newCall(GET(mainURL)).execute().body.string()
+        val responseString = client.newCall(GET(mainURL)).awaitSuccess().body.string()
         val streamList = json.decodeFromString<StreamDataTorrent>(responseString)
         val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
 
@@ -620,12 +620,12 @@ class Torrentio : Source() {
         )
     }
 
-    private fun fetchTrackers(): String {
+    private suspend fun fetchTrackers(): String {
         val request = Request.Builder()
             .url("https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt")
             .build()
 
-        client.newCall(request).execute().use { response ->
+        client.newCall(request).awaitSuccess().use { response ->
             if (!response.isSuccessful) throw Exception("Unexpected code $response")
             return response.body.string().trim()
         }

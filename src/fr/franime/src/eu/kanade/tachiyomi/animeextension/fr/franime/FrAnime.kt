@@ -318,7 +318,7 @@ class FrAnime :
 
         return players.withIndex().filter { !it.value.equals("TELECHARGEMENT UNIQUE", true) }.flatMap { (playerIdx, _) ->
             try {
-                val responseBody = client.newCall(GET("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)).execute().body.string()
+                val responseBody = client.newCall(GET("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)).awaitSuccess().body.string()
 
                 var playerUrl = responseBody
                 if (responseBody.contains("watch2")) {

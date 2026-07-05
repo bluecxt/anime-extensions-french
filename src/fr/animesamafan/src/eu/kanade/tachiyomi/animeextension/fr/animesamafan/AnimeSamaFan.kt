@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.CommonPreferences
@@ -101,13 +102,13 @@ class AnimeSamaFan :
     override fun getFilterList() = AnimeSamaFanCatalogueFilters.FILTER_LIST
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(catalogueRequest(page = page)).execute()
+        val response = client.newCall(catalogueRequest(page = page)).awaitSuccess()
         return parseAnimePage(response.asJsoup(), page)
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
-        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
         val doc = response.asJsoup()
         return AnimesPage(parseLatestFromHome(doc), false)
     }
@@ -146,7 +147,7 @@ class AnimeSamaFan :
 
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
-            val response = client.newCall(GET("$baseUrl/anime/$id", headers)).execute()
+            val response = client.newCall(GET("$baseUrl/anime/$id", headers)).awaitSuccess()
             return parseSearchPage(response.asJsoup())
         }
 
@@ -158,7 +159,7 @@ class AnimeSamaFan :
                 type = searchFilters.type,
                 genre = searchFilters.genre,
             ),
-        ).execute()
+        ).awaitSuccess()
 
         return parseAnimePage(response.asJsoup(), page)
     }
@@ -220,7 +221,7 @@ class AnimeSamaFan :
 
     // ================== Details ==================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
 
         val docTitle = document.selectFirst("h1.anime-title")?.text()?.trim()
@@ -321,7 +322,7 @@ class AnimeSamaFan :
     }
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
         val baseTitle = sanitizeTitle(anime.title)
 
@@ -344,7 +345,7 @@ class AnimeSamaFan :
         val initialPath = anime.url
         Log.d("AnimeSamaFan", "getEpisodeList: initialPath='$initialPath'")
 
-        val initialDoc = client.newCall(GET("$baseUrl$initialPath", headers)).execute().asJsoup()
+        val initialDoc = client.newCall(GET("$baseUrl$initialPath", headers)).awaitSuccess().asJsoup()
 
         // If it's a hub page with no episodes but has a seasons grid, follow the first one
         // (Avoids aggregation but ensures we find episodes for single-season animes)
@@ -353,7 +354,7 @@ class AnimeSamaFan :
 
         val (doc, path) = if (episodeCards.isEmpty() && gridCards.isNotEmpty()) {
             val firstUrl = gridCards.first()!!.safeRelativePath()
-            client.newCall(GET("$baseUrl$firstUrl", headers)).execute().asJsoup() to firstUrl
+            client.newCall(GET("$baseUrl$firstUrl", headers)).awaitSuccess().asJsoup() to firstUrl
         } else {
             initialDoc to initialPath
         }
@@ -399,10 +400,10 @@ class AnimeSamaFan :
         return null
     }
 
-    private fun tryGetDocument(url: String): Document? {
+    private suspend fun tryGetDocument(url: String): Document? {
         Log.d("AnimeSamaFan", "tryGetDocument: url='$url'")
         return try {
-            val response = client.newCall(GET(url, headers)).execute()
+            val response = client.newCall(GET(url, headers)).awaitSuccess()
             if (!response.isSuccessful) {
                 Log.d("AnimeSamaFan", "tryGetDocument failed: code=${response.code}")
                 return null
@@ -507,7 +508,7 @@ class AnimeSamaFan :
             "$episodeUrl?lang=${lang.lowercase()}"
         }
 
-        val doc = client.newCall(GET("$baseUrl$urlWithLang", headers)).execute().asJsoup()
+        val doc = client.newCall(GET("$baseUrl$urlWithLang", headers)).awaitSuccess().asJsoup()
         val playerUrls = mutableListOf<String>()
 
         val iframes = doc.select("iframe")

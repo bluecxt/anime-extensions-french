@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
@@ -132,7 +133,7 @@ class MovixAnime :
     // ============================ Popular ============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
-        val response = client.newCall(GET("$apiUrl/api/top10/overview?type=anime", apiHeaders)).execute()
+        val response = client.newCall(GET("$apiUrl/api/top10/overview?type=anime", apiHeaders)).awaitSuccess()
         val data = json.decodeFromString<Top10Response>(response.body.string())
 
         // We must fetch the real URL from Movix API to ensure getAnimeDetails works
@@ -140,7 +141,7 @@ class MovixAnime :
             try {
                 val encodedQuery = URLEncoder.encode(item.title, "UTF-8").replace("+", "%20")
                 Log.d(MOVIXANIME_LOG, "Popular: Fetching URL for ${item.title} -> $encodedQuery")
-                val searchRes = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=false&includeEpisodes=false", apiHeaders)).execute()
+                val searchRes = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=false&includeEpisodes=false", apiHeaders)).awaitSuccess()
                 val results = json.decodeFromString<List<AnimeItem>>(searchRes.body.string())
                 val exactMatch = results.firstOrNull { it.name.equals(item.title, true) } ?: results.firstOrNull()
 
@@ -172,7 +173,7 @@ class MovixAnime :
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val tmdbApi = BuildConfig.TMDB_API
         val tmdbUrl = "https://api.themoviedb.org/3/discover/tv?api_key=$tmdbApi&with_genres=&page=$page&language=fr-FR&vote_average_gte=0&sort_by=first_air_date.desc&with_watch_providers=283&watch_region=FR&with_release_type=2%7C3"
-        val response = client.newCall(GET(tmdbUrl)).execute()
+        val response = client.newCall(GET(tmdbUrl)).awaitSuccess()
         val data = json.decodeFromString<TmdbDiscoverResponse>(response.body.string())
 
         val animes = data.results.parallelMap { item ->
@@ -181,7 +182,7 @@ class MovixAnime :
                 val encodedQuery = URLEncoder.encode(titleStr, "UTF-8").replace("+", "%20")
                 Log.d(MOVIXANIME_LOG, "Latest: Fetching URL for $titleStr -> $encodedQuery")
 
-                val searchRes = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=false&includeEpisodes=false", apiHeaders)).execute()
+                val searchRes = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=false&includeEpisodes=false", apiHeaders)).awaitSuccess()
                 val results = json.decodeFromString<List<AnimeItem>>(searchRes.body.string())
                 val exactMatch = results.firstOrNull { it.name.equals(titleStr, true) } ?: results.firstOrNull()
 
@@ -228,7 +229,7 @@ class MovixAnime :
 
     private suspend fun fetchAndCache(query: String, targetUrl: String? = null): AnimesPage {
         val encodedQuery = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
-        val response = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=true&includeEpisodes=true", apiHeaders)).execute()
+        val response = client.newCall(GET("$apiUrl/anime/search/$encodedQuery?includeSeasons=true&includeEpisodes=true", apiHeaders)).awaitSuccess()
         val results = json.decodeFromString<List<AnimeItem>>(response.body.string())
 
         val filtered = if (targetUrl != null) results.filter { it.url == targetUrl } else results

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
@@ -171,9 +172,9 @@ class SouthTV :
         }
     }
 
-    private fun fetchEpisodesPerSeason(): List<Int> {
+    private suspend fun fetchEpisodesPerSeason(): List<Int> {
         val request = Request.Builder().url(baseUrl).headers(headers).build()
-        val body = client.newCall(request).execute().body.string()
+        val body = client.newCall(request).awaitSuccess().body.string()
         return Regex("""const\s+episodesPerSeason\s*=\s*\[(.*?)\]""")
             .find(body)?.groupValues?.get(1)
             ?.split(",")

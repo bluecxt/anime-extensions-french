@@ -285,7 +285,7 @@ class Torrentio : Source() {
     override fun episodeListRequest(anime: SAnime): Request = GET("https://api.ani.zip/mappings?anilist_id=${anime.url}")
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(episodeListRequest(anime)).execute()
+        val response = client.newCall(episodeListRequest(anime)).awaitSuccess()
         val responseString = response.body.string()
         val aniZipResponse = json.decodeFromString<AniZipResponse>(responseString)
 
@@ -398,7 +398,7 @@ class Torrentio : Source() {
             append(episode.url)
         }.removeSuffix("|")
 
-        val responseString = client.newCall(GET(mainURL)).execute().body.string()
+        val responseString = client.newCall(GET(mainURL)).awaitSuccess().body.string()
         val streamList = json.decodeFromString<StreamDataTorrent>(responseString)
         val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
 
@@ -490,12 +490,12 @@ class Torrentio : Source() {
         else -> "other"
     }
 
-    private fun fetchTrackers(): String {
+    private suspend fun fetchTrackers(): String {
         val request = Request.Builder()
             .url("https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt")
             .build()
 
-        client.newCall(request).execute().use { response ->
+        client.newCall(request).awaitSuccess().use { response ->
             if (!response.isSuccessful) throw Exception("Unexpected code $response")
             return response.body.string().trim()
         }

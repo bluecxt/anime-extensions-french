@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
@@ -61,7 +62,7 @@ class LesPoroiniens :
             fileList.map { fileName ->
                 async {
                     try {
-                        val seriesResponse = client.newCall(GET("$baseUrl/data/series/$fileName")).execute()
+                        val seriesResponse = client.newCall(GET("$baseUrl/data/series/$fileName")).awaitSuccess()
                         val seriesJson = json.decodeFromString<JsonObject>(seriesResponse.body.string())
                         val epArray = seriesJson["episodes"]?.jsonArray
                         if (epArray.isNullOrEmpty()) return@async null
@@ -85,14 +86,14 @@ class LesPoroiniens :
     }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val pageData = client.newCall(popularAnimeRequest(page)).execute().use { popularAnimeParse(it) }
+        val pageData = client.newCall(popularAnimeRequest(page)).awaitSuccess().use { popularAnimeParse(it) }
         if (query.isBlank()) return pageData
         return AnimesPage(pageData.animes.filter { it.title.contains(query, ignoreCase = true) }, false)
     }
 
     // --- Détails ---
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET("$baseUrl${anime.url}")).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}")).awaitSuccess()
         val document = response.asJsoup()
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: throw Exception("Données introuvables")
         val obj = json.decodeFromString<JsonObject>(jsonString)
@@ -109,7 +110,7 @@ class LesPoroiniens :
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET("$baseUrl${anime.url}")).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}")).awaitSuccess()
         val document = response.asJsoup()
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: return emptyList()
         val obj = json.decodeFromString<JsonObject>(jsonString)

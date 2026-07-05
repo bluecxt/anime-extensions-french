@@ -23,6 +23,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
@@ -136,12 +137,12 @@ class Movix :
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         // Films populaires en salle
         val moviesUrl = "$tmdbBase/movie/now_playing?api_key=$tmdbKey&language=$tmdbLang&page=$page"
-        val moviesRes = client.newCall(GET(moviesUrl)).execute()
+        val moviesRes = client.newCall(GET(moviesUrl)).awaitSuccess()
         val movies = json.decodeFromString<TmdbMainResponse>(moviesRes.body.string())
 
         // Séries diffusées en ce moment
         val tvUrl = "$tmdbBase/tv/on_the_air?api_key=$tmdbKey&language=$tmdbLang&page=$page"
-        val tvRes = client.newCall(GET(tvUrl)).execute()
+        val tvRes = client.newCall(GET(tvUrl)).awaitSuccess()
         val tvShows = json.decodeFromString<TmdbMainResponse>(tvRes.body.string())
 
         val animes = (
@@ -161,13 +162,13 @@ class Movix :
         // Films récents (sortie FR)
         val moviesUrl = "$tmdbBase/discover/movie?api_key=$tmdbKey&language=$tmdbLang" +
             "&sort_by=release_date.desc&watch_region=FR&page=$page&include_adult=false"
-        val moviesRes = client.newCall(GET(moviesUrl)).execute()
+        val moviesRes = client.newCall(GET(moviesUrl)).awaitSuccess()
         val movies = json.decodeFromString<TmdbMainResponse>(moviesRes.body.string())
 
         // Séries récentes
         val tvUrl = "$tmdbBase/discover/tv?api_key=$tmdbKey&language=$tmdbLang" +
             "&sort_by=first_air_date.desc&watch_region=FR&page=$page"
-        val tvRes = client.newCall(GET(tvUrl)).execute()
+        val tvRes = client.newCall(GET(tvUrl)).awaitSuccess()
         val tvShows = json.decodeFromString<TmdbMainResponse>(tvRes.body.string())
 
         val animes = (
@@ -192,7 +193,7 @@ class Movix :
             val type = if (id.startsWith("movie")) "movie" else "tv"
             val tmdbId = id.substringAfterLast("/")
             val url = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
-            val res = client.newCall(GET(url)).execute()
+            val res = client.newCall(GET(url)).awaitSuccess()
             val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
             val anime = detail.toSAnime(type) ?: return AnimesPage(emptyList(), false)
             return AnimesPage(listOf(anime), false)
@@ -200,7 +201,7 @@ class Movix :
 
         val encoded = URLEncoder.encode(trimmed, "UTF-8")
         val url = "$tmdbBase/search/multi?api_key=$tmdbKey&query=$encoded&language=$tmdbLang&page=$page"
-        val res = client.newCall(GET(url)).execute()
+        val res = client.newCall(GET(url)).awaitSuccess()
         val data = json.decodeFromString<TmdbMainResponse>(res.body.string())
 
         val animes = data.results.mapNotNull { result ->
@@ -220,7 +221,7 @@ class Movix :
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val (type, tmdbId) = parseAnimeUrl(anime.url)
         val url = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
-        val res = client.newCall(GET(url)).execute()
+        val res = client.newCall(GET(url)).awaitSuccess()
         val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
 
         anime.title = detail.title ?: detail.name ?: detail.originalTitle ?: detail.originalName ?: anime.title
@@ -260,7 +261,7 @@ class Movix :
 
         // Séries : fetch saisons depuis TMDB
         val tmdbUrl = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
-        val res = client.newCall(GET(tmdbUrl)).execute()
+        val res = client.newCall(GET(tmdbUrl)).awaitSuccess()
         val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
 
         val seasons = detail.seasons?.filter { (it.seasonNumber ?: 0) > 0 } ?: return emptyList()
@@ -269,7 +270,7 @@ class Movix :
             val sn = season.seasonNumber ?: return@flatMap emptyList()
             val seasonUrl = "$tmdbBase/$type/$tmdbId/season/$sn?api_key=$tmdbKey&language=$tmdbLang"
             try {
-                val seasonRes = client.newCall(GET(seasonUrl)).execute()
+                val seasonRes = client.newCall(GET(seasonUrl)).awaitSuccess()
                 val seasonDetail = json.decodeFromString<TmdbSeasonDetail>(seasonRes.body.string())
                 seasonDetail.episodes?.map { ep ->
                     val en = ep.episodeNumber ?: 0
@@ -356,7 +357,7 @@ class Movix :
                     .url(targetUrl)
                     .headers(apiHeaders)
                     .build(),
-            ).execute()
+            ).awaitSuccess()
 
             var responseText = res.body.string()
 
@@ -366,7 +367,7 @@ class Movix :
                 if (!location.isNullOrBlank()) {
                     responseText = client.newCall(
                         Request.Builder().url(location).headers(apiHeaders).build(),
-                    ).execute().body.string()
+                    ).awaitSuccess().body.string()
                 }
             }
 

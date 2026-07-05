@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
@@ -178,13 +179,13 @@ class AnimoFlix :
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         // Site behavior: when "sort" is omitted (or invalid), it behaves like a "views"/popular sort.
-        val response = client.newCall(catalogueRequest(page = page, sort = "")).execute()
+        val response = client.newCall(catalogueRequest(page = page, sort = "")).awaitSuccess()
         return parseCatalogueAjaxResponse(response, page)
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
-        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
         val doc = response.asJsoup()
         return AnimesPage(parseLatestFromHome(doc), false)
     }
@@ -219,7 +220,7 @@ class AnimoFlix :
                 sort = f.sort,
                 letter = f.letter,
             ),
-        ).execute()
+        ).awaitSuccess()
         return parseCatalogueAjaxResponse(response, page)
     }
 
@@ -290,7 +291,7 @@ class AnimoFlix :
 
     // ================== Details ==================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
 
         val fullTitle = document.selectFirst("h1.anime-title-pro, h1")?.text() ?: anime.title
@@ -329,7 +330,7 @@ class AnimoFlix :
     // ================== Seasons ==================
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val hubUrl = getHubUrl(anime.url)
-        val response = client.newCall(GET(baseUrl + hubUrl, headers)).execute()
+        val response = client.newCall(GET(baseUrl + hubUrl, headers)).awaitSuccess()
         val document = response.asJsoup()
         val seasonCards = document.select(".seasons-grid a.season-card")
 
@@ -351,7 +352,7 @@ class AnimoFlix :
 
     // ================== Episodes ==================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.asJsoup()
         val episodeCards = document.select("a.episode-card")
         val seasonCards = document.select(".seasons-grid a.season-card")
@@ -364,7 +365,7 @@ class AnimoFlix :
                         val seasonName = card.selectFirst(".season-title")?.text() ?: ""
                         val seasonNum = parseSeasonNumber(seasonName)
                         val seasonUrl = card.attr("href").let { if (it.startsWith("http")) it else baseUrl + it }
-                        val seasonResponse = client.newCall(GET(seasonUrl, headers)).execute()
+                        val seasonResponse = client.newCall(GET(seasonUrl, headers)).awaitSuccess()
 
                         parseEpisodesFromSeasonPage(seasonResponse.asJsoup(), seasonName, seasonCards.size, anime.title, seasonUrl)
                     }
@@ -466,7 +467,7 @@ class AnimoFlix :
         val lang = hoster.hosterName
         val url = hoster.hosterUrl
 
-        val response = client.newCall(GET(url, headers)).execute()
+        val response = client.newCall(GET(url, headers)).awaitSuccess()
         val document = response.asJsoup()
 
         return document.select("select#lecteurSelect option").flatMap { option ->

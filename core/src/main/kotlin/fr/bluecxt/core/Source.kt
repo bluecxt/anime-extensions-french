@@ -228,8 +228,7 @@ abstract class Source :
 
         return this.sortedWith(
             // Exception : downloading with sibnet is a little bit fucked with anizen actually
-            compareByDescending<Video> { !it.videoTitle.contains("sibnet", true) || player.equals("sibnet", true) }
-                .thenByDescending { it.videoTitle.contains(voices, true) }
+            compareByDescending<Video> { it.videoTitle.contains(voices, true) }
                 .thenByDescending { it.videoTitle.contains(player, true) }
                 .thenByDescending { video ->
                     val actualQual = qualityRegex.find(video.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
