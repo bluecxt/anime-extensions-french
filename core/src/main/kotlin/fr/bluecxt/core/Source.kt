@@ -16,8 +16,8 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.network.CloudflareInterceptor
+import fr.bluecxt.core.utils.getPreferencesLazy
 import keiyoushi.core.BuildConfig
-import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
@@ -30,6 +30,7 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 import kotlin.random.Random
+import fr.bluecxt.core.utils.buildFromSource as buildVideoFromSource
 
 val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 30000L else 60000L
 
@@ -86,30 +87,7 @@ abstract class Source :
 
     // ============================ Utils =============================
 
-    fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
-        val sourceQuality = this.quality
-        val sourceFrameRate = this.frameRate
-        val sourceUrl = this.url
-
-        val finalVideo = Video(
-            videoUrl = sourceUrl,
-            videoTitle = buildString {
-                if (!lang.isNullOrBlank()) append("($lang) ")
-                append(name)
-                if (!sourceFrameRate.isNullOrBlank() || !sourceQuality.isNullOrBlank()) append(" ✦ ")
-                if (!sourceQuality.isNullOrBlank()) append("$sourceQuality")
-                if (!sourceFrameRate.isNullOrBlank() && !sourceQuality.isNullOrBlank()) append(" ⫻ ")
-                if (!sourceFrameRate.isNullOrBlank()) append(sourceFrameRate)
-            },
-            headers = this.headers,
-            subtitleTracks = this.subtitleTracks,
-            audioTracks = this.audioTracks,
-        ).withDefaultHeaders(sourceUrl)
-
-        Log.d(SERVER_LOG, "title = ${finalVideo.videoTitle} url = ${finalVideo.videoUrl}")
-
-        return finalVideo
-    }
+    fun ExtractedSource.buildFromSource(lang: String?, name: String): Video = this.buildVideoFromSource(lang, name)
 
     suspend fun extractVideos(playerUrl: String, lang: String? = null, allowedServers: List<String>): List<Video> {
         val isFilemoonDisabled = preferences.getBoolean(CommonPreferences.PREF_DISABLE_FILEMOON_KEY, false)

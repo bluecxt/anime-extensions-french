@@ -12,7 +12,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.EXTENSIONTEST_LOG
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.UqloadExtractor
-import keiyoushi.utils.parallelCatchingFlatMap
+import fr.bluecxt.core.utils.parallelCatchingFlatMap
 import okhttp3.Request
 import okhttp3.Response
 

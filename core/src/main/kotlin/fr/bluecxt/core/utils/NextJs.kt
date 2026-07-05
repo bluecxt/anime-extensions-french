@@ -1,6 +1,6 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
-import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.network.asJsoup
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement

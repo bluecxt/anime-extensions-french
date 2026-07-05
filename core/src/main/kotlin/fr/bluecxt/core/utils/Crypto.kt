@@ -1,4 +1,4 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
 /**
  * Decodes this hexadecimal string into a [ByteArray].

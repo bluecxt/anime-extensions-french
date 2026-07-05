@@ -1,4 +1,4 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -13,7 +13,17 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.InputStream
 
-val jsonInstance: Json = Injekt.get()
+val jsonInstance: Json by lazy {
+    try {
+        Injekt.get<Json>()
+    } catch (e: Throwable) {
+        Json {
+            ignoreUnknownKeys = true
+            explicitNulls = false
+            isLenient = true
+        }
+    }
+}
 
 /**
  * Parses JSON string into an object of type [T].

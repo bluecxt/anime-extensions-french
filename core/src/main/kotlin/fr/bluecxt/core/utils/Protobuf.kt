@@ -1,6 +1,5 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
-import android.util.Base64
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -13,8 +12,38 @@ import okhttp3.ResponseBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-val protoInstance: ProtoBuf = Injekt.get()
+val protoInstance: ProtoBuf by lazy {
+    try {
+        Injekt.get<ProtoBuf>()
+    } catch (e: Throwable) {
+        ProtoBuf
+    }
+}
+
 val PROTOBUF_MEDIA_TYPE = "application/protobuf".toMediaType()
+
+object Base64Compat {
+    private val isAndroid: Boolean by lazy {
+        try {
+            Class.forName("android.util.Base64")
+            true
+        } catch (e: ClassNotFoundException) {
+            false
+        }
+    }
+
+    fun decode(str: String): ByteArray = if (isAndroid) {
+        android.util.Base64.decode(str, android.util.Base64.NO_WRAP)
+    } else {
+        java.util.Base64.getDecoder().decode(str.replace("\n", "").replace("\r", ""))
+    }
+
+    fun encodeToString(bytes: ByteArray): String = if (isAndroid) {
+        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+    } else {
+        java.util.Base64.getEncoder().encodeToString(bytes)
+    }
+}
 
 /**
  * Decodes a [ByteArray] into an object of type [T] using Protobuf deserialization.
@@ -69,17 +98,17 @@ inline fun <reified T : Any> T.toRequestBodyProto(proto: ProtoBuf = protoInstanc
 /**
  * Decodes a Base64-encoded string into an object of type [T] using Protobuf deserialization.
  *
- * The string is expected to be encoded with [Base64.NO_WRAP].
+ * The string is expected to be encoded with Base64 NO_WRAP.
  *
  * @param proto The [ProtoBuf] instance to use for deserialization.
  */
-inline fun <reified T> String.decodeProtoBase64(proto: ProtoBuf = protoInstance): T = Base64.decode(this, Base64.NO_WRAP).decodeProto(proto)
+inline fun <reified T> String.decodeProtoBase64(proto: ProtoBuf = protoInstance): T = Base64Compat.decode(this).decodeProto(proto)
 
 /**
  * Encodes the object to a Protobuf [ByteArray] and returns it as a Base64-encoded string.
  *
- * The resulting string is encoded with [Base64.NO_WRAP].
+ * The resulting string is encoded with Base64 NO_WRAP.
  *
  * @param proto The [ProtoBuf] instance to use for serialization.
  */
-inline fun <reified T : Any> T.encodeProtoBase64(proto: ProtoBuf = protoInstance): String = Base64.encodeToString(encodeProto(proto), Base64.NO_WRAP)
+inline fun <reified T : Any> T.encodeProtoBase64(proto: ProtoBuf = protoInstance): String = Base64Compat.encodeToString(encodeProto(proto))

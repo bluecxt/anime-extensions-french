@@ -7,9 +7,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.useAsJsoup
 import fr.bluecxt.core.utils.PlaylistUtils
-import keiyoushi.utils.UrlUtils
-import keiyoushi.utils.useAsJsoup
+import fr.bluecxt.core.utils.UrlUtils
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient

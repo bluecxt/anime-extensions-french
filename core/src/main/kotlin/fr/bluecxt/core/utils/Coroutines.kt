@@ -1,6 +1,5 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -9,8 +8,6 @@ import kotlinx.coroutines.withContext
 
 /**
  * Parallel implementation of [Iterable.map].
- *
- * @since extensions-lib 14
  */
 suspend inline fun <A, B> Iterable<A>.parallelMap(crossinline f: suspend (A) -> B): List<B> = withContext(Dispatchers.IO) {
     map { async { f(it) } }.awaitAll()
@@ -18,15 +15,11 @@ suspend inline fun <A, B> Iterable<A>.parallelMap(crossinline f: suspend (A) -> 
 
 /**
  * Thread-blocking parallel implementation of [Iterable.map].
- *
- * @since extensions-lib 14
  */
 inline fun <A, B> Iterable<A>.parallelMapBlocking(crossinline f: suspend (A) -> B): List<B> = runBlocking { parallelMap(f) }
 
 /**
  * Parallel implementation of [Iterable.mapNotNull].
- *
- * @since extensions-lib 14
  */
 suspend inline fun <A, B> Iterable<A>.parallelMapNotNull(crossinline f: suspend (A) -> B?): List<B> = withContext(Dispatchers.IO) {
     map { async { f(it) } }.awaitAll().filterNotNull()
@@ -34,15 +27,11 @@ suspend inline fun <A, B> Iterable<A>.parallelMapNotNull(crossinline f: suspend 
 
 /**
  * Thread-blocking parallel implementation of [Iterable.mapNotNull].
- *
- * @since extensions-lib 14
  */
 inline fun <A, B> Iterable<A>.parallelMapNotNullBlocking(crossinline f: suspend (A) -> B?): List<B> = runBlocking { parallelMapNotNull(f) }
 
 /**
  * Parallel implementation of [Iterable.flatMap].
- *
- * @since extensions-lib 14
  */
 suspend inline fun <A, B> Iterable<A>.parallelFlatMap(crossinline f: suspend (A) -> Iterable<B>): List<B> = withContext(Dispatchers.IO) {
     map { async { f(it) } }.awaitAll().flatten()
@@ -50,16 +39,12 @@ suspend inline fun <A, B> Iterable<A>.parallelFlatMap(crossinline f: suspend (A)
 
 /**
  * Thread-blocking parallel implementation of [Iterable.flatMap].
- *
- * @since extensions-lib 14
  */
 inline fun <A, B> Iterable<A>.parallelFlatMapBlocking(crossinline f: suspend (A) -> Iterable<B>): List<B> = runBlocking { parallelFlatMap(f) }
 
 /**
  * Parallel implementation of [Iterable.flatMap], but running
  * the transformation function inside a try-catch block.
- *
- * @since extensions-lib 14
  */
 suspend inline fun <A, B> Iterable<A>.parallelCatchingFlatMap(crossinline f: suspend (A) -> Iterable<B>): List<B> = withContext(Dispatchers.IO) {
     map {
@@ -77,8 +62,6 @@ suspend inline fun <A, B> Iterable<A>.parallelCatchingFlatMap(crossinline f: sus
 /**
  * Parallel implementation of [Iterable.map], but running
  * the transformation function inside a try-catch block.
- *
- * @since extensions-lib 14
  */
 suspend inline fun <A, B> Iterable<A>.parallelCatchingMapNotNull(crossinline f: suspend (A) -> B?): List<B> = withContext(Dispatchers.IO) {
     map {
@@ -96,16 +79,12 @@ suspend inline fun <A, B> Iterable<A>.parallelCatchingMapNotNull(crossinline f: 
 /**
  * Thread-blocking parallel implementation of [Iterable.flatMap], but running
  * the transformation function inside a try-catch block.
- *
- * @since extensions-lib 14
  */
 inline fun <A, B> Iterable<A>.parallelCatchingFlatMapBlocking(crossinline f: suspend (A) -> Iterable<B>): List<B> = runBlocking { parallelCatchingFlatMap(f) }
 
 /**
  * Implementation of [Iterable.flatMap], but running
  * the transformation function inside a try-catch block.
- *
- * @since extensions-lib 14
  */
 suspend inline fun <A, B> Iterable<A>.catchingFlatMap(crossinline f: suspend (A) -> Iterable<B>): List<B> = flatMap {
     try {
@@ -119,8 +98,6 @@ suspend inline fun <A, B> Iterable<A>.catchingFlatMap(crossinline f: suspend (A)
 /**
  * Implementation of [Iterable.flatMap], but running
  * the transformation function inside a try-catch block.
- *
- * @since extensions-lib 14
  */
 inline fun <A, B> Iterable<A>.flatMapCatching(crossinline f: (A) -> Iterable<B>): List<B> = flatMap {
     try {
@@ -134,7 +111,5 @@ inline fun <A, B> Iterable<A>.flatMapCatching(crossinline f: (A) -> Iterable<B>)
 /**
  * Thread-blocking parallel implementation of [Iterable.flatMap], but running
  * the transformation function inside a try-catch block.
- *
- * @since extensions-lib 14
  */
 inline fun <A, B> Iterable<A>.catchingFlatMapBlocking(crossinline f: suspend (A) -> Iterable<B>): List<B> = runBlocking { catchingFlatMap(f) }

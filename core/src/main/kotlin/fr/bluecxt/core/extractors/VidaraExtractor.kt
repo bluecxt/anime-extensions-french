@@ -7,7 +7,7 @@ import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VIDARA_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
-import keiyoushi.utils.toJsonRequestBody
+import fr.bluecxt.core.utils.toJsonRequestBody
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json

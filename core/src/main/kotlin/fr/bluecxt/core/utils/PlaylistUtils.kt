@@ -8,10 +8,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.PLAYLIST_LOG
 import fr.bluecxt.core.model.ExtractedSource
-import keiyoushi.utils.UrlUtils
-import keiyoushi.utils.bodyString
-import keiyoushi.utils.parallelMapNotNullBlocking
-import keiyoushi.utils.useAsJsoup
+import fr.bluecxt.core.network.bodyString
+import fr.bluecxt.core.network.useAsJsoup
+import fr.bluecxt.core.utils.UrlUtils
+import fr.bluecxt.core.utils.parallelMapNotNullBlocking
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient

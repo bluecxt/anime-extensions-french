@@ -9,11 +9,11 @@ import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDMOLY_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.commonEmptyHeaders
+import fr.bluecxt.core.network.useAsJsoup
 import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.utils.PlaylistUtils
-import keiyoushi.utils.commonEmptyHeaders
-import keiyoushi.utils.parallelCatchingFlatMap
-import keiyoushi.utils.useAsJsoup
+import fr.bluecxt.core.utils.parallelCatchingFlatMap
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope

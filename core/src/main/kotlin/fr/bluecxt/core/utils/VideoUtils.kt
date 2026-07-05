@@ -1,11 +1,42 @@
 package fr.bluecxt.core.utils
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.animesource.model.Video
+import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.GET
+import fr.bluecxt.core.network.awaitSuccess
+import fr.bluecxt.core.withDefaultHeaders
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import java.io.IOException
+
+/**
+ * JVM-safe and decoupled Video mapping function.
+ */
+fun ExtractedSource.buildFromSource(lang: String?, name: String): Video {
+    val sourceQuality = this.quality
+    val sourceFrameRate = this.frameRate
+    val sourceUrl = this.url
+
+    val finalVideo = Video(
+        videoUrl = sourceUrl,
+        videoTitle = buildString {
+            if (!lang.isNullOrBlank()) append("($lang) ")
+            append(name)
+            if (!sourceFrameRate.isNullOrBlank() || !sourceQuality.isNullOrBlank()) append(" ✦ ")
+            if (!sourceQuality.isNullOrBlank()) append("$sourceQuality")
+            if (!sourceFrameRate.isNullOrBlank() && !sourceQuality.isNullOrBlank()) append(" ⫻ ")
+            if (!sourceFrameRate.isNullOrBlank()) append(sourceFrameRate)
+        },
+        headers = this.headers,
+        subtitleTracks = this.subtitleTracks,
+        audioTracks = this.audioTracks,
+    ).withDefaultHeaders(sourceUrl)
+
+    Log.d("VideoUtils", "title = ${finalVideo.videoTitle} url = ${finalVideo.videoUrl}")
+
+    return finalVideo
+}
 
 /**
  * Attempts to detect the resolution (height) of an MP4 video by reading its header atoms.

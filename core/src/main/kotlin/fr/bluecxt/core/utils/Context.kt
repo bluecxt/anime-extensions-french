@@ -1,4 +1,4 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
 import android.app.Application
 import uy.kohesive.injekt.Injekt

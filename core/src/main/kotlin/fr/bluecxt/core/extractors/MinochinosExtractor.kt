@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.useAsJsoup
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.UrlUtils
+import fr.bluecxt.core.utils.parallelCatchingFlatMap
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
-import keiyoushi.utils.UrlUtils
-import keiyoushi.utils.parallelCatchingFlatMap
-import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json

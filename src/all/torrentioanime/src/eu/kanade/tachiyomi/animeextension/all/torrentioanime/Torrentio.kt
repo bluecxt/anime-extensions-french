@@ -21,8 +21,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.Source
-import keiyoushi.utils.bodyString
-import keiyoushi.utils.tryParse
+import fr.bluecxt.core.network.bodyString
+import fr.bluecxt.core.utils.tryParse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject

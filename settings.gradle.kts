@@ -1,7 +1,8 @@
 /**
  * Add or remove modules to load as needed for local development here.
  */
-loadAllIndividualExtensions()
+// Load only extensiontest for unit testing and core refactoring focus
+loadIndividualExtension("fr", "extensiontest")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================

@@ -1,4 +1,4 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
 import java.text.ParseException
 import java.text.SimpleDateFormat

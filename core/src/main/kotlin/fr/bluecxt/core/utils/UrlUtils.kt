@@ -1,4 +1,4 @@
-package keiyoushi.utils
+package fr.bluecxt.core.utils
 
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 

@@ -5,7 +5,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
-import keiyoushi.utils.addEditTextPreference
+import fr.bluecxt.core.utils.addEditTextPreference
 
 interface CommonPreferences : ConfigurableAnimeSource {
 

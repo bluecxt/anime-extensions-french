@@ -23,7 +23,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.withDefaultHeaders
-import keiyoushi.utils.parallelMapNotNull
+import fr.bluecxt.core.utils.parallelMapNotNull
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
