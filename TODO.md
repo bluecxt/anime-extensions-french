@@ -25,5 +25,5 @@
 - [x] wiflix
 - [x] adkami
 - [x] animeultime
-- [ ] movix
-- [ ] anime ultra
+- [x] anime ultra
+- [x] movix

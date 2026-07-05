@@ -25,6 +25,8 @@ const val VIDMOLY_LOG: String = "VidmolyLog"
 
 // Extension logs
 
+const val MOVIXANIME_LOG: String = "MovixanimeLog"
+const val MOVIX_LOG: String = "MovixLog"
 const val ANIMOFLIX_LOG: String = "AnimoflixLog"
 const val ADKAMI_LOG: String = "AdkamiLog"
 const val ANIMESAMA_LOG: String = "AnimesamaLog"

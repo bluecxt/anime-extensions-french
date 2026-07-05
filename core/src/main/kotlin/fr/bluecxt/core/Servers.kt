@@ -12,6 +12,7 @@ import fr.bluecxt.core.extractors.OkruExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
 import fr.bluecxt.core.extractors.StreamixExtractor
+import fr.bluecxt.core.extractors.StreamtapeExtractor
 import fr.bluecxt.core.extractors.UqloadExtractor
 import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
@@ -40,6 +41,7 @@ val DEFAULT_SERVER = listOf(
     "Uqload",
     "Vudeo",
     "UltraCDN",
+    "Streamtape",
 )
 
 /**
@@ -100,6 +102,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
     //     hosts = listOf("vk.com", "vk.ru"),
     //     extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
     // )
+
+    "Streamtape" -> VideoServer(
+        name = "Streamtape",
+        hosts = listOf("streamtape.com", "shavetape.cash", "streamtape.to", "streamtape.net", "streamtape.pe", "streamtape.org", "shavetape.com"),
+        extractor = { url -> StreamtapeExtractor(source.client).videosFromUrl(url) },
+    )
 
     "Filemoon" -> VideoServer(
         name = "Filemoon",

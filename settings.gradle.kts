@@ -20,6 +20,8 @@ loadIndividualExtension("fr", "frenchmanga")
 loadIndividualExtension("fr", "dessinanime")
 loadIndividualExtension("fr", "animeultime")
 loadIndividualExtension("fr", "animesultra")
+loadIndividualExtension("fr", "movixanime")
+loadIndividualExtension("fr", "movix")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
