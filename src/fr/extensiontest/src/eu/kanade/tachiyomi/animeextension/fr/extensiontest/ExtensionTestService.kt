@@ -13,7 +13,8 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 
 class ExtensionTestService(
-    private val client: OkHttpClient,
+    override val client: OkHttpClient,
+    override val baseUrl: String = "https://example.com",
     private val supportedServers: List<String> = DEFAULT_SERVER,
     override val supportsLatest: Boolean = false,
 ) : AnimeExtensionService {

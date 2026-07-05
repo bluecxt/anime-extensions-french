@@ -5,8 +5,11 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
+import okhttp3.OkHttpClient
 
 interface AnimeExtensionService {
+    val client: OkHttpClient
+    val baseUrl: String
     val supportsLatest: Boolean
     suspend fun getPopularAnime(page: Int): AnimesPage
     suspend fun getLatestUpdates(page: Int): AnimesPage

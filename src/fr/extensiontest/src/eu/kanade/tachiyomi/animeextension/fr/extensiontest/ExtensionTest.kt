@@ -32,6 +32,7 @@ class ExtensionTest :
     private val service by lazy {
         ExtensionTestService(
             client = client,
+            baseUrl = baseUrl,
             supportedServers = supportedServers,
         )
     }
