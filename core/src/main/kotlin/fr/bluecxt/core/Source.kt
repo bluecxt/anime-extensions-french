@@ -57,7 +57,6 @@ abstract class Source :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
-        .set("User-Agent", DEFAULT_USER_AGENT)
 
     override val baseUrl: String
         get() = (this as? CommonPreferences)?.currentBaseUrl

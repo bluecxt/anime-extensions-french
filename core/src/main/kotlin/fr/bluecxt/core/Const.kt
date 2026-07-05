@@ -1,6 +1,14 @@
 package fr.bluecxt.core
 
-const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+import uy.kohesive.injekt.api.get
+
+val DEFAULT_USER_AGENT: String by lazy {
+    try {
+        uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
+    } catch (_: Throwable) {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+    }
+}
 
 const val HUB_SEASON_NUMBER = -2.0
 
