@@ -1,15 +1,15 @@
 package fr.bluecxt.core.utils
 
 import android.net.Uri
-import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.PLAYLIST_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.GET
+import fr.bluecxt.core.network.awaitSuccess
 import fr.bluecxt.core.network.bodyString
 import fr.bluecxt.core.network.useAsJsoup
+import fr.bluecxt.core.utils.Log
 import fr.bluecxt.core.utils.UrlUtils
 import fr.bluecxt.core.utils.parallelMapNotNullBlocking
 import okhttp3.Headers

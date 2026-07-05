@@ -1,11 +1,11 @@
 package fr.bluecxt.core.extractors
 
-import android.util.Log
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VIDARA_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.POST
+import fr.bluecxt.core.network.awaitSuccess
+import fr.bluecxt.core.utils.Log
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.toJsonRequestBody
 import kotlinx.serialization.Serializable

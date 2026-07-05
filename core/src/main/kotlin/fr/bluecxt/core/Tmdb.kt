@@ -1,10 +1,10 @@
 package fr.bluecxt.core
 
-import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.SAnime
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.TMDB_LOG
+import fr.bluecxt.core.network.GET
+import fr.bluecxt.core.network.awaitSuccess
+import fr.bluecxt.core.utils.Log
 import keiyoushi.core.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject

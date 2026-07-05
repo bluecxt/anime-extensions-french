@@ -46,6 +46,13 @@ android {
             assets.directories.clear()
             assets.directories.add("assets")
         }
+
+        test {
+            java.directories.clear()
+            java.directories.add("test")
+            kotlin.directories.clear()
+            kotlin.directories.add("test")
+        }
     }
 
     defaultConfig {
@@ -135,6 +142,12 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+        }
+    }
+
     packaging {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
@@ -155,6 +168,13 @@ dependencies {
     compileOnly("org.jspecify:jspecify:1.0.0")
     compileOnly(libs.bundles.common)
 
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0"
+    testImplementation "io.mockk:mockk:1.13.8"
+    testImplementation(libs.bundles.common)
 }
 
 tasks.register("copyManifestFile", Copy) {
@@ -184,3 +204,12 @@ afterEvaluate {
 }
 
 preBuild.dependsOn(writeManifestFile)
+
+tasks.withType(Test).configureEach {
+    afterSuite { desc, result ->
+        if (desc.parent == null) {
+            def reportFile = new File(layout.buildDirectory.getAsFile().get(), "reports/tests/${name}/index.html")
+            println "Report: ${reportFile.toURI()}"
+        }
+    }
+}

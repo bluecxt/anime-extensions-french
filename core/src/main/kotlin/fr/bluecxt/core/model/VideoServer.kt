@@ -1,6 +1,6 @@
 package fr.bluecxt.core.model
 
-import android.util.Log
+import fr.bluecxt.core.utils.Log
 
 data class VideoServer(
     val name: String,

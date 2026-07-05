@@ -48,89 +48,89 @@ val DEFAULT_SERVER = listOf(
  * Factory pour créer les objets serveurs à la demande.
  * Cela permet à R8/ProGuard de supprimer les extracteurs non utilisés par une extension.
  */
-fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
+fun getVideoServer(client: okhttp3.OkHttpClient, headers: okhttp3.Headers, name: String): VideoServer? = when (name) {
     "Sibnet" -> VideoServer(
         name = "Sibnet",
         hosts = listOf("sibnet.ru"),
-        extractor = { url -> SibnetExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> SibnetExtractor(client).videosFromUrl(url) },
     )
 
     "Sendvid" -> VideoServer(
         name = "Sendvid",
         hosts = listOf("sendvid.com"),
-        extractor = { url -> SendvidExtractor(source.client, source.headers).videosFromUrl(url) },
+        extractor = { url -> SendvidExtractor(client, headers).videosFromUrl(url) },
     )
 
     // "Waveplayer" -> VideoServer(
     //     name = "WavePlayer",
     //     hosts = listOf("waveanime.fr"),
-    //     extractor = { url -> WaveplayerExtractor(source.client, source.headers).videosFromUrl(url, "") },
+    //     extractor = { url -> WaveplayerExtractor(client, headers).videosFromUrl(url, "") },
     // )
 
     "GoogleDrive" -> VideoServer(
         name = "GoogleDrive",
         hosts = listOf("drive.usercontent.google.com"),
-        extractor = { id -> GoogleDriveExtractor(source.client).videosFromUrl(id) },
+        extractor = { id -> GoogleDriveExtractor(client).videosFromUrl(id) },
     )
 
     "Vidmoly" -> VideoServer(
         name = "Vidmoly",
         hosts = listOf("vidmoly.me", "vidmoly.to", "vidmoly.biz", "vidmoly.net"),
-        extractor = { url -> VidmolyExtractor(source.client, source.headers).videosFromUrl(url) },
+        extractor = { url -> VidmolyExtractor(client, headers).videosFromUrl(url) },
     )
 
     "Minochinos" -> VideoServer(
         name = "Minochinos",
         hosts = listOf("minochinos.com", "vidhide.com"),
-        extractor = { url -> MinochinosExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> MinochinosExtractor(client).videosFromUrl(url) },
     )
 
     "Abyss" -> VideoServer(
         name = "Abyss",
         hosts = listOf("abysscdn.com", "hydraxcdn.biz", "short.icu", "embedplayabyss.top"),
-        extractor = { url -> AbyssExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> AbyssExtractor(client).videosFromUrl(url) },
     )
 
     "Embed4me" -> VideoServer(
         name = "Embed4me",
         hosts = listOf("*embed4me.*", "seekstreaming.com"),
-        extractor = { url -> Embed4meExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> Embed4meExtractor(client).videosFromUrl(url) },
     )
 
     // "Vk" -> VideoServer( // the majority of urls look down
     //     name = "Vk",
     //     hosts = listOf("vk.com", "vk.ru"),
-    //     extractor = { url -> VkExtractor(source.client, source.headers).videosFromUrl(url) },
+    //     extractor = { url -> VkExtractor(client, headers).videosFromUrl(url) },
     // )
 
     "Streamtape" -> VideoServer(
         name = "Streamtape",
         hosts = listOf("streamtape.com", "shavetape.cash", "streamtape.to", "streamtape.net", "streamtape.pe", "streamtape.org", "shavetape.com"),
-        extractor = { url -> StreamtapeExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> StreamtapeExtractor(client).videosFromUrl(url) },
     )
 
     "Filemoon" -> VideoServer(
         name = "Filemoon",
         hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org"),
-        extractor = { url -> FilemoonExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> FilemoonExtractor(client).videosFromUrl(url) },
     )
 
     // "JWPlayer" -> VideoServer(
     //     name = "JWPlayer",
     //     hosts = emptyList(), // Generic
-    //     extractor = { url -> JWplayerExtractor(source.client).videosFromUrl(url) },
+    //     extractor = { url -> JWplayerExtractor(client).videosFromUrl(url) },
     // )
 
     "Okru" -> VideoServer(
         name = "Okru",
         hosts = listOf("ok.ru", "odnoklassniki.ru"),
-        extractor = { url -> OkruExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> OkruExtractor(client).videosFromUrl(url) },
     )
 
     "Mymail" -> VideoServer(
         name = "Mymail",
         hosts = listOf("my.mail.ru"),
-        extractor = { url -> MymailExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> MymailExtractor(client).videosFromUrl(url) },
     )
 
     "Dood" -> VideoServer(
@@ -143,19 +143,19 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "all3do.com", "do7go.com", "doodcdn.io", "doply.net", "vide0.net", "vvide0.com",
             "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com",
         ),
-        extractor = { url -> DoodExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> DoodExtractor(client).videosFromUrl(url) },
     )
 
     "Vidara" -> VideoServer(
         name = "Vidara",
         hosts = listOf("vidara.so", "vidara.to"),
-        extractor = { url -> VidaraExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> VidaraExtractor(client).videosFromUrl(url) },
     )
 
     "Streamix" -> VideoServer(
         name = "Streamix",
         hosts = listOf("streamix.so", "stmix.io"),
-        extractor = { url -> StreamixExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> StreamixExtractor(client).videosFromUrl(url) },
     )
 
     "Voe" -> VideoServer(
@@ -177,13 +177,13 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
             "jessicayeahcatch.com", "kathyinformationwhether.com", "ralphysuccessfull.org", "bryantenunder.com",
         ),
-        extractor = { url -> VoeExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> VoeExtractor(client).videosFromUrl(url) },
     )
 
     "Vidoza" -> VideoServer(
         name = "Vidoza",
         hosts = listOf("vidoza.net", "vidoza.co", "videzz.net"),
-        extractor = { url -> VidozaExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> VidozaExtractor(client).videosFromUrl(url) },
     )
 
     "Lulu" -> VideoServer(
@@ -195,32 +195,34 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "vidhidehub.com", "vidhidevip.com", "vidhidepre.com", "smoothpre.com",
             "dhtpre.com", "peytonepre.com", "movearnpre.com", "dintezuvio.com",
         ),
-        extractor = { url -> LuluExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> LuluExtractor(client).videosFromUrl(url) },
     )
 
     "Uqload" -> VideoServer(
         name = "Uqload",
         hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz", "uqload.io", "uqload.cx"),
-        extractor = { url -> UqloadExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> UqloadExtractor(client).videosFromUrl(url) },
     )
 
     "Vudeo" -> VideoServer(
         name = "Vudeo",
         hosts = listOf("vudeo.co"),
-        extractor = { url -> VudeoExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> VudeoExtractor(client).videosFromUrl(url) },
     )
 
     "Vido" -> VideoServer(
         name = "Vido",
         hosts = listOf("Vido.*"),
-        extractor = { url -> VidoExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> VidoExtractor(client).videosFromUrl(url) },
     )
 
     "UltraCDN" -> VideoServer(
         name = "UltraCDN",
         hosts = listOf("daisukianime.xyz", "vidstream.pro", "animesultra.org"),
-        extractor = { url -> VidstreamExtractor(source.client).videosFromUrl(url) },
+        extractor = { url -> VidstreamExtractor(client).videosFromUrl(url) },
     )
 
     else -> null
 }
+
+fun getVideoServer(source: Source, name: String): VideoServer? = getVideoServer(source.client, source.headers, name)

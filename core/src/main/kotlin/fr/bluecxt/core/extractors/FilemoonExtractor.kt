@@ -1,9 +1,9 @@
 package fr.bluecxt.core.extractors
 
 import android.util.Base64
-import android.util.Log
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.awaitSuccess
+import fr.bluecxt.core.utils.Log
 import fr.bluecxt.core.utils.PlaylistUtils
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

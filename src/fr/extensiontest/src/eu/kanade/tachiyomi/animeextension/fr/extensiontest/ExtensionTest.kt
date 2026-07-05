@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.fr.extensiontest
 
-import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -9,12 +8,14 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.EXTENSIONTEST_LOG
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.extractors.UqloadExtractor
-import fr.bluecxt.core.utils.parallelCatchingFlatMap
+import fr.bluecxt.core.utils.buildFromSource
 import okhttp3.Request
 import okhttp3.Response
+import fr.bluecxt.core.model.Anime as CoreAnime
+import fr.bluecxt.core.model.Episode as CoreEpisode
+import fr.bluecxt.core.model.Hoster as CoreHoster
+import fr.bluecxt.core.model.Video as CoreVideo
 
 class ExtensionTest :
     Source(),
@@ -33,111 +34,76 @@ class ExtensionTest :
     override val lang = "fr"
     override val supportsLatest = false
 
+    private val service by lazy {
+        ExtensionTestService(
+            client = client,
+            extractVideos = { url ->
+                extractVideos(playerUrl = url, allowedServers = supportedServers).map { extSource ->
+                    CoreVideo(url = extSource.videoUrl ?: "", title = extSource.videoTitle ?: "Video", headers = extSource.headers)
+                }
+            },
+        )
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 
-    override suspend fun getPopularAnime(page: Int): AnimesPage = AnimesPage(
-        listOf(
+    override suspend fun getPopularAnime(page: Int): AnimesPage {
+        val coreAnimes = service.getPopularAnime(page)
+        val sAnimes = coreAnimes.map { coreAnime ->
             SAnime.create().apply {
-                title = "Test Extracteurs"
-                url = "/test-extractors"
-                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/repo_logo.svg"
-            },
-        ),
-        false,
-    )
-// combo 1
-// val char1 = "❱"
-// val char2 = "•"
-//
-// combo 2
-// val char1 = "-"
-// val char2 = "•"
-//
-// combo 3
-// val char1 = "➜"
-// val char2 = "•"
-//
-// combo 4
-// val char1 = "✦"
-// val char2 = "⫻"
+                title = coreAnime.title
+                url = coreAnime.url
+                thumbnail_url = coreAnime.thumbnailUrl
+            }
+        }
+        return AnimesPage(sAnimes, false)
+    }
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime.apply {
-        description = buildString {
-            val char1 = "✦"
-            val char2 = "⫻"
-            append("Uqload $char1 802p $char2 23.98fps")
-            append("\n")
-            append("Sendvid $char1 1080p $char2 60fps")
-            append("\n")
-            append("Sibnet $char1 720p $char2 60fps")
-            append("\n")
-            append("Vidmoly $char1 1080p")
-            append("\n")
-            append("Vk $char1 60fps")
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        val coreAnime = CoreAnime(title = anime.title, url = anime.url)
+        val updatedCore = service.getAnimeDetails(coreAnime)
+        return anime.apply {
+            description = updatedCore.description
         }
     }
 
-    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = listOf(
-        SEpisode.create().apply {
-            name = "Episode Test - Extracteurs"
-            url = "/episode-test"
-            episode_number = 1f
-        },
-    )
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val coreAnime = CoreAnime(title = anime.title, url = anime.url)
+        return service.getEpisodeList(coreAnime).map { coreEpisode ->
+            SEpisode.create().apply {
+                name = coreEpisode.name
+                url = coreEpisode.url
+                episode_number = coreEpisode.episodeNumber
+            }
+        }
+    }
 
-    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "Tests", internalData = "all_tests"))
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val coreEpisode = CoreEpisode(name = episode.name, url = episode.url, episodeNumber = episode.episode_number)
+        return service.getHosterList(coreEpisode).map { coreHoster ->
+            Hoster(hosterName = coreHoster.name, internalData = coreHoster.url)
+        }
+    }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val testLinks = listOf(
-            "Vidoza" to "https://videzz.net/embed-y34qudiino2n.html",
-            "Uqload" to "https://uqload.is/embed-hkhff5k2pjp7.html",
-            "UqloadManual" to "https://uqload.is/embed-hkhff5k2pjp7.html",
-            "Streamtape" to "https://streamtape.com/e/4RjVoMZ0zWcKQDb/",
-            "Lulu" to "https://luluvdo.com/e/5q4zzr3cbn7k",
-            "Vidara" to "https://vidara.to/e/E0PwlcdTTVuTZ",
-            "Cda" to "https://ebd.cda.pl/1055x594/27664708b6",
-            "Sibnet" to "https://video.sibnet.ru/shell.php?videoid=1028952",
-            "Voe" to "https://jessicayeahcatch.com/e/jp2cdfcagow2",
-            "Vidnest" to "https://vidnest.io/embed-5xsbjc4ohpyo.html",
-            "Doodstream" to "https://dood.yt/e/aorzlvboafi6",
-            "Mp4upload" to "https://www.mp4upload.com/y8xh3ip7qxey",
-            "Savefiles" to "https://bigwarp.io/e/q8554e8tzewc.html",
-            "Filemoon" to "https://rupertisdivingintoocean.com/eyi/qgdk9knxn0d3",
-            "Okru" to "https://ok.ru/videoembed/4511946705484",
-            "Veev" to "https://veev.to/e/2EvjtvNM7IF2vqAWgGH8ug7pAb9eIlagSuKIInw",
-            "Vidguard" to "https://listeamed.net/e/JzkPxzX4NpAObyd",
-            "Lycoris" to "https://www.lycoris.cafe/embed?id=181447&episode=10",
-            "Pixeldrain" to "https://pixeldrain.com/u/rkHjhTWZ?embed",
-            "Abstream" to "https://abstream.to/embed/blshnz6jt14e",
-            "Streamup" to "https://strmup.to/c74b4341041c1",
-            "GoogleDrive" to "https://drive.usercontent.google.com/download?id=1kp9oGevIWTAXmymgvRRB29qUvINU-3Qs&confirm=t&uuid=a45d4b4b-b284-4e14-836f-9a78ce980c1c",
-            "Rumble" to "https://rumble.com/v716bwo-frixttwakrnin05.html",
-            "Abyss" to "https://abysscdn.com/?v=Q1a8w6rjA",
-            "Buzz" to "https://buzzheavier.com/hg1gtctkofos",
-            "Earnvid" to "https://dhtpre.com/embed/grins3nycf6t",
-            "Hqq" to "https://hqq.tv/e/NEYvTktac2pMOTFtQTNjNUhHUy9EUT09",
-            "Dailymotion" to "https://www.dailymotion.com/embed/video/x9ybkyu",
-            "Sendvid" to "https://sendvid.com/embed/nzhbbd7k",
-        )
-
-        return testLinks.parallelCatchingFlatMap { (serverName, url) ->
-            Log.d("ExtensionTest", "Testing $serverName with URL: $url")
-            if (serverName == "UqloadManual") {
-                UqloadExtractor(client).videosFromUrl(url).map {
-                    it.copy(quality = null).buildFromSource(null, "Uqload Manual")
-                }
-            } else {
-                extractVideos(
-                    playerUrl = url,
-                    allowedServers = supportedServers,
-                )
-            }
+        val coreHoster = CoreHoster(name = hoster.hosterName, url = hoster.internalData)
+        val coreVideos = service.getVideoList(coreHoster)
+        return coreVideos.map { coreVideo ->
+            val extSource = fr.bluecxt.core.model.ExtractedSource(
+                url = coreVideo.url,
+                quality = coreVideo.title,
+                headers = coreVideo.headers,
+            )
+            extSource.buildFromSource(null, coreVideo.title)
         }
     }
 
     // Dummy implementations for unused methods
     override fun latestUpdatesParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
     override fun latestUpdatesRequest(page: Int): Request = Request.Builder().url(defaultBaseUrl).build()
+    override fun popularAnimeParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
+    override fun popularAnimeRequest(page: Int): Request = Request.Builder().url(defaultBaseUrl).build()
+    override fun episodeListParse(response: Response): List<SEpisode> = emptyList()
     override fun searchAnimeParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = Request.Builder().url(defaultBaseUrl).build()
 }

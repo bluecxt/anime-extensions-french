@@ -1,9 +1,9 @@
 package fr.bluecxt.core.extractors
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.GET
+import fr.bluecxt.core.network.awaitSuccess
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient

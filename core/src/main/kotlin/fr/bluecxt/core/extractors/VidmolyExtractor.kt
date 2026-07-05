@@ -1,17 +1,17 @@
 package fr.bluecxt.core.extractors
 
-import android.util.Log
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDMOLY_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.GET
+import fr.bluecxt.core.network.await
+import fr.bluecxt.core.network.awaitSuccess
 import fr.bluecxt.core.network.commonEmptyHeaders
 import fr.bluecxt.core.network.useAsJsoup
 import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.Log
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.parallelCatchingFlatMap
 import kotlinx.coroutines.Deferred

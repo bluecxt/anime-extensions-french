@@ -4,15 +4,15 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.awaitSuccess
+import fr.bluecxt.core.utils.Log
 import fr.bluecxt.core.utils.PlaylistUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking

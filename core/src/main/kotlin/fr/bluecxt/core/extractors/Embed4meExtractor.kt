@@ -1,10 +1,10 @@
 package fr.bluecxt.core.extractors
 
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.await
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.POST
+import fr.bluecxt.core.network.await
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray

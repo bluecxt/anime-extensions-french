@@ -18,7 +18,7 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
+import fr.bluecxt.core.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ANIMEULTIME_LOG
 import fr.bluecxt.core.CommonPreferences

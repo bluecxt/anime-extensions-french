@@ -8,8 +8,8 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.network.GET
+import fr.bluecxt.core.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.CommonPreferences.Companion.PREF_VOICES_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT

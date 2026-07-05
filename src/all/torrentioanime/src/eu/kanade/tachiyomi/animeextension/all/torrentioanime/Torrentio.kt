@@ -17,9 +17,9 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.network.GET
+import fr.bluecxt.core.network.POST
+import fr.bluecxt.core.network.awaitSuccess
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.network.bodyString
 import fr.bluecxt.core.utils.tryParse

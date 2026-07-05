@@ -1,6 +1,6 @@
 package fr.bluecxt.core.utils.unpacker
 
-import android.util.Log
+import fr.bluecxt.core.utils.Log
 import fr.bluecxt.core.utils.unpacker.Unpacker
 import fr.bluecxt.core.utils.unpacker.jsunpacker.JsUnpacker
 

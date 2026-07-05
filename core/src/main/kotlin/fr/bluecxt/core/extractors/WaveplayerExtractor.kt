@@ -1,8 +1,8 @@
 package fr.bluecxt.core.extractors
 
-import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.Log
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
