@@ -5,13 +5,16 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
+import fr.bluecxt.core.DEFAULT_SERVER
+import fr.bluecxt.core.getVideoServer
 import fr.bluecxt.core.model.AnimeExtensionService
 import fr.bluecxt.core.utils.buildFromSource
+import okhttp3.Headers
 import okhttp3.OkHttpClient
 
 class ExtensionTestService(
     private val client: OkHttpClient,
-    private val extractVideos: suspend (playerUrl: String) -> List<Video>,
+    private val supportedServers: List<String> = DEFAULT_SERVER,
     override val supportsLatest: Boolean = false,
 ) : AnimeExtensionService {
 
@@ -89,6 +92,9 @@ class ExtensionTestService(
             "Sendvid" to "https://sendvid.com/embed/nzhbbd7k",
         )
 
+        val headers = Headers.Builder().build()
+        val servers = supportedServers.mapNotNull { getVideoServer(client, headers, it) }
+
         return testLinks.flatMap { (serverName, url) ->
             print("Testing $serverName with URL: $url")
             val videos = if (serverName == "UqloadManual") {
@@ -100,7 +106,18 @@ class ExtensionTestService(
                     listOf(Video(videoUrl = url, videoTitle = "Error Uqload Manual: ${e.message}"))
                 }
             } else {
-                extractVideos(url)
+                val server = servers.find { s -> s.matches(url) }
+                if (server != null) {
+                    try {
+                        server.extractor(url).map { extSource ->
+                            extSource.buildFromSource(null, server.name)
+                        }
+                    } catch (e: Exception) {
+                        listOf(Video(videoUrl = url, videoTitle = "Error ${server.name}: ${e.message}"))
+                    }
+                } else {
+                    emptyList()
+                }
             }
             if (videos.isEmpty()) {
                 println(" >>> [AUCUNE VIDÉO EXTRAITE]")

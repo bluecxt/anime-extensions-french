@@ -32,9 +32,7 @@ class ExtensionTest :
     private val service by lazy {
         ExtensionTestService(
             client = client,
-            extractVideos = { url ->
-                extractVideos(playerUrl = url, allowedServers = supportedServers)
-            },
+            supportedServers = supportedServers,
         )
     }
 
