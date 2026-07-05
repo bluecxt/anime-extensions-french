@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.animeextension.fr.extensiontest
 
 import eu.kanade.tachiyomi.animesource.model.Video
+import fr.bluecxt.core.DEFAULT_SERVER
 import fr.bluecxt.core.getVideoServer
 import fr.bluecxt.core.test.BaseExtensionTest
 import okhttp3.OkHttpClient
@@ -11,16 +12,9 @@ class ExtensionTestTest :
         service = ExtensionTestService(
             client = OkHttpClient(),
             extractVideos = { url ->
-                val supportedServers = listOf(
-                    "Embed4me", "Filemoon", "GoogleDrive", "Minochinos", "Sendvid",
-                    "Sibnet", "Vidmoly", "Vk", "Waveplayer", "Okru", "Doodstream", "Voe",
-                    "Vidoza", "Uqload", "Lulu", "Streamtape", "SouthTV", "Cda", "Mp4upload",
-                    "Streamup", "Vidguard", "Lycoris", "Pixeldrain", "Abstream", "Rumble",
-                    "Abyss", "Buzz", "Earnvid", "Hqq", "Dailymotion",
-                )
                 val client = okhttp3.OkHttpClient()
                 val headers = okhttp3.Headers.Builder().build()
-                val servers = supportedServers.mapNotNull { getVideoServer(client, headers, it) }
+                val servers = DEFAULT_SERVER.mapNotNull { getVideoServer(client, headers, it) }
                 val server = servers.find { s -> s.matches(url) }
                 if (server != null) {
                     try {
