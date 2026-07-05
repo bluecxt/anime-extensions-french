@@ -99,12 +99,13 @@ android {
         release {
             signingConfig = signingConfigs.release
             minifyEnabled = true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro"
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro", "$rootDir/proguard-rules-release.pro"
             vcsInfo.include = false
         }
         dev {
             initWith debug
-            minifyEnabled = true
+            debuggable false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro"
             signingConfig = signingConfigs.dev
             matchingFallbacks = ['debug', 'release']

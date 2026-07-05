@@ -11,12 +11,6 @@
 # --- Pas d'obfuscation (les extensions chargent les classes par nom) ---
 -dontobfuscate
 
-# --- Suppression des logs de debug en release ---
--assumenosideeffects class android.util.Log {
-    public static *** v(...);
-    public static *** d(...);
-    public static *** i(...);
-}
 
 # ===========================================================================
 # EXTENSION ENTRY POINTS
