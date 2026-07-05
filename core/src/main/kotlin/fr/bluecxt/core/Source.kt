@@ -58,6 +58,14 @@ abstract class Source :
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 
+    open val currentBaseUrl: String
+        get() {
+            val defaultUrl = (this as? CommonPreferences)?.defaultBaseUrl ?: ""
+            return preferences.getString(CommonPreferences.PREF_URL_KEY, defaultUrl)
+                ?.removeSuffix("/")
+                ?: defaultUrl
+        }
+
     override val baseUrl: String
         get() = (this as? CommonPreferences)?.currentBaseUrl
             ?: throw IllegalStateException("baseUrl must be overridden or CommonPreferences must be implemented")

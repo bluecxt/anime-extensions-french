@@ -66,9 +66,6 @@ interface CommonPreferences : ConfigurableAnimeSource {
      * Récupère l'URL de base actuelle (soit celle modifiée par l'utilisateur, soit celle par défaut).
      */
     val currentBaseUrl: String
-        get() = (this as Source).preferences.getString(PREF_URL_KEY, defaultBaseUrl)
-            ?.removeSuffix("/")
-            ?: defaultBaseUrl
 
     /**
      * le text affiché en dessous de base_url_pref
