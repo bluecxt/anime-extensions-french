@@ -20,83 +20,13 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CI_CHUNK_SIZE: 65
   IS_PR_CHECK: false
 
 jobs:
-  prepare:
-    permissions:
-      contents: write
-    name: Prepare job
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      latestCommitMessage: ${{ steps.set-env.outputs.LATEST_COMMIT_MESSAGE }}
-      latestCommitHash: ${{ steps.set-env.outputs.LATEST_COMMIT_HASH }}
-      matrix: ${{ steps.generate-matrices.outputs.matrix }}
-      delete: ${{ steps.generate-matrices.outputs.delete }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        with:
-          fetch-depth: 0
-
-      - name: Check Core/Lib changes and bump versions
-        if: false
-        id: bump-check
-        run: |
-          COMMIT_COUNT=$(jq '.commits | length' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "0")
-
-          if [ "$COMMIT_COUNT" -gt 0 ]; then
-            BASE_COMMIT="HEAD~$COMMIT_COUNT"
-          else
-            BASE_COMMIT="${{ github.event.before }}"
-            if [ "$BASE_COMMIT" = "0000000000000000000000000000000000000000" ] || [ -z "$BASE_COMMIT" ]; then
-              BASE_COMMIT="HEAD~1"
-            fi
-          fi
-
-          echo "[+] Analyse globale de l'historique ($BASE_COMMIT -> HEAD) contenant $COMMIT_COUNT commit(s)..."
-
-          if git diff --name-only $BASE_COMMIT HEAD | grep -E '^(src/fr/bluecxt/core/|lib/)'; then
-            echo "core a changé depuis la dernière fois"
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-            python3 bump_versions.py
-
-            git add src/
-            if ! git diff-index --quiet HEAD --; then
-              git commit -m "[CI] Auto-bump extension versions due to Core/Lib updates"
-              git push origin main
-            fi
-          fi
-
-      - name: Set env
-        id: set-env
-        run: |
-          LATEST_MSG=$(git log -1 --pretty=%s | tr -d '\"')
-          LATEST_HASH=$(git log -1 --pretty=%H)
-          echo "LATEST_COMMIT_MESSAGE=$LATEST_MSG" >> $GITHUB_OUTPUT
-          echo "LATEST_COMMIT_HASH=$LATEST_HASH" >> $GITHUB_OUTPUT
-
-      - id: generate-matrices
-        name: Create output matrices
-        run: |
-          BASE_COMMIT="${{ github.event.before }}"
-          if [ "$BASE_COMMIT" = "0000000000000000000000000000000000000000" ]; then
-            BASE_COMMIT="HEAD~1"
-          fi
-          python3 ./.github/scripts/generate-build-matrices.py "$BASE_COMMIT" Release
-
   build:
-    name: Build extensions (${{ matrix.chunk.number }})
-    needs: prepare
+    name: Build extensions
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -112,8 +42,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92
-        with:
-          cache-read-only: ${{ matrix.chunk.number > 1 }}
 
       - name: Clean up runner gradle.properties
         run: rm -f ~/.gradle/gradle.properties
@@ -127,20 +55,19 @@ jobs:
             chmod 600 signingkey.jks
           fi
 
-      - name: Build extensions (${{ matrix.chunk.number }})
+      - name: Build extensions
         env:
-          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           TMDB_API: ${{ secrets.TMDB_API }}
         run: |
-          ./gradlew $MODULES && ls src/*/*/build/outputs/apk/release/*.apk
+          ./gradlew assembleRelease && ls src/*/*/build/outputs/apk/release/*.apk
 
-      - name: Upload APKs (${{ matrix.chunk.number }})
+      - name: Upload APKs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: "individual-apks-${{ matrix.chunk.number }}"
+          name: "individual-apks"
           path: "src/*/*/build/outputs/apk/release/*.apk"
           retention-days: 1
 
@@ -149,7 +76,7 @@ jobs:
 
   publish:
     name: Publish extension repo
-    needs: [prepare, build]
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -158,6 +85,7 @@ jobs:
       - name: Download APK artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
+          name: individual-apks
           path: ~/apk-artifacts
 
       - name: Set up JDK
@@ -172,7 +100,7 @@ jobs:
           ref: main
           persist-credentials: false
 
-      - name: Checkout repo branch (production)
+      - name: Checkout repo branch (stable)
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         continue-on-error: true
         with:
@@ -180,7 +108,7 @@ jobs:
           path: temp_gh_pages
           persist-credentials: false
 
-      - name: Copy existing production repo
+      - name: Copy existing stable repo
         run: |
           if [ -d "temp_gh_pages/stable" ]; then
             cp -r temp_gh_pages/stable repo
@@ -228,6 +156,13 @@ jobs:
           rsvg-convert -w 512 -h 512 repo_logo.svg -o repo/icon.png
           cp repo/icon.png repo/logo.png
 
+      - name: Collect Commit Information
+        run: |
+          LATEST_MSG=$(git log -1 --pretty=%s | tr -d '\"')
+          LATEST_HASH=$(git log -1 --pretty=%H)
+          echo "LATEST_COMMIT_MESSAGE=$LATEST_MSG" >> $GITHUB_ENV
+          echo "LATEST_COMMIT_HASH=$LATEST_HASH" >> $GITHUB_ENV
+
       - name: Deploy to repo branch
         uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f
         with:
@@ -235,4 +170,4 @@ jobs:
           folder: repo
           target-folder: stable
           clean: true
-          commit-message: "Update extension repo stable: ${{ needs.prepare.outputs.latestCommitMessage }} (${{ needs.prepare.outputs.latestCommitHash }})"
+          commit-message: "Update extension repo stable: ${{ env.LATEST_COMMIT_MESSAGE }} (${{ env.LATEST_COMMIT_HASH }})"
