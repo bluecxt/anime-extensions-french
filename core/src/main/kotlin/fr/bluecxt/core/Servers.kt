@@ -11,8 +11,13 @@ import fr.bluecxt.core.extractors.MymailExtractor
 import fr.bluecxt.core.extractors.OkruExtractor
 import fr.bluecxt.core.extractors.SendvidExtractor
 import fr.bluecxt.core.extractors.SibnetExtractor
+import fr.bluecxt.core.extractors.StreamDavExtractor
+import fr.bluecxt.core.extractors.StreamHideExtractor
+import fr.bluecxt.core.extractors.StreamHubExtractor
+import fr.bluecxt.core.extractors.StreamVidExtractor
 import fr.bluecxt.core.extractors.StreamixExtractor
 import fr.bluecxt.core.extractors.StreamtapeExtractor
+import fr.bluecxt.core.extractors.UpstreamExtractor
 import fr.bluecxt.core.extractors.UqloadExtractor
 import fr.bluecxt.core.extractors.VidaraExtractor
 import fr.bluecxt.core.extractors.VidmolyExtractor
@@ -45,6 +50,11 @@ val DEFAULT_SERVER = listOf(
     "GoogleDrive",
     "Abyss",
     "Vido",
+    "Upstream",
+    "StreamHide",
+    "StreamVid",
+    "StreamHub",
+    "StreamDav",
 )
 
 /**
@@ -223,6 +233,36 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "UltraCDN",
         hosts = listOf("daisukianime.xyz", "vidstream.pro", "animesultra.org"),
         extractor = { url -> VidstreamExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Upstream" -> VideoServer(
+        name = "Upstream",
+        hosts = listOf("upstream.to", "upstream.co"),
+        extractor = { url -> UpstreamExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "StreamHide" -> VideoServer(
+        name = "StreamHide",
+        hosts = listOf("guccihide.com", "streamhide.to", "streamhide.com", "streamhide.co", "streamhide.cc"),
+        extractor = { url -> StreamHideExtractor(source.client, source.headers).videosFromUrl(url) },
+    )
+
+    "StreamVid" -> VideoServer(
+        name = "StreamVid",
+        hosts = listOf("streamvid.net", "streamvid.co"),
+        extractor = { url -> StreamVidExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "StreamHub" -> VideoServer(
+        name = "StreamHub",
+        hosts = listOf("streamhub.gg", "streamhub.ink"),
+        extractor = { url -> StreamHubExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "StreamDav" -> VideoServer(
+        name = "StreamDav",
+        hosts = listOf("streamdav.com"),
+        extractor = { url -> StreamDavExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null

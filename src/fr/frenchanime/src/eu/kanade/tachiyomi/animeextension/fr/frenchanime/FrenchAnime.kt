@@ -49,6 +49,10 @@ class FrenchAnime :
         "Voe",
         "Vudeo",
         "Vido",
+        "StreamHide",
+        "StreamVid",
+        "StreamHub",
+        "Upstream",
     )
 
     override val json: Json by injectLazy()

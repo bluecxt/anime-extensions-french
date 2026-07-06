@@ -27,6 +27,7 @@ class ExtensionTest :
         "Vidoza", "Uqload", "Lulu", "Streamtape", "SouthTV", "Cda", "Mp4upload",
         "Streamup", "Vidguard", "Lycoris", "Pixeldrain", "Abstream", "Rumble",
         "Abyss", "Buzz", "Earnvid", "Hqq", "Dailymotion",
+        "Upstream", "StreamHide", "StreamVid", "StreamHub", "StreamDav",
     )
 
     override val baseUrl: String get() = defaultBaseUrl
