@@ -5,7 +5,7 @@
 
 <br>
 
-<a href="anizen://add-repo?url=https://bluecxt.github.io/anime-extensions-french/stable/index.min.json">
+<a href="https://intradeus.github.io/http-protocol-redirector/?r=anizen://add-repo?url=https://bluecxt.github.io/anime-extensions-french/stable/index.min.json">
   <img src="https://img.shields.io/badge/AniZen-Ajouter-FFFFFF?labelColor=00209F&style=for-the-badge&logo=android&logoColor=white" alt="Ajouter le Repo à AniZen"><img src="https://img.shields.io/badge/%20-Repo-E70013?labelColor=FFFFFF&style=for-the-badge" alt="Ajouter le Repo à AniZen">
 </a>
 
