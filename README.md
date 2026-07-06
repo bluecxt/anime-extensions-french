@@ -5,7 +5,7 @@
 
 <br>
 
-<a href="anizen://add-repo?url=https://bluecxt.github.io/anime-extensions-french/stable/index.json">
+<a href="anizen://add-repo?url=https://bluecxt.github.io/anime-extensions-french/stable/index.min.json">
   <img src="https://img.shields.io/badge/AniZen-Ajouter-FFFFFF?labelColor=00209F&style=for-the-badge&logo=android&logoColor=white" alt="Ajouter le Repo à AniZen"><img src="https://img.shields.io/badge/%20-Repo-E70013?labelColor=FFFFFF&style=for-the-badge" alt="Ajouter le Repo à AniZen">
 </a>
 
@@ -23,11 +23,11 @@ Pour intégrer ce repository à votre application (comme AniZen), ajoutez l'URL 
 
 *   **Stable (Production) :**
     ```text
-    https://bluecxt.github.io/anime-extensions-french/stable/index.json
+    https://bluecxt.github.io/anime-extensions-french/stable/index.min.json
     ```
 *   **Alpha :**
     ```text
-    https://bluecxt.github.io/anime-extensions-french/alpha/index.json
+    https://bluecxt.github.io/anime-extensions-french/alpha/index.min.json
     ```
 
 ## ⚠️ Notes Importantes (DNS)
