@@ -42,6 +42,9 @@ val DEFAULT_SERVER = listOf(
     "Vudeo",
     "UltraCDN",
     "Streamtape",
+    "GoogleDrive",
+    "Abyss",
+    "Vido",
 )
 
 /**

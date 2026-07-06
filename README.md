@@ -9,11 +9,16 @@
 
 ## 📌 Configuration du Repository
 
-Pour intégrer ce repository à votre environnement de test, utilisez l'URL de métadonnées brute suivante :
+Pour intégrer ce repository à votre application (comme AniZen), ajoutez l'URL correspondant à la version souhaitée :
 
-```text
-https://raw.githubusercontent.com/bluecxt/anime-extensions-french/repo/index.min.json
-```
+*   **Stable (Production) :**
+    ```text
+    https://bluecxt.github.io/anime-extensions-french/stable/index.json
+    ```
+*   **Alpha :**
+    ```text
+    https://bluecxt.github.io/anime-extensions-french/alpha/index.json
+    ```
 
 ## ⚠️ Notes Importantes (DNS)
 
@@ -49,7 +54,7 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 | **Anime-Sama** | ✅ | Plus grosse source pour les sorties d'animes récents. | VOSTFR, VF, VA | Non     |
 | **Anime-Sama (FAN)** | ✅ | Version alternative rapide, utile en secours à Anime-Sama. | VOSTFR, VF     | Non     |
 | **ADKami** | ✅ | Catalogue massif incluant une large section Hentai. | VOSTFR, VOSTA, RAW | **Oui** |
-| **AnimoFlix** | ✅ | Seule source proposant également des cartoons. | VOSTFR, VF     | Non     |
+| **AnimoFlix** | ✅ | Source variée proposant également des cartoons. | VOSTFR, VF     | Non     |
 | **Anime-Ultime** | ✅ | Haute qualité de Fantrad sur des titres peu diffusés. | VOSTFR, RAW    | **Oui** |
 | **FrAnime** | ✅ | Plus grosse source de films et d'animes. | VOSTFR, VF     | **Oui** |
 | **French-Manga** | ✅ | Très complet avec flux haute qualité. | VOSTFR, VF     | Non     |
@@ -60,6 +65,10 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 | **SouthTV** | ✅ | L'intégrale de South Park : épisodes VF et tous les films. | VF             | Non     |
 | **WaveAnime** | ✅ | Flux moderne optimisé au format DASH (Haute résolution). | VOSTFR, VF     | Non     |
 | **AnimesUltra** | ✅ | Alternative de secours de haute qualité. | VOSTFR         | Non     |
+| **Dessin Anime** | ✅ | Dessins animés et séries jeunesse. | VF | Non |
+| **Movix** | ✅ | Films et séries via l'API TMDB. | VOSTFR, VF | Non |
+| **Movix Anime** | ✅ | Animes via l'API TMDB. | VOSTFR, VF | Non |
+| **Wiflix** | ✅ | Grand catalogue de films et séries. | VOSTFR, VF | Non |
 | **Torrentio** | ✅ | Moteur de recherche Torrent / Debrid (Cinemeta/JustWatch). | Multi (All)    | Non     |
 | **Torrentio Anime** | ✅ | Version optimisée Anime pour Torrentio (Anilist). | Multi (All)    | Non     |
 
