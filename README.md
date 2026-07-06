@@ -3,6 +3,12 @@
 # 🇫🇷 bluecxt french repo 🇫🇷
 ### Repository regroupant des modules de parsing Java/Kotlin pour l'agrégation de métadonnées de médias francophones. Optimisé pour les environnements basés sur l'architecture [AniZen](https://github.com/salmanbappi/AniZen).
 
+<br>
+
+<a href="anizen://add-repo?url=https://bluecxt.github.io/anime-extensions-french/stable/index.json">
+  <img src="https://img.shields.io/badge/AniZen-Ajouter-FFFFFF?labelColor=00209F&style=for-the-badge&logo=android&logoColor=white" alt="Ajouter le Repo à AniZen"><img src="https://img.shields.io/badge/%20-Repo-E70013?labelColor=FFFFFF&style=for-the-badge" alt="Ajouter le Repo à AniZen">
+</a>
+
 </div>
 
 ---
@@ -10,6 +16,10 @@
 ## 📌 Configuration du Repository
 
 Pour intégrer ce repository à votre application (comme AniZen), ajoutez l'URL correspondant à la version souhaitée :
+
+> [!WARNING]
+> Les URLs du repository ont récemment changé (migration vers GitHub Pages). Pensez à mettre à jour l'adresse dans votre application pour continuer à recevoir les dernières mises à jour des extensions.
+
 
 *   **Stable (Production) :**
     ```text
