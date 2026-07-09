@@ -143,7 +143,7 @@ jobs:
           if [ -n "$SAMPLE_APK" ]; then
             FINGERPRINT=$(keytool -printcert -jarfile "$SAMPLE_APK" | grep "SHA256:" | head -n 1 | awk -F': ' '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
             REPO_ICON_URL="https://bluecxt.github.io/anime-extensions-french/dev/icon.png"
-            echo "{\"meta\":{\"name\":\"bluecxt french repo dev\",\"shortName\":\"bluecat-dev\",\"website\":\"https://github.com/bluecxt/anime-extensions-french\",\"signingKeyFingerprint\":\"$FINGERPRINT\",\"iconUrl\":\"$REPO_ICON_URL\",\"author\":\"bluecxt (Dev)\"}}" > repo/repo.json
+            echo "{\"meta\":{\"name\":\"bluecxt french repo dev\",\"shortName\":\"bluecxt-dev\",\"website\":\"https://github.com/bluecxt/anime-extensions-french\",\"signingKeyFingerprint\":\"$FINGERPRINT\",\"iconUrl\":\"$REPO_ICON_URL\",\"author\":\"bluecxt (Dev)\"}}" > repo/repo.json
             echo "Successfully generated repo.json with name: bluecxt french repo dev"
           else
             echo "Error: No APK found to extract fingerprint!"
