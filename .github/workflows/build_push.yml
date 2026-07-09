@@ -13,161 +13,25 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  IS_PR_CHECK: false
-
 jobs:
-  build:
-    name: Build extensions
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        with:
-          ref: main
-          persist-credentials: false
-
-      - name: Set up Java
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
-        with:
-          java-version: 17
-          distribution: temurin
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92
-
-      - name: Clean up runner gradle.properties
-        run: rm -f ~/.gradle/gradle.properties
-
-      - name: Prepare signing key
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: |
-          if [ -n "$SIGNING_KEY" ]; then
-            echo "$SIGNING_KEY" | base64 -d > signingkey.jks
-            chmod 600 signingkey.jks
-          fi
-
-      - name: Build extensions
-        env:
-          ALIAS: ${{ secrets.ALIAS }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          TMDB_API: ${{ secrets.TMDB_API }}
-        run: |
-          ./gradlew assembleRelease && ls src/*/*/build/outputs/apk/release/*.apk
-
-      - name: Upload APKs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: "individual-apks"
-          path: "src/*/*/build/outputs/apk/release/*.apk"
-          retention-days: 1
-
-      - name: Clean up CI files
-        run: rm -f signingkey.jks
-
-  publish:
-    name: Publish extension repo
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - name: Download APK artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: individual-apks
-          path: ~/apk-artifacts
-
-      - name: Set up JDK
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
-        with:
-          java-version: 17
-          distribution: temurin
-
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        with:
-          ref: main
-          persist-credentials: false
-
-      - name: Checkout repo branch (stable)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        continue-on-error: true
-        with:
-          ref: gh-pages
-          path: temp_gh_pages
-          persist-credentials: false
-
-      - name: Copy existing stable repo
-        run: |
-          if [ -d "temp_gh_pages/stable" ]; then
-            cp -r temp_gh_pages/stable repo
-          fi
-          rm -rf temp_gh_pages
-
-      - name: Move built APKs
-        run: |
-          mkdir -p repo
-          python3 ./.github/scripts/move-built-apks.py
-
-      - name: Download Extensions Inspector
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          INSPECTOR_LINK="$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/bluecxt/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -n 1)"
-          if [ -z "$INSPECTOR_LINK" ] || [ "$INSPECTOR_LINK" = "null" ]; then
-            echo "Error: Could not find Inspector.jar download link. Check GitHub API rate limits."
-            exit 1
-          fi
-          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-
-      - name: Generate Repository Metadata
-        run: |
-          java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
-          python3 ./.github/scripts/create-repo.py
-          cp repo/index.min.json repo/index.json
-
-      - name: Generate repo.json
-        run: |
-          SAMPLE_APK=$(find repo/apk -name "*.apk" | head -n 1)
-          if [ -n "$SAMPLE_APK" ]; then
-            FINGERPRINT=$(keytool -printcert -jarfile "$SAMPLE_APK" | grep "SHA256:" | head -n 1 | awk -F': ' '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
-            REPO_ICON_URL="https://bluecxt.github.io/anime-extensions-french/stable/icon.png"
-            echo "{\"meta\":{\"name\":\"bluecxt french repo\",\"shortName\":\"bluecxt\",\"website\":\"https://github.com/bluecxt/anime-extensions-french\",\"signingKeyFingerprint\":\"$FINGERPRINT\",\"iconUrl\":\"$REPO_ICON_URL\",\"author\":\"bluecxt\"}}" > repo/repo.json
-            echo "Successfully generated repo.json with name: bluecxt french repo"
-          else
-            echo "Error: No APK found to extract fingerprint!"
-            exit 1
-          fi
-
-      - name: Generate Repo Icon
-        run: |
-          sudo apt-get update && sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 512 -h 512 repo_logo.svg -o repo/icon.png
-          cp repo/icon.png repo/logo.png
-
-      - name: Collect Commit Information
-        run: |
-          LATEST_MSG=$(git log -1 --pretty=%s | tr -d '\"')
-          LATEST_HASH=$(git log -1 --pretty=%H)
-          echo "LATEST_COMMIT_MESSAGE=$LATEST_MSG" >> $GITHUB_ENV
-          echo "LATEST_COMMIT_HASH=$LATEST_HASH" >> $GITHUB_ENV
-
-      - name: Deploy to repo branch
-        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f
-        with:
-          branch: gh-pages
-          folder: repo
-          target-folder: stable
-          clean: true
-          commit-message: "Update extension repo stable: ${{ env.LATEST_COMMIT_MESSAGE }} (${{ env.LATEST_COMMIT_HASH }})"
+  build-and-publish:
+    uses: ./.github/workflows/reusable_build_publish.yml
+    with:
+      channel: 'stable'
+      gradle_task: 'assembleRelease'
+      apk_path: 'src/*/*/build/outputs/apk/release/*.apk'
+      repo_name: 'bluecxt french repo'
+      short_name: 'bluecxt'
+      author: 'bluecxt'
+    secrets:
+      signing_key: ${{ secrets.SIGNING_KEY }}
+      alias: ${{ secrets.ALIAS }}
+      key_store_password: ${{ secrets.KEY_STORE_PASSWORD }}
+      key_password: ${{ secrets.KEY_PASSWORD }}
+      tmdb_api: ${{ secrets.TMDB_API }}
