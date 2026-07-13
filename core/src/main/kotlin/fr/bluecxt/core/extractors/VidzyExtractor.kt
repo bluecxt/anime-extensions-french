@@ -79,7 +79,7 @@ class VidzyExtractor(private val client: OkHttpClient) {
         Log.d(VIDZY_LOG, "post on $downloadUrl, headers = $url as referer and useragent classic")
         Log.d(VIDZY_LOG, "formbody: op = $op, id = $id mode = $mode hash = $hash")
 
-        val downloadLink = downloadDocument.selectFirst("a.main-button")?.attr("href")
+        val downloadLink = downloadDocument.selectFirst("a.main-button")?.attr("abs:href")
 
         if (downloadLink.isNullOrBlank()) throw SelectorException("could not find the download button")
 
@@ -87,7 +87,7 @@ class VidzyExtractor(private val client: OkHttpClient) {
 
         val softSubs = downloadDocument.select("a.sub-btn").map { sub ->
             Track(
-                url = sub.attr("href"),
+                url = sub.attr("abs:href"),
                 lang = if (title.contains("fr", ignoreCase = true)) "fr" else "",
             )
         }
