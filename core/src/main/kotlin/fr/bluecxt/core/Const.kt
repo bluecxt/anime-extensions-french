@@ -21,6 +21,7 @@ const val PLAYLIST_LOG: String = "PlaylistLog"
 // extractor logs
 
 const val FILEMOON_LOG: String = "FilemoonLog"
+const val VIDZY_LOG: String = "VidzyLog"
 const val JWPLAYER_LOG: String = "JWPlayerLog"
 const val OKRU_LOG: String = "OkruLog"
 const val DOOD_LOG: String = "DoodLog"
