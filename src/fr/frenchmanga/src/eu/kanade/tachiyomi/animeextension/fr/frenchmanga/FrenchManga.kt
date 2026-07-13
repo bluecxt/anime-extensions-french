@@ -43,12 +43,11 @@ open class FrenchManga(
     override val supportsLatest = true
 
     override val supportedServers = listOf(
-        "Filemoon",
         "Lulu",
-        "Dood",
         "Voe",
         "Sibnet",
         "Vidmoly",
+        "Vidzy",
     )
 
     override val json: Json by injectLazy()
