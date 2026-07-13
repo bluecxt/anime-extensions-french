@@ -92,12 +92,13 @@ class FrenchAnime :
 
                 val details = element.selectFirst("span.block-sai")?.text()?.trim() ?: ""
                 val season = details.filter { it.isDigit() }.toIntOrNull()
-                val lang = Regex("(?i)vostfr|vf").find(details)?.value?.uppercase()
+                val langMatch = Regex("(?i)vostfr|vf|french").find(details)?.value?.uppercase()
+                val lang = if (langMatch == "FRENCH") "VF" else langMatch
 
                 title = buildString {
                     append(link.text())
-                    if (season != null) append(season)
-                    if (lang != null) append(lang)
+                    if (season != null) append(" $season")
+                    if (lang != null) append(" $lang")
                 }
             }
         }
