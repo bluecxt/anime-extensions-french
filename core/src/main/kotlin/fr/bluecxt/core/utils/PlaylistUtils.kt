@@ -17,6 +17,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
 
@@ -139,7 +140,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             val frameRate = FRAME_RATE_REGEX.find(stream)?.groupValues?.get(1)
                 ?.toDoubleOrNull()
                 ?.let { fps ->
-                    "${fps.toInt()}fps"
+                    "${fps.roundToInt()}fps"
                 }
 
             val bandwidth = BANDWIDTH_REGEX.find(stream)

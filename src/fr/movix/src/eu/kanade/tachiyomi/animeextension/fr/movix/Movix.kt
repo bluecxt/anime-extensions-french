@@ -431,7 +431,7 @@ class Movix :
                 json.decodeFromString<MovixImdbResponse>(response).series?.forEach { series ->
                     series.seasons?.forEach { season ->
                         season.episodes?.filter {
-                            episode == null || it.number == episode || it.number?.toIntOrNull() == episode?.toIntOrNull()
+                            episode == null || it.number == episode || it.number?.toIntOrNull() == episode.toIntOrNull()
                         }?.forEach { ep ->
                             ep.versions?.values?.forEach { version ->
                                 version.players?.forEach { it.link?.let(links::add) }

@@ -4,8 +4,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.bodyString
+import keiyoushi.utils.parallelCatchingFlatMap
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -14,6 +16,8 @@ import java.util.regex.Pattern
 // writed using https://github.com/skoruppa/docchi-stremio-addon/blob/main/app/players/lulustream.py
 
 class LuluExtractor(private val client: OkHttpClient) {
+
+    private val playlistUtils by lazy { PlaylistUtils(client) }
 
     private fun getHeaders(url: String): Headers {
         val parsedUrl = url.toHttpUrl()
@@ -29,14 +33,12 @@ class LuluExtractor(private val client: OkHttpClient) {
         val html = client.newCall(GET(url, headers)).awaitSuccess().bodyString()
         val m3u8Url = extractM3u8Url(html)
         val fixedUrl = fixM3u8Link(m3u8Url)
-        val quality = getResolution(fixedUrl, headers)
 
-        return listOf(
-            ExtractedSource(
-                url = fixedUrl,
-                quality = quality ?: "Unknown",
-                headers = headers,
-            ),
+        return playlistUtils.extractFromHls(
+            playlistUrl = fixedUrl,
+            referer = url,
+            masterHeaders = headers,
+            videoHeaders = headers,
         )
     }
 
@@ -94,18 +96,5 @@ class LuluExtractor(private val client: OkHttpClient) {
         }
 
         return fixedLink.build().toString()
-    }
-
-    private suspend fun getResolution(m3u8Url: String, headers: Headers): String? = try {
-        val content = client.newCall(GET(m3u8Url, headers)).awaitSuccess()
-            .bodyString()
-
-        Pattern.compile("RESOLUTION=\\d+x(\\d+)")
-            .matcher(content)
-            .takeIf { it.find() }
-            ?.group(1)
-            ?.let { "${it}p" }
-    } catch (_: Exception) {
-        null
     }
 }
