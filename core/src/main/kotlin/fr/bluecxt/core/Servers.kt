@@ -24,6 +24,7 @@ import fr.bluecxt.core.extractors.VidmolyExtractor
 import fr.bluecxt.core.extractors.VidoExtractor
 import fr.bluecxt.core.extractors.VidozaExtractor
 import fr.bluecxt.core.extractors.VidstreamExtractor
+import fr.bluecxt.core.extractors.VidzyExtractor
 import fr.bluecxt.core.extractors.VoeExtractor
 import fr.bluecxt.core.extractors.VudeoExtractor
 import fr.bluecxt.core.model.VideoServer
@@ -55,6 +56,7 @@ val DEFAULT_SERVER = listOf(
     "StreamVid",
     "StreamHub",
     "StreamDav",
+    "Vidzy",
 )
 
 /**
@@ -263,6 +265,12 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "StreamDav",
         hosts = listOf("streamdav.com"),
         extractor = { url -> StreamDavExtractor(source.client).videosFromUrl(url) },
+    )
+
+    "Vidzy" -> VideoServer(
+        name = "Vidzy",
+        hosts = listOf("Vidzy.live"),
+        extractor = { url -> VidzyExtractor(source.client).videosFromUrl(url) },
     )
 
     else -> null
