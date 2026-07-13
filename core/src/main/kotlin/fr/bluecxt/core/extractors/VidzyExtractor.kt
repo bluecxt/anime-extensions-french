@@ -19,8 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
-// writed using https://github.com/skoruppa/docchi-stremio-addon/blob/main/app/players/lulustream.py
-
 class VidzyExtractor(private val client: OkHttpClient) {
 
     private val resolutionRegex = """(?<=^|[^a-zA-Z0-9])\d{3,4}p(?=$|[^a-zA-Z0-9])""".toRegex(RegexOption.IGNORE_CASE)
