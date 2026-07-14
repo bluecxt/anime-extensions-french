@@ -42,19 +42,27 @@ class AnimeSama :
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val document = client.get(baseUrl, headers).awaitSuccess().toJsoup()
-        return parseCatalogue(document, page)
+        return AnimesPage(parseMainPage(document), false)
     }
 
     // ============================== Search ===============================
 
     // ============================== Utils ===============================
+    private fun parseMainPage(document: Document): AnimesPage {
+        val animes = document.select("#containerSorties > div, #containerAjoutsAnimes > div, #containerJeudi > div, #akTrack > div").mapNotNull { anime ->
+            val link = anime.selectFirst("a") ?: return@mapNotNull null
+            val realLink = link.split("/").take(3).joinToString("/")
+            val name = anime.selectFirst(".card-title, h2").text() ?: "error contact repo owner"
+        }
+    }
+
     private fun parseCatalogue(document: Document, page: Int): AnimesPage {
-        val animes = document.select("div.catalog-card, #containerSorties > div, #containerAjoutsAnimes > div, #containerJeudi > div, #akTrack > div").mapNotNull { anime ->
+        val animes = document.select("div.catalog-card").mapNotNull { anime ->
             if (anime.select(".info-row:has(.info-label:contains(Types)) .info-value").text().trim().equals("Scans", true)) return@mapNotNull null
 
             val link = anime.selectFirst("a") ?: return@mapNotNull null
             val realLink = link.split("/").take(3).joinToString("/")
-            val name = anime.selectFirst(".card-title, h2").text() ?: "unknown title"
+            val name = anime.selectFirst(".card-title").text() ?: "unknown title"
             val names = anime.selectFirst("p.alternate-titles")?.text()?.split(",") ?: emptyList() + name
 
             val jsonUrl = json.encodeToString(UrlContent(
