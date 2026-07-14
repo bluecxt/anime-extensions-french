@@ -30,7 +30,13 @@ android {
             }
         }
         val tmdbApi = System.getenv("TMDB_API") ?: localProperties.getProperty("TMDB_API", "")
+        val webhookUrl = System.getenv("WEBHOOK_URL") ?: localProperties.getProperty("WEBHOOK_URL", "")
+
+        require(tmdbApi.isNotBlank()) { "tmdb api missing" }
+        require(webhookUrl.isNotBlank()) { "webhookUrl missing" }
+
         buildConfigField("String", "TMDB_API", "\"$tmdbApi\"")
+        buildConfigField("String", "WEBHOOK_URL", "\"$webhookUrl\"")
     }
 
     namespace = "keiyoushi.core"

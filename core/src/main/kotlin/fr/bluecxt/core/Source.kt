@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.network.CloudflareInterceptor
+import fr.bluecxt.core.network.ErrorInterceptor
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CancellationException
@@ -48,6 +49,19 @@ abstract class Source :
     ConfigurableAnimeSource {
 
     val preferences: SharedPreferences by getPreferencesLazy()
+
+    protected val currentName: String by lazy {
+        try { name } catch (_: Exception) { "Unknown" }
+    }
+
+    protected val currentVersion: String by lazy {
+        try {
+            val pkgName = this.javaClass.`package`?.name ?: context.packageName
+            context.packageManager.getPackageInfo(pkgName, 0).versionName ?: "Unknown"
+        } catch (_: Exception) {
+            "Unknown"
+        }
+    }
 
     open val json: Json = Json {
         ignoreUnknownKeys = true
@@ -85,6 +99,7 @@ abstract class Source :
                 },
             )
             .addInterceptor(CloudflareInterceptor(network.client))
+            .addInterceptor(ErrorInterceptor(currentName, currentVersion))
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())
@@ -460,12 +475,6 @@ abstract class Source :
     @android.annotation.SuppressLint("HardwareIds")
     private fun logUsage() {
         try {
-            val currentName = try {
-                name
-            } catch (_: Exception) {
-                "Unknown"
-            }
-
             // Daily check: only ping once per day per extension
             val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
             val lastPingDate = preferences.getString("last_usage_ping", "")
@@ -479,14 +488,6 @@ abstract class Source :
                 android.provider.Settings.Secure.ANDROID_ID,
             ) ?: "unknown"
 
-            // Récupérer la version de l'extension
-            val version = try {
-                val pkgName = this.javaClass.`package`?.name ?: context.packageName
-                context.packageManager.getPackageInfo(pkgName, 0).versionName
-            } catch (_: Exception) {
-                "Unknown"
-            }
-
             // Hash simple pour l'anonymat (SHA-256)
             val bytes = androidId.toByteArray()
             val md = java.security.MessageDigest.getInstance("SHA-256")
@@ -496,7 +497,7 @@ abstract class Source :
             val url = "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
                 "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
                 "&uid=$hashedId" +
-                "&version=${java.net.URLEncoder.encode(version, "UTF-8")}"
+                "&version=${java.net.URLEncoder.encode(currentVersion, "UTF-8")}"
 
             Log.d("SourceTelemetry", "Envoi usage quotidien vers : $url")
 
