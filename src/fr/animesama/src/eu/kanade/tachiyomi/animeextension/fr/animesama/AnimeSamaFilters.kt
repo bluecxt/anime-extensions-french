@@ -20,6 +20,8 @@ object AnimeSamaFilters {
 
     open class CheckBoxFilterList(name: String, values: List<CheckBox>) : AnimeFilter.Group<AnimeFilter.CheckBox>(name, values)
 
+    open class SelectFilterList(name: String, options: Array<Pair<String, String>>) : AnimeFilter.
+
     private class CheckBoxVal(name: String, state: Boolean = false) : AnimeFilter.CheckBox(name, state)
 
     private inline fun <reified R> AnimeFilterList.getFirst(): R = this.filterIsInstance<R>().first()
@@ -47,6 +49,12 @@ object AnimeSamaFilters {
             getOptions("LANGUAGES").map { CheckBoxVal(it.first, false) },
         )
 
+    class StatutFilter :
+        CheckBoxFilterList(
+            "Statut",
+            getOptions("STATUT").map { CheckBoxVal(it.first, false) },
+        )
+
     class GenresFilter :
         CheckBoxFilterList(
             "Genre",
@@ -56,12 +64,14 @@ object AnimeSamaFilters {
     val FILTER_LIST get() = AnimeFilterList(
         TypesFilter(),
         LangFilter(),
+        StatutFilter(),
         GenresFilter(),
     )
 
     data class SearchFilters(
         val types: List<String> = emptyList(),
         val language: List<String> = emptyList(),
+        val statut: List<String> = emptyList(),
         val genres: List<String> = emptyList(),
     )
 
@@ -70,6 +80,7 @@ object AnimeSamaFilters {
         return SearchFilters(
             filters.parseCheckbox<TypesFilter>(getOptions("TYPES")),
             filters.parseCheckbox<LangFilter>(getOptions("LANGUAGES")),
+            filters.parseCheckbox<StatutFilter>(getOptions("STATUT")),
             filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
         )
     }

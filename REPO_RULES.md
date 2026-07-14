@@ -49,3 +49,12 @@ Certaines extensions implémentent une logique avancée pour gérer des structur
 - **Disponibilité Obligatoire :** Le bouton "WebView" (ouvrir dans le navigateur intégré d'Aniyomi/aniZen) ne doit jamais crasher.
 - **Utilisation de `getAnimeUrl` :** Si la structure interne de l'extension modifie `anime.url` pour y stocker des données sérialisées (par exemple, un JSON contenant plusieurs identifiants VF/VOSTFR fusionnés comme `{"ids":["123","456"]}`), il est **obligatoire** de surcharger la méthode `getAnimeUrl(anime: SAnime): String`.
 - **Comportement Attendu :** La surcharge de `getAnimeUrl` doit désérialiser `anime.url`, en extraire l'identifiant principal de la liste, et renvoyer une URL brute et valide du site web (ex: `"$baseUrl/index.php?newsid=${ids.first()}"`) afin d'assurer que l'utilisateur soit redirigé sur la bonne page web sans provoquer d'erreur ou de plantage de l'application.
+
+## 8. Utilitaires Communs (JSON / Coroutines)
+- **JSON Simplifié :** Évitez d'utiliser `json.encodeToString(...)` ou `decodeFromString` manuels. Utilisez les fonctions d'extension de `keiyoushi.utils` :
+  - **Sérialisation :** `myObject.toJsonString()`
+  - **Désérialisation :** `myJsonString.parseAs<MyType>()`
+  - **Parsing Réponse OkHttp :** `response.parseAs<MyType>()` (ferme le flux proprement en interne).
+- **Parallélisme :** Pour traiter des requêtes ou extractions en parallèle de façon sûre sur `Dispatchers.IO`, privilégiez :
+  - `myList.parallelMap { ... }` ou `myList.parallelMapNotNull { ... }` (fournis par `keiyoushi.utils.Coroutines`).
+

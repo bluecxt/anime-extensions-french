@@ -1,6 +1,7 @@
 package fr.bluecxt.core.network
 
 import keiyoushi.core.BuildConfig
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -31,6 +32,7 @@ object ErrorWebhook {
     private val json = Json { encodeDefaults = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
+    @OptIn(DelicateCoroutinesApi::class)
     fun sendWebhook(
         baseUrl: String,
         url: String,

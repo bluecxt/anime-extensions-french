@@ -6,7 +6,7 @@ import java.io.IOException
 
 class ErrorInterceptor(
     private val extensionName: String,
-    private val extensionVersion: String
+    private val extensionVersion: String,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {

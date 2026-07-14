@@ -51,7 +51,11 @@ abstract class Source :
     val preferences: SharedPreferences by getPreferencesLazy()
 
     protected val currentName: String by lazy {
-        try { name } catch (_: Exception) { "Unknown" }
+        try {
+            name
+        } catch (_: Exception) {
+            "Unknown"
+        }
     }
 
     protected val currentVersion: String by lazy {
@@ -544,7 +548,6 @@ abstract class Source :
     companion object {
         const val PREF_VOICES_KEY = "preferred_voices"
         const val PREF_VOICES_DEFAULT = "VOSTFR"
-
         const val PREF_PLAYER_KEY = "preferred_server"
         const val PREF_PLAYER_DEFAULT = "sibnet"
     }

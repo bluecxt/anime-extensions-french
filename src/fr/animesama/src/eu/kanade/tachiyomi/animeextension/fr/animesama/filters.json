@@ -9,6 +9,10 @@
     ["VOSTFR", "VOSTFR"],
     ["VASTFR", "VASTFR"]
   ],
+  "STATUT": [
+    ["En cours", "En cours"],
+	["Terminé", "Terminé"]
+  ],
   "GENRES": [
     ["Action", "Action"],
     ["Adolescence", "Adolescence"],
