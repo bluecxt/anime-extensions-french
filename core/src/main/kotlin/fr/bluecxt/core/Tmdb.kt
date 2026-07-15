@@ -351,20 +351,47 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
         } else {
             val originalLang = detailJson.optString("original_language", "ja")
 
-            // TV Series - Fetch season data (Requested language first)
-            val langSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$lang")).awaitSuccess().use { it.body.string() }
-            val langSeasonJson = JSONObject(langSeasonBody)
-            val langEpisodes = langSeasonJson.optJSONArray("episodes") ?: JSONArray()
+            // Check if the requested season actually exists on TMDB to avoid HTTP 404 errors
+            val tmdbSeasons = detailJson.optJSONArray("seasons")
+            var hasSeason = false
+            if (tmdbSeasons != null) {
+                for (i in 0 until tmdbSeasons.length()) {
+                    if (tmdbSeasons.getJSONObject(i).optInt("season_number") == season) {
+                        hasSeason = true
+                        break
+                    }
+                }
+            }
+
+            var seasonSummary = mainSummary
+            var seasonPoster = mainPoster
+
+            // TV Series - Fetch season data (Requested language first) if it exists
+            val langEpisodes = if (hasSeason) {
+                try {
+                    val langSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$lang")).awaitSuccess().use { it.body.string() }
+                    val langSeasonJson = JSONObject(langSeasonBody)
+                    seasonSummary = langSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
+                    seasonPoster = langSeasonJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" } ?: mainPoster
+                    langSeasonJson.optJSONArray("episodes") ?: JSONArray()
+                } catch (_: Exception) {
+                    JSONArray()
+                }
+            } else {
+                JSONArray()
+            }
 
             // Check for fallback (English if requested was not English, else Japanese/Original)
-            var needsFallback = langEpisodes.length() == 0
+            var needsFallback = hasSeason && langEpisodes.length() == 0
             val genericRegex = Regex("(?i)^(Episode|Épisode)\\s*\\d+$|^第\\d+[話回]$|^\\d+$")
-            for (i in 0 until langEpisodes.length()) {
-                val ep = langEpisodes.getJSONObject(i)
-                val name = ep.optString("name")
-                if (name.isBlank() || name.matches(genericRegex) || ep.optString("overview").isBlank()) {
-                    needsFallback = true
-                    break
+            if (hasSeason && !needsFallback) {
+                for (i in 0 until langEpisodes.length()) {
+                    val ep = langEpisodes.getJSONObject(i)
+                    val name = ep.optString("name")
+                    if (name.isBlank() || name.matches(genericRegex) || ep.optString("overview").isBlank()) {
+                        needsFallback = true
+                        break
+                    }
                 }
             }
 
@@ -461,11 +488,10 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                 }
             }
 
-            val seasonSummary = langSeasonJson.optString("overview").takeIf { it.isNotBlank() } ?: mainSummary
-            val seasonPoster = langSeasonJson.optString("poster_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" } ?: mainPoster
             TmdbMetadata(posterUrl = seasonPoster, summary = seasonSummary, author = author, artist = artist, status = status, releaseDate = releaseDate, genre = genre, episodeSummaries = epMap)
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        Log.e(TMDB_LOG, "Error constructing metadata for id=$id, type=$mediaType, season=$season", e)
         null
     }
 }

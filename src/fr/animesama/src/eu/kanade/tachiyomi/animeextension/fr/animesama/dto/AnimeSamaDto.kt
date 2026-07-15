@@ -8,5 +8,5 @@ import kotlinx.serialization.Serializable
 data class UrlContent(
     val url: String,
     val titles: Set<String>,
-    val season: String?,
+    val season: String? = null,
 )

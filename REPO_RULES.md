@@ -12,11 +12,6 @@ Ce document définit les normes obligatoires pour toutes les extensions Aniyomi 
 ## 2. Libellés des Sources Vidéo
 - **Format Standard :** `(Langue) Serveur - Qualité` ou `(Langue) Team Serveur - Qualité`.
 - **Tags de Langue :** `(VOSTFR)`, `(VF)`, `(VA)`.
-- **Nettoyage (Regex) :**
-    - Supprimez les répétitions du nom du serveur (ex: `Vidmoly - Vidmoly` -> `Vidmoly`).
-    - Supprimez les informations de poids de fichier (ex: `- 300MB`).
-    - Supprimez les suffixes techniques (`:default`, `default`).
-    - Incluez le nom de la team de fansub si disponible (obligatoire pour Anime-Ultime).
 
 ## 3. Regroupement par Hébergeur (Super Packs)
 - **Consolidation :** Les hébergeurs doivent être regroupés par langue pour éviter de longues listes répétitives sur l'écran de sélection initial.

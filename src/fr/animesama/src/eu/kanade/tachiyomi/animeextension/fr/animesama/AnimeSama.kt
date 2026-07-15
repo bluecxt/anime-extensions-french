@@ -50,7 +50,7 @@ class AnimeSama :
         .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
-    override fun getAnimeUrl(anime: SAnime): String = urlParser(anime.url).first.url
+    override fun getAnimeUrl(anime: SAnime): String = "$baseUrl${urlParser(anime.url).first.url}"
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -140,7 +140,6 @@ class AnimeSama :
         val titles = parsedUrl.titles
         Log.d(ANIMESAMA_LOG, "getAnimeDetails: parsed link = '$link', newUrl = $newUrl, season = $season")
         if (!newUrl) return getLegacyAnimeDetails(anime)
-        val title: String = anime.title
 
         val targetUrl = "$baseUrl$link"
         Log.d(ANIMESAMA_LOG, "getAnimeDetails: fetching targetUrl = '$targetUrl'")
@@ -148,8 +147,9 @@ class AnimeSama :
             putCachedDocument(link, it)
         }
 
-        val isHub = (season == null)
         val medias = parseMedias(link, document, titles)
+
+        val isHub = (season == null && medias.size > 1)
 
         val isMovie = medias.size == 1 && medias[0].season?.equals("Film", true) == true
 
@@ -174,7 +174,9 @@ class AnimeSama :
         var year = document.selectFirst("div.info-grid > span:contains(Année) + .info-val")?.text()
         var description = document.selectFirstLog("p#synopsisText")?.text() ?: ""
 
-        val tmdbMetadata: TmdbMetadata? = titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, type = if (isMovie) "movie" else null) }
+        val seasonNumber = if (season != null) extractSeasonNumber(season) ?: 1 else 1
+
+        val tmdbMetadata: TmdbMetadata? = titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, seasonNumber, if (isMovie) "movie" else null) }
         tmdbMetadata?.let { metadata ->
             if (anime.artist.isNullOrBlank()) anime.artist = metadata.artist
             if (anime.author.isNullOrBlank()) anime.author = metadata.author
@@ -186,7 +188,7 @@ class AnimeSama :
         }
 
         anime.description = buildString {
-            if (year != null) append("$year\n")
+            if (year != null) append("Date de sortie : $year\n")
             append(description)
         }
 
@@ -208,8 +210,10 @@ class AnimeSama :
         }
 
         return parseMedias(link, document, parsedUrl.titles).parallelMap { media ->
-            val fullTitle = "${anime.title} ${media.season}"
-            val tmdbMetadata = fetchTmdbMetadata(fullTitle)
+            val seasonName = media.season!!.replace("Saison", "").replace("Partie", "part")
+            val fullTitle = "${anime.title} $seasonName"
+            val seasonNumber = extractSeasonNumber(media.season) ?: 1
+            val tmdbMetadata = fetchTmdbMetadata(anime.title, seasonNumber)
 
             SAnime.create().apply {
                 title = fullTitle
@@ -227,6 +231,7 @@ class AnimeSama :
                 status = tmdbMetadata?.status ?: SAnime.UNKNOWN
                 initialized = true
                 fetch_type = FetchType.Episodes
+                season_number = HUB_SEASON_NUMBER
             }
         }
     }
@@ -235,6 +240,17 @@ class AnimeSama :
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val (parsedUrl, newUrl) = urlParser(anime.url)
         if (!newUrl) return getLegacyEpisodeList(anime)
+
+        if (parsedUrl.url.count { it == '/' } == 2) {
+            return listOf(
+                SEpisode.create().apply {
+                    url = ""
+                    name = ""
+                    date_upload = 0L
+                    episode_number = 0F
+                },
+            )
+        }
 
         return emptyList()
     }
@@ -257,7 +273,7 @@ class AnimeSama :
 
     private fun parseMedias(link: String, document: Document, titles: Set<String>): List<UrlContent> {
         Log.d(ANIMESAMA_LOG, "parseMedias: link = '$link'")
-        val scriptContent = document.select("script:contains(panneauAnime)").html()
+        val scriptContent = document.select("script").joinToString("\n") { it.html() }
         val uncommented = commentRegex.replace(scriptContent, "")
         return uncommented.lines()
             .map { it.trim() }
@@ -265,7 +281,7 @@ class AnimeSama :
                 panneauRegex.find(line)?.let { match ->
                     val name = match.groupValues[1]
                     val rawUrl = match.groupValues[2]
-                    val urlClean = rawUrl.safeRelativePath(baseUrl).removeSuffix("/")
+                    val urlClean = rawUrl.substringBefore("/").safeRelativePath("$baseUrl$link/").removeSuffix("/")
                     Log.d(ANIMESAMA_LOG, "parseMedias: found rawUrl = '$rawUrl' -> urlClean = '$urlClean'")
                     UrlContent(
                         url = urlClean,
@@ -304,12 +320,15 @@ class AnimeSama :
         "#containerSorties > div, #containerAjoutsAnimes > div, #containerJeudi > div, #akTrack > div",
     )
 
+    fun extractSeasonNumber(text: String): Int? = seasonNumberRegex.find(text)?.groupValues?.get(1)?.toIntOrNull()
+
     private fun sendWebhook(url: String, additionalContext: List<String>) = ErrorWebhook.sendWebhook(baseUrl, url, additionalContext)
 
     companion object {
         const val PREFIX_SEARCH = "id:"
         private val commentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
         private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
+        private val seasonNumberRegex = Regex("""Saison\s*(\d+)""", RegexOption.IGNORE_CASE)
         private val documentCache = synchronizedMap(
             mutableMapOf<String, Pair<Document, Long>>(),
         )
