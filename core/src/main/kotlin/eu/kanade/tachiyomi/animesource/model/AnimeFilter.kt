@@ -22,7 +22,7 @@ sealed class AnimeFilter<T>(val name: String, var state: T) {
 
     /**
      * A text control, similar to HTML's `<input type="text">`.
-     * 
+     *
      * @param name The placeholder text.
      * @param state The text written on it.
      */
@@ -30,14 +30,14 @@ sealed class AnimeFilter<T>(val name: String, var state: T) {
 
     /**
      * A checkbox control, similar to HTML's `<input type="checkbox">`.
-     * 
+     *
      * @param name The checkbox text
      * @param state A boolean that will be `true` if it's checked.
      */
     abstract class CheckBox(name: String, state: Boolean = false) : AnimeFilter<Boolean>(name, state)
 
     /**
-     * A enhanced checkbox control that supports an excluding state. 
+     * A enhanced checkbox control that supports an excluding state.
      * The state can be compared with `STATE_IGNORE`, `STATE_INCLUDE` and `STATE_EXCLUDE` constants of the class.
      */
     abstract class TriState(name: String, state: Int = STATE_IGNORE) : AnimeFilter<Int>(name, state) {
@@ -59,15 +59,13 @@ sealed class AnimeFilter<T>(val name: String, var state: T) {
      * @param name The filter group name
      * @param state a `List` with all the states.
      */
-    abstract class Group<V>(name: String, state: List<V>): AnimeFilter<List<V>>(name, state)
+    abstract class Group<V>(name: String, state: List<V>) : AnimeFilter<List<V>>(name, state)
 
     /**
-     * A control for sorting, with support for the ordering. 
+     * A control for sorting, with support for the ordering.
      * The state indicates which item index is selected and if the sorting is ascending.
      */
-    abstract class Sort(name: String, val values: Array<String>, state: Selection? = null)
-        : AnimeFilter<Sort.Selection?>(name, state) {
+    abstract class Sort(name: String, val values: Array<String>, state: Selection? = null) : AnimeFilter<Sort.Selection?>(name, state) {
         data class Selection(val index: Int, val ascending: Boolean)
     }
-
 }

@@ -37,7 +37,6 @@ data class TmdbMetadata(
     val artist: String?,
     val status: Int,
     val genre: String? = null,
-    val episodeThumbUrl: String? = null,
     val episodeSummaries: Map<Int, Triple<String?, String?, String?>>,
 )
 
@@ -119,25 +118,41 @@ suspend fun Source.fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR")
 suspend fun Source.fetchTmdbMetadata(title: String, season: Int = 1, type: String? = null, lang: String = "fr-FR"): TmdbMetadata? {
     if (title.isBlank()) return null
     val cacheKey = "$title-$season-$type-$lang"
-    if (tmdbCache.containsKey(cacheKey)) return tmdbCache[cacheKey]
+    if (tmdbCache.containsKey(cacheKey)) {
+        val cached = tmdbCache[cacheKey]
+        Log.d(TMDB_LOG, "Cache hit for '$title' (season $season, type $type): found=${cached != null}")
+        return cached
+    }
+
+    Log.d(TMDB_LOG, "TMDB Search start for '$title' (season $season, type $type, lang $lang)")
 
     // Step 1: Try searching with the full title (most accurate)
     val firstAttempt = performTmdbSearch(title, season, type, lang)
     if (firstAttempt != null) {
+        Log.d(TMDB_LOG, "TMDB Search success for full title '$title'")
         tmdbCache[cacheKey] = firstAttempt
         return firstAttempt
     }
 
+    Log.d(TMDB_LOG, "TMDB Search failed for '$title', checking backup with sanitized title...")
+
     // Step 2: If failed, try with sanitized title
     val cleanTitle = sanitizeTitle(title)
     if (cleanTitle != title && cleanTitle.isNotBlank()) {
+        Log.d(TMDB_LOG, "TMDB Backup Search start with sanitized title '$cleanTitle'")
         val secondAttempt = performTmdbSearch(cleanTitle, season, type, lang)
         if (secondAttempt != null) {
+            Log.d(TMDB_LOG, "TMDB Backup Search success with sanitized title '$cleanTitle'")
             tmdbCache[cacheKey] = secondAttempt
             return secondAttempt
+        } else {
+            Log.d(TMDB_LOG, "TMDB Backup Search failed for sanitized title '$cleanTitle'")
         }
+    } else {
+        Log.d(TMDB_LOG, "TMDB Backup Search skipped (sanitized title is same or empty)")
     }
 
+    Log.d(TMDB_LOG, "TMDB Search totally failed for '$title'")
     tmdbCache[cacheKey] = null
     return null
 }
@@ -184,7 +199,17 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
         val response = client.newCall(GET(searchUrl)).awaitSuccess().use { it.body.string() }
         val results = JSONObject(response).getJSONArray("results")
         if (results.length() == 0) {
-            return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
+            if (lang != "en-US") {
+                Log.d(TMDB_LOG, "No results for '$query' in $lang, trying English backup (en-US)...")
+                val enAttempt = performTmdbSearch(query, season, type, "en-US")
+                if (enAttempt != null) {
+                    Log.d(TMDB_LOG, "English backup search success for '$query'")
+                } else {
+                    Log.d(TMDB_LOG, "English backup search failed for '$query'")
+                }
+                return enAttempt
+            }
+            return null
         }
 
         var bestMatch: JSONObject? = null

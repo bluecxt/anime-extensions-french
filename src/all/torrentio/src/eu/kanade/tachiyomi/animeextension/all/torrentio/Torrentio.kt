@@ -497,7 +497,7 @@ class Torrentio : Source() {
                         name = "[Movie] Film"
                         tmdbSeasonsMeta?.get(1)?.let { meta ->
                             summary = meta.summary ?: ""
-                            preview_url = meta.episodeThumbUrl
+                            preview_url = meta.episodeSummaries[1]?.second
                         }
                     },
                 ).asReversed()

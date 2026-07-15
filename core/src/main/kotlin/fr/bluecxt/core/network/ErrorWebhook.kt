@@ -1,5 +1,6 @@
 package fr.bluecxt.core.network
 
+import android.app.Application
 import keiyoushi.core.BuildConfig
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,36 @@ object ErrorWebhook {
 
     private val json = Json { encodeDefaults = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
+
+    private fun getCallerInfo(): Triple<String, String, String> {
+        val stackTrace = Thread.currentThread().stackTrace
+        val caller = stackTrace.firstOrNull { element ->
+            element.className.contains("animeextension") || element.className.contains("bluecxt")
+        }
+        return if (caller != null) {
+            val extensionClass = caller.className.substringAfterLast(".")
+            val version = try {
+                val pkgName = caller.className.substringBeforeLast(".")
+                val app = Injekt.get<Application>()
+                app.packageManager.getPackageInfo(pkgName, 0).versionName ?: "Unknown"
+            } catch (_: Exception) {
+                "Unknown"
+            }
+            Triple(extensionClass, version, "${caller.methodName}(${caller.fileName}:${caller.lineNumber})")
+        } else {
+            Triple("UnknownExtension", "Unknown", "UnknownMethod")
+        }
+    }
+
+    fun sendWebhook(
+        baseUrl: String,
+        url: String,
+        additionalContext: List<String>,
+    ) {
+        val (extensionName, extensionVersion, callerDetails) = getCallerInfo()
+        val enrichedContext = additionalContext + "Caller: $callerDetails"
+        sendWebhook(baseUrl, url, extensionName, extensionVersion, enrichedContext)
+    }
 
     @OptIn(DelicateCoroutinesApi::class)
     fun sendWebhook(

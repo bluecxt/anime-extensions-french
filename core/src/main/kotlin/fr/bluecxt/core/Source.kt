@@ -103,7 +103,7 @@ abstract class Source :
                 },
             )
             .addInterceptor(CloudflareInterceptor(network.client))
-            .addInterceptor(ErrorInterceptor(currentName, currentVersion))
+            .addInterceptor(ErrorInterceptor())
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())
@@ -544,6 +544,7 @@ abstract class Source :
     override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
     override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
     override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException()
+    open suspend fun fetchRelatedAnimeList(anime: SAnime): List<SAnime> = throw UnsupportedOperationException()
 
     companion object {
         const val PREF_VOICES_KEY = "preferred_voices"

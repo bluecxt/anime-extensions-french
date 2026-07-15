@@ -1,0 +1,142 @@
+// =========================== Anime Details ============================
+override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+    val animeUrlPath = anime.url.substringBefore("#")
+    val response = client.newCall(GET("$baseUrl$animeUrlPath")).awaitSuccess()
+    val doc = response.asJsoup()
+
+    val rawUrl = "$baseUrl$animeUrlPath".toHttpUrl()
+    val pathSegments = rawUrl.pathSegments
+
+    // Hub is always /catalogue/anime-name/ (segments 0 and 1)
+    val hubUrl = if (pathSegments.size > 2) {
+        rawUrl.newBuilder().apply {
+            (pathSegments.size - 1 downTo 2).forEach { i -> removePathSegment(i) }
+        }.build().toString().removeSuffix("/")
+    } else {
+        rawUrl.toString().removeSuffix("/")
+    }
+
+    val hubDoc = if (rawUrl.toString().removeSuffix("/") == hubUrl) {
+        doc
+    } else {
+        try {
+            client.newCall(GET(hubUrl)).awaitSuccess().asJsoup()
+        } catch (_: Exception) {
+            doc
+        }
+    }
+
+    val seriesTitle = hubDoc.selectFirst("div.my-2 > h1")?.text() ?: ""
+    val absoluteFullTitle = doc.selectFirst("div.my-2 > h1")?.text() ?: anime.title
+
+    // Extract title from URL fragment if available (set in fetchAnimeSeasons)
+    val originalTitleFromUrl = anime.url.substringAfter("|", "").takeIf { it.isNotBlank() }
+    val titleToSearch = originalTitleFromUrl ?: absoluteFullTitle
+
+    // Fallback: extract from URL slug (often more accurate than the displayed H1)
+    val urlSlugTitle = pathSegments.getOrNull(1)?.replace("-", " ")?.trim()
+
+    val tmdbMetadata = when {
+        // Extract season number from URL fragment if available
+        anime.url.contains("#s") -> {
+            val sNumStr = anime.url.substringAfter("#s", "").substringBefore("|")
+            val sNum = sNumStr.toDoubleOrNull()
+            // -2.0 is a bypass code, we need real number for TMDB
+            val meta = if (sNum != null && sNum > 0) fetchTmdbMetadata(seriesTitle, sNum.toInt(), "tv") else fetchSmartTmdbMetadata(titleToSearch)
+            meta ?: urlSlugTitle?.let { fetchSmartTmdbMetadata(it) }
+        }
+
+        else -> fetchSmartTmdbMetadata(titleToSearch) ?: urlSlugTitle?.let { fetchSmartTmdbMetadata(it) }
+    }
+
+    // REPO_RULES: Optimize long titles for grid view
+    var isSubTitleOnly = false
+    val displayTitle = if (absoluteFullTitle.length > 40 && absoluteFullTitle.contains(" ") && seriesTitle.isNotEmpty()) {
+        val suffix = absoluteFullTitle.substringAfter(seriesTitle).trim()
+        val isStandardSeason = suffix.matches(Regex("""(?i)(?:-?\s*)?(?:Saison|Season|Partie|Part|\d+).*"""))
+        if (suffix.isNotEmpty() && suffix != absoluteFullTitle && !isStandardSeason) {
+            isSubTitleOnly = true
+            suffix
+        } else {
+            absoluteFullTitle
+        }
+    } else {
+        // If the title is already a subtitle (from fetchAnimeSeasons), keep it
+        if (originalTitleFromUrl != null && !absoluteFullTitle.contains(originalTitleFromUrl)) {
+            isSubTitleOnly = true
+            anime.title
+        } else {
+            absoluteFullTitle
+        }
+    }
+
+    // Ensure series title is present if not already there
+    val titleWithSeries = if (seriesTitle.isNotEmpty() && !displayTitle.contains(seriesTitle, true)) {
+        "$seriesTitle $displayTitle"
+    } else {
+        displayTitle
+    }
+
+    // REPO_RULES: "Saison X" -> "X" for consistency and space (Saison 1 is removed)
+    val finalTitle = titleWithSeries
+        .replace(Regex("""(?i)\s*-\s*(?:Saison|Season)\s*1(?!\d)"""), "")
+        .replace(Regex("""(?i)\s*(?:Saison|Season)\s*1(?!\d)"""), "")
+        .replace(Regex("""(?i)\s*-\s*(?:Saison|Season)\s*(\d+)"""), " $1")
+        .replace(Regex("""(?i)\s*(?:Saison|Season)\s*(\d+)"""), " $1")
+        .replace(Regex("""(?i)Partie\s*(\d+)"""), "Part $1")
+        .trim()
+
+    anime.title = if (isSubTitleOnly) displayTitle else finalTitle
+
+    anime.description = tmdbMetadata?.summary ?: hubDoc.select("h2:contains(synopsis) + p").text()
+
+    tmdbMetadata?.releaseDate?.let { date ->
+        anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
+    }
+
+    // Always put raw full title at the very top if the display title was optimized to a subtitle
+    if (isSubTitleOnly) {
+        anime.description = "$titleToSearch\n\n${anime.description ?: ""}"
+    }
+
+    anime.author = tmdbMetadata?.author
+    anime.artist = tmdbMetadata?.artist
+    anime.status = tmdbMetadata?.status ?: if (animeUrlPath.contains("/film", ignoreCase = true)) SAnime.COMPLETED else SAnime.UNKNOWN
+    anime.genre = tmdbMetadata?.genre ?: hubDoc.select("h2:contains(genres) + a").text().replace(" - ", ", ")
+
+    // Priority: Sub-page TMDB Poster > Hub TMDB Poster > Hub HTML Cover
+    anime.thumbnail_url = tmdbMetadata?.posterUrl ?: hubDoc.getElementById("coverOeuvre")?.attr("abs:src")
+
+    val scripts = doc.select("script").toString()
+    val uncommented = commentRegex.replace(scripts, "")
+
+    // Count distinct base stems to avoid duplicates (VOSTFR vs VF panels)
+    val matches = seasonRegex.findAll(uncommented).toList()
+
+    val distinctSeasons = matches
+        .filter {
+            val stem = it.groupValues[2].trim().removeSuffix("/")
+            // Filter out pointers to the hub itself (must have at least one / to be a sub-season)
+            // A sub-season stem should NOT just be a language code (vostfr, vf, etc.)
+            val isLangOnly = stem.equals("vostfr", true) || stem.equals("vf", true) ||
+                stem.equals("vf1", true) || stem.equals("vf2", true) ||
+                stem.equals("va", true) || stem.equals("vcn", true) ||
+                stem.equals("vj", true) || stem.equals("vkr", true) ||
+                stem.equals("vqc", true)
+
+            stem.contains("/") && !isLangOnly
+        }
+        .map {
+            it.groupValues[2].trim().removeSuffix("/")
+                .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
+        }
+        .distinct()
+        .toList()
+
+    // Hub is /catalogue/anime-name/ or /catalogue/anime-name/vostfr/
+    // Path segments for hub are ["catalogue", "anime-name"] or ["catalogue", "anime-name", "lang"]
+    val isHub = pathSegments.size <= 3
+    anime.fetch_type = if (isHub && distinctSeasons.size > 1) FetchType.Seasons else FetchType.Episodes
+
+    return anime
+}

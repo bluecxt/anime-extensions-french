@@ -15,17 +15,24 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.TmdbMetadata
+import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.network.ErrorWebhook
 import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.utils.selectFirstLog
 import fr.bluecxt.core.utils.selectLog
 import keiyoushi.utils.get
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import java.util.Collections.synchronizedMap
 
 class AnimeSama :
     Source(),
@@ -42,6 +49,8 @@ class AnimeSama :
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
+
+    override fun getAnimeUrl(anime: SAnime): String = urlParser(anime.url).first.url
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -68,6 +77,10 @@ class AnimeSama :
         params.types.forEach { url.addQueryParameter("type[]", it) }
         params.language.forEach { url.addQueryParameter("langue[]", it) }
         params.genres.forEach { url.addQueryParameter("genre[]", it) }
+        params.statut.forEach { url.addQueryParameter("current[]", it) }
+
+        url.addQueryParameter("annee_min", params.yearMin)
+        url.addQueryParameter("annee_max", params.yearMax)
 
         url.addQueryParameter("search", query)
         url.addQueryParameter("page", "$page")
@@ -76,13 +89,7 @@ class AnimeSama :
         return parseCatalogue(document, page)
     }
 
-    // ============================== Utils ===============================
-    private fun parseMainPage(document: Document): AnimesPage = parseCatalogue(
-        document,
-        0,
-        "#containerSorties > div, #containerAjoutsAnimes > div, #containerJeudi > div, #akTrack > div",
-    )
-
+    // ============================== Catalogue ===============================
     private fun parseCatalogue(
         document: Document,
         page: Int,
@@ -95,11 +102,15 @@ class AnimeSama :
             val realLink = link.split("/").take(3).joinToString("/")
             val thumbnail = anime.selectLog("img:not(.ak-cta-flag)").attr("abs:src")
             val name = anime.selectFirstLog(".card-title, h2")?.text() ?: "unknown title"
-            val names: List<String> = anime.selectFirstLog("p.alternate-titles")?.text()?.split(",") ?: listOf(name)
+            val names: Set<String> = buildSet {
+                add(name)
+                add(realLink.substringAfterLast("/").replace("-", " "))
+                anime.selectFirstLog("p.alternate-titles")?.text()?.split(",")
+                    ?.map { it.trim() }
+                    ?.let { addAll(it) }
+            }
 
-            val jsonUrl = UrlContent(url = realLink, titles = names).toJsonString()
-
-            Log.d(ANIMESAMA_LOG, "title = $name, url = $realLink")
+            val jsonUrl = UrlContent(url = realLink, titles = names, null).toJsonString()
 
             SAnime.create().apply {
                 title = name
@@ -107,20 +118,201 @@ class AnimeSama :
                 url = jsonUrl
             }
         }
-
         val lastPage = document.selectLog("#list_pagination a:last-child").text().toIntOrNull() ?: 0
-
         val hasNextPage = if (lastPage != 0 && page < lastPage) true else false
-
         return AnimesPage(animes.distinctBy { it.url }, hasNextPage)
     }
 
+    // =========================== Anime Details ============================
+
+    override suspend fun fetchRelatedAnimeList(anime: SAnime): List<SAnime> {
+        val (parsedUrl, _) = urlParser(anime.url)
+        val link = parsedUrl.url
+        val document = client.get("$baseUrl$link", headers).asJsoup()
+        return parseCatalogue(document, 0).animes
+    }
+
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        Log.d(ANIMESAMA_LOG, "url dans details = ${anime.url}")
+        Log.d(ANIMESAMA_LOG, "getAnimeDetails: input url = '${anime.url}'")
+        val (parsedUrl, newUrl) = urlParser(anime.url)
+        val link = parsedUrl.url
+        val season = parsedUrl.season
+        val titles = parsedUrl.titles
+        Log.d(ANIMESAMA_LOG, "getAnimeDetails: parsed link = '$link', newUrl = $newUrl, season = $season")
+        if (!newUrl) return getLegacyAnimeDetails(anime)
+        val title: String = anime.title
+
+        val targetUrl = "$baseUrl$link"
+        Log.d(ANIMESAMA_LOG, "getAnimeDetails: fetching targetUrl = '$targetUrl'")
+        val document = getCachedDocument(link) ?: client.get(targetUrl, headers).asJsoup().also {
+            putCachedDocument(link, it)
+        }
+
+        val isHub = (season == null)
+        val medias = parseMedias(link, document, titles)
+
+        val isMovie = medias.size == 1 && medias[0].season?.equals("Film", true) == true
+
+        Log.d(ANIMESAMA_LOG, "media number = ${medias.size}")
+
+        if (isHub) {
+            anime.apply {
+                fetch_type = FetchType.Seasons
+                season_number = HUB_SEASON_NUMBER
+            }
+        }
+
+        anime.author = document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text() ?: ""
+        anime.genre = document.selectLog("div.genres-wrap > span").map { it.text() }.joinToString()
+        val statusText = document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text() ?: ""
+        anime.status = when (statusText) {
+            "Terminé", "Sorti" -> SAnime.COMPLETED
+            "En cours" -> SAnime.ONGOING
+            else -> SAnime.UNKNOWN
+        }
+
+        var year = document.selectFirst("div.info-grid > span:contains(Année) + .info-val")?.text()
+        var description = document.selectFirstLog("p#synopsisText")?.text() ?: ""
+
+        val tmdbMetadata: TmdbMetadata? = titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, type = if (isMovie) "movie" else null) }
+        tmdbMetadata?.let { metadata ->
+            if (anime.artist.isNullOrBlank()) anime.artist = metadata.artist
+            if (anime.author.isNullOrBlank()) anime.author = metadata.author
+            if (anime.genre.isNullOrBlank()) anime.genre = metadata.genre
+            if (anime.status == SAnime.UNKNOWN) anime.status = metadata.status
+            anime.thumbnail_url = metadata.posterUrl
+            anime.background_url = metadata.posterUrl
+            if (year.isNullOrBlank() || metadata.releaseDate != null) year = metadata.releaseDate
+        }
+
+        anime.description = buildString {
+            if (year != null) append("$year\n")
+            append(description)
+        }
+
         return anime
     }
 
+    // ============================== Season ==============================
+    override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
+        Log.d(ANIMESAMA_LOG, "getSeasonList: input url = '${anime.url}'")
+        val (parsedUrl, newUrl) = urlParser(anime.url)
+        Log.d(ANIMESAMA_LOG, "getSeasonList: parsedUrl = $parsedUrl, newUrl = $newUrl")
+        if (!newUrl) return getLegacySeasonList(anime)
+
+        val link = parsedUrl.url
+        val targetUrl = "$baseUrl$link"
+        Log.d(ANIMESAMA_LOG, "getSeasonList: fetching targetUrl = '$targetUrl'")
+        val document = getCachedDocument(link) ?: client.get(targetUrl, headers).asJsoup().also {
+            putCachedDocument(link, it)
+        }
+
+        return parseMedias(link, document, parsedUrl.titles).parallelMap { media ->
+            val fullTitle = "${anime.title} ${media.season}"
+            val tmdbMetadata = fetchTmdbMetadata(fullTitle)
+
+            SAnime.create().apply {
+                title = fullTitle
+                url = UrlContent(
+                    url = media.url,
+                    titles = parsedUrl.titles,
+                    season = media.season,
+                ).toJsonString()
+                thumbnail_url = tmdbMetadata?.posterUrl ?: anime.thumbnail_url
+
+                description = tmdbMetadata?.summary
+                author = tmdbMetadata?.author
+                artist = tmdbMetadata?.artist
+                genre = tmdbMetadata?.genre
+                status = tmdbMetadata?.status ?: SAnime.UNKNOWN
+                initialized = true
+                fetch_type = FetchType.Episodes
+            }
+        }
+    }
+
+    // ============================== Episodes ==============================
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
+        val (parsedUrl, newUrl) = urlParser(anime.url)
+        if (!newUrl) return getLegacyEpisodeList(anime)
+
+        return emptyList()
+    }
+
+    // ============================== Utils ===============================
+
+    private fun getCachedDocument(link: String): Document? {
+        val cached = documentCache[link] ?: return null
+        val (doc, timestamp) = cached
+        if (System.currentTimeMillis() - timestamp > CACHE_LIFETIME) {
+            documentCache.remove(link)
+            return null
+        }
+        return doc
+    }
+
+    private fun putCachedDocument(link: String, doc: Document) {
+        documentCache[link] = Pair(doc, System.currentTimeMillis())
+    }
+
+    private fun parseMedias(link: String, document: Document, titles: Set<String>): List<UrlContent> {
+        Log.d(ANIMESAMA_LOG, "parseMedias: link = '$link'")
+        val scriptContent = document.select("script:contains(panneauAnime)").html()
+        val uncommented = commentRegex.replace(scriptContent, "")
+        return uncommented.lines()
+            .map { it.trim() }
+            .mapNotNull { line ->
+                panneauRegex.find(line)?.let { match ->
+                    val name = match.groupValues[1]
+                    val rawUrl = match.groupValues[2]
+                    val urlClean = rawUrl.safeRelativePath(baseUrl).removeSuffix("/")
+                    Log.d(ANIMESAMA_LOG, "parseMedias: found rawUrl = '$rawUrl' -> urlClean = '$urlClean'")
+                    UrlContent(
+                        url = urlClean,
+                        titles = titles,
+                        season = name,
+                    )
+                }
+            }.distinctBy { it.url }
+    }
+
+    private fun urlParser(jsonUrl: String): Pair<UrlContent, Boolean> = try {
+        val urlContent: UrlContent = jsonUrl.parseAs(json)
+        val parsedUrl = UrlContent(
+            urlContent.url,
+            urlContent.titles,
+            urlContent.season,
+        )
+        Pair(parsedUrl, true)
+    } catch (_: SerializationException) { // legacy
+        val link = jsonUrl.substringBefore("#")
+
+        val titleFromUrl = jsonUrl.substringAfter("|", "").takeIf { it.isNotBlank() }
+        val slugTitle = link.substringAfterLast("/").replace("-", " ")
+
+        val titles: Set<String> = buildSet {
+            titleFromUrl?.let { add(it) }
+            add(slugTitle)
+        }
+        val parsedUrl = UrlContent(link, titles, null)
+        Pair(parsedUrl, false)
+    }
+
+    private fun parseMainPage(document: Document): AnimesPage = parseCatalogue(
+        document,
+        0,
+        "#containerSorties > div, #containerAjoutsAnimes > div, #containerJeudi > div, #akTrack > div",
+    )
+
+    private fun sendWebhook(url: String, additionalContext: List<String>) = ErrorWebhook.sendWebhook(baseUrl, url, additionalContext)
+
     companion object {
         const val PREFIX_SEARCH = "id:"
+        private val commentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
+        private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
+        private val documentCache = synchronizedMap(
+            mutableMapOf<String, Pair<Document, Long>>(),
+        )
+        const val CACHE_LIFETIME = 30000L
     }
 }

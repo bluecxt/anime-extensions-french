@@ -4,10 +4,7 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
 
-class ErrorInterceptor(
-    private val extensionName: String,
-    private val extensionVersion: String,
-) : Interceptor {
+class ErrorInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -22,8 +19,6 @@ class ErrorInterceptor(
                 ErrorWebhook.sendWebhook(
                     baseUrl = request.url.host,
                     url = url,
-                    extensionName = extensionName,
-                    extensionVersion = extensionVersion,
                     additionalContext = listOfNotNull(
                         "HTTP_ERROR_$code",
                         "method=${request.method}",
@@ -43,8 +38,6 @@ class ErrorInterceptor(
             ErrorWebhook.sendWebhook(
                 baseUrl = request.url.host,
                 url = url,
-                extensionName = extensionName,
-                extensionVersion = extensionVersion,
                 additionalContext = listOfNotNull(
                     errorType,
                     e.message,

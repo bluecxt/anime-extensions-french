@@ -20,7 +20,9 @@ object AnimeSamaFilters {
 
     open class CheckBoxFilterList(name: String, values: List<CheckBox>) : AnimeFilter.Group<AnimeFilter.CheckBox>(name, values)
 
-    open class SelectFilterList(name: String, options: Array<Pair<String, String>>) : AnimeFilter.
+    open class TextFilterDual(name: String, values: List<Text>) : AnimeFilter.Group<AnimeFilter.Text>(name, values)
+
+    private class TextVal(name: String, state: String = "") : AnimeFilter.Text(name, state)
 
     private class CheckBoxVal(name: String, state: Boolean = false) : AnimeFilter.CheckBox(name, state)
 
@@ -55,6 +57,15 @@ object AnimeSamaFilters {
             getOptions("STATUT").map { CheckBoxVal(it.first, false) },
         )
 
+    class YearFilter :
+        TextFilterDual(
+            "Année (Min - Max)",
+            listOf(
+                TextVal("Année Min", ""),
+                TextVal("Année Max", ""),
+            ),
+        )
+
     class GenresFilter :
         CheckBoxFilterList(
             "Genre",
@@ -65,6 +76,7 @@ object AnimeSamaFilters {
         TypesFilter(),
         LangFilter(),
         StatutFilter(),
+        YearFilter(),
         GenresFilter(),
     )
 
@@ -72,16 +84,25 @@ object AnimeSamaFilters {
         val types: List<String> = emptyList(),
         val language: List<String> = emptyList(),
         val statut: List<String> = emptyList(),
+        val yearMin: String = "",
+        val yearMax: String = "",
         val genres: List<String> = emptyList(),
     )
 
     fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
         if (filters.isEmpty()) return SearchFilters()
+
+        val yearFilter = filters.filterIsInstance<YearFilter>().firstOrNull()
+        val yearMin: String = yearFilter?.state?.get(0)?.state ?: ""
+        val yearMax: String = yearFilter?.state?.get(1)?.state ?: ""
+
         return SearchFilters(
-            filters.parseCheckbox<TypesFilter>(getOptions("TYPES")),
-            filters.parseCheckbox<LangFilter>(getOptions("LANGUAGES")),
-            filters.parseCheckbox<StatutFilter>(getOptions("STATUT")),
-            filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
+            types = filters.parseCheckbox<TypesFilter>(getOptions("TYPES")),
+            language = filters.parseCheckbox<LangFilter>(getOptions("LANGUAGES")),
+            statut = filters.parseCheckbox<StatutFilter>(getOptions("STATUT")),
+            yearMin = yearMin,
+            yearMax = yearMax,
+            genres = filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
         )
     }
 }
