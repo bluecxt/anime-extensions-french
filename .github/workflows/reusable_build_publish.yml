@@ -171,7 +171,7 @@ jobs:
       - name: Generate Repo Icon
         run: |
           sudo apt-get update && sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 512 -h 512 repo_logo.svg -o repo/icon.png
+          rsvg-convert -w 512 -h 512 assets/repo_logo.svg -o repo/icon.png
           cp repo/icon.png repo/logo.png
 
       - name: Collect Commit Information

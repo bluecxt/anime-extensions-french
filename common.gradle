@@ -103,14 +103,14 @@ android {
         release {
             signingConfig = signingConfigs.release
             minifyEnabled = true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro", "$rootDir/proguard-rules-release.pro"
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/config/proguard-rules.pro", "$rootDir/config/proguard-rules-release.pro"
             vcsInfo.include = false
         }
         dev {
             initWith debug
             debuggable false
             minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/proguard-rules.pro"
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), "$rootDir/config/proguard-rules.pro"
             signingConfig = signingConfigs.dev
             matchingFallbacks = ['debug', 'release']
         }
@@ -127,6 +127,7 @@ android {
     lint {
         checkReleaseBuilds = false
         abortOnError = false
+        lintConfig = file("$rootDir/config/lint.xml")
     }
 
     buildTypes {

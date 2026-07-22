@@ -40,7 +40,7 @@ subprojects {
                 }
             )
             
-            config.setFrom(files("${rootProject.projectDir}/config/detekt/detekt.yml"))
+            config.setFrom(files("${rootProject.projectDir}/config/detekt.yml"))
             buildUponDefaultConfig = true
             allRules = false
             ignoreFailures = true // Permet de collecter les rapports de TOUTES les extensions sans bloquer

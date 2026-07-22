@@ -41,7 +41,7 @@ class ExtensionTest :
             SAnime.create().apply {
                 title = "Test Extracteurs"
                 url = "/test-extractors"
-                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/repo_logo.svg"
+                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/assets/repo_logo.svg"
             },
         ),
         false,
