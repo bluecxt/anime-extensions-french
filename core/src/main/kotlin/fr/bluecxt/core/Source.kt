@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.network.CloudflareInterceptor
 import fr.bluecxt.core.network.ErrorInterceptor
+import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CancellationException
@@ -350,7 +351,7 @@ abstract class Source :
         SAnime.create().apply {
             this.title = sTitle
             this.url = sUrl
-            thumbnail_url = finalMeta?.posterUrl
+            thumbnail_url = finalMeta?.seasonPosterUrl ?: finalMeta?.mainPosterUrl
             description = finalMeta?.summary
             genre = finalMeta?.genre
             author = finalMeta?.author

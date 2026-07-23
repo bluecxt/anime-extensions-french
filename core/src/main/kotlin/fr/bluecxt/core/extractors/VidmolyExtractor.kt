@@ -9,8 +9,8 @@ import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDMOLY_LOG
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.commonEmptyHeaders
 import keiyoushi.utils.parallelCatchingFlatMap
 import keiyoushi.utils.useAsJsoup

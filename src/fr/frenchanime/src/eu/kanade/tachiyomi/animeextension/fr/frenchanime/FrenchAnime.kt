@@ -14,7 +14,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.SelectorException
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.safeRelativePath
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response

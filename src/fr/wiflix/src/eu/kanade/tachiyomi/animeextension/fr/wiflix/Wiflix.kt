@@ -18,7 +18,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.WIFLIX_LOG
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.safeRelativePath
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope

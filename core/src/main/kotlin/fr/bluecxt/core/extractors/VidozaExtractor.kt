@@ -4,8 +4,8 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.VIDOZA_LOG
-import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.defaultHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 

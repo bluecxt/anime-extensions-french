@@ -20,7 +20,7 @@ import fr.bluecxt.core.DESSINANIME_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.safeRelativePath
 import fr.bluecxt.core.utils.PlaylistUtils
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json

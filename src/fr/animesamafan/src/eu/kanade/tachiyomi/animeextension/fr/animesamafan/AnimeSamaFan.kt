@@ -20,7 +20,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.filterSmartMetadata
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.safeRelativePath
 import fr.bluecxt.core.sanitizeTitle
 import kotlinx.serialization.json.Json
 import okhttp3.Headers

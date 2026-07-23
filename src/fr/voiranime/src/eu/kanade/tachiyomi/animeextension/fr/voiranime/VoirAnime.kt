@@ -19,7 +19,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.VOIRANIME_LOG
 import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.safeRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody

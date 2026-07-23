@@ -29,7 +29,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.MOVIX_LOG
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.withDefaultHeaders
+import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

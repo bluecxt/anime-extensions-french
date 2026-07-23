@@ -5,9 +5,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.UQLOAD_LOG
-import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl

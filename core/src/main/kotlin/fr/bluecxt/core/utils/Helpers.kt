@@ -1,8 +1,9 @@
-package fr.bluecxt.core
+package fr.bluecxt.core.utils
 
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.Video
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -62,3 +63,8 @@ fun defaultHeaders(
         if (!origin.isBlank()) add("Origin", origin)
         if (!accept.isBlank()) add("Accept", accept)
     }.build()
+
+/**
+ * Normalize a String by putting everything in lowercase and removing all the non latin letter
+ */
+fun String.normalize(): String = this.lowercase().replace(Regex("""[^a-z0-9]"""), "")

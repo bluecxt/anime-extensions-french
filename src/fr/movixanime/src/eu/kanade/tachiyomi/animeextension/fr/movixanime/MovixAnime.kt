@@ -20,7 +20,7 @@ import fr.bluecxt.core.MOVIXANIME_LOG
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.filterSmartMetadata
-import fr.bluecxt.core.withDefaultHeaders
+import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
