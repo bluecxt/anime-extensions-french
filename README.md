@@ -40,14 +40,6 @@ Si vous rencontrez des problèmes de chargement des lecteurs, il est fortement r
 
 Ce repository inclut des outils pour valider les extensions.
 
-### 🧪 Validation des Extensions
-Chaque module dispose d'un validateur qui vérifie si le flux de données distant est toujours conforme aux schémas attendus.
-
-**Lancer tous les tests :**
-```bash
-python3 audit_extensions.py
-```
-
 ### 🔨 Build des Artifacts
 Pour compiler un module spécifique (Android Debug APK) :
 ```bash

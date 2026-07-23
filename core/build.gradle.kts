@@ -23,6 +23,12 @@ android {
         consumerProguardFiles("consumer-rules.pro")
 
         val localProperties = Properties()
+        val envFile = rootProject.file(".env")
+        if (envFile.exists()) {
+            envFile.inputStream().use { stream ->
+                localProperties.load(stream)
+            }
+        }
         val localPropertiesFile = rootProject.file("local.properties")
         if (localPropertiesFile.exists()) {
             localPropertiesFile.inputStream().use { stream ->
@@ -32,8 +38,8 @@ android {
         val tmdbApi = System.getenv("TMDB_API") ?: localProperties.getProperty("TMDB_API", "")
         val webhookUrl = System.getenv("WEBHOOK_URL") ?: localProperties.getProperty("WEBHOOK_URL", "")
 
-        require(tmdbApi.isNotBlank()) { "tmdb api missing" }
-        require(webhookUrl.isNotBlank()) { "webhookUrl missing" }
+        require(tmdbApi.isNotBlank()) { "TMDB_API missing" }
+        require(webhookUrl.isNotBlank()) { "WEBHOOK_URL missing" }
 
         buildConfigField("String", "TMDB_API", "\"$tmdbApi\"")
         buildConfigField("String", "WEBHOOK_URL", "\"$webhookUrl\"")

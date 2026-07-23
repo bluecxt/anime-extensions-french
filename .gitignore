@@ -7,6 +7,7 @@ build/
 .idea/
 *.iml
 repo/
+repo
 apk/
 gen
 generated-src/
@@ -47,3 +48,6 @@ issue/
 .editorconfig
 .gitattributes
 ktlintCodeStyle.xml
+
+gradle-wrapper.properties
+gradle/
