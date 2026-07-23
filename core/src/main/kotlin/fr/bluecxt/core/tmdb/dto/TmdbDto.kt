@@ -1,4 +1,4 @@
-package fr.bluecxt.core.dto
+package fr.bluecxt.core.tmdb.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
