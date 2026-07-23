@@ -29,11 +29,14 @@ import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.util.Collections.synchronizedMap
+import java.util.concurrent.ConcurrentHashMap
 
 class AnimeSama :
     Source(),
@@ -147,11 +150,7 @@ class AnimeSama :
         Log.d(ANIMESAMA_LOG, "getAnimeDetails: parsed link = '$link', newUrl = $newUrl, season = $season")
         if (!newUrl) return getLegacyAnimeDetails(anime)
 
-        val targetUrl = "$baseUrl$link"
-        Log.d(ANIMESAMA_LOG, "getAnimeDetails: fetching targetUrl = '$targetUrl'")
-        val document = getCachedDocument(link) ?: client.get(targetUrl, headers).asJsoup().also {
-            putCachedDocument(link, it)
-        }
+        val document = getOrFetchDocument(link)
 
         val medias = parseMedias(link, document, titles)
 
@@ -168,8 +167,8 @@ class AnimeSama :
             }
         }
 
-        anime.author = document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text() ?: ""
-        anime.genre = document.selectLog("div.genres-wrap > span").joinToString { it.text() }
+        if (anime.author.isNullOrEmpty()) anime.author = document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text() ?: ""
+        if (anime.genre.isNullOrEmpty()) anime.genre = document.selectLog("div.genres-wrap > span").joinToString { it.text() }
         val statusText = document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text() ?: ""
         anime.status = when (statusText) {
             "Terminé", "Sorti" -> SAnime.COMPLETED
@@ -207,11 +206,7 @@ class AnimeSama :
         if (!newUrl) return getLegacySeasonList(anime)
 
         val link = parsedUrl.url
-        val targetUrl = "$baseUrl$link"
-        Log.d(ANIMESAMA_LOG, "getSeasonList: fetching targetUrl = '$targetUrl'")
-        val document = getCachedDocument(link) ?: client.get(targetUrl, headers).asJsoup().also {
-            putCachedDocument(link, it)
-        }
+        val document = getOrFetchDocument(link)
 
         return parseMedias(link, document, parsedUrl.titles).parallelMap { media ->
             val rawSeason = media.season.orEmpty()
@@ -244,7 +239,12 @@ class AnimeSama :
         val (parsedUrl, newUrl) = urlParser(anime.url)
         if (!newUrl) return getLegacyEpisodeList(anime)
 
-        if (parsedUrl.url.count { it == '/' } == 2) {
+        val link = parsedUrl.url
+        val document = getOrFetchDocument(link)
+        val medias = parseMedias(link, document, parsedUrl.titles)
+        val isHub = (parsedUrl.season == null && medias.size > 1)
+
+        if (isHub) {
             return listOf(
                 SEpisode.create().apply {
                     url = ""
@@ -282,6 +282,23 @@ class AnimeSama :
             cleanSeason
         } else {
             fullCombined
+        }
+    }
+
+    private val documentMutexes = ConcurrentHashMap<String, Mutex>()
+
+    private suspend fun getOrFetchDocument(link: String): Document {
+        getCachedDocument(link)?.let { return it }
+
+        val mutex = documentMutexes.computeIfAbsent(link) { Mutex() }
+        return mutex.withLock {
+            getCachedDocument(link)?.let { return it }
+
+            val targetUrl = "$baseUrl$link"
+            client.get(targetUrl, headers).asJsoup().also { doc ->
+                putCachedDocument(link, doc)
+                documentMutexes.remove(link)
+            }
         }
     }
 
