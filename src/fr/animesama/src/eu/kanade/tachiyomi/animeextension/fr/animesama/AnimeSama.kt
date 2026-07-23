@@ -17,10 +17,12 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.network.ErrorWebhook
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
+import fr.bluecxt.core.tmdb.utils.fetchTmdbForPanel
+import fr.bluecxt.core.utils.normalize
+import fr.bluecxt.core.utils.safeRelativePath
 import fr.bluecxt.core.utils.selectFirstLog
 import fr.bluecxt.core.utils.selectLog
 import keiyoushi.utils.get
@@ -28,7 +30,6 @@ import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -82,7 +83,7 @@ class AnimeSama :
         url.addQueryParameter("annee_min", params.yearMin)
         url.addQueryParameter("annee_max", params.yearMax)
 
-        url.addQueryParameter("search", query)
+        url.addQueryParameter("search", query.trim())
         url.addQueryParameter("page", "$page")
 
         val document = client.get(url.build(), headers).asJsoup()
@@ -100,7 +101,12 @@ class AnimeSama :
 
             val link = anime.selectFirstLog("a")?.safeRelativePath() ?: return@mapNotNull null
             val realLink = link.split("/").take(3).joinToString("/")
-            val thumbnail = anime.selectLog("img:not(.ak-cta-flag)").attr("abs:src")
+            var thumbnail = anime.selectLog("img:not(.ak-cta-flag)").attr("abs:src")
+
+            if (thumbnail.contains("thumb/") && thumbnail.contains(".webp")) {
+                thumbnail = thumbnail.replace("thumb/", "").replace(".webp", ".jpg")
+            }
+
             val name = anime.selectFirstLog(".card-title, h2")?.text() ?: "unknown title"
             val names: Set<String> = buildSet {
                 add(name)
@@ -119,7 +125,7 @@ class AnimeSama :
             }
         }
         val lastPage = document.selectLog("#list_pagination a:last-child").text().toIntOrNull() ?: 0
-        val hasNextPage = if (lastPage != 0 && page < lastPage) true else false
+        val hasNextPage = lastPage != 0 && page < lastPage
         return AnimesPage(animes.distinctBy { it.url }, hasNextPage)
     }
 
@@ -163,7 +169,7 @@ class AnimeSama :
         }
 
         anime.author = document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text() ?: ""
-        anime.genre = document.selectLog("div.genres-wrap > span").map { it.text() }.joinToString()
+        anime.genre = document.selectLog("div.genres-wrap > span").joinToString { it.text() }
         val statusText = document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text() ?: ""
         anime.status = when (statusText) {
             "Terminé", "Sorti" -> SAnime.COMPLETED
@@ -172,25 +178,23 @@ class AnimeSama :
         }
 
         var year = document.selectFirst("div.info-grid > span:contains(Année) + .info-val")?.text()
-        var description = document.selectFirstLog("p#synopsisText")?.text() ?: ""
+        val description = document.selectFirstLog("p#synopsisText")?.text() ?: ""
 
-        val seasonNumber = if (season != null) extractSeasonNumber(season) ?: 1 else 1
+        val tmdbMetadata = fetchTmdbForPanel(anime.title, season, anime.title, titles)
 
-        val tmdbMetadata: TmdbMetadata? = titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, seasonNumber, if (isMovie) "movie" else null) }
         tmdbMetadata?.let { metadata ->
             if (anime.artist.isNullOrBlank()) anime.artist = metadata.artist
             if (anime.author.isNullOrBlank()) anime.author = metadata.author
             if (anime.genre.isNullOrBlank()) anime.genre = metadata.genre
             if (anime.status == SAnime.UNKNOWN) anime.status = metadata.status
-            anime.thumbnail_url = metadata.posterUrl
-            anime.background_url = metadata.posterUrl
+            // Preserve the season-specific poster when viewing a season or movie page
+            val targetPoster = if (season != null && !isHub) (metadata.seasonPosterUrl ?: metadata.mainPosterUrl) else metadata.mainPosterUrl
+            anime.thumbnail_url = targetPoster ?: anime.thumbnail_url
+            anime.background_url = metadata.mainPosterUrl
             if (year.isNullOrBlank() || metadata.releaseDate != null) year = metadata.releaseDate
         }
 
-        anime.description = buildString {
-            if (year != null) append("Date de sortie : $year\n")
-            append(description)
-        }
+        if (anime.description.isNullOrEmpty()) anime.description = buildDescription(description, year)
 
         return anime
     }
@@ -210,10 +214,9 @@ class AnimeSama :
         }
 
         return parseMedias(link, document, parsedUrl.titles).parallelMap { media ->
-            val seasonName = media.season!!.replace("Saison", "").replace("Partie", "part")
-            val fullTitle = "${anime.title} $seasonName"
-            val seasonNumber = extractSeasonNumber(media.season) ?: 1
-            val tmdbMetadata = fetchTmdbMetadata(anime.title, seasonNumber)
+            val rawSeason = media.season.orEmpty()
+            val fullTitle = formatSeasonTitle(anime.title, rawSeason, media.titles)
+            val tmdbMetadata = fetchTmdbForPanel(anime.title, rawSeason, fullTitle, media.titles)
 
             SAnime.create().apply {
                 title = fullTitle
@@ -222,7 +225,7 @@ class AnimeSama :
                     titles = parsedUrl.titles,
                     season = media.season,
                 ).toJsonString()
-                thumbnail_url = tmdbMetadata?.posterUrl ?: anime.thumbnail_url
+                thumbnail_url = tmdbMetadata?.seasonPosterUrl ?: tmdbMetadata?.mainPosterUrl ?: anime.thumbnail_url
 
                 description = tmdbMetadata?.summary
                 author = tmdbMetadata?.author
@@ -256,6 +259,31 @@ class AnimeSama :
     }
 
     // ============================== Utils ===============================
+
+    private fun formatSeasonTitle(seriesTitle: String, rawSeasonName: String, titles: Set<String>): String {
+        val cleanSeason = rawSeasonName.trim()
+
+        val normalizedSeason = cleanSeason.normalize()
+
+        if (titles.any { it.normalize() in normalizedSeason }) return cleanSeason
+
+        if (cleanSeason.equals("Saison 1", ignoreCase = true)) return seriesTitle
+
+        if (cleanSeason.matches(Regex("""(?i)^Saison\s*\d+.*"""))) {
+            val shortSeason = cleanSeason
+                .replace(Regex("""(?i)\s*Saison\s*"""), " ")
+                .replace(Regex("""(?i)Partie\s*(\d+)"""), "Part $1")
+                .trim()
+            return "$seriesTitle $shortSeason"
+        }
+
+        val fullCombined = "$seriesTitle $cleanSeason"
+        return if (fullCombined.length > 35 && !cleanSeason.startsWith("Film") && !cleanSeason.contains("OAV", ignoreCase = true)) {
+            cleanSeason
+        } else {
+            fullCombined
+        }
+    }
 
     private fun getCachedDocument(link: String): Document? {
         val cached = documentCache[link] ?: return null
@@ -320,7 +348,10 @@ class AnimeSama :
         "#containerSorties > div, #containerAjoutsAnimes > div, #containerJeudi > div, #akTrack > div",
     )
 
-    fun extractSeasonNumber(text: String): Int? = seasonNumberRegex.find(text)?.groupValues?.get(1)?.toIntOrNull()
+    private fun buildDescription(description: String, year: String?): String = buildString {
+        if (!year.isNullOrBlank()) append("Date de sortie : $year\n\n")
+        append(description)
+    }
 
     private fun sendWebhook(url: String, additionalContext: List<String>) = ErrorWebhook.sendWebhook(baseUrl, url, additionalContext)
 
@@ -328,7 +359,6 @@ class AnimeSama :
         const val PREFIX_SEARCH = "id:"
         private val commentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
         private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
-        private val seasonNumberRegex = Regex("""Saison\s*(\d+)""", RegexOption.IGNORE_CASE)
         private val documentCache = synchronizedMap(
             mutableMapOf<String, Pair<Document, Long>>(),
         )
