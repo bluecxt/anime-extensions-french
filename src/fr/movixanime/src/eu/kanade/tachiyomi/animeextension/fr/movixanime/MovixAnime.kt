@@ -18,8 +18,9 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.MOVIXANIME_LOG
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.filterSmartMetadata
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.filterSmartMetadata
 import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import kotlinx.serialization.encodeToString
@@ -303,7 +304,7 @@ class MovixAnime :
 
     override fun animeDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    private suspend fun fetchSmartTmdbMetadata(title: String, isMovieHint: Boolean = false): fr.bluecxt.core.TmdbMetadata? {
+    private suspend fun fetchSmartTmdbMetadata(title: String, isMovieHint: Boolean = false): TmdbMetadata? {
         if (title.isBlank()) return null
 
         val seasonRegex = Regex("""(?i)(.*?)\s+\b(?:Saison|Season)\b\s*(\d+)""")

@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString

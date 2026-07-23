@@ -12,8 +12,8 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.fetchTmdbMetadataById
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import fr.bluecxt.core.utils.withDefaultHeaders
 import okhttp3.Request
 

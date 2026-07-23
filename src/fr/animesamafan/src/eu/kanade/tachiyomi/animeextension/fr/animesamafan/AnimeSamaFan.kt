@@ -17,11 +17,11 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.CommonPreferences.Companion.PREF_URL_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.filterSmartMetadata
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.filterSmartMetadata
+import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import fr.bluecxt.core.utils.safeRelativePath
-import fr.bluecxt.core.sanitizeTitle
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl

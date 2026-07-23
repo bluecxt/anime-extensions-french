@@ -13,9 +13,9 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
 import fr.bluecxt.core.extractors.WaveplayerExtractor
-import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull

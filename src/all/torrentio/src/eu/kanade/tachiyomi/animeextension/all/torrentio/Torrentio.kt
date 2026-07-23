@@ -20,8 +20,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.fetchTmdbMetadataById
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request

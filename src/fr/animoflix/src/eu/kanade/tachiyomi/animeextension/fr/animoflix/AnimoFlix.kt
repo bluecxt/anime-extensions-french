@@ -16,9 +16,9 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.fetchTmdbMovieMetadata
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMovieMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -319,7 +319,7 @@ class AnimoFlix :
         tmdbMetadata?.releaseDate?.let { date ->
             anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
         }
-        tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
+        tmdbMetadata?.mainPosterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
         tmdbMetadata?.status?.let { anime.status = it }

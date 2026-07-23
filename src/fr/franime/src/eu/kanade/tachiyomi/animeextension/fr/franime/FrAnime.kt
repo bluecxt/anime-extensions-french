@@ -14,7 +14,8 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.CommonPreferences.Companion.PREF_VOICES_KEY
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -135,7 +136,7 @@ class FrAnime :
         animeData?.titlesAlt?.enJp?.let { if (it.isNotBlank()) searchQueries.add(it) }
         animeData?.titlesAlt?.jaJp?.let { if (it.isNotBlank()) searchQueries.add(it) }
 
-        var tmdbMetadata: fr.bluecxt.core.TmdbMetadata? = null
+        var tmdbMetadata: TmdbMetadata? = null
         for (query in searchQueries.distinct()) {
             tmdbMetadata = if (sNumFromUrl != null) fetchTmdbMetadata(query, sNumFromUrl) else fetchTmdbMetadata(query)
             if (tmdbMetadata != null) break
@@ -155,7 +156,7 @@ class FrAnime :
             append(synopsis ?: "")
         }.trim()
 
-        tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
+        tmdbMetadata?.mainPosterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
 
