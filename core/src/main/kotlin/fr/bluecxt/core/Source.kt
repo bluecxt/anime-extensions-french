@@ -57,6 +57,7 @@ abstract class Source :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
+        .set("Connection", "close")
 
     open val currentBaseUrl: String
         get() {
@@ -89,6 +90,12 @@ abstract class Source :
                 logUsage()
                 chain.proceed(chain.request())
             }.build()
+    }
+
+    val extractorClient: okhttp3.OkHttpClient by lazy {
+        client.newBuilder().apply {
+            interceptors().removeAll { it.javaClass.simpleName.contains("Cloudflare") }
+        }.build()
     }
 
     // ============================ Utils =============================
@@ -151,7 +158,7 @@ abstract class Source :
                 if (keiyoushi.core.BuildConfig.DEBUG) {
                     listOf(
                         ExtractedSource(
-                            url = "https://localhost/ratelimit",
+                            url = playerUrl,
                             quality = "Rate Limited: ${server.name}",
                         ),
                     )
@@ -163,7 +170,7 @@ abstract class Source :
                 if (keiyoushi.core.BuildConfig.DEBUG) {
                     listOf(
                         ExtractedSource(
-                            url = "https://localhost/error",
+                            url = playerUrl,
                             quality = e.message ?: e.javaClass.simpleName,
                         ),
                     )
@@ -176,7 +183,7 @@ abstract class Source :
             if (keiyoushi.core.BuildConfig.DEBUG) {
                 listOf(
                     ExtractedSource(
-                        url = "https://localhost/timeout",
+                        url = playerUrl,
                         quality = "Timeout (${EXTRACTOR_TIMEOUT}ms)",
                     ),
                 )
