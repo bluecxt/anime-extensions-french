@@ -11,12 +11,22 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 class SendvidExtractor(private val client: OkHttpClient, private val headers: Headers) {
-    private val playlistUtils by lazy { PlaylistUtils(client, headers) }
+    // TODO: TEMPORAIRE - Sendvid est instable / hors service.
+    // Retirer ce client spécifique avec timeout de 10s dès que Sendvid fonctionnera à nouveau correctement.
+    private val sendvidClient: OkHttpClient by lazy {
+        client.newBuilder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .build()
+    }
+    private val playlistUtils by lazy { PlaylistUtils(sendvidClient, headers) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val document = client.newCall(GET(url, headers)).awaitSuccess().asJsoup()
+        val document = sendvidClient.newCall(GET(url, headers)).awaitSuccess().asJsoup()
         val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: throw Exception("Could not find video source in Sendvid")
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
 
