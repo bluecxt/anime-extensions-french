@@ -2,131 +2,75 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDMOLY_LOG
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.safeRelativePath
-import keiyoushi.utils.commonEmptyHeaders
 import keiyoushi.utils.parallelCatchingFlatMap
-import keiyoushi.utils.useAsJsoup
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.selects.select
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import okhttp3.Response
 
 class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Headers.EMPTY) {
 
     companion object {
         const val BASE_URL = "https://vidmoly.biz"
 
-        private val sourcesRegex by lazy { Regex("""sources\s*:\s*(.+?]),""") }
+        private val sourcesRegex by lazy { Regex("""sources\s*:\s*(.+?]),""", RegexOption.DOT_MATCHES_ALL) }
         private val urlsRegex by lazy { Regex("""file\s*:\s*["'](.+?)["']""") }
+
+        const val VIDEO_DELETED = "h2:contains(Sorry)"
     }
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
     private val headers: Headers = headers.newBuilder()
-        .set("Origin", BASE_URL)
+        .set("User-Agent", DEFAULT_USER_AGENT)
         .set("Referer", "$BASE_URL/")
+        .set("Connection", "close")
         .build()
 
-    suspend fun videosFromUrl(iframeUrl: String, depth: Int = 0): List<ExtractedSource> = coroutineScope {
-        val backupUrl = BASE_URL + iframeUrl.safeRelativePath(BASE_URL)
+    suspend fun videosFromUrl(iframeUrl: String): List<ExtractedSource> {
+        val url = BASE_URL + iframeUrl.safeRelativePath(BASE_URL)
+        val realUrl = if (url.contains(".to")) url.replace(".to", ".biz") else url
+        Log.d(VIDMOLY_LOG, "Step 1: Fetching Vidmoly page from: $url | User-Agent: ${headers["User-Agent"]} | Referer: ${headers["Referer"]}")
 
-        val deferredOriginal = async {
-            runCatching { client.newCall(GET(iframeUrl, headers)).await() }.getOrNull()
+        val document = try {
+            client.newCall(GET(url, headers)).awaitSuccess().asJsoup()
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(VIDMOLY_LOG, "Step 1 Failed for $realUrl: ${e.javaClass.simpleName} - ${e.message}")
+            throw ExtractionException("Vidmoly timed out or failed for $realUrl: ${e.message}")
         }
 
-        val deferredBackup = async {
-            if (backupUrl != iframeUrl) {
-                runCatching { client.newCall(GET(backupUrl, headers)).await() }.getOrNull()
-            } else {
-                null
-            }
+        if (document.selectFirst(VIDEO_DELETED) != null || !document.location().contains(".html")) {
+            Log.d(VIDMOLY_LOG, "$realUrl Video non available")
+            throw ContentUnavailableException("Vidmoly: Video non available $realUrl")
         }
 
-        Log.d(VIDMOLY_LOG, "Step 1: Start request for $iframeUrl and $backupUrl")
-        val origAsync = async { fetchAndParse(deferredOriginal) }
-        val backAsync = async { fetchAndParse(deferredBackup) }
-
-        val orig = origAsync.await()
-        val back = backAsync.await()
-
-        val document = when {
-            orig?.selectFirst("div#loading") != null -> orig
-
-            back?.selectFirst("div#loading") != null -> back
-
-            orig?.selectFirst("h2:contains(Sorry)") != null -> {
-                Log.d(VIDMOLY_LOG, "$iframeUrl contains Sorry")
-                throw ContentUnavailableException("Vidmoly: Video officially not found (Sorry detected) for $iframeUrl")
-            }
-
-            back?.selectFirst("h2:contains(Sorry)") != null -> {
-                Log.d(VIDMOLY_LOG, "$backupUrl contains Sorry")
-                throw ContentUnavailableException("Vidmoly: Video officially not found (Sorry detected) for $backupUrl")
-            }
-
-            back != null -> back
-
-            orig != null -> orig
-
-            else -> {
-                Log.d(VIDMOLY_LOG, "Failed to get response for $iframeUrl and $backupUrl")
-                throw ExtractionException("Both sources returned null")
-            }
-        }
-
-        Log.d(VIDMOLY_LOG, "Step 3: HTML parsed, checking script for $iframeUrl")
         val script = document.selectFirst("script:containsData(sources)")?.data()
-        if (script == null) {
-            if (document.html().contains("Loading") && depth < 3) {
-                Log.d(VIDMOLY_LOG, "Bait detected, retrying (depth $depth) for $iframeUrl")
-                kotlinx.coroutines.delay(1000)
-                return@coroutineScope videosFromUrl(iframeUrl, depth + 1)
-            }
-            val fullHtml = document.html()
-            Log.d(VIDMOLY_LOG, "Could not find script for $iframeUrl. Full HTML: $fullHtml")
-            throw Exception("Vidmoly: Could not find player script (Title: ${document.title()}, Length: ${fullHtml.length})")
-        }
-        val sources = sourcesRegex.find(script)?.groupValues[1] ?: throw Exception("Vidmoly: Could not find sources in script")
+            ?: throw ExtractionException("Vidmoly: Could not find player script for $realUrl")
+
+        val sources = sourcesRegex.find(script)?.groupValues[1]
+            ?: throw ExtractionException("Vidmoly: Could not find sources in script for $realUrl")
+
         val urls = urlsRegex.findAll(sources)
             .mapNotNull { match -> match.groupValues[1].takeIf { it.isNotBlank() } }.toList()
 
-        if (urls.isEmpty()) throw Exception("Vidmoly: No video URLs found in sources")
+        if (urls.isEmpty()) throw ExtractionException("Vidmoly: No video URLs found in sources for $realUrl")
 
-        urls.parallelCatchingFlatMap { videoUrl ->
-            Log.d(VIDMOLY_LOG, "Step 4: Script found, extracting HLS playlist for $iframeUrl")
-            try {
-                playlistUtils.extractFromHls(
-                    videoUrl,
-                    masterHeaders = headers,
-                    videoHeaders = headers,
-                )
-            } catch (e: Exception) {
-                Log.e(VIDMOLY_LOG, "Error extracting HLS for $iframeUrl: ${e.message}")
-                throw e
-            }
-        }
-    }
+        Log.d(VIDMOLY_LOG, "Step 3: Script found (${urls.size} video URLs), extracting HLS playlists...")
 
-    private suspend fun fetchAndParse(deferred: Deferred<Response?>): org.jsoup.nodes.Document? = try {
-        val res = deferred.await()
-        if (res != null && (res.isSuccessful || res.code == 404)) {
-            res.use { it.asJsoup() }
-        } else {
-            res?.close()
-            null
+        return urls.parallelCatchingFlatMap { videoUrl ->
+            Log.d(VIDMOLY_LOG, "Step 4: Extracting HLS playlist for $videoUrl")
+            playlistUtils.extractFromHls(
+                videoUrl,
+                masterHeaders = headers,
+                videoHeaders = headers,
+            )
         }
-    } catch (e: Exception) {
-        null
     }
 }
