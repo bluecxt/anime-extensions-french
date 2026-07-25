@@ -37,7 +37,7 @@ val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 30000L else 60000L
  * Global semaphore to limit the number of concurrent extractions.
  * Prevents overwhelming video servers and local DNS/OkHttp connection pools.
  */
-private val extractionSemaphore = Semaphore(4)
+private val extractionSemaphore = Semaphore(10)
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
