@@ -2,7 +2,7 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
@@ -26,7 +26,16 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
     private val playlistUtils by lazy { PlaylistUtils(sendvidClient, headers) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val document = sendvidClient.newCall(GET(url, headers)).awaitSuccess().asJsoup()
+        val document = runCatching {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            sendvidClient.newCall(GET(url, headers)).await()
+        }.getOrElse {
+            throw ExtractionException("Timeout")
+        }.use { res ->
+            if (res.code == 404) throw ContentUnavailableException("Video non available (404) $url")
+            if (!res.isSuccessful) throw ExtractionException("failed for $url with ${res.code}: ${res.message}")
+            res.asJsoup()
+        }
         val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: throw Exception("Could not find video source in Sendvid")
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
 
