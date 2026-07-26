@@ -3,10 +3,15 @@ package fr.bluecxt.core.utils
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 /**
@@ -68,3 +73,12 @@ fun defaultHeaders(
  * Normalize a String by putting everything in lowercase and removing all the non latin letter
  */
 fun String.normalize(): String = this.lowercase().replace(Regex("""[^a-z0-9]"""), "")
+
+/**
+ * Convert a response to jsoup document with handling in the different error used in extractors
+ */
+fun Response.toDoc(url: String): Document = this.use { res ->
+    if (res.code == 404) throw ContentUnavailableException("Video non available (404) $url")
+    if (!res.isSuccessful) throw ExtractionException("failed for $url with ${res.code}: ${res.message}")
+    res.asJsoup()
+}
