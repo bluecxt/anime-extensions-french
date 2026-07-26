@@ -31,7 +31,9 @@ on:
       key_password:
         required: true
       tmdb_api:
-        required: false
+        required: true
+      tvdb_api:
+        required: true
 
 permissions:
   contents: write
@@ -82,6 +84,7 @@ jobs:
           KEY_STORE_PASSWORD: ${{ secrets.key_store_password }}
           KEY_PASSWORD: ${{ secrets.key_password }}
           TMDB_API: ${{ secrets.tmdb_api }}
+          TVDB_API: ${{ secrets.tvdb_api }}
         run: |
           ./gradlew ${{ inputs.gradle_task }} && ls ${{ inputs.apk_path }}
 

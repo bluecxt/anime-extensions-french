@@ -26,3 +26,4 @@ jobs:
       key_store_password: ${{ secrets.ALPHA_KEY_STORE_PASSWORD }}
       key_password: ${{ secrets.ALPHA_KEY_PASSWORD }}
       tmdb_api: ${{ secrets.TMDB_API }}
+      tvdb_api: ${{ secrets.TVDB_API }}
