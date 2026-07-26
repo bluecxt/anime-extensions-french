@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
-import android.util.Log
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -9,16 +8,12 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
-import fr.bluecxt.core.ANIMESAMA_LOG
-import fr.bluecxt.core.utils.safeRelativePath
-import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
 
 // a retirer en decembre 2026
 
@@ -140,7 +135,7 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
         }.awaitAll()
     }
 
-    val episodes = legacyPlayersToEpisodes(players, anime, "$seasonRootPath/", langValues)
+    val episodes = legacyPlayersToEpisodes(players)
     return if (movieIndex == null) episodes.reversed() else listOf(episodes[movieIndex])
 }
 
@@ -175,11 +170,8 @@ private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>
 
 private fun legacyPlayersToEpisodes(
     list: List<List<List<String>>>,
-    anime: SAnime,
-    animeUrlPath: String,
-    langValues: List<String>,
 ): List<SEpisode> {
-    val maxEpisodes = list.fold(0) { acc, it -> maxOf(acc, it.size) }
+    val maxEpisodes = list.fold(0) { acc, sublist -> maxOf(acc, sublist.size) }
     val episodes = mutableListOf<SEpisode>()
 
     for (i in 0 until maxEpisodes) {
