@@ -2,13 +2,44 @@ package fr.bluecxt.core.tmdb.utils
 
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbEpisodeGroupMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMovieMetadata
+import fr.bluecxt.core.utils.normalize
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 enum class PanelMediaType {
     MOVIE,
     SPIN_OFF,
     SEASON,
+}
+
+@Serializable
+data class TmdbOverrideEntry(
+    val tmdbSeason: Int? = null,
+    val episodeOffset: Int = 0,
+)
+
+@Serializable
+data class TmdbSeriesOverride(
+    val episodeGroupId: String? = null,
+    val seasons: Map<String, TmdbOverrideEntry> = emptyMap(),
+)
+
+private val overrideJson = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
+
+private val tmdbOverridesMap: Map<String, TmdbSeriesOverride> by lazy {
+    try {
+        val stream = Source::class.java.getResourceAsStream("/tmdb_overrides.json")
+        val content = stream?.bufferedReader()?.use { it.readText() } ?: "{}"
+        overrideJson.decodeFromString<Map<String, TmdbSeriesOverride>>(content)
+    } catch (_: Exception) {
+        emptyMap()
+    }
 }
 
 /**
@@ -21,7 +52,21 @@ suspend fun Source.fetchTmdbForPanel(
     fullTitle: String,
     titles: Set<String> = emptySet(),
 ): TmdbMetadata? {
-    val seasonNumber = rawSeasonName?.let { extractSeasonNumber(it) } ?: 1
+    val normTitle = seriesTitle.normalize()
+    val normSeason = rawSeasonName.orEmpty().normalize()
+
+    val seriesOverride = tmdbOverridesMap.entries.find { normTitle.contains(it.key.normalize()) }?.value
+    val overrideEntry = seriesOverride?.seasons?.entries?.find { normSeason.contains(it.key.normalize()) }?.value
+
+    val calculatedSeasonNumber = rawSeasonName?.let { extractSeasonNumber(it) } ?: 1
+    val seasonNumber = overrideEntry?.tmdbSeason ?: calculatedSeasonNumber
+    val episodeOffset = overrideEntry?.episodeOffset ?: 0
+
+    if (seriesOverride?.episodeGroupId != null) {
+        val groupResult = fetchTmdbEpisodeGroupMetadata(seriesOverride.episodeGroupId, seasonNumber)
+        if (groupResult != null) return groupResult
+    }
+
     val isMovie = rawSeasonName?.contains("Film", ignoreCase = true) == true || rawSeasonName?.contains("Movie", ignoreCase = true) == true
     val isSpinOff = rawSeasonName != null && extractSeasonNumber(rawSeasonName) == null && !isMovie
 
@@ -31,7 +76,7 @@ suspend fun Source.fetchTmdbForPanel(
         else -> PanelMediaType.SEASON
     }
 
-    return when (mediaType) {
+    val result = when (mediaType) {
         PanelMediaType.MOVIE -> {
             fetchTmdbMovieMetadata(seriesTitle)
                 ?: fetchTmdbMovieMetadata(fullTitle)
@@ -51,4 +96,6 @@ suspend fun Source.fetchTmdbForPanel(
                 ?: fetchTmdbMetadata(seriesTitle, seasonNumber)
         }
     }
+
+    return result?.copy(episodeOffset = episodeOffset)
 }

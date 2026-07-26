@@ -9,11 +9,14 @@ import fr.bluecxt.core.TMDB_LOG
 import fr.bluecxt.core.tmdb.dto.TmdbAlternativeTitlesResponse
 import fr.bluecxt.core.tmdb.dto.TmdbDetailResponse
 import fr.bluecxt.core.tmdb.dto.TmdbEpisodeDto
+import fr.bluecxt.core.tmdb.dto.TmdbEpisodeGroupResponse
+import fr.bluecxt.core.tmdb.dto.TmdbEpisodeGroupSeason
 import fr.bluecxt.core.tmdb.dto.TmdbSearchResponse
 import fr.bluecxt.core.tmdb.dto.TmdbSearchResult
 import fr.bluecxt.core.tmdb.dto.TmdbSeasonImagesResponse
 import fr.bluecxt.core.tmdb.dto.TmdbSeasonResponse
 import fr.bluecxt.core.tmdb.utils.calculateSimilarityScore
+import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import keiyoushi.core.BuildConfig
 import kotlinx.serialization.json.Json
@@ -429,6 +432,47 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
         }
     } catch (e: Exception) {
         Log.e(TMDB_LOG, "Error constructing metadata for id=$id, type=$mediaType, season=$season", e)
+        null
+    }
+}
+
+/**
+ * Fetches TMDB metadata using an explicit Episode Group ID.
+ */
+suspend fun Source.fetchTmdbEpisodeGroupMetadata(
+    episodeGroupId: String,
+    seasonNumber: Int = 1,
+    lang: String = "fr-FR",
+): TmdbMetadata? {
+    val groupUrl = "$TMDB_BASE_URL/tv/episode_group/$episodeGroupId?api_key=$TMDB_API_KEY&language=$lang"
+    return try {
+        val response = client.newCall(GET(groupUrl)).awaitSuccess().use { it.body.string() }
+        val groupDto = tmdbJson.decodeFromString<TmdbEpisodeGroupResponse>(response)
+
+        val targetGroup = groupDto.groups.find { it.order == seasonNumber }
+            ?: groupDto.groups.find { fr.bluecxt.core.tmdb.utils.extractSeasonNumber(it.name.orEmpty()) == seasonNumber }
+            ?: groupDto.groups.getOrNull(seasonNumber - 1)
+            ?: return null
+
+        val summaries = targetGroup.episodes.associate { ep ->
+            val still = ep.stillPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+            ep.episodeNumber to Triple(ep.name, still, ep.overview)
+        }
+
+        TmdbMetadata(
+            summary = targetGroup.name,
+            releaseDate = null,
+            mainPosterUrl = null,
+            seasonPosterUrl = null,
+            author = null,
+            artist = null,
+            status = 0,
+            genre = null,
+            episodeSummaries = summaries,
+            episodeOffset = 0,
+        )
+    } catch (e: Exception) {
+        Log.e(TMDB_LOG, "Failed to fetch episode group $episodeGroupId: ${e.message}")
         null
     }
 }

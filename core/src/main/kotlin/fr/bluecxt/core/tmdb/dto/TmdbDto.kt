@@ -108,3 +108,19 @@ internal data class TmdbPosterDto(
     @SerialName("file_path") val filePath: String? = null,
     @SerialName("iso_639_1") val iso6391: String? = null,
 )
+
+@Serializable
+internal data class TmdbEpisodeGroupResponse(
+    val id: String = "",
+    val name: String? = null,
+    val description: String? = null,
+    val groups: List<TmdbEpisodeGroupSeason> = emptyList(),
+)
+
+@Serializable
+internal data class TmdbEpisodeGroupSeason(
+    val id: String = "",
+    val name: String? = null,
+    val order: Int = 0,
+    val episodes: List<TmdbEpisodeDto> = emptyList(),
+)

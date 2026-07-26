@@ -18,4 +18,5 @@ data class TmdbMetadata(
     val status: Int,
     val genre: String? = null,
     val episodeSummaries: Map<Int, Triple<String?, String?, String?>>,
+    val episodeOffset: Int = 0,
 )
