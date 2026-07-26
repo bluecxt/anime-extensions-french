@@ -4,6 +4,8 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.ContentUnavailableException
+import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.defaultHeaders
@@ -11,6 +13,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 import java.util.concurrent.TimeUnit
 
 class SendvidExtractor(private val client: OkHttpClient, private val headers: Headers) {
@@ -26,10 +29,10 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
     private val playlistUtils by lazy { PlaylistUtils(sendvidClient, headers) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val document = runCatching {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+        val document: Document = runCatching {
             sendvidClient.newCall(GET(url, headers)).await()
-        }.getOrElse {
+        }.getOrElse { e ->
+            if (e is kotlinx.coroutines.CancellationException) throw e
             throw ExtractionException("Timeout")
         }.use { res ->
             if (res.code == 404) throw ContentUnavailableException("Video non available (404) $url")

@@ -265,11 +265,5 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         extractor = { url -> StreamDavExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
-    "Vidzy" -> VideoServer(
-        name = "Vidzy",
-        hosts = listOf("Vidzy.live"),
-        extractor = { url -> VidzyExtractor(source.extractorClient).videosFromUrl(url) },
-    )
-
     else -> null
 }
