@@ -48,7 +48,6 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
             Log.d(VIDMOLY_LOG, "$realUrl Video non available")
             throw ContentUnavailableException("Video non available (detected in DOM) $realUrl")
         }
-
         val script = document.selectFirst("script:containsData(sources)")?.data()
             ?: throw ExtractionException("Could not find player script for $realUrl")
 

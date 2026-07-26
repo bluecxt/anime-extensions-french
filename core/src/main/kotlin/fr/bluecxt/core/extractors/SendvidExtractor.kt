@@ -13,7 +13,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 import java.util.concurrent.TimeUnit
 
 class SendvidExtractor(private val client: OkHttpClient, private val headers: Headers) {
@@ -29,7 +28,7 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
     private val playlistUtils by lazy { PlaylistUtils(sendvidClient, headers) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val document: Document = runCatching {
+        val document = runCatching {
             sendvidClient.newCall(GET(url, headers)).await()
         }.getOrElse { e ->
             if (e is kotlinx.coroutines.CancellationException) throw e
