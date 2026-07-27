@@ -36,3 +36,4 @@ jobs:
       key_password: ${{ secrets.KEY_PASSWORD }}
       tmdb_api: ${{ secrets.TMDB_API }}
       tvdb_api: ${{ secrets.TVDB_API }}
+      webhook_url: ${{ secrets.WEBHOOK_URL }}
