@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.animeextension.fr.dessinanime
 
 import android.util.Log
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.CatalogueDto
 import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.SearchItemDto
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -22,6 +23,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -50,11 +52,71 @@ class DessinAnime :
 
     // =============================== Popular ===============================
 
-    override suspend fun getPopularAnime(page: Int): AnimesPage = parseAnimePage("$baseUrl/catalogue?sortField=popularity&page=$page".toHttpUrl())
+    private val paginationMapPopular = mutableMapOf<Int, String>()
+
+    override suspend fun getPopularAnime(page: Int): AnimesPage {
+        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/catalogue")
+
+        if (page == 1) {
+            paginationMapPopular.clear()
+        } else {
+            val cursor = paginationMapPopular[page]
+            if (cursor != null) {
+                urlBuilder.addQueryParameter("cursor", cursor)
+            }
+        }
+
+        val response = client.newCall(GET(urlBuilder.build(), headers)).awaitSuccess()
+
+        val jsonString = response.body.string()
+        val data: List<CatalogueDto> = jsonString.parseAs(json)
+
+        val animes = data.map { element ->
+            val animeUrl = "/${element.mediaType.lowercase()}/${element.slug}"
+            Log.d(DESSINANIME_LOG, "url = $animeUrl")
+            SAnime.create().apply {
+                title = element.title
+                url = animeUrl
+                thumbnail_url = element.posterPath
+            }
+        }
+
+        // Clause de sauvegarde basée sur la taille du lot (déduite du module 4819)
+        val hasNextPage = data.size == 36
+
+        if (hasNextPage) {
+            val lastElementId = data.last().id
+
+            // Verrouillage de l'état pour l'itération N+1
+            paginationMapPopular[page + 1] = lastElementId.toString()
+            Log.d(DESSINANIME_LOG, "page = $page lastId = $lastElementId, hasNextPage=$hasNextPage")
+        }
+        return AnimesPage(animes, hasNextPage)
+    }
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): AnimesPage = parseAnimePage("$baseUrl/catalogue?sortField=releaseDate&page=$page".toHttpUrl())
+    override suspend fun getLatestUpdates(page: Int): AnimesPage {
+        val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
+        val document = response.use { it.asJsoup() }.apply { resolveSuspense() }
+
+        val animes = document.select(
+            "div[data-slot=carousel]:contains(NOUVEAUX EPISODES) a.group, " +
+                "div[data-slot=carousel]:contains(NOUVEAUX AJOUTS (FILMS)) a.group",
+        ).mapNotNull { element ->
+            SAnime.create().apply {
+                url = element.safeRelativePath().ifBlank { null } ?: return@mapNotNull null
+
+                val rawImgSrc = element.selectFirst("img")?.attr("src")
+                thumbnail_url = rawImgSrc?.nextJsToDirectUrl() ?: POSTER_PLACEHOLDER
+
+                title = element.selectFirst("p")?.text() ?: ""
+            }
+        }
+
+        return AnimesPage(animes, false)
+    }
 
     // =============================== Search ===============================
 
@@ -106,6 +168,15 @@ class DessinAnime :
 
     // =============================== Utils ===============================
 
+    private fun String.nextJsToDirectUrl(): String = if (!this.contains("url=")) {
+        this
+    } else {
+        this.substringAfter("url=")
+            .replace("%3A", ":", ignoreCase = true)
+            .replace("%2F", "/", ignoreCase = true)
+            .substringBefore("&")
+    }
+
     private suspend fun parseAnimePage(pageUrl: HttpUrl): AnimesPage {
         val response = client.newCall(GET(pageUrl, headers)).awaitSuccess()
         val document = response.asJsoup().apply { resolveSuspense() }
@@ -131,6 +202,7 @@ class DessinAnime :
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         var document = response.body.string()
+        val soupClassic = parse(document)
         var soup = parse(document, "$baseUrl${anime.url}").apply { resolveSuspense() }
 
         val seasons = soup.select("a.bg-card")
@@ -177,7 +249,7 @@ class DessinAnime :
                 title = sTitle
                 url = sUrl
                 val poster = soup.selectFirst("a[href='$sUrl'] img")?.attr("abs:src") ?: ""
-                thumbnail_url = if (poster.isNotEmpty() && !poster.contains("null")) poster else anime.thumbnail_url
+                thumbnail_url = anime.thumbnail_url
                 status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else anime.status
                 coreSetFetchType(Episodes)
                 coreSetSeasonNumber(HUB_SEASON_NUMBER)
@@ -216,7 +288,7 @@ class DessinAnime :
                     }
                     url = link
                     summary = element.selectFirst("p.text-muted-foreground")?.text() ?: ""
-                    preview_url = element.selectFirst("img")?.attr("src") ?: ""
+                    preview_url = element.selectFirst("img")?.attr("src")?.nextJsToDirectUrl() ?: ""
                 }
             }
         } else {
@@ -226,7 +298,7 @@ class DessinAnime :
                 SEpisode.create().apply {
                     episode_number = 1F
                     name = "[Movie] ${anime.title}"
-                    preview_url = posterRegex.find(document)?.groupValues?.get(1)
+                    preview_url = posterRegex.find(document)?.groupValues?.get(1)?.nextJsToDirectUrl()
                     url = anime.url
                 },
             )

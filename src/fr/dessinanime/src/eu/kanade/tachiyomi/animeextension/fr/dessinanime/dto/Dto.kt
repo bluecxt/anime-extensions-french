@@ -9,3 +9,13 @@ data class SearchItemDto(
     val mediaType: String,
     val posterPath: String? = null,
 )
+
+@Serializable
+data class CatalogueDto(
+    val id: Int,
+    val slug: String,
+    val title: String,
+    val releaseYear: Int,
+    val posterPath: String,
+    val mediaType: String,
+)
