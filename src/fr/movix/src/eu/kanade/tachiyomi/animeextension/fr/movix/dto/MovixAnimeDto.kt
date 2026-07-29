@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.animeextension.fr.movixanime.dto
+package eu.kanade.tachiyomi.animeextension.fr.movix.dto
 
 import kotlinx.serialization.Serializable
 

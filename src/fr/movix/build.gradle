@@ -1,7 +1,7 @@
 ext {
     extName = 'Movix'
-    extClass = '.Movix'
-    extVersionCode = 6
+    extClass = '.MovixFactory'
+    extVersionCode = 7
     isNsfw = true
 }
 apply from: "$rootDir/common.gradle"

@@ -1,20 +1,18 @@
 package eu.kanade.tachiyomi.animeextension.fr.movix
 
 import android.util.Log
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.CpasmalRes
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.ImdbSeries
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixDramaResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixFstreamResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixImdbResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixMovieLinksResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixPlayerLink
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixPurstreamResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixTmdbResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixTvLinksResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixWiflixResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbDetailResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbMainResponse
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbResult
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbSeasonDetail
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -25,101 +23,14 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.MOVIX_LOG
-import fr.bluecxt.core.Source
-import fr.bluecxt.core.utils.withDefaultHeaders
+
 import keiyoushi.core.BuildConfig
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
 
-class Movix :
-    Source(),
-    CommonPreferences {
-
-    override val name = "Movix"
-
-    override val defaultBaseUrl = "https://movix.chat"
-
-    override val supportedServers = listOf(
-        "Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Dood", "Streamtape",
-        "Vidoza", "Voe", "Minochinos", "Embed4me", "Lulu", "Uqload",
-        "Okru", "Mymail", "Vidara", "Streamix",
-    )
-
-    override val defaultServer = "Vidmoly"
-
-    override val supportedVoices = arrayOf("VOSTFR", "VF", "VA")
-    override val lang = "fr"
-
-    override val supportsLatest = true
-
-    override val json: Json by injectLazy()
-
-    // ========================= URL DYNAMIQUE =========================
-
-    private var dynamicBaseUrl: String? = null
-
-    override val baseUrl: String
-        get() {
-            // Préférences toujours prioritaires sur le cache mémoire
-            val prefUrl = currentBaseUrl
-            if (!prefUrl.isNullOrEmpty() && prefUrl != "https://movix.online") {
-                dynamicBaseUrl = prefUrl
-                return prefUrl
-            }
-            // Cache mémoire si aucune préférence valide
-            dynamicBaseUrl?.let { return it }
-            // Auto-détection via movix.online
-            return fetchAndSaveRealUrl()
-        }
-
-    override val baseUrlSummary: String
-        get() = "Laissez vide pour trouver automatiquement le domaine actif via movix.online. Actuel: $baseUrl"
-
-    private fun fetchAndSaveRealUrl(): String = try {
-        val response = client.newCall(GET("https://movix.online/")).execute()
-        val html = response.body.string()
-        val regex = Regex("""La seule adresse active de Movix est <a href="(https://[^"]+)"""")
-        val match = regex.find(html)
-        if (match != null) {
-            val domain = match.groupValues[1].removeSuffix("/")
-            preferences.edit().putString(CommonPreferences.PREF_URL_KEY, domain).apply()
-            dynamicBaseUrl = domain
-            domain
-        } else {
-            defaultBaseUrl
-        }
-    } catch (e: Exception) {
-        defaultBaseUrl
-    }
-
-    private val domain: String
-        get() = baseUrl.toHttpUrl().host
-
-    private val apiUrl: String
-        get() = "https://api.$domain/api"
-
-    // ========================= HEADERS =========================
-
-    override fun headersBuilder() = super.headersBuilder()
-
-    private val apiHeaders
-        get() = headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .set("User-Agent", DEFAULT_USER_AGENT)
-            .removeAll("Origin")
-            .build()
+class Movix : BaseMovix("Movix") {
 
     // ========================= TMDB CONSTANTS =========================
 
@@ -127,10 +38,6 @@ class Movix :
     private val tmdbKey = BuildConfig.TMDB_API
     private val tmdbLang = "fr-FR"
     private val tmdbImg500 = "https://image.tmdb.org/t/p/w500"
-
-    companion object {
-        const val PREFIX_SEARCH = "id:"
-    }
 
     // ========================= POPULAR =========================
 
@@ -216,6 +123,13 @@ class Movix :
     override fun searchAnimeParse(response: Response) = throw UnsupportedOperationException()
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList) = throw UnsupportedOperationException()
 
+    // ========================= URL =========================
+
+    override fun getAnimeUrl(anime: SAnime): String {
+        val cleanUrl = anime.url.substringBefore("#")
+        return "$baseUrl/$cleanUrl"
+    }
+
     // ========================= DETAILS =========================
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
@@ -223,11 +137,9 @@ class Movix :
         val url = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
         val res = client.newCall(GET(url)).awaitSuccess()
         val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
-
-        anime.title = detail.title ?: detail.name ?: detail.originalTitle ?: detail.originalName ?: anime.title
         anime.description = buildString {
             val date = (detail.releaseDate ?: detail.firstAirDate)?.split("-")?.first()
-            if (!date.isNullOrBlank()) appendLine("📅 $date\n")
+            if (!date.isNullOrBlank()) append("Date de sortie : $date\n\n")
             if (!detail.overview.isNullOrBlank()) append(detail.overview)
         }
         anime.thumbnail_url = detail.posterPath?.let { "$tmdbImg500$it" } ?: anime.thumbnail_url
@@ -238,11 +150,56 @@ class Movix :
             "Canceled", "Ended" -> SAnime.COMPLETED
             else -> SAnime.UNKNOWN
         }
+
+        if (type == "tv") {
+            val seasonsCount = detail.seasons?.count { (it.seasonNumber ?: 0) > 0 } ?: 0
+            if (seasonsCount > 1) {
+                anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+            } else {
+                anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+            }
+        }
+
         anime.initialized = true
         return anime
     }
 
     override fun animeDetailsParse(response: Response) = throw UnsupportedOperationException()
+
+    // ========================= SEASONS =========================
+
+    override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
+        val (type, tmdbId) = parseAnimeUrl(anime.url)
+        if (type != "tv") return emptyList()
+
+        val url = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
+        val res = client.newCall(GET(url)).awaitSuccess()
+        val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
+
+        val seasons = detail.seasons?.filter { (it.seasonNumber ?: 0) > 0 } ?: return emptyList()
+
+        return seasons.mapIndexed { index, season ->
+            val sn = season.seasonNumber!!
+            val seasonTitle = if (sn > 1) {
+                "${anime.title} Saison $sn"
+            } else {
+                anime.title
+            }
+
+            SAnime.create().apply {
+                title = seasonTitle
+                this.url = "tv/$tmdbId#s$sn"
+                thumbnail_url = season.posterPath?.let { "$tmdbImg500$it" } ?: anime.thumbnail_url
+                description = anime.description
+                status = if (index < seasons.size - 1) SAnime.COMPLETED else anime.status
+
+                coreOptimizeDisplayTitle(this.title, anime.title)
+                coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+                coreSetSeasonNumber(-2.0)
+                initialized = true
+            }
+        }
+    }
 
     // ========================= EPISODES =========================
 
@@ -252,19 +209,26 @@ class Movix :
         if (type == "movie") {
             return listOf(
                 SEpisode.create().apply {
-                    name = anime.title
+                    name = "[Movie] ${anime.title}"
                     episode_number = 1f
                     url = anime.url
                 },
             )
         }
 
+        val specificSeasonStr = anime.url.substringAfter("#s", "").substringBefore("|")
+        val specificSeason = specificSeasonStr.toIntOrNull()
+
         // Séries : fetch saisons depuis TMDB
         val tmdbUrl = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
         val res = client.newCall(GET(tmdbUrl)).awaitSuccess()
         val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
 
-        val seasons = detail.seasons?.filter { (it.seasonNumber ?: 0) > 0 } ?: return emptyList()
+        var seasons = detail.seasons?.filter { (it.seasonNumber ?: 0) > 0 } ?: return emptyList()
+
+        if (specificSeason != null) {
+            seasons = seasons.filter { it.seasonNumber == specificSeason }
+        }
 
         return seasons.flatMap { season ->
             val sn = season.seasonNumber ?: return@flatMap emptyList()
@@ -275,12 +239,18 @@ class Movix :
                 seasonDetail.episodes?.map { ep ->
                     val en = ep.episodeNumber ?: 0
                     SEpisode.create().apply {
-                        name = if (!ep.name.isNullOrBlank() && !ep.name.matches(Regex("Episode \\d+"))) {
-                            "[S$sn] E$en - ${ep.name}"
-                        } else {
-                            "[S$sn] Episode $en"
+                        name = buildString {
+                            if (sn > 1) append("[S$sn] ")
+
+                            append("Épisode $en")
+
+                            val hasTitle = !ep.name.isNullOrBlank() && !ep.name.matches(Regex("(?i)Episode \\d+"))
+                            if (hasTitle) {
+                                append(" - ")
+                                append(ep.name)
+                            }
                         }
-                        episode_number = (sn * 1000 + en).toFloat()
+                        episode_number = (en).toFloat()
                         scanlator = "Saison $sn"
                         url = "tv/$tmdbId-$sn-$en"
                         preview_url = ep.stillPath?.let { "$tmdbImg500$it" }
@@ -305,8 +275,6 @@ class Movix :
         val ep = parts.getOrNull(2)
         val query = if (type == "tv" && season != null && ep != null) "?season=$season&episode=$ep" else ""
 
-        // On stocke uniquement le CHEMIN dans internalData pour que
-        // getVideoList puisse reconstruire l'URL depuis l'apiUrl courant (toujours frais)
         val endpoints = buildList {
             add(Hoster(hosterName = "Movix", internalData = "links/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
             add(Hoster(hosterName = "MovixTmdb", internalData = "tmdb/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
@@ -342,9 +310,8 @@ class Movix :
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val parts = hoster.internalData.split("|")
-        val apiPath = parts[0] // chemin seulement, ex: "links/movie/12345"
-        // L'URL est reconstruite depuis l'apiUrl courant (baseUrl toujours frais)
-        val targetUrl = "$apiUrl/$apiPath"
+        val apiPath = parts[0]
+        val targetUrl = "$apiUrl/api/$apiPath"
         val type = parts.getOrNull(1) ?: "movie"
         val episode = parts.getOrNull(4)
         val brand = hoster.hosterName
@@ -361,7 +328,6 @@ class Movix :
 
             var responseText = res.body.string()
 
-            // Suivre redirect manuel si nécessaire
             if (res.code in 301..302) {
                 val location = res.header("location")
                 if (!location.isNullOrBlank()) {
@@ -397,107 +363,14 @@ class Movix :
 
     // ========================= HELPERS =========================
 
-    private fun isValidResponse(response: String): Boolean {
-        val lower = response.lowercase()
-        return listOf("success", "player_links", "iframe_src", "series", "sources", "players", "links", "purstream_id", "wiflix")
-            .any { lower.contains(it) }
-    }
-
-    private fun extractLinks(brand: String, response: String, type: String, episode: String?): List<String> {
-        val links = mutableListOf<String>()
-        val fixedResponse = response.replace("\"players\":", "\"links\":")
-
-        when (brand) {
-            "Movix" -> {
-                if (type == "movie") {
-                    json.decodeFromString<MovixMovieLinksResponse>(response).data?.links?.let(links::addAll)
-                } else {
-                    json.decodeFromString<MovixTvLinksResponse>(response).data?.forEach { data ->
-                        data.links?.let(links::addAll)
-                    }
-                }
-            }
-
-            "MovixTmdb" -> {
-                json.decodeFromString<MovixTmdbResponse>(response).let { res ->
-                    res.playerLinks?.forEach { it.decodedUrl?.let(links::add) }
-                    res.currentEpisode?.playerLinks?.forEach { it.decodedUrl?.let(links::add) }
-                    res.iframeSrc?.let(links::add)
-                    res.currentEpisode?.iframeSrc?.let(links::add)
-                }
-            }
-
-            "IMDB" -> {
-                json.decodeFromString<MovixImdbResponse>(response).series?.forEach { series ->
-                    series.seasons?.forEach { season ->
-                        season.episodes?.filter {
-                            episode == null || it.number == episode || it.number?.toIntOrNull() == episode.toIntOrNull()
-                        }?.forEach { ep ->
-                            ep.versions?.values?.forEach { version ->
-                                version.players?.forEach { it.link?.let(links::add) }
-                            }
-                        }
-                    }
-                }
-            }
-
-            "FStream" -> {
-                json.decodeFromString<MovixFstreamResponse>(fixedResponse).let { res ->
-                    if (type == "movie") {
-                        res.links?.values?.flatten()?.forEach { it.url?.let(links::add) }
-                    } else {
-                        val target = res.episodes?.entries?.find {
-                            it.key == episode || it.key.toIntOrNull() == episode?.toIntOrNull()
-                        }?.value
-                        target?.languages?.values?.flatten()?.forEach { it.url?.let(links::add) }
-                    }
-                }
-            }
-
-            "Wiflix" -> {
-                json.decodeFromString<MovixWiflixResponse>(response).let { res ->
-                    if (type == "movie") {
-                        res.movie?.values?.flatten()?.forEach { it.url?.let(links::add) }
-                    } else {
-                        val epData = res.episodes?.entries?.find {
-                            it.key == episode || it.key.toIntOrNull() == episode?.toIntOrNull()
-                        }?.value
-                        epData?.vf?.forEach { it.url?.let(links::add) }
-                        epData?.vostfr?.forEach { it.url?.let(links::add) }
-                    }
-                }
-            }
-
-            "Cpasmal" -> {
-                json.decodeFromString<CpasmalRes>(fixedResponse).links?.values?.flatten()
-                    ?.forEach { it.url?.let(links::add) }
-            }
-
-            "Drama" -> {
-                json.decodeFromString<MovixDramaResponse>(response).data
-                    ?.forEach { it.link?.let(links::add) }
-            }
-
-            "Purstream" -> {
-                json.decodeFromString<MovixPurstreamResponse>(response).sources?.forEach { source ->
-                    source.url?.takeIf { it.isNotBlank() }?.let(links::add)
-                }
-            }
-        }
-
-        return links.distinct().filter { it.isNotBlank() }
-    }
-
     private fun parseAnimeUrl(url: String): Pair<String, String> {
-        // URL format: "movie/12345" ou "tv/12345-1-3"
         val type = if (url.startsWith("movie")) "movie" else "tv"
-        val tmdbId = url.substringAfter("/").substringBefore("-")
+        val cleanUrl = url.substringBefore("#")
+        val tmdbId = cleanUrl.substringAfter("/").substringBefore("-")
         return type to tmdbId
     }
 
-    // ========================= SANIME BUILDERS =========================
-
-    private fun eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbResult.toSAnime(type: String): SAnime? {
+    private fun TmdbResult.toSAnime(type: String): SAnime? {
         val titleText = title ?: name ?: originalTitle ?: originalName ?: return null
         val poster = (posterPath ?: backdropPath)?.let { "$tmdbImg500$it" }
         return SAnime.create().apply {

@@ -278,6 +278,8 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                 status = status,
                 genre = genre,
                 episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)),
+                tmdbId = id,
+                type = mediaType,
             )
         } else {
             val originalLang = detailDto.originalLanguage ?: "ja"
@@ -428,6 +430,8 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                 status = status,
                 genre = genre,
                 episodeSummaries = epMap,
+                tmdbId = id,
+                type = mediaType,
             )
         }
     } catch (e: Exception) {
