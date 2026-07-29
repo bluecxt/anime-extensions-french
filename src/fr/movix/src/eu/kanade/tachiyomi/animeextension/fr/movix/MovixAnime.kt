@@ -1,10 +1,9 @@
-package eu.kanade.tachiyomi.animeextension.fr.movixanime
+package eu.kanade.tachiyomi.animeextension.fr.movix
 
 import android.util.Log
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animeextension.fr.movixanime.dto.AnimeItem
-import eu.kanade.tachiyomi.animeextension.fr.movixanime.dto.TmdbDiscoverResponse
-import eu.kanade.tachiyomi.animeextension.fr.movixanime.dto.Top10Response
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.AnimeItem
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbDiscoverResponse
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.Top10Response
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -14,119 +13,17 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.MOVIXANIME_LOG
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.fetchTmdbMetadata
 import fr.bluecxt.core.filterSmartMetadata
-import fr.bluecxt.core.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
 
-class MovixAnime :
-    Source(),
-    CommonPreferences {
-
-    override val name = "Movix Anime"
-
-    override val defaultBaseUrl = "https://movix.chat"
-
-    override val supportedServers = listOf(
-        "Sendvid",
-        "Sibnet",
-        "Vidmoly",
-        "Filemoon",
-        "Dood",
-        "Streamtape",
-        "Vidoza",
-        "Voe",
-        "Minochinos",
-        "Embed4me",
-    )
-
-    override val defaultServer = "Vidmoly"
-
-    override val supportedVoices = arrayOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
-
-    override val defaultVoice = "VOSTFR"
-
-    override val supportedQualities = arrayOf("1080", "720", "480", "360")
-
-    override val baseUrlSummary: String
-        get() = "Laissez vide pour trouver automatiquement le domaine actif via movix.online. Actuel: $baseUrl"
-
-    private var dynamicBaseUrl: String? = null
-
-    override val baseUrl: String
-        get() {
-            if (dynamicBaseUrl != null) return dynamicBaseUrl!!
-
-            if (!currentBaseUrl.isNullOrEmpty() && currentBaseUrl != "https://movix.online") {
-                dynamicBaseUrl = currentBaseUrl
-                return dynamicBaseUrl!!
-            }
-
-            // If empty or explicitly set to the status page, fetch the real one
-            return fetchAndSaveRealUrl()
-        }
-
-    private fun fetchAndSaveRealUrl(): String {
-        try {
-            val response = client.newCall(GET("https://movix.online/")).execute()
-            val html = response.body.string()
-            val activeDomainRegex = Regex("""La seule adresse active de Movix est <a href="(https://[^"]+)"""")
-            val match = activeDomainRegex.find(html)
-
-            if (match != null) {
-                val newDomain = match.groupValues[1].removeSuffix("/")
-                preferences.edit().putString(CommonPreferences.PREF_URL_KEY, newDomain).apply()
-                dynamicBaseUrl = newDomain
-                return newDomain
-            }
-        } catch (e: Exception) {
-            // Ignore and fallback
-        }
-        return defaultBaseUrl
-    }
-
-    private val domain: String
-        get() = baseUrl.toHttpUrl().host
-
-    private val apiUrl: String
-        get() = "https://api.$domain"
-
-    override val lang = "fr"
-
-    override val supportsLatest = true
-
-    override val json: Json by injectLazy()
-
-    // Headers pour les pages du site (avec Origin/Referer)
-    override fun headersBuilder() = super.headersBuilder()
-
-    // Headers pour l'API — sans Origin pour éviter le CORS check côté serveur
-    private val apiHeaders
-        get() = headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .set("User-Agent", DEFAULT_USER_AGENT)
-            .removeAll("Origin")
-            .build()
+class MovixAnime : BaseMovix("Movix Anime") {
 
     private val animeCache = mutableMapOf<String, AnimeItem>()
-
-    companion object {
-        const val PREFIX_SEARCH = "id:"
-    }
 
     private fun getAnimeId(url: String): String = URLEncoder.encode(url, "UTF-8")
 
@@ -136,7 +33,6 @@ class MovixAnime :
         val response = client.newCall(GET("$apiUrl/api/top10/overview?type=anime", apiHeaders)).awaitSuccess()
         val data = json.decodeFromString<Top10Response>(response.body.string())
 
-        // We must fetch the real URL from Movix API to ensure getAnimeDetails works
         val animes = data.top10.parallelMap { item ->
             try {
                 val encodedQuery = URLEncoder.encode(item.title, "UTF-8").replace("+", "%20")
@@ -207,7 +103,9 @@ class MovixAnime :
         }.filterNotNull()
 
         return AnimesPage(animes, data.results.isNotEmpty())
-    } override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    }
+
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
     // ============================ Search ============================
@@ -219,7 +117,6 @@ class MovixAnime :
             val id = trimmedQuery.substring(PREFIX_SEARCH.length).trim()
             val decodedUrl = java.net.URLDecoder.decode(id, "UTF-8")
             val name = decodedUrl.split("/").filter { it.isNotBlank() }.last()
-            // DO NOT filter by targetUrl if the id is just the title (like from Popular/Latest)
             val target = if (decodedUrl.startsWith("http")) decodedUrl else null
             return fetchAndCache(name, target)
         }
@@ -249,6 +146,13 @@ class MovixAnime :
 
     override fun searchAnimeParse(response: Response) = throw UnsupportedOperationException()
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList) = throw UnsupportedOperationException()
+
+    // ============================ URL ============================
+
+    override fun getAnimeUrl(anime: SAnime): String {
+        val cleanUrl = anime.url.substringBefore("#").substringBefore("?")
+        return "$baseUrl$cleanUrl"
+    }
 
     // ============================ Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
@@ -495,14 +399,28 @@ class MovixAnime :
                 it.scanlator = "Season $seasonNumber"
                 Log.d(MOVIXANIME_LOG, "getEpisodeList: Mapped Episode ${it.name}, initial preview_url = ${it.preview_url}")
                 if (isMovie && season.episodes.size == 1) {
-                    it.name = "[Movie] $fullTitle".replace(" [Movie]", "") // On nettoie le nom pour n'avoir que le titre du film
+                    it.name = "[Movie] $fullTitle".replace(" [Movie]", "")
                     it.preview_url = tmdbMetadata?.posterUrl ?: it.preview_url
                     it.summary = tmdbMetadata?.summary ?: it.summary
-                    Log.d(MOVIXANIME_LOG, "getEpisodeList: Single-episode movie detected. Renamed to ${it.name}, Overrode preview_url with posterUrl = ${it.preview_url}")
                 } else if (isMovie && it.preview_url == null) {
                     it.preview_url = tmdbMetadata?.posterUrl
                     it.summary = tmdbMetadata?.summary
-                    Log.d(MOVIXANIME_LOG, "getEpisodeList: Overrode preview_url with posterUrl = ${it.preview_url}")
+                }
+
+                // Append TMDB tracking for Hosters
+                val epNum = it.episode_number.toInt()
+                val absEpNum = epNum + siteOffset
+                val isS0 = activeTmdbMeta != null && tmdbEpCount > 0 && absEpNum > tmdbEpCount
+
+                val finalTmdbS = if (isS0) 0 else tmdbSNum
+                val finalTmdbE = if (isS0) (absEpNum - tmdbEpCount) + oavOffset else absEpNum
+
+                val tmdbId = if (isS0) s0Metadata?.tmdbId ?: activeTmdbMeta?.tmdbId else activeTmdbMeta?.tmdbId
+                val tmdbType = if (isS0) s0Metadata?.type ?: activeTmdbMeta?.type else activeTmdbMeta?.type
+
+                if (tmdbId != null) {
+                    val finalType = tmdbType ?: if (isMovie) "movie" else "tv"
+                    it.url += "&tmdbId=$tmdbId&tmdbType=$finalType&tmdbS=$finalTmdbS&tmdbE=$finalTmdbE"
                 }
             }
             allEpisodes.addAll(mappedEpisodes)
@@ -513,37 +431,135 @@ class MovixAnime :
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val animeId = episode.url.substringBefore("?").substringAfter("/anime/")
-        val sIdx = episode.url.substringAfter("?s=").substringBefore("&").toInt()
-        val eIdx = episode.url.substringAfter("&e=").toInt()
+        val queryParams = episode.url.substringAfter("?", "")
+        val sIdx = queryParams.substringAfter("s=").substringBefore("&").toIntOrNull() ?: return emptyList()
+        val eIdx = queryParams.substringAfter("e=").substringBefore("&").toIntOrNull() ?: return emptyList()
 
         val item = animeCache[animeId] ?: return emptyList()
-        val epData = item.seasons[sIdx].episodes[eIdx]
+        val epData = item.seasons.getOrNull(sIdx)?.episodes?.getOrNull(eIdx) ?: return emptyList()
 
-        return epData.streaming_links.map { link ->
-            Hoster(
-                hosterName = link.language.uppercase(),
-                internalData = json.encodeToString(link.players) + "|" + link.language.uppercase(),
+        val endpoints = mutableListOf<Hoster>()
+
+        // 1. Native Anime Hosters
+        epData.streaming_links.forEach { link ->
+            endpoints.add(
+                Hoster(
+                    hosterName = link.language.uppercase(),
+                    internalData = json.encodeToString(link.players) + "|" + link.language.uppercase(),
+                ),
             )
         }
+
+        // 2. Movix Hosters
+        val tmdbId = queryParams.substringAfter("tmdbId=", "").substringBefore("&").takeIf { it.isNotBlank() }
+        val tmdbType = queryParams.substringAfter("tmdbType=", "").substringBefore("&").takeIf { it.isNotBlank() }
+        val tmdbS = queryParams.substringAfter("tmdbS=", "").substringBefore("&").takeIf { it.isNotBlank() }
+        val tmdbE = queryParams.substringAfter("tmdbE=", "").substringBefore("&").takeIf { it.isNotBlank() }
+
+        if (tmdbId != null && tmdbType != null && tmdbS != null && tmdbE != null) {
+            val type = tmdbType
+            val season = tmdbS
+            val ep = tmdbE
+            val query = if (type == "tv") "?season=$season&episode=$ep" else ""
+
+            endpoints.add(Hoster(hosterName = "Movix", internalData = "links/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
+            endpoints.add(Hoster(hosterName = "MovixTmdb", internalData = "tmdb/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
+            endpoints.add(Hoster(hosterName = "IMDB", internalData = "imdb/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
+            if (type == "movie") {
+                endpoints.add(Hoster(hosterName = "FStream", internalData = "fstream/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
+                endpoints.add(Hoster(hosterName = "Wiflix", internalData = "wiflix/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
+                endpoints.add(Hoster(hosterName = "Cpasmal", internalData = "cpasmal/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
+            } else {
+                endpoints.add(Hoster(hosterName = "FStream", internalData = "fstream/$type/$tmdbId/season/$season|$type|$tmdbId|$season|$ep"))
+                endpoints.add(Hoster(hosterName = "Wiflix", internalData = "wiflix/$type/$tmdbId/$season|$type|$tmdbId|$season|$ep"))
+                endpoints.add(Hoster(hosterName = "Cpasmal", internalData = "cpasmal/$type/$tmdbId/$season/$ep|$type|$tmdbId|$season|$ep"))
+                endpoints.add(Hoster(hosterName = "Drama", internalData = "drama/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
+            }
+            endpoints.add(
+                Hoster(
+                    hosterName = "Purstream",
+                    internalData = if (type == "movie") {
+                        "purstream/movie/$tmdbId/stream|$type|$tmdbId|$season|$ep"
+                    } else {
+                        "purstream/tv/$tmdbId/stream$query|$type|$tmdbId|$season|$ep"
+                    },
+                ),
+            )
+        }
+
+        return endpoints
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         Log.d(MOVIXANIME_LOG, "getVideoList START for hoster: ${hoster.hosterName}")
         val data = hoster.internalData.split("|")
-        val players = json.decodeFromString<List<String>>(data[0])
-        Log.d(MOVIXANIME_LOG, "Raw players list: $players")
-        val langLabel = data[1]
 
-        return players.parallelMap { playerUrl ->
-            try {
-                extractVideos(playerUrl, lang = langLabel, allowedServers = supportedServers)
-            } catch (e: Exception) {
-                Log.d(MOVIXANIME_LOG, "Exception extracting $playerUrl : ${e.message}")
-                emptyList()
+        // 1. Native API Link
+        if (data[0].startsWith("[")) {
+            val players = json.decodeFromString<List<String>>(data[0])
+            Log.d(MOVIXANIME_LOG, "Raw players list: $players")
+            val langLabel = data[1]
+
+            return players.parallelMap { playerUrl ->
+                try {
+                    extractVideos(playerUrl, lang = langLabel, allowedServers = supportedServers)
+                } catch (e: Exception) {
+                    Log.d(MOVIXANIME_LOG, "Exception extracting $playerUrl : ${e.message}")
+                    emptyList()
+                }
+            }.flatten().distinctBy { it.videoUrl }.also { videos ->
+                val logMessage = videos.joinToString { v -> "${v.videoTitle} -> ${v.videoUrl}" }
+                Log.d(MOVIXANIME_LOG, "Final sorted videos list: [$logMessage]")
             }
-        }.flatten().distinctBy { it.videoUrl }.also { videos ->
-            val logMessage = videos.joinToString { v -> "${v.videoTitle} -> ${v.videoUrl}" }
-            Log.d(MOVIXANIME_LOG, "Final sorted videos list: [$logMessage]")
+        }
+
+        // 2. Movix Endpoint Link
+        val apiPath = data[0]
+        val targetUrl = "$apiUrl/api/$apiPath"
+        val type = data.getOrNull(1) ?: "movie"
+        val episode = data.getOrNull(4)
+        val brand = hoster.hosterName
+
+        Log.d(MOVIXANIME_LOG, "[$brand] → $targetUrl")
+
+        return try {
+            val res = client.newCall(
+                okhttp3.Request.Builder()
+                    .url(targetUrl)
+                    .headers(apiHeaders)
+                    .build(),
+            ).awaitSuccess()
+
+            var responseText = res.body.string()
+
+            if (res.code in 301..302) {
+                val location = res.header("location")
+                if (!location.isNullOrBlank()) {
+                    responseText = client.newCall(
+                        okhttp3.Request.Builder().url(location).headers(apiHeaders).build(),
+                    ).awaitSuccess().body.string()
+                }
+            }
+
+            if (!isValidResponse(responseText)) {
+                Log.d(MOVIXANIME_LOG, "[$brand] Réponse invalide")
+                return emptyList()
+            }
+
+            val links = extractLinks(brand, responseText, type, episode)
+            Log.d(MOVIXANIME_LOG, "[$brand] ${links.size} liens trouvés")
+
+            links.parallelMap { link ->
+                try {
+                    extractVideos(link, lang = null, allowedServers = supportedServers)
+                } catch (e: Exception) {
+                    Log.d(MOVIXANIME_LOG, "[$brand] Erreur extraction $link: ${e.message}")
+                    emptyList()
+                }
+            }.flatten().distinctBy { it.videoUrl }
+        } catch (e: Exception) {
+            Log.d(MOVIXANIME_LOG, "[$brand] Erreur: ${e.message}")
+            emptyList()
         }
     }
 }

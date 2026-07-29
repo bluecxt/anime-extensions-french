@@ -1,7 +1,0 @@
-ext {
-    extName = 'Movix Anime'
-    extClass = '.MovixAnime'
-    extVersionCode = 1
-    isNsfw = true
-}
-apply from: "$rootDir/common.gradle"
