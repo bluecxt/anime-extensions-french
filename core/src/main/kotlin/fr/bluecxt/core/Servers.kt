@@ -90,7 +90,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidmoly" -> VideoServer(
         name = "Vidmoly",
-        hosts = listOf("vidmoly.me", "vidmoly.to", "vidmoly.biz", "vidmoly.net"),
+        hosts = listOf("vidmoly.me", "vidmoly.to", "vidmoly.biz", "vidmoly.net", "ansembed.net"),
         extractor = { url -> VidmolyExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
     )
 

@@ -36,7 +36,7 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
 
     suspend fun videosFromUrl(iframeUrl: String): List<ExtractedSource> {
         val url = BASE_URL + iframeUrl.safeRelativePath(BASE_URL)
-        val realUrl = if (url.contains(".to")) url.replace(".to", ".biz") else url
+        val realUrl = if (url.contains("vidmoly.to")) url.replace("vidmoly.to", "vidmoly.biz") else url
 
         Log.d(VIDMOLY_LOG, "Fetching Vidmoly page from: $url")
 
