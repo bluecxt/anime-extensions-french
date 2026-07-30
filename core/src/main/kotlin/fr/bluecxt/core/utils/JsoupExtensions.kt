@@ -1,6 +1,6 @@
 package fr.bluecxt.core.utils
 
-import fr.bluecxt.core.network.ErrorWebhook
+import fr.bluecxt.core.monitoring.ErrorWebhook
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 
