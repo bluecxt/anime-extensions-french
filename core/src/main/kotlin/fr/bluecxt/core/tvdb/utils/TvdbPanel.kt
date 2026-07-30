@@ -43,6 +43,7 @@ suspend fun Source.fetchTvdbForPanel(
     rawSeasonName: String?,
     fullTitle: String,
     titles: Set<String> = emptySet(),
+    isMovie: Boolean = false,
 ): TvdbMetadata? {
     val normTitle = seriesTitle.normalize()
     val normSeason = rawSeasonName.orEmpty().normalize()
@@ -54,15 +55,32 @@ suspend fun Source.fetchTvdbForPanel(
     val seasonNumber = overrideEntry?.tvdbSeason ?: calculatedSeasonNumber
     val episodeOffset = overrideEntry?.episodeOffset ?: 0
 
-    val candidateTitles = buildList {
-        addAll(titles)
-        add(seriesTitle)
-        add(fullTitle)
-    }.map { sanitizeTitle(it) }
+    // 1. Try Primary Titles first (seriesTitle & fullTitle)
+    val primaryTitles = listOf(sanitizeTitle(seriesTitle), sanitizeTitle(fullTitle))
         .filter { it.isNotBlank() }
         .distinct()
 
-    val result = candidateTitles.firstNotNullOfOrNull { fetchTvdbMetadata(it, seasonNumber) }
+    val primaryResults = primaryTitles.mapNotNull { title ->
+        fetchTvdbMetadata(title, seasonNumber, isMovie = isMovie)
+    }
+
+    val bestPrimary = primaryResults.maxByOrNull { it.matchScore }
+    if (bestPrimary != null && bestPrimary.matchScore >= 60) {
+        return bestPrimary.copy(episodeOffset = episodeOffset)
+    }
+
+    // 2. Fallback to Secondary Titles only if primary score is < 60
+    val minLen = if (seriesTitle.length <= 4) seriesTitle.length else 4
+    val secondaryTitles = titles.map { sanitizeTitle(it) }
+        .filter { it.isNotBlank() && it.length >= minLen && !primaryTitles.contains(it) }
+        .distinct()
+
+    val secondaryResults = secondaryTitles.take(5).mapNotNull { title ->
+        fetchTvdbMetadata(title, seasonNumber, isMovie = isMovie)
+    }
+
+    val allCandidates = primaryResults + secondaryResults
+    val result = allCandidates.maxByOrNull { it.matchScore } ?: bestPrimary
 
     return result?.copy(episodeOffset = episodeOffset)
 }

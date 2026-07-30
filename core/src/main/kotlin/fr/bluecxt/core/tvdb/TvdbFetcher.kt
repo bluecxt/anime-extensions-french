@@ -13,7 +13,8 @@ import fr.bluecxt.core.tvdb.dto.TvdbAuthResponse
 import fr.bluecxt.core.tvdb.dto.TvdbEpisodesResponse
 import fr.bluecxt.core.tvdb.dto.TvdbExtendedResponse
 import fr.bluecxt.core.tvdb.dto.TvdbSearchResponse
-import fr.bluecxt.core.tvdb.dto.TvdbTranslationResponse
+import fr.bluecxt.core.tvdb.dto.TvdbSearchResult
+import fr.bluecxt.core.utils.normalize
 import keiyoushi.core.BuildConfig
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -110,9 +111,10 @@ suspend fun Source.fetchTvdbMetadata(
     season: Int = 1,
     lang: String = "fra",
     apiKey: String = DEFAULT_TVDB_API_KEY,
+    isMovie: Boolean = false,
 ): TvdbMetadata? {
     val sanitizedTitle = sanitizeTitle(title)
-    val cacheKey = "$sanitizedTitle:$season:$lang"
+    val cacheKey = "$sanitizedTitle:$season:$lang:$isMovie"
 
     // 1. Check in-memory cache
     val cached = tvdbMetadataCache[cacheKey]
@@ -130,53 +132,87 @@ suspend fun Source.fetchTvdbMetadata(
         }
 
         val searchUrl = "$TVDB_BASE_URL/search?q=${URLEncoder.encode(sanitizedTitle, "UTF-8")}"
-        Log.d(TVDB_LOG, "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title')")
+        Log.d(TVDB_LOG, "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title', isMovie=$isMovie)")
 
-        val (tvdbId, posterUrl, isMovie, frenchOverview) = try {
+        val searchData = try {
             val response = executeTvdbRequest(searchUrl, apiKey) ?: return@withLock null
             val searchDto = tvdbJson.decodeFromString<TvdbSearchResponse>(response)
-            val jpnResult = searchDto.data.find { it.primaryLanguage == "jpn" || it.country == "jpn" }
-                ?: searchDto.data.firstOrNull()
+
+            val targetType = if (isMovie) "movie" else "series"
+            val typeFiltered = searchDto.data.filter { it.type == targetType }
+            val candidatePool = if (typeFiltered.isNotEmpty()) typeFiltered else searchDto.data.filter { it.type == "series" || it.type == "movie" }.ifEmpty { searchDto.data }
+
+            val jpnResult = candidatePool.maxByOrNull { scoreTvdbResult(it, sanitizedTitle) }
+                ?: candidatePool.firstOrNull()
                 ?: run {
                     Log.w(TVDB_LOG, "TVDB Search returned 0 results for '$sanitizedTitle'")
                     return@withLock null
                 }
+            val bestScore = scoreTvdbResult(jpnResult, sanitizedTitle)
             val id = jpnResult.tvdbId.ifBlank { jpnResult.objectId.substringAfter("-") }
             val poster = jpnResult.imageUrl?.takeIf { it.isNotBlank() }?.let {
                 if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
             }
+            val officialTitle = jpnResult.translations["fra"] ?: jpnResult.name
             val movieType = jpnResult.type == "movie" || jpnResult.objectId.startsWith("movie-")
             val overview = jpnResult.overviews[lang] ?: jpnResult.overview
-            Quadruple(id, poster, movieType, overview)
+            val releaseDate = jpnResult.firstAirTime?.takeIf { it.isNotBlank() } ?: jpnResult.year?.takeIf { it.isNotBlank() }
+            TvdbSearchResultData(
+                id = id,
+                title = officialTitle,
+                posterUrl = poster,
+                isMovie = movieType,
+                overview = overview,
+                releaseDate = releaseDate,
+                score = bestScore,
+                status = jpnResult.status,
+            )
         } catch (e: Exception) {
             Log.e(TVDB_LOG, "TVDB Search failed for '$sanitizedTitle': ${e.message}")
             return@withLock null
         }
 
-        Log.d(TVDB_LOG, "TVDB Search found tvdbId='$tvdbId', isMovie=$isMovie, posterUrl='$posterUrl'")
+        val tvdbId = searchData.id
+        val tvdbTitle = searchData.title
+        val posterUrl = searchData.posterUrl
+        val isMovieResolved = searchData.isMovie
+        val frenchOverview = searchData.overview
+        val tvdbReleaseDate = searchData.releaseDate
+        val tvdbMatchScore = searchData.score
 
-        val mediaType = if (isMovie) "movies" else "series"
+        Log.d(TVDB_LOG, "TVDB Search found tvdbId='$tvdbId', title='$tvdbTitle', isMovie=$isMovieResolved, posterUrl='$posterUrl'")
 
-        // Fetch Extended Details for backdrop image
+        val mediaType = if (isMovieResolved) "movies" else "series"
+
+        // Fetch Extended Details for backdrop image, status, season poster, genres and studios/companies
         val extendedUrl = "$TVDB_BASE_URL/$mediaType/$tvdbId/extended"
-        val backdropUrl = try {
+        var backdropUrl: String? = null
+        var tvdbStatusName: String? = null
+        var seasonPosterUrl: String? = null
+        var tvdbGenres: String? = null
+        var tvdbCompanies: String? = null
+
+        try {
             val response = executeTvdbRequest(extendedUrl, apiKey)
             if (response != null) {
                 val extDto = tvdbJson.decodeFromString<TvdbExtendedResponse>(response)
-                extDto.data?.artworks?.find { it.type == 3 || it.type == 15 }?.image?.takeIf { it.isNotBlank() }?.let {
+                backdropUrl = extDto.data?.artworks?.find { it.type == 15 || it.type == 14 || it.type == 3 }?.image?.takeIf { it.isNotBlank() }?.let {
                     if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                 }
-            } else {
-                null
+                tvdbStatusName = extDto.data?.status?.name ?: extDto.data?.status?.recordType
+                seasonPosterUrl = extDto.data?.seasons?.find { it.number == season }?.image?.takeIf { it.isNotBlank() }?.let {
+                    if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
+                }
+                tvdbGenres = extDto.data?.genres?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.joinToString(", ")?.takeIf { it.isNotBlank() }
+                tvdbCompanies = extDto.data?.companies?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.distinct()?.joinToString(", ")?.takeIf { it.isNotBlank() }
             }
-        } catch (_: Exception) {
-            null
-        }
+        } catch (_: Exception) {}
 
         // Fetch Episodes (up to 3 pages) for series
         val epMap = mutableMapOf<Int, Triple<String?, String?, String?>>()
+        var seasonReleaseDate: String? = null
 
-        if (!isMovie) {
+        if (!isMovieResolved) {
             for (page in 0..2) {
                 val episodesUrl = "$TVDB_BASE_URL/series/$tvdbId/episodes/default/$lang?page=$page"
                 try {
@@ -186,10 +222,14 @@ suspend fun Source.fetchTvdbMetadata(
                     if (episodes.isEmpty()) break
 
                     val seasonEps = episodes.filter { it.seasonNumber == season }
+                    if (seasonReleaseDate == null) {
+                        seasonReleaseDate = seasonEps.firstOrNull { !it.aired.isNullOrBlank() }?.aired
+                    }
+
                     for (ep in seasonEps) {
                         val epNum = ep.number
                         if (epNum > 0 && !epMap.containsKey(epNum)) {
-                            val fullImgUrl = ep.image?.takeIf { it.isNotBlank() }?.let {
+                            val fullImgUrl = ep.episodeImage?.let {
                                 if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                             }
                             epMap[epNum] = Triple(ep.name, fullImgUrl, ep.overview)
@@ -201,20 +241,24 @@ suspend fun Source.fetchTvdbMetadata(
             }
         }
 
-        Log.d(TVDB_LOG, "TVDB fetched ${epMap.size} episodes for season $season, backdropUrl=$backdropUrl")
+        val finalStatus = parseTvdbStatus(tvdbStatusName ?: searchData.status)
+
+        Log.d(TVDB_LOG, "TVDB fetched ${epMap.size} episodes for season $season, backdropUrl=$backdropUrl, seasonPosterUrl=$seasonPosterUrl, seasonReleaseDate=$seasonReleaseDate, status=$finalStatus")
 
         val metadata = TvdbMetadata(
+            title = tvdbTitle,
             summary = frenchOverview,
-            releaseDate = null,
+            releaseDate = seasonReleaseDate ?: tvdbReleaseDate,
             mainPosterUrl = posterUrl,
-            seasonPosterUrl = posterUrl,
+            seasonPosterUrl = seasonPosterUrl ?: posterUrl,
             backdropUrl = backdropUrl,
-            author = null,
+            author = tvdbCompanies,
             artist = null,
-            status = 0,
-            genre = null,
+            status = finalStatus,
+            genre = tvdbGenres,
             episodeSummaries = epMap,
             episodeOffset = 0,
+            matchScore = tvdbMatchScore,
         )
 
         tvdbMetadataCache[cacheKey] = Pair(metadata, System.currentTimeMillis())
@@ -222,9 +266,61 @@ suspend fun Source.fetchTvdbMetadata(
     }
 }
 
-private data class Quadruple<A, B, C, D>(
-    val first: A,
-    val second: B,
-    val third: C,
-    val fourth: D,
+private data class TvdbSearchResultData(
+    val id: String,
+    val title: String?,
+    val posterUrl: String?,
+    val isMovie: Boolean,
+    val overview: String?,
+    val releaseDate: String?,
+    val score: Int = 0,
+    val status: String? = null,
 )
+
+private fun parseTvdbStatus(statusStr: String?): Int {
+    val norm = statusStr.orEmpty().lowercase()
+    return when {
+        norm.contains("continuing") || norm.contains("air-dated") || norm.contains("ongoing") || norm.contains("in production") -> 1
+        norm.contains("ended") || norm.contains("released") || norm.contains("completed") -> 2
+        else -> 0
+    }
+}
+
+private fun scoreTvdbResult(result: TvdbSearchResult, query: String): Int {
+    val normQuery = query.normalize()
+    val candidateTitles = buildList {
+        result.name?.let { add(it) }
+        result.translations["fra"]?.let { add(it) }
+        result.translations["eng"]?.let { add(it) }
+        result.slug?.let { add(it) }
+        addAll(result.aliases)
+    }.map { it.normalize() }.filter { it.isNotBlank() }
+
+    if (candidateTitles.isEmpty() || normQuery.isBlank()) return 0
+
+    var maxScore = 0
+
+    for (candidate in candidateTitles) {
+        var currentScore = 0
+        when {
+            candidate == normQuery -> currentScore += 100
+
+            candidate.contains(normQuery) || normQuery.contains(candidate) -> {
+                val longer = maxOf(candidate.length, normQuery.length)
+                val shorter = minOf(candidate.length, normQuery.length)
+                val ratio = shorter.toDouble() / longer
+                currentScore += (85 * ratio).toInt()
+            }
+        }
+
+        if (currentScore > maxScore) {
+            maxScore = currentScore
+        }
+    }
+
+    if (result.primaryLanguage == "jpn" || result.country == "jpn") {
+        maxScore += 15
+    }
+
+    return maxScore
+}

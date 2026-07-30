@@ -4,6 +4,7 @@ package fr.bluecxt.core.tvdb
  * Cleaned metadata model consumed by extensions for TVDB.
  */
 data class TvdbMetadata(
+    val title: String? = null,
     val summary: String?,
     val releaseDate: String?,
     val mainPosterUrl: String?,
@@ -15,4 +16,5 @@ data class TvdbMetadata(
     val genre: String? = null,
     val episodeSummaries: Map<Int, Triple<String?, String?, String?>>,
     val episodeOffset: Int = 0,
+    val matchScore: Int = 0,
 )
