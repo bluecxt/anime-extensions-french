@@ -19,6 +19,11 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportEpisodeIssues
+import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportHosterIssues
+import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportIncompleteness
+import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportSeasonIssues
+import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportVideoIssues
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
@@ -99,12 +104,12 @@ class AnimeSama :
         page: Int,
         animesSelector: String = "div.catalog-card",
     ): AnimesPage {
-        val animes = document.selectLog(animesSelector).mapNotNull { anime ->
-            if (anime.selectLog(".info-row:has(.info-label:contains(Types)) .info-value").text().trim().equals("Scans", true)) return@mapNotNull null
+        val animes = document.select(animesSelector).mapNotNull { anime ->
+            if (anime.select(".info-row:has(.info-label:contains(Types)) .info-value").text().trim().equals("Scans", true)) return@mapNotNull null
 
             val link = anime.selectFirstLog("a")?.safeRelativePath() ?: return@mapNotNull null
             val realLink = link.split("/").take(MAX_HUB_PATH_SEGMENTS).joinToString("/")
-            var thumbnail = anime.selectLog("img:not(.ak-cta-flag)").attr("abs:src")
+            var thumbnail = anime.select("img:not(.ak-cta-flag)").attr("abs:src")
 
             if (thumbnail.contains("thumb/") && thumbnail.contains(".webp")) {
                 thumbnail = thumbnail.replace("thumb/", "").replace(".webp", ".jpg")
@@ -114,7 +119,7 @@ class AnimeSama :
             val names: Set<String> = buildSet {
                 add(name)
                 add(realLink.substringAfterLast("/").replace("-", " "))
-                anime.selectFirstLog("p.alternate-titles")?.text()?.split(",")
+                anime.selectFirst("p.alternate-titles")?.text()?.split(",")
                     ?.map { it.trim() }
                     ?.let { addAll(it) }
             }
@@ -127,7 +132,7 @@ class AnimeSama :
                 url = jsonUrl
             }
         }
-        val lastPage = document.selectLog("#list_pagination a:last-child").text().toIntOrNull() ?: 0
+        val lastPage = document.select("#list_pagination a:last-child").text().toIntOrNull() ?: 0
         val hasNextPage = lastPage != 0 && page < lastPage
         return AnimesPage(animes.distinctBy { it.url }, hasNextPage)
     }
@@ -148,6 +153,7 @@ class AnimeSama :
         val season = parsedUrl.season
         val titles = parsedUrl.titles
         Log.d(ANIMESAMA_LOG, "getAnimeDetails: parsed link = '$link', newUrl = $newUrl, season = $season")
+
         if (!newUrl) return getLegacyAnimeDetails(anime)
 
         val document = getOrFetchDocument(link)
@@ -163,15 +169,25 @@ class AnimeSama :
 
         anime.populateFromDocument(document)
 
-        val tvdbMetadata = fetchTvdbForPanel(anime.title, season, anime.title, titles)
-        anime.enrichWithTvdb(tvdbMetadata, document, season, isHub)
+        val effectiveLink = if (medias.size == 1 && medias[0].url.isNotBlank()) medias[0].url else link
+        val effectiveSeason = season ?: if (medias.isNotEmpty()) medias[0].season else null
 
+        val contentType = ContentType.from(anime.title, effectiveSeason ?: effectiveLink)
+        val isMovie = (effectiveSeason != null && effectiveSeason.startsWith("Film", ignoreCase = true)) ||
+            effectiveLink.contains("film", ignoreCase = true) ||
+            contentType == ContentType.MOVIE ||
+            (medias.size == 1 && medias[0].url.contains("film", ignoreCase = true))
+
+        val tvdbMetadata = fetchTvdbForPanel(anime.title, effectiveSeason, anime.title, titles, isMovie = isMovie)
+        anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub)
+
+        anime.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl)
         return anime
     }
 
     private fun SAnime.populateFromDocument(document: Document) {
         if (author.isNullOrEmpty()) author = document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text() ?: ""
-        if (genre.isNullOrEmpty()) genre = document.selectLog("div.genres-wrap > span").joinToString { it.text() }
+        if (genre.isNullOrEmpty()) genre = document.select("div.genres-wrap > span").joinToString { it.text() }
         val statusText = document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text() ?: ""
         status = when (statusText) {
             "Terminé", "Sorti" -> SAnime.COMPLETED
@@ -182,7 +198,7 @@ class AnimeSama :
 
     private fun SAnime.enrichWithTvdb(tvdbMetadata: TvdbMetadata?, document: Document, season: String?, isHub: Boolean) {
         val rawYear = document.selectFirst("div.info-grid > span:contains(Année) + .info-val")?.text()
-        val descriptionText = document.selectFirstLog("p#synopsisText")?.text().orEmpty()
+        val descriptionText = document.selectFirst("p#synopsisText")?.text().orEmpty()
 
         tvdbMetadata?.let { metadata ->
             if (artist.isNullOrBlank()) artist = metadata.artist
@@ -236,7 +252,7 @@ class AnimeSama :
                 season_number = HUB_SEASON_NUMBER
                 background_url = tvdbMetadata?.backdropUrl
             }
-        }
+        }.checkAndReportSeasonIssues(baseUrl, anime.title, ::getAnimeUrl)
     }
 
     // ============================== Episodes ==============================
@@ -289,10 +305,11 @@ class AnimeSama :
                 throw IllegalStateException("Aucun épisode n'a pu être récupéré sur Anime-Sama. Vérifiez votre connexion Internet.")
             }
 
-        // 2. Recherche automatique TVDB (Test)
         val titles = parsedUrl.titles
         val fullTitle = formatSeasonTitle(anime.title, rawSeason.orEmpty(), titles)
-        val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, titles)
+        val contentType = ContentType.from(anime.title, rawSeason ?: link)
+        val isMovie = (rawSeason != null && rawSeason.startsWith("Film", ignoreCase = true)) || link.contains("film", ignoreCase = true) || contentType == ContentType.MOVIE
+        val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, titles, isMovie = isMovie)
 
         // 3. Gestion de l'overflow (Saisons avec OAV rajoutés en fin de liste)
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
@@ -307,7 +324,7 @@ class AnimeSama :
             season = rawSeason,
             animeTitle = anime.title,
             s0Metadata = s0Metadata,
-        )
+        ).reversed().checkAndReportEpisodeIssues(baseUrl, link, anime.title)
     }
 
     // ============================== Hosters ==============================
@@ -315,17 +332,18 @@ class AnimeSama :
         val players: List<Player> = try {
             episode.url.parseAs(json)
         } catch (_: Exception) {
-            emptyList()
+            return getLegacyHosterList(episode)
         }
 
         val langs = players.map { it.lang }.distinct()
-        return langs.map { lang ->
+        val hosters = langs.map { lang ->
             val langPlayers = players.filter { it.lang == lang }
             Hoster(
                 hosterName = lang.uppercase(),
                 internalData = json.encodeToString(langPlayers),
             )
         }
+        return hosters.checkAndReportHosterIssues(baseUrl, episode.url, episode.name)
     }
 
     // ============================== Videos ==============================
@@ -333,12 +351,14 @@ class AnimeSama :
         val players: List<Player> = try {
             json.decodeFromString(hoster.internalData)
         } catch (_: Exception) {
-            emptyList()
+            return getLegacyVideoList(hoster)
         }
 
-        return players.parallelMap { player ->
+        val videos = players.parallelMap { player ->
             extractVideos(player.url, player.lang, supportedServers)
         }.flatten()
+
+        return videos.checkAndReportVideoIssues(baseUrl, hoster.hosterName, hoster.hosterName)
     }
 
     // ============================== Utils ===============================
@@ -356,10 +376,13 @@ class AnimeSama :
         return this.map { episode ->
             val epNum = episode.episodeNumber
             val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType)
-            val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, epMeta?.first, this.size)
+            val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, season, epMeta?.first, tvdbMetadata?.title, this.size)
+            val finalName = "$prefix$baseName".trim()
+
+            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='${epMeta?.second}', hasSummary=${epMeta?.third != null}")
 
             SEpisode.create().apply {
-                name = "$prefix$baseName".trim()
+                name = finalName
                 episode_number = epNum.toFloat()
                 scanlator = episode.getScanlatorString()
                 url = episode.players.toJsonString(json)
@@ -391,13 +414,31 @@ class AnimeSama :
         epNum: Int,
         contentType: ContentType,
         animeTitle: String,
+        season: String?,
         tvdbName: String?,
+        tvdbTitle: String?,
         totalEpisodes: Int,
-    ): String = when {
-        contentType == ContentType.MOVIE -> if (totalEpisodes == 1) animeTitle else "Film $epNum"
-        tvdbName == null || contentType == ContentType.SPECIAL -> "Épisode $epNum"
-        tvdbName.contains(Regex("""(?i)Épisode\s*$epNum""")) || tvdbName.contains(Regex("""(?i)Episode\s*$epNum""")) -> tvdbName
-        else -> "Épisode $epNum - $tvdbName"
+    ): String {
+        val cleanTvdbName = tvdbName?.trim()
+        return when {
+            contentType == ContentType.MOVIE -> {
+                val movieTitle = tvdbTitle?.takeIf { it.isNotBlank() }
+                    ?: season?.takeIf { it.isNotBlank() && !it.equals("Film", ignoreCase = true) }
+                    ?: animeTitle
+                if (totalEpisodes == 1) movieTitle else "$movieTitle $epNum"
+            }
+
+            cleanTvdbName.isNullOrBlank() || contentType == ContentType.SPECIAL -> "Épisode $epNum"
+
+            cleanTvdbName.matches(Regex("""(?i)^(?:Épisode|Episode)\s*\d+$""")) -> "Épisode $epNum"
+
+            cleanTvdbName.matches(Regex("""(?i)^(?:Épisode|Episode)\s*\d+\s*[-:]\s*(.+)""")) -> {
+                val realTitle = Regex("""(?i)^(?:Épisode|Episode)\s*\d+\s*[-:]\s*(.+)""").find(cleanTvdbName)?.groupValues?.get(1)?.trim()
+                if (!realTitle.isNullOrBlank()) "Épisode $epNum - $realTitle" else "Épisode $epNum"
+            }
+
+            else -> "Épisode $epNum - $cleanTvdbName"
+        }
     }
 
     private suspend fun fetchPlayers(url: String, lang: String): List<EpisodePlayers> {

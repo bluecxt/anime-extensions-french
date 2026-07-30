@@ -2,12 +2,15 @@ package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.animesource.model.FetchType
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parallelMap
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -168,7 +171,7 @@ private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>
     return List(maxEpisodes) { i -> urls.mapNotNull { it.getOrNull(i) }.distinct() }
 }
 
-private fun legacyPlayersToEpisodes(
+private fun AnimeSama.legacyPlayersToEpisodes(
     list: List<List<List<String>>>,
 ): List<SEpisode> {
     val maxEpisodes = list.fold(0) { acc, sublist -> maxOf(acc, sublist.size) }
@@ -186,9 +189,41 @@ private fun legacyPlayersToEpisodes(
             SEpisode.create().apply {
                 episode_number = (i + 1).toFloat()
                 name = "Épisode ${i + 1}"
-                url = Json.encodeToString(epUrls)
+                url = json.encodeToString(epUrls)
             },
         )
     }
     return episodes
+}
+
+fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
+    val playerUrls = try {
+        json.decodeFromString<List<List<String>>>(episode.url)
+    } catch (_: Exception) {
+        return emptyList()
+    }
+    val hosters = mutableListOf<Hoster>()
+    val langValues = listOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
+
+    playerUrls.forEachIndexed { i, it ->
+        if (it.isEmpty()) return@forEachIndexed
+        val lang = langValues.getOrElse(i) { "VOSTFR" }
+        hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(it) + "|" + lang))
+    }
+    return hosters
+}
+
+suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
+    val data = hoster.internalData.split("|")
+    if (data.size < 2) return emptyList()
+    val urls = try {
+        json.decodeFromString<List<String>>(data[0])
+    } catch (_: Exception) {
+        return emptyList()
+    }
+    val lang = data[1]
+
+    return urls.parallelMap { playerUrl ->
+        extractVideos(playerUrl, lang, supportedServers)
+    }.flatten()
 }
