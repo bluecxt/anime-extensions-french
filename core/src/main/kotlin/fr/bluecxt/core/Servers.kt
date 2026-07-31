@@ -126,7 +126,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Filemoon" -> VideoServer(
         name = "Filemoon",
-        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org"),
+        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "boosteradx.online", "byse.sx"),
         extractor = { url -> FilemoonExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
@@ -163,7 +163,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidara" -> VideoServer(
         name = "Vidara",
-        hosts = listOf("vidara.so", "vidara.to", "vidaraa.cc", "vidavaca.cc"),
+        hosts = listOf("vidara.so", "vidara.to", "vidaraa.cc", "vidavaca.cc", "viewdara.com", "vidchampions.com", "thebesthosterv.com"),
         extractor = { url -> VidaraExtractor(source.extractorClient).videosFromUrl(url) },
     )
 

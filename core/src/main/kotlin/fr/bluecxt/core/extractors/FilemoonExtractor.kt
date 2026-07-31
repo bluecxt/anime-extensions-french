@@ -3,8 +3,11 @@ package fr.bluecxt.core.extractors
 import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.ContentUnavailableException
+import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -51,7 +54,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             .build()
 
         // 1. Resolve actual host and mediaId
-        val initialResponse = client.newCall(Request.Builder().url(url).headers(initialHeaders).build()).awaitSuccess()
+        val initialResponse = client.newCall(Request.Builder().url(url).headers(initialHeaders).build()).awaitSuccessOrUnavailable(url)
         val resolvedUrl = initialResponse.request.url
         var host = resolvedUrl.host
 
@@ -146,13 +149,21 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             .set("Referer", embedUrl)
             .build()
 
-        // 1. Challenge
+        return try {
+            executeChallengeFlow(base, mediaId, apiHeaders, refererHost, embedUrl, userAgent, cachedFingerprint ?: createNewFingerprint(base, apiHeaders, userAgent))
+        } catch (_: Exception) {
+            // Invalidate cache and retry with fresh attestation
+            cachedFingerprint = null
+            executeChallengeFlow(base, mediaId, apiHeaders, refererHost, embedUrl, userAgent, createNewFingerprint(base, apiHeaders, userAgent))
+        }
+    }
+
+    private suspend fun createNewFingerprint(base: String, apiHeaders: Headers, userAgent: String): Fingerprint {
         val challengeUrl = "$base/api/videos/access/challenge"
         val challengeResponse = client.newCall(
             Request.Builder().url(challengeUrl).headers(apiHeaders).post("".toRequestBody()).build(),
         ).awaitSuccess().parseAs<ChallengeResponse>()
 
-        // 2. Attest
         val (privateKey, jwk) = generateEcKeypair()
         val signature = signNonce(privateKey, challengeResponse.nonce)
         val clientFp = generateClientFingerprint(userAgent)
@@ -170,27 +181,35 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             Request.Builder().url(attestUrl).headers(apiHeaders).post(json.encodeToString(attestPayload).toRequestBody(jsonMediaType)).build(),
         ).awaitSuccess().parseAs<AttestResponse>()
 
-        val fp = Fingerprint(
+        return Fingerprint(
             token = attestResponse.token,
             viewerId = attestResponse.viewerId,
             deviceId = attestResponse.deviceId,
             confidence = attestResponse.confidence,
-        )
+        ).also { cachedFingerprint = it }
+    }
 
-        // 3. Captcha
+    private suspend fun executeChallengeFlow(
+        base: String,
+        mediaId: String,
+        apiHeaders: Headers,
+        refererHost: String,
+        embedUrl: String,
+        userAgent: String,
+        fp: Fingerprint,
+    ): PlaybackResponse {
         val captchaUrl = "$base/api/videos/$mediaId/embed/captcha"
         val embedHeaders = apiHeaders.newBuilder()
             .set("X-Embed-Origin", refererHost)
             .set("X-Embed-Referer", "https://$refererHost/")
             .set("X-Embed-Parent", embedUrl)
-            .set("Cookie", "byse_viewer_id=${attestResponse.viewerId}; byse_device_id=${attestResponse.deviceId}")
+            .set("Cookie", "byse_viewer_id=${fp.viewerId}; byse_device_id=${fp.deviceId}")
             .build()
 
         val captchaResponse = client.newCall(
             Request.Builder().url(captchaUrl).headers(embedHeaders).post(json.encodeToString(CaptchaPayload(fp)).toRequestBody(jsonMediaType)).build(),
         ).awaitSuccess().parseAs<CaptchaResponse>()
 
-        // 4. Solve PoW
         val solution = solvePow(captchaResponse.powNonce, captchaResponse.powDifficulty)
 
         val verifyUrl = "$base/api/videos/$mediaId/embed/captcha/verify"
@@ -207,7 +226,6 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             throw Exception("PoW verification failed: ${verifyResponse.status}")
         }
 
-        // 5. Playback
         val playbackUrl = "$base/api/videos/$mediaId/embed/playback"
         val playbackHeaders = embedHeaders.newBuilder()
             .set("X-Captcha-Token", verifyResponse.token)
@@ -578,5 +596,8 @@ class FilemoonExtractor(private val client: OkHttpClient) {
 
     companion object {
         private val REDIRECT_DOMAINS = listOf("boosteradx.online", "byse.sx")
+
+        @Volatile
+        private var cachedFingerprint: Fingerprint? = null
     }
 }

@@ -2,11 +2,13 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDARA_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -46,13 +48,16 @@ open class VidaraExtractor(private val client: OkHttpClient) {
             "device" to "web",
         ).toJsonRequestBody()
 
-        val response = client.newCall(POST(apiUrl, headers, payload)).awaitSuccess()
+        val response = client.newCall(POST(apiUrl, headers, payload)).awaitSuccessOrUnavailable(apiUrl)
+        val responseBody = response.use { it.body.string() }
+        if (responseBody.contains("file_not_found", ignoreCase = true) || responseBody.contains("file is no longer available", ignoreCase = true) || responseBody.contains("\"error\":\"not_found\"", ignoreCase = true)) {
+            throw ContentUnavailableException("Vidara: Video file deleted or not found")
+        }
 
-        val responseBody = response.body.string()
         val data = runCatching { json.decodeFromString<VidaraResponse>(responseBody) }.getOrNull()
 
         val streamingUrl = data?.streaming_url
-            ?: throw Exception("streaming_url not found in Vidara/Streamix response: $responseBody")
+            ?: throw ContentUnavailableException("Vidara: streaming_url not found in response: $responseBody")
 
         val videoHeaders = headers.newBuilder()
             .removeAll("Content-Type")

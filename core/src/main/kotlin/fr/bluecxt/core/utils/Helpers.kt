@@ -3,11 +3,13 @@ package fr.bluecxt.core.utils
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
+import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
@@ -75,10 +77,35 @@ fun defaultHeaders(
 fun String.normalize(): String = this.lowercase().replace(Regex("""[^a-z0-9]"""), "")
 
 /**
+ * Awaits response and verifies status:
+ * - Throws ContentUnavailableException on 404 or 410 (dead/unavailable content)
+ * - Throws ExtractionException on non-2xx status codes
+ * Automatically closes response on failure.
+ */
+suspend fun Call.awaitSuccessOrUnavailable(url: String = ""): Response {
+    val response = this.await()
+    if (response.code == 404 || response.code == 410) {
+        response.close()
+        throw ContentUnavailableException("Video unavailable (${response.code}) $url".trim())
+    }
+    if (!response.isSuccessful) {
+        val errCode = response.code
+        val errMsg = response.message
+        response.close()
+        throw ExtractionException("HTTP $errCode ($errMsg) for $url".trim())
+    }
+    return response
+}
+
+/**
  * Convert a response to jsoup document with handling in the different error used in extractors
  */
 fun Response.toDoc(url: String): Document = this.use { res ->
-    if (res.code == 404) throw ContentUnavailableException("Video non available (404) $url")
-    if (!res.isSuccessful) throw ExtractionException("failed for $url with ${res.code}: ${res.message}")
+    if (res.code == 404 || res.code == 410) {
+        throw ContentUnavailableException("Video unavailable (${res.code}) $url".trim())
+    }
+    if (!res.isSuccessful) {
+        throw ExtractionException("HTTP ${res.code} (${res.message}) for $url".trim())
+    }
     res.asJsoup()
 }
