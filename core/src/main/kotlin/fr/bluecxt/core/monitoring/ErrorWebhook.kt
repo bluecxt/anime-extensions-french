@@ -135,6 +135,19 @@ object ErrorWebhook {
         sendWebhook(baseUrl, url, extensionName, extensionVersion, enrichedContext)
     }
 
+    fun sendWebhook(
+        baseUrl: String,
+        url: String,
+        context: String,
+        exception: Throwable? = null,
+    ) {
+        val details = mutableListOf(context)
+        if (exception != null) {
+            details.add("Exception: ${exception::class.java.simpleName} - ${exception.message}")
+        }
+        sendWebhook(baseUrl, url, details)
+    }
+
     @OptIn(DelicateCoroutinesApi::class)
     fun sendWebhook(
         baseUrl: String,

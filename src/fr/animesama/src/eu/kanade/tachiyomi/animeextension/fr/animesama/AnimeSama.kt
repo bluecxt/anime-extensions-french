@@ -19,6 +19,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportEpisodeIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportHosterIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportIncompleteness
@@ -468,6 +469,12 @@ class AnimeSama :
 
         val maxEpisodes = servers.maxOfOrNull { it.size } ?: run {
             Log.w(ANIMESAMA_LOG, "fetchPlayers: 0 server arrays matched in $jsUrl")
+            ErrorWebhook.sendWebhook(
+                baseUrl = baseUrl,
+                url = jsUrl,
+                context = "Échec du parsing de $jsUrl (0 tableau de serveurs vidéo 'eps' trouvé)",
+                exception = IllegalStateException("epsArrayRegex matched 0 server arrays in $jsUrl"),
+            )
             return emptyList()
         }
 
@@ -555,7 +562,7 @@ class AnimeSama :
 
         val scriptContent = document.select("script").joinToString("\n") { it.html() }
         val uncommented = commentRegex.replace(scriptContent, "")
-        return uncommented.lines()
+        val medias = uncommented.lines()
             .map { it.trim() }
             .mapNotNull { line ->
                 panneauRegex.find(line)?.let { match ->
@@ -572,6 +579,16 @@ class AnimeSama :
                     )
                 }
             }.distinctBy { it.url }
+
+        if (medias.isEmpty() && !link.contains("404")) {
+            ErrorWebhook.sendWebhook(
+                baseUrl = baseUrl,
+                url = "$baseUrl$link",
+                context = "Échec du parsing des saisons (panneauAnime) : aucun média trouvé dans le script HTML",
+                exception = IllegalStateException("panneauRegex matched 0 season panels for $link"),
+            )
+        }
+        return medias
     }
 
     private fun urlParser(jsonUrl: String): Pair<UrlContent, Boolean> = try {

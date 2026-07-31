@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.TVDB_LOG
+import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import fr.bluecxt.core.tvdb.dto.TvdbAuthRequest
 import fr.bluecxt.core.tvdb.dto.TvdbAuthResponse
@@ -74,6 +75,12 @@ private suspend fun Source.getTvdbToken(apiKey: String = DEFAULT_TVDB_API_KEY, f
             }
         } catch (e: Exception) {
             Log.e(TVDB_LOG, "Error authenticating with TVDB API v4: ${e.message}")
+            ErrorWebhook.sendWebhook(
+                baseUrl = TVDB_BASE_URL,
+                url = "$TVDB_BASE_URL/login",
+                context = "Échec d'authentification TVDB v4 (Clé API invalide ou révoquée)",
+                exception = e,
+            )
             null
         }
     }
@@ -88,13 +95,23 @@ private suspend fun Source.executeTvdbRequest(url: String, apiKey: String): Stri
         return null
     }
 
-    if (response.code == 401) {
-        Log.w(TVDB_LOG, "TVDB 401 Unauthorized on '$url', refreshing JWT token and retrying...")
+    if (response.code == 401 || response.code == 403) {
+        Log.w(TVDB_LOG, "TVDB ${response.code} Unauthorized on '$url', refreshing JWT token and retrying...")
         val freshToken = getTvdbToken(apiKey, forceRefresh = true) ?: return null
         val retryReq = GET(url, Headers.headersOf("Authorization", "Bearer $freshToken", "Accept", "application/json"))
         return try {
             val retryRes = client.newCall(retryReq).await()
-            if (retryRes.isSuccessful) retryRes.body.string() else null
+            if (retryRes.isSuccessful) {
+                retryRes.body.string()
+            } else {
+                ErrorWebhook.sendWebhook(
+                    baseUrl = TVDB_BASE_URL,
+                    url = url,
+                    context = "API TVDB v4 inaccessible (HTTP ${retryRes.code}) après rafraîchissement du token",
+                    exception = IllegalStateException("TVDB API v4 returned HTTP ${retryRes.code} for $url"),
+                )
+                null
+            }
         } catch (_: Exception) {
             null
         }
