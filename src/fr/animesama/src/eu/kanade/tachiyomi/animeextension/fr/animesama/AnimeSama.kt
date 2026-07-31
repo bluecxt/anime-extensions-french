@@ -343,7 +343,7 @@ class AnimeSama :
                 hosterName = lang.uppercase(),
                 internalData = json.encodeToString(langPlayers),
             )
-        }
+        }.coreSortHosters()
         return hosters.checkAndReportHosterIssues(baseUrl, episode.url, episode.name)
     }
 
@@ -357,7 +357,7 @@ class AnimeSama :
 
         val videos = players.parallelMap { player ->
             extractVideos(player.url, player.lang, supportedServers)
-        }.flatten()
+        }.flatten().sortVideos()
 
         return videos.checkAndReportVideoIssues(baseUrl, hoster.hosterName, hoster.hosterName)
     }

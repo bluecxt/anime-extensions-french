@@ -254,7 +254,7 @@ abstract class Source :
     /**
      * Standardized video sorting based on user preferences.
      */
-    override fun List<Video>.sortVideos(): List<Video> {
+    public override fun List<Video>.sortVideos(): List<Video> {
         val voices = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val player = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
         val prefQualStr = preferences.getString(CommonPreferences.PREF_QUALITY_KEY, "Highest")!!
@@ -285,13 +285,13 @@ abstract class Source :
     /**
      * Standardized hoster sorting based on language tags and user preferences.
      */
-    protected fun List<Hoster>.coreSortHosters(): List<Hoster> {
+    fun List<Hoster>.coreSortHosters(): List<Hoster> {
         val prefVoice = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val prefServer = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
         val langRegex = Regex("\\((.*?)\\)")
 
         return this.sortedWith(
-            compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) }
+            compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) || it.hosterName.contains(prefVoice, true) }
                 .thenBy {
                     langRegex.find(it.hosterName)?.value ?: "(Unknown)"
                 }

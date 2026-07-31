@@ -210,7 +210,7 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
         val lang = langValues.getOrElse(i) { "VOSTFR" }
         hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(it) + "|" + lang))
     }
-    return hosters
+    return hosters.coreSortHosters()
 }
 
 suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
@@ -225,5 +225,5 @@ suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
 
     return urls.parallelMap { playerUrl ->
         extractVideos(playerUrl, lang, supportedServers)
-    }.flatten()
+    }.flatten().sortVideos()
 }
