@@ -24,7 +24,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.MOVIX_LOG
-
 import keiyoushi.core.BuildConfig
 import okhttp3.Request
 import okhttp3.Response
