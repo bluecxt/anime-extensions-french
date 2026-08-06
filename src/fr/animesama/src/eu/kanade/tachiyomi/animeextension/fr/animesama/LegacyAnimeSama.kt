@@ -34,7 +34,7 @@ suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
         author = authorText
         genre = genres
         description = buildString {
-            append("animé ajouté avant la migration, certaine functionnalité peuvent ne pas functionner correctement, veuiller re ajouter cette animé dans votre librairie pour faire la migration\n\n")
+            append("animé ajouté avant la migration, certaine functionnalité peuvent ne pas functionner correctement, veuiller re ajouter cette animé dans votre librairie pour faire la migration\n\n\n")
             append(descriptionText)
         }
     }
@@ -110,15 +110,15 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
         val scripts = doc.select("script").toString()
         val commentRegex = Regex("""//.*|/\*[\s\S]*?\*/""")
         val uncommented = commentRegex.replace(scripts, "")
+        val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
         val seasonRegex = Regex("""(?:episodes|var|let|const)\s+([\w\d_]+)\s*=\s*['"]([^'"]+)['"]""")
-        val seasons = seasonRegex.findAll(uncommented).toList()
-            .distinctBy {
-                it.groupValues[2].trim().removeSuffix("/")
-                    .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
-            }
 
-        if (seasons.isNotEmpty()) {
-            currentUrlPath = "$animeUrlPath/${seasons.first().groupValues[2].trim().removeSuffix("/")}"
+        val panneaux = panneauRegex.findAll(uncommented).map { it.groupValues[2].trim().removeSuffix("/") }.toList()
+        val legacySeasons = seasonRegex.findAll(uncommented).map { it.groupValues[2].trim().removeSuffix("/") }.toList()
+        val allSeasons = (panneaux + legacySeasons).filter { it.isNotBlank() }
+
+        if (allSeasons.isNotEmpty()) {
+            currentUrlPath = "$animeUrlPath/${allSeasons.first()}"
         }
     }
 
@@ -205,10 +205,10 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
     val hosters = mutableListOf<Hoster>()
     val langValues = listOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
 
-    playerUrls.forEachIndexed { i, it ->
-        if (it.isEmpty()) return@forEachIndexed
+    playerUrls.forEachIndexed { i, playerUrl ->
+        if (playerUrl.isEmpty()) return@forEachIndexed
         val lang = langValues.getOrElse(i) { "VOSTFR" }
-        hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(it) + "|" + lang))
+        hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(playerUrl) + "|" + lang))
     }
     return hosters.coreSortHosters()
 }

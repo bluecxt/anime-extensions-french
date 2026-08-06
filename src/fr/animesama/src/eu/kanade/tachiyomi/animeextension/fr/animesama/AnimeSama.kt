@@ -31,7 +31,6 @@ import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
 import fr.bluecxt.core.utils.normalize
 import fr.bluecxt.core.utils.safeRelativePath
 import fr.bluecxt.core.utils.selectFirstLog
-import fr.bluecxt.core.utils.selectLog
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
@@ -170,14 +169,9 @@ class AnimeSama :
 
         anime.populateFromDocument(document)
 
-        val effectiveLink = if (medias.size == 1 && medias[0].url.isNotBlank()) medias[0].url else link
-        val effectiveSeason = season ?: if (medias.isNotEmpty()) medias[0].season else null
-
+        val (effectiveLink, effectiveSeason) = resolveEffectiveTarget(medias, link, season)
         val contentType = ContentType.from(anime.title, effectiveSeason ?: effectiveLink)
-        val isMovie = (effectiveSeason != null && effectiveSeason.startsWith("Film", ignoreCase = true)) ||
-            effectiveLink.contains("film", ignoreCase = true) ||
-            contentType == ContentType.MOVIE ||
-            (medias.size == 1 && medias[0].url.contains("film", ignoreCase = true))
+        val isMovie = isMovieContent(effectiveSeason, effectiveLink, contentType, medias)
 
         val tvdbMetadata = fetchTvdbForPanel(anime.title, effectiveSeason, anime.title, titles, isMovie = isMovie)
         anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub)
@@ -185,6 +179,17 @@ class AnimeSama :
         anime.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl)
         return anime
     }
+
+    private fun resolveEffectiveTarget(medias: List<UrlContent>, link: String, season: String?): Pair<String, String?> {
+        val effectiveLink = if (medias.size == 1 && medias[0].url.isNotBlank()) medias[0].url else link
+        val effectiveSeason = season ?: if (medias.isNotEmpty()) medias[0].season else null
+        return Pair(effectiveLink, effectiveSeason)
+    }
+
+    private fun isMovieContent(season: String?, link: String, contentType: ContentType, medias: List<UrlContent> = emptyList()): Boolean = (season != null && season.startsWith("Film", ignoreCase = true)) ||
+        link.contains("film", ignoreCase = true) ||
+        contentType == ContentType.MOVIE ||
+        (medias.size == 1 && medias[0].url.contains("film", ignoreCase = true))
 
     private fun SAnime.populateFromDocument(document: Document) {
         if (author.isNullOrEmpty()) author = document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text() ?: ""
@@ -262,17 +267,16 @@ class AnimeSama :
         Log.d(ANIMESAMA_LOG, "getEpisodeList: input url='${anime.url}', parsedUrl=$parsedUrl, newUrl=$newUrl")
         if (!newUrl) return getLegacyEpisodeList(anime)
 
-        var link = parsedUrl.url
-        var rawSeason = parsedUrl.season
-        Log.d(ANIMESAMA_LOG, "getEpisodeList: starting with link='$link', rawSeason='$rawSeason'")
+        val initialLink = parsedUrl.url
+        val initialSeason = parsedUrl.season
 
-        val preDoc = getOrFetchDocument(link)
-        val medias = parseMedias(link, preDoc, parsedUrl.titles)
-        Log.d(ANIMESAMA_LOG, "getEpisodeList: found ${medias.size} medias for link='$link'")
+        val preDoc = getOrFetchDocument(initialLink)
+        val medias = parseMedias(initialLink, preDoc, parsedUrl.titles)
+        Log.d(ANIMESAMA_LOG, "getEpisodeList: found ${medias.size} medias for link='$initialLink'")
 
-        val isHub = (rawSeason == null && medias.size > 1)
+        val isHub = (initialSeason == null && medias.size > 1)
         if (isHub) {
-            Log.d(ANIMESAMA_LOG, "getEpisodeList: isHub=true for '$link'")
+            Log.d(ANIMESAMA_LOG, "getEpisodeList: isHub=true for '$initialLink'")
             return listOf(
                 SEpisode.create().apply {
                     url = ""
@@ -281,14 +285,9 @@ class AnimeSama :
             )
         }
 
-        if (medias.size == 1 && medias[0].url != link && medias[0].url.isNotBlank()) {
-            Log.d(ANIMESAMA_LOG, "getEpisodeList: medias.size==1, updating link from '$link' to '${medias[0].url}'")
-            getOrFetchDocument(medias[0].url)
-            link = medias[0].url
-        }
-
-        if (rawSeason == null && medias.isNotEmpty()) {
-            rawSeason = medias[0].season
+        val (link, rawSeason) = resolveEffectiveTarget(medias, initialLink, initialSeason)
+        if (link != initialLink) {
+            getOrFetchDocument(link)
         }
 
         val episodes: List<EpisodePlayers> = langList.parallelMap { lang ->
@@ -309,7 +308,7 @@ class AnimeSama :
         val titles = parsedUrl.titles
         val fullTitle = formatSeasonTitle(anime.title, rawSeason.orEmpty(), titles)
         val contentType = ContentType.from(anime.title, rawSeason ?: link)
-        val isMovie = (rawSeason != null && rawSeason.startsWith("Film", ignoreCase = true)) || link.contains("film", ignoreCase = true) || contentType == ContentType.MOVIE
+        val isMovie = isMovieContent(rawSeason, link, contentType, medias)
         val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, titles, isMovie = isMovie)
 
         // 3. Gestion de l'overflow (Saisons avec OAV rajoutés en fin de liste)
