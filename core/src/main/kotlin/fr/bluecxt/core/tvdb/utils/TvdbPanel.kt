@@ -44,6 +44,7 @@ suspend fun Source.fetchTvdbForPanel(
     fullTitle: String,
     titles: Set<String> = emptySet(),
     isMovie: Boolean = false,
+    isSpecial: Boolean = false,
 ): TvdbMetadata? {
     val normTitle = seriesTitle.normalize()
     val normSeason = rawSeasonName.orEmpty().normalize()
@@ -51,7 +52,7 @@ suspend fun Source.fetchTvdbForPanel(
     val seriesOverride = tvdbOverridesMap.entries.find { normTitle.contains(it.key.normalize()) }?.value
     val overrideEntry = seriesOverride?.seasons?.entries?.find { normSeason.contains(it.key.normalize()) }?.value
 
-    val calculatedSeasonNumber = rawSeasonName?.let { extractSeasonNumber(it) } ?: 1
+    val calculatedSeasonNumber = if (isSpecial) 0 else (rawSeasonName?.let { extractSeasonNumber(it) } ?: 1)
     val seasonNumber = overrideEntry?.tvdbSeason ?: calculatedSeasonNumber
     val episodeOffset = overrideEntry?.episodeOffset ?: 0
 

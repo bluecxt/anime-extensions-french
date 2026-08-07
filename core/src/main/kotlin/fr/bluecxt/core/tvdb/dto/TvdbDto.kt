@@ -129,4 +129,18 @@ internal data class TvdbExtendedData(
 internal data class TvdbArtworkDto(
     val type: Int = 0,
     val image: String? = null,
+    val language: String? = null,
+)
+
+@Serializable
+internal data class TvdbSeasonExtendedResponse(
+    val status: String = "",
+    val data: TvdbSeasonExtendedData? = null,
+)
+
+@Serializable
+internal data class TvdbSeasonExtendedData(
+    val id: Long = 0,
+    val image: String? = null,
+    val artwork: List<TvdbArtworkDto> = emptyList(),
 )

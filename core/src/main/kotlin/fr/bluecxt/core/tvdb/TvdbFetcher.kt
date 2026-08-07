@@ -15,6 +15,7 @@ import fr.bluecxt.core.tvdb.dto.TvdbEpisodesResponse
 import fr.bluecxt.core.tvdb.dto.TvdbExtendedResponse
 import fr.bluecxt.core.tvdb.dto.TvdbSearchResponse
 import fr.bluecxt.core.tvdb.dto.TvdbSearchResult
+import fr.bluecxt.core.tvdb.dto.TvdbSeasonExtendedResponse
 import fr.bluecxt.core.utils.normalize
 import keiyoushi.core.BuildConfig
 import kotlinx.coroutines.sync.Mutex
@@ -206,6 +207,7 @@ suspend fun Source.fetchTvdbMetadata(
         var backdropUrl: String? = null
         var tvdbStatusName: String? = null
         var seasonPosterUrl: String? = null
+        var targetSeasonId: Long? = null
         var tvdbGenres: String? = null
         var tvdbCompanies: String? = null
 
@@ -217,7 +219,26 @@ suspend fun Source.fetchTvdbMetadata(
                     if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                 }
                 tvdbStatusName = extDto.data?.status?.name ?: extDto.data?.status?.recordType
-                seasonPosterUrl = extDto.data?.seasons?.find { it.number == season }?.image?.takeIf { it.isNotBlank() }?.let {
+                val targetSeasonObj = extDto.data?.seasons?.find { it.number == season }
+                targetSeasonId = targetSeasonObj?.id
+                var rawSeasonPoster: String? = null
+                if (targetSeasonId != null && targetSeasonId > 0) {
+                    try {
+                        val seasonUrl = "$TVDB_BASE_URL/seasons/$targetSeasonId/extended"
+                        val sResp = executeTvdbRequest(seasonUrl, apiKey)
+                        if (sResp != null) {
+                            val sDto = tvdbJson.decodeFromString<TvdbSeasonExtendedResponse>(sResp)
+                            val artworks = sDto.data?.artwork.orEmpty()
+                            val langPoster = artworks.find { it.language?.equals(lang, ignoreCase = true) == true }?.image
+                            val bestArt = langPoster ?: artworks.firstOrNull()?.image
+                            rawSeasonPoster = bestArt ?: sDto.data?.image
+                        }
+                    } catch (_: Exception) {}
+                }
+                if (rawSeasonPoster == null) {
+                    rawSeasonPoster = targetSeasonObj?.image
+                }
+                seasonPosterUrl = rawSeasonPoster?.takeIf { it.isNotBlank() }?.let {
                     if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                 }
                 tvdbGenres = extDto.data?.genres?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.joinToString(", ")?.takeIf { it.isNotBlank() }
@@ -227,6 +248,7 @@ suspend fun Source.fetchTvdbMetadata(
 
         // Fetch Episodes (up to 3 pages) for series
         val epMap = mutableMapOf<Int, Triple<String?, String?, String?>>()
+        val seasonCounts = mutableMapOf<Int, Int>()
         var seasonReleaseDate: String? = null
 
         if (!isMovieResolved) {
@@ -237,6 +259,13 @@ suspend fun Source.fetchTvdbMetadata(
                     val epDto = tvdbJson.decodeFromString<TvdbEpisodesResponse>(response)
                     val episodes = epDto.data?.episodes.orEmpty()
                     if (episodes.isEmpty()) break
+
+                    for (ep in episodes) {
+                        val sNum = ep.seasonNumber
+                        if (ep.number > 0) {
+                            seasonCounts[sNum] = maxOf(seasonCounts[sNum] ?: 0, ep.number)
+                        }
+                    }
 
                     val seasonEps = episodes.filter { it.seasonNumber == season }
                     if (seasonReleaseDate == null) {
@@ -260,6 +289,8 @@ suspend fun Source.fetchTvdbMetadata(
 
         val finalStatus = parseTvdbStatus(tvdbStatusName ?: searchData.status)
 
+        val selectedPoster = seasonPosterUrl ?: posterUrl
+        Log.d(TVDB_LOG, "Poster selected for '$title' (season $season): selected='$selectedPoster', seasonPoster='$seasonPosterUrl', mainPoster='$posterUrl', targetSeasonId=$targetSeasonId")
         Log.d(TVDB_LOG, "TVDB fetched ${epMap.size} episodes for season $season, backdropUrl=$backdropUrl, seasonPosterUrl=$seasonPosterUrl, seasonReleaseDate=$seasonReleaseDate, status=$finalStatus")
 
         val metadata = TvdbMetadata(
@@ -276,6 +307,7 @@ suspend fun Source.fetchTvdbMetadata(
             episodeSummaries = epMap,
             episodeOffset = 0,
             matchScore = tvdbMatchScore,
+            seasonEpisodeCounts = seasonCounts,
         )
 
         tvdbMetadataCache[cacheKey] = Pair(metadata, System.currentTimeMillis())

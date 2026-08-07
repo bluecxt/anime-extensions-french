@@ -52,4 +52,17 @@ Certaines extensions implémentent une logique avancée pour gérer des structur
   - **Parsing Réponse OkHttp :** `response.parseAs<MyType>()` (ferme le flux proprement en interne).
 - **Parallélisme :** Pour traiter des requêtes ou extractions en parallèle de façon sûre sur `Dispatchers.IO`, privilégiez :
   - `myList.parallelMap { ... }` ou `myList.parallelMapNotNull { ... }` (fournis par `keiyoushi.utils.Coroutines`).
+- **Requêtes Réseau Simultanées en Parallèle (`coroutineScope` + `async`) :**
+  Lorsqu'une méthode d'extension doit effectuer au moins deux requêtes réseau indépendantes (par exemple, télécharger la page HTML du site source ET récupérer les métadonnées TVDB/TMDB dans `getAnimeDetails` ou `getEpisodeList`), il est **obligatoire** de les exécuter simultanément en parallèle à l'aide de `coroutineScope` et `async { ... }` :
+  ```kotlin
+  coroutineScope {
+      val documentDeferred = async { getOrFetchDocument(link) }
+      val tvdbMetadataDeferred = async { fetchTvdbForPanel(anime.title, season, anime.title, titles) }
+
+      val document = documentDeferred.await()
+      val tvdbMetadata = tvdbMetadataDeferred.await()
+  }
+  ```
+  Cette pratique permet d'exécuter les requêtes en même temps et de diviser le temps de chargement perçu par deux.
+
 

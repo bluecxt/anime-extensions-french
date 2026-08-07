@@ -17,4 +17,5 @@ data class TvdbMetadata(
     val episodeSummaries: Map<Int, Triple<String?, String?, String?>>,
     val episodeOffset: Int = 0,
     val matchScore: Int = 0,
+    val seasonEpisodeCounts: Map<Int, Int> = emptyMap(),
 )

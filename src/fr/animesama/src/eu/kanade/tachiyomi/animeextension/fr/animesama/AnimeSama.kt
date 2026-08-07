@@ -27,6 +27,7 @@ import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportHosterIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportIncompleteness
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportSeasonIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportVideoIssues
+import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
@@ -37,6 +38,8 @@ import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
@@ -148,7 +151,7 @@ class AnimeSama :
         return parseCatalogue(document, 0).animes
     }
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = coroutineScope {
         Log.d(ANIMESAMA_LOG, "getAnimeDetails: input url = '${anime.url}'")
         val (parsedUrl, newUrl) = urlParser(anime.url)
         val link = parsedUrl.url
@@ -156,9 +159,14 @@ class AnimeSama :
         val titles = parsedUrl.titles
         Log.d(ANIMESAMA_LOG, "getAnimeDetails: parsed link = '$link', newUrl = $newUrl, season = $season")
 
-        if (!newUrl) return getLegacyAnimeDetails(anime)
+        if (!newUrl) return@coroutineScope getLegacyAnimeDetails(anime)
 
-        val document = getOrFetchDocument(link)
+        val documentDeferred = async { getOrFetchDocument(link) }
+        val tvdbMetadataDeferred = async {
+            fetchTvdbForPanel(anime.title, season, anime.title, titles)
+        }
+
+        val document = documentDeferred.await()
         val medias = parseMedias(link, document, titles)
         val isHub = (season == null && medias.size > 1)
 
@@ -174,12 +182,23 @@ class AnimeSama :
         val (effectiveLink, effectiveSeason) = resolveEffectiveTarget(medias, link, season)
         val contentType = ContentType.from(anime.title, effectiveSeason ?: effectiveLink)
         val isMovie = isMovieContent(effectiveSeason, effectiveLink, contentType, medias)
+        val isSpecial = isSpecialSeason(effectiveSeason)
 
-        val tvdbMetadata = fetchTvdbForPanel(anime.title, effectiveSeason, anime.title, titles, isMovie = isMovie)
+        var tvdbMetadata = tvdbMetadataDeferred.await()
+        if (isMovie || isSpecial || effectiveSeason != season) {
+            tvdbMetadata = fetchTvdbForPanel(anime.title, effectiveSeason, anime.title, titles, isMovie = isMovie, isSpecial = isSpecial)
+        }
+
         anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub)
 
         anime.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl)
-        return anime
+        anime
+    }
+
+    private fun isSpecialSeason(seasonName: String?): Boolean {
+        if (seasonName.isNullOrBlank()) return false
+        val lower = seasonName.lowercase()
+        return lower.contains("oav") || lower.contains("ova") || lower.contains("special") || lower.contains("spécial")
     }
 
     private fun resolveEffectiveTarget(medias: List<UrlContent>, link: String, season: String?): Pair<String, String?> {
@@ -234,10 +253,14 @@ class AnimeSama :
         val link = parsedUrl.url
         val document = getOrFetchDocument(link)
 
-        return parseMedias(link, document, parsedUrl.titles).parallelMap { media ->
+        val medias = parseMedias(link, document, parsedUrl.titles)
+        return medias.parallelMap { media ->
             val rawSeason = media.season.orEmpty()
             val fullTitle = formatSeasonTitle(anime.title, rawSeason, media.titles)
-            val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, media.titles)
+            val contentType = ContentType.from(fullTitle, media.url)
+            val isMovie = isMovieContent(rawSeason, media.url, contentType, medias)
+            val isSpecial = isSpecialSeason(rawSeason)
+            val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, media.titles, isMovie = isMovie, isSpecial = isSpecial)
 
             SAnime.create().apply {
                 title = fullTitle
@@ -247,6 +270,7 @@ class AnimeSama :
                     season = rawSeason,
                 ).toJsonString(json)
                 thumbnail_url = tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl ?: document.getElementById("coverOeuvre")?.attr("abs:src")
+                Log.d(ANIMESAMA_LOG, "getSeasonList item: title='$fullTitle', rawSeason='$rawSeason', chosenThumbnail='$thumbnail_url', tvdbSeasonPoster='${tvdbMetadata?.seasonPosterUrl}', tvdbMainPoster='${tvdbMetadata?.mainPosterUrl}'")
                 description = tvdbMetadata?.summary ?: document.selectFirstLog("p#synopsisText")?.text() ?: ""
                 tvdbMetadata?.releaseDate?.let { date ->
                     description = buildDescription(description.orEmpty(), date)
@@ -315,6 +339,24 @@ class AnimeSama :
 
         // 3. Gestion de l'overflow (Saisons avec OAV rajoutés en fin de liste)
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
+        var autoS0Offset = 0
+        if (episodes.size > tvdbEpCount && tvdbEpCount > 0) {
+            val currentMediaIndex = medias.indexOfFirst { it.url == link }.takeIf { it >= 0 } ?: medias.size
+            for (i in 0 until currentMediaIndex) {
+                val m = medias[i]
+                val mSeasonName = m.season.orEmpty()
+                val mSeasonNum = extractSeasonNumber(mSeasonName)
+                if (mSeasonNum != null && mSeasonNum > 0) {
+                    val mPlayers = fetchPlayers(m.url, "vostfr")
+                    val mAnimeSamaCount = mPlayers.size
+                    val mTvdbCount = tvdbMetadata?.seasonEpisodeCounts?.get(mSeasonNum) ?: 0
+                    if (mAnimeSamaCount > mTvdbCount && mTvdbCount > 0) {
+                        autoS0Offset += (mAnimeSamaCount - mTvdbCount)
+                    }
+                }
+            }
+        }
+
         val s0Metadata = if (episodes.size > tvdbEpCount && tvdbEpCount > 0) {
             fetchTvdbMetadata(anime.title, season = 0)
         } else {
@@ -326,6 +368,7 @@ class AnimeSama :
             season = rawSeason,
             animeTitle = anime.title,
             s0Metadata = s0Metadata,
+            autoS0Offset = autoS0Offset,
         ).reversed().checkAndReportEpisodeIssues(baseUrl, link, anime.title)
     }
 
@@ -369,6 +412,7 @@ class AnimeSama :
         season: String?,
         animeTitle: String = "",
         s0Metadata: TvdbMetadata? = null,
+        autoS0Offset: Int = 0,
     ): List<SEpisode> {
         val contentType = ContentType.from(animeTitle, season ?: "")
         val defaultPrefix = contentType.getPrefix()
@@ -377,7 +421,7 @@ class AnimeSama :
 
         return this.map { episode ->
             val epNum = episode.episodeNumber
-            val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType)
+            val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType, autoS0Offset)
             val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, season, epMeta?.first, tvdbMetadata?.title, this.size)
             val finalName = "$prefix$baseName".trim()
 
@@ -399,6 +443,7 @@ class AnimeSama :
         tvdbMetadata: TvdbMetadata?,
         s0Metadata: TvdbMetadata?,
         contentType: ContentType,
+        autoS0Offset: Int = 0,
     ): Pair<String, Triple<String?, String?, String?>?> {
         val offset = tvdbMetadata?.episodeOffset ?: 0
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
@@ -406,7 +451,8 @@ class AnimeSama :
 
         val epMeta = tvdbMetadata?.episodeSummaries?.get(epNum + offset)
         if (isSeasonOverflow(epMeta, contentType, epNum, tvdbEpCount, s0Metadata)) {
-            val s0Meta = s0Metadata?.episodeSummaries?.get(epNum - tvdbEpCount)
+            val s0EpIndex = (epNum - tvdbEpCount) + offset + autoS0Offset
+            val s0Meta = s0Metadata?.episodeSummaries?.get(s0EpIndex)
             if (s0Meta != null) return Pair("[OAV] ", s0Meta)
         }
         return Pair(defaultPrefix, epMeta)
