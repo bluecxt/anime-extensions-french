@@ -26,6 +26,8 @@ import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -37,8 +39,6 @@ import org.jsoup.Jsoup.parse
 import org.jsoup.select.QueryParser
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 class DessinAnime :
     Source(),
