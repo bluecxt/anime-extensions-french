@@ -1,3 +1,5 @@
+// Copyright 2024 The Aniyomi Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 import android.app.Activity

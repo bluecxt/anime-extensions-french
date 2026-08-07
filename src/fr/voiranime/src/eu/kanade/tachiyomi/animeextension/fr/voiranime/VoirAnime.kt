@@ -1,3 +1,5 @@
+// Copyright 2024 The Aniyomi Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 @file:Suppress("SpellCheckingInspection")
 
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
@@ -195,7 +197,7 @@ class VoirAnime :
         val url = baseUrl + hoster.hosterUrl
         val lang = hoster.hosterName
 
-        val response = client.newCall(GET(url)).awaitSuccess()
+        val response = client.newCall(GET(url, headers)).awaitSuccess()
         val document = response.asJsoup()
 
         val videos = document.select("select.mirror option[data-index]").mapNotNull { element ->

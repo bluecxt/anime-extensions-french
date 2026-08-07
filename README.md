@@ -76,6 +76,44 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 
 ---
 
+## 🔍 Télémétrie & Rapports d'erreurs
+
+Certaines extensions intègrent un mécanisme de rapport d'erreur automatique (`ErrorWebhook`) actif dans les builds officiels signés par le mainteneur du repo.
+
+**Ce qui est transmis en cas d'erreur de parsing :**
+- Le domaine de la source (`baseUrl`) et l'URL de la page ayant échoué
+- Le message d'erreur et le nom de la méthode concernée
+- La version de l'extension
+
+**Ce qui n'est pas transmis :**
+- Aucune donnée personnelle (compte, identifiants, historique de navigation)
+- Aucune information sur l'appareil ou l'utilisateur
+
+**Conditions d'envoi :**
+- La clé webhook (`WEBHOOK_URL`) n'est **pas incluse** dans les builds compilés depuis les sources publiques — elle est injectée uniquement lors des builds CI officiels via une variable d'environnement secrète. Tout build réalisé sans cette clé ne transmet rien.
+- Un même événement ne peut être envoyé qu'une fois toutes les 24h (déduplication par hash).
+- Les envois sont réalisés de manière asynchrone et n'affectent pas le fonctionnement de l'extension.
+
+Cette fonctionnalité a pour seul but de détecter rapidement les cassures de parsing (changement de structure HTML d'un site source).
+
+---
+
+## 📊 Statistiques d'usage anonymes
+
+Les extensions envoient une fois par jour un ping anonyme afin de connaître les sources les plus utilisées et d'orienter les priorités de maintenance.
+
+**Ce qui est transmis :**
+- Le nom et la version de l'extension utilisée
+- Un identifiant anonyme à usage unique (ANDROID_ID haché en SHA-256, tronqué à 16 caractères — non réversible, non lié à un compte)
+
+**Ce qui n'est pas transmis :**
+- Aucune donnée de navigation (titres regardés, URLs, historique)
+- Aucune information personnelle ou d'appareil identifiable
+
+Un même appareil ne peut envoyer qu'un ping par extension par jour. Ces données sont utilisées uniquement à des fins statistiques internes (popularité des sources) et ne sont ni revendues ni partagées.
+
+---
+
 ## 💬 Support
 
 Besoin d'aide ou envie de discuter du projet ? Rejoigne le discord !

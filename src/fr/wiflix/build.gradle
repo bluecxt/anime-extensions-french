@@ -1,7 +1,7 @@
 ext {
     extName = 'Wiflix'
     extClass = '.Wiflix'
-    baseUrl = 'https://flemmix.win'
+    baseUrl = 'https://flemmix.men'
     extVersionCode = 8
 }
 

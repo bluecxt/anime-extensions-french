@@ -1,3 +1,5 @@
+// Copyright 2024 The Aniyomi Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.frenchanime
 
 import androidx.preference.PreferenceScreen
@@ -36,7 +38,7 @@ class FrenchAnime :
     override val defaultBaseUrl = "https://french-anime.com"
 
     override val lang = "fr"
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     override val supportedServers = listOf(
         "Filemoon",

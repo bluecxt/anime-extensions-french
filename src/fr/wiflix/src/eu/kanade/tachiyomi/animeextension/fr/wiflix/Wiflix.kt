@@ -1,3 +1,5 @@
+// Copyright 2024 The Aniyomi Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.wiflix
 
 import android.util.Log
@@ -39,7 +41,7 @@ class Wiflix :
 
     override val name = "Wiflix"
 
-    override val defaultBaseUrl = "https://flemmix.city"
+    override val defaultBaseUrl = "https://flemmix.men"
 
     override val lang = "fr"
 
@@ -99,7 +101,8 @@ class Wiflix :
 
             SAnime.create().apply {
                 title = anchor.selectFirst("span.fsr-title")?.text() ?: "Title not found"
-                url = anchor.selectFirst("a.fsr-wrap")?.attr("href")?.substringAfter(baseUrl) ?: ""
+                val href = anchor.attr("href").ifEmpty { return@mapNotNull null }
+                url = if (href.startsWith(baseUrl)) href.removePrefix(baseUrl) else href
                 thumbnail_url = anchor.selectFirst("img")?.attr("abs:src") ?: "https://http.cat/404.jpg"
             }
         }
@@ -116,7 +119,7 @@ class Wiflix :
 
         val animes = document.select("div.mov").mapNotNull { element ->
             SAnime.create().apply {
-                title = element.selectFirst("a.mov-t")?.text() ?: "failed selector"
+                title = element.selectFirst("a.mov-t")?.text() ?: ""
                 url = element.selectFirst("a.mov-t")?.safeRelativePath() ?: ""
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: "https://http.cat/404.jpg"
             }

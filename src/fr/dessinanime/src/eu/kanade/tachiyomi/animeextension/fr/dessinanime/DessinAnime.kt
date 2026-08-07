@@ -1,3 +1,5 @@
+// Copyright 2024 The Aniyomi Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.dessinanime
 
 import android.util.Log
@@ -34,6 +36,9 @@ import okhttp3.Response
 import org.jsoup.Jsoup.parse
 import org.jsoup.select.QueryParser
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class DessinAnime :
     Source(),
@@ -52,18 +57,21 @@ class DessinAnime :
 
     // =============================== Popular ===============================
 
-    private val paginationMapPopular = mutableMapOf<Int, String>()
+    private val paginationMapPopular = ConcurrentHashMap<Int, String>()
+    private val paginationMutex = Mutex()
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("api/catalogue")
 
-        if (page == 1) {
-            paginationMapPopular.clear()
-        } else {
-            val cursor = paginationMapPopular[page]
-            if (cursor != null) {
-                urlBuilder.addQueryParameter("cursor", cursor)
+        paginationMutex.withLock {
+            if (page == 1) {
+                paginationMapPopular.clear()
+            } else {
+                val cursor = paginationMapPopular[page]
+                if (cursor != null) {
+                    urlBuilder.addQueryParameter("cursor", cursor)
+                }
             }
         }
 
@@ -87,9 +95,9 @@ class DessinAnime :
 
         if (hasNextPage) {
             val lastElementId = data.last().id
-
-            // Verrouillage de l'état pour l'itération N+1
-            paginationMapPopular[page + 1] = lastElementId.toString()
+            paginationMutex.withLock {
+                paginationMapPopular[page + 1] = lastElementId.toString()
+            }
             Log.d(DESSINANIME_LOG, "page = $page lastId = $lastElementId, hasNextPage=$hasNextPage")
         }
         return AnimesPage(animes, hasNextPage)
