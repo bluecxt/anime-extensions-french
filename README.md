@@ -78,23 +78,23 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 
 ## 🔍 Télémétrie & Rapports d'erreurs
 
-Certaines extensions intègrent un mécanisme de rapport d'erreur automatique (`ErrorWebhook`) actif dans les builds officiels signés par le mainteneur du repo.
+Les builds officiels intègrent deux mécanismes de rapport automatique actifs uniquement lorsque la clé secrète `WEBHOOK_URL` est présente (builds CI signés par le mainteneur).
 
-**Ce qui est transmis en cas d'erreur de parsing :**
-- Le domaine de la source (`baseUrl`) et l'URL de la page ayant échoué
-- Le message d'erreur et le nom de la méthode concernée
+**1. Erreurs de parsing** (`ErrorWebhook`) — déclenché manuellement dans certaines extensions :
+- Le domaine et l'URL de la page ayant échoué
+- Le message d'erreur et le nom de la méthode
 - La version de l'extension
+- Un même événement ne peut être envoyé qu'une fois toutes les 24h (déduplication par hash)
 
-**Ce qui n'est pas transmis :**
-- Aucune donnée personnelle (compte, identifiants, historique de navigation)
-- Aucune information sur l'appareil ou l'utilisateur
+**2. Erreurs réseau** (`ErrorInterceptor`) — déclenché automatiquement sur toute réponse HTTP non-2xx (hors 404, 3xx, 502-504) :
+- Le domaine et l'URL de la requête
+- Le code HTTP et la méthode (`GET`, `POST`...)
+- Les 200 premiers caractères du corps de la réponse (message d'erreur du serveur)
 
-**Conditions d'envoi :**
-- La clé webhook (`WEBHOOK_URL`) n'est **pas incluse** dans les builds compilés depuis les sources publiques — elle est injectée uniquement lors des builds CI officiels via une variable d'environnement secrète. Tout build réalisé sans cette clé ne transmet rien.
-- Un même événement ne peut être envoyé qu'une fois toutes les 24h (déduplication par hash).
-- Les envois sont réalisés de manière asynchrone et n'affectent pas le fonctionnement de l'extension.
-
-Cette fonctionnalité a pour seul but de détecter rapidement les cassures de parsing (changement de structure HTML d'un site source).
+**Dans les deux cas :**
+- La clé webhook (`WEBHOOK_URL`) **n'est pas incluse** dans les builds compilés depuis les sources publiques — tout build sans cette clé ne transmet rien
+- Aucune donnée personnelle (compte, historique, identifiants) n'est transmise
+- Les envois sont asynchrones et n'affectent pas le fonctionnement de l'extension
 
 ---
 
