@@ -5,11 +5,14 @@ on:
     branches:
       - dev
     paths:
-      - "**"
-      - "!**.md"
-      - "!.github/**"
+      - "src/**"
+      - "core/**"
+      - "common.gradle"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
       - ".github/scripts/**"
       - ".github/workflows/build_push_dev.yml"
+      - ".github/workflows/reusable_build_publish.yml"
   workflow_dispatch:
 
 permissions:
