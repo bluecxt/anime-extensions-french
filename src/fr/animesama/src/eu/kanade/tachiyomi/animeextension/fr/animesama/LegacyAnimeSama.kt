@@ -20,7 +20,22 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-// a retirer en decembre 2026
+// a retirer en juillet 2027
+
+class LegacyAnimeSama {
+    companion object {
+        val LANG_VALUES = listOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
+
+        private val quickJsThreadLocal = ThreadLocal.withInitial { QuickJs.create() }
+
+        fun quickJs(): QuickJs = quickJsThreadLocal.get()!!
+
+        fun closeCurrentQuickJs() {
+            quickJs().close()
+            quickJsThreadLocal.remove()
+        }
+    }
+}
 
 // Helper extension functions to handle legacy URLs (non-JSON format) without TMDB integration.
 suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
@@ -124,18 +139,16 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
         }
     }
 
-    val langSuffixes = listOf("vostfr", "vf", "vf1", "vf2", "va", "vcn", "vj", "vkr", "vqc")
     var seasonRootPath = currentUrlPath
-    for (suffix in langSuffixes) {
-        if (seasonRootPath.endsWith("/$suffix", ignoreCase = true)) {
+    for (suffix in LegacyAnimeSama.LANG_VALUES) {
+        if (seasonRootPath.endsWith("/" + suffix, ignoreCase = true)) {
             seasonRootPath = seasonRootPath.substringBeforeLast("/")
             break
         }
     }
 
-    val langValues = listOf("vostfr", "vf", "va", "vcn", "vj", "vkr", "vqc")
     val players = coroutineScope {
-        langValues.map { lang ->
+        LegacyAnimeSama.LANG_VALUES.map { lang ->
             async { fetchLegacyPlayers("$baseUrl$seasonRootPath/$lang") }
         }.awaitAll()
     }
@@ -159,12 +172,18 @@ private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>
     if (doc.trim().startsWith("<")) return emptyList()
 
     val urls = try {
-        QuickJs.create().use { qjs ->
-            qjs.evaluate(doc)
-            val res = qjs.evaluate("JSON.stringify(Array.from({length: 40}, (e, i) => this['eps' + (i + 1)]).filter(e => e !== undefined && e !== null))")
-            Json.decodeFromString<List<List<String>>>(res as String)
-        }
-    } catch (_: Exception) {
+        val qjs = LegacyAnimeSama.quickJs()
+        qjs.evaluate(doc)
+        val json = qjs.evaluate(
+            """
+            JSON.stringify(
+                Array.from({length: 40}, (e, i) => this['eps' + (i + 1)])
+                    .filter(e => e !== undefined && e !== null)
+            )
+            """,
+        ) as String
+        Json.decodeFromString<List<List<String>>>(json)
+    } catch (e: Exception) {
         emptyList()
     }
 
@@ -205,11 +224,10 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
         return emptyList()
     }
     val hosters = mutableListOf<Hoster>()
-    val langValues = listOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
 
     playerUrls.forEachIndexed { i, playerUrl ->
         if (playerUrl.isEmpty()) return@forEachIndexed
-        val lang = langValues.getOrElse(i) { "VOSTFR" }
+        val lang = LegacyAnimeSama.LANG_VALUES.getOrElse(i) { "VOSTFR" }
         hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(playerUrl) + "|" + lang))
     }
     return hosters.coreSortHosters()
