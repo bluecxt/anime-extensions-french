@@ -1,7 +1,7 @@
 <div align="center">
 
-# 🇫🇷 bluecxt french repo 🇫🇷
-### Repository regroupant des modules de parsing Java/Kotlin pour l'agrégation de métadonnées de médias francophones. Optimisé pour les environnements basés sur l'architecture [AniZen](https://github.com/salmanbappi/AniZen).
+# 🇫🇷 bluecxt french repo 🇫🇷 ![Utilisateurs uniques](https://img.shields.io/endpoint?style=for-the-badge&labelColor=00209F&color=E50914&url=https%3A%2F%2Fscript.google.com%2Fmacros%2Fs%2FAKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg%2Fexec%3Ftype%3Dbadge)
+### Repository regroupant des modules de parsing Kotlin pour l'agrégation de métadonnées de médias francophones. Optimisé pour les environnements basés sur l'architecture [AniZen](https://github.com/salmanbappi/AniZen).
 
 <br>
 
