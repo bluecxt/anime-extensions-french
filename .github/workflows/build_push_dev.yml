@@ -7,6 +7,7 @@ on:
     paths:
       - "src/**"
       - "core/**"
+      - "gradle/**"
       - "common.gradle"
       - "build.gradle.kts"
       - "settings.gradle.kts"
