@@ -28,9 +28,9 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
     baseurl = urlparse(args.baseurl)
     if baseurl.scheme != "https" or not baseurl.netloc:
         parser.error(
-            f"invalid baseurl: '{baseurl}' (must include scheme 'https://' and a host)"
+            f"invalid baseurl: '{args.baseurl}' (must include scheme 'https://' and a host)"
         )
-    args.baseurl = f"{baseurl.scheme}://{baseurl.netloc}"
+    args.baseurl = f"{baseurl.scheme}://{baseurl.netloc}{baseurl.path}".rstrip("/")
 
     # Validate extension repo path
     path = Path(args.path).resolve()
@@ -54,10 +54,8 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
             )
         args.multisrc = multisrc_theme
 
-        if (
-            'libVersion = "1.4"'
-            in (multisrc_dir / multisrc_theme / "build.gradle.kts").read_text()
-        ):
+        gradle_content = (multisrc_dir / multisrc_theme / "build.gradle.kts").read_text()
+        if re.search(r'libVersion\s*=\s*["\']1\.4["\']', gradle_content):
             args.is_keisource = False
 
 
