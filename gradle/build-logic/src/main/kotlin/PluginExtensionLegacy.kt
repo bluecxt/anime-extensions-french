@@ -91,6 +91,12 @@ class PluginExtensionLegacy : Plugin<Project> {
                     keyAlias = providers.environmentVariable("ALIAS").orNull
                     keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
                 }
+                create("dev") {
+                    storeFile = rootProject.file("signingkey.jks")
+                    storePassword = providers.environmentVariable("KEY_STORE_PASSWORD").orNull
+                    keyAlias = providers.environmentVariable("DEV_ALIAS").orNull
+                    keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
+                }
             }
 
             buildTypes {
@@ -108,6 +114,17 @@ class PluginExtensionLegacy : Plugin<Project> {
                     )
                     @Suppress("UnstableApiUsage")
                     vcsInfo.include = false
+                }
+                create("dev") {
+                    initWith(getByName("debug"))
+                    isDebuggable = false
+                    isMinifyEnabled = true
+                    proguardFiles(
+                        getDefaultProguardFile("proguard-android-optimize.txt"),
+                        rootProject.file("config/proguard-rules.pro")
+                    )
+                    signingConfig = signingConfigs.getByName("dev")
+                    matchingFallbacks.addAll(listOf("debug", "release"))
                 }
             }
 
