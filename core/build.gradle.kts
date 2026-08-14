@@ -1,25 +1,15 @@
 import java.util.Properties
 
 plugins {
-    id("com.android.library")
-    id("keiyoushi.lint")
-    id("kotlinx-serialization")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
+
+    alias(kei.plugins.android.base)
+    alias(kei.plugins.spotless)
 }
 
 android {
-    compileSdk = AndroidConfig.compileSdk
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlin {
-        jvmToolchain(17)
-    }
-
     defaultConfig {
-        minSdk = AndroidConfig.minSdk
         consumerProguardFiles("consumer-rules.pro")
 
         val localProperties = Properties()
@@ -57,13 +47,7 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
-    }
-}
-
 dependencies {
     compileOnly(libs.jspecify)
-    compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    compileOnly(libs.bundles.common)
 }
