@@ -3,4 +3,4 @@ ext {
     extClass = '.SouthTV'
     extVersionCode = 18
 }
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,23 +1,26 @@
-plugins {
-    id("io.gitlab.arturbosch.detekt") version "1.23.6" 
-}
-
-allprojects {
-    repositories {
-        mavenCentral()
-        google()
-        maven(url = "https://jitpack.io")
-    }
-}
+import org.gradle.api.artifacts.VersionCatalogsExtension
 
 buildscript {
-    repositories {
-        mavenCentral()
-        google()
-        maven(url = "https://jitpack.io")
-    }
     dependencies {
-        classpath(libs.gradle.kotlin)
+        classpath(libs.kotlin.gradle)
+    }
+}
+
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.detekt)
+
+    alias(kei.plugins.spotless)
+}
+
+val buildLogic: IncludedBuild = gradle.includedBuild("build-logic")
+tasks {
+    listOf("clean", "spotlessApply", "spotlessCheck").forEach { task ->
+        named(task) {
+            dependsOn(buildLogic.task(":$task"))
+        }
     }
 }
 
@@ -27,8 +30,11 @@ subprojects {
     if (hasSourceDir) {
         apply(plugin = "io.gitlab.arturbosch.detekt")
 
+        val catalog = rootProject.extensions.getByType(VersionCatalogsExtension::class.java).named("libs")
+        val detektVersion = catalog.findVersion("detekt").get().toString()
+
         detekt {
-            toolVersion = "1.23.6"
+            toolVersion = detektVersion
             source.setFrom(
                 fileTree("src") {
                     include("**/*.kt")
@@ -48,7 +54,7 @@ subprojects {
                 html.required.set(true)
                 xml.required.set(false)
                 txt.required.set(true)
-                html.outputLocation.set(layout.buildDirectory.file("outputs/detekt-report.html").get().asFile)
+                sarif.required.set(true)
             }
         }
     }

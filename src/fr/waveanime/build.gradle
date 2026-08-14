@@ -4,4 +4,4 @@ ext {
     extVersionCode = 17
     isNsfw = false
 }
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

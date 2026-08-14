@@ -48,6 +48,3 @@ issue/
 .editorconfig
 .gitattributes
 ktlintCodeStyle.xml
-
-gradle-wrapper.properties
-gradle/
