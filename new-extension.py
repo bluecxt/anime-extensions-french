@@ -132,7 +132,7 @@ def write_android_manifest_file(
     ANDROID_NS = "http://schemas.android.com/apk/res/android"
     ET.register_namespace("android", ANDROID_NS)
     
-    root = ET.Element("manifest")
+    root = ET.Element("manifest", {"package": f"eu.kanade.tachiyomi.animeextension.{ext_dir_lang}.{ext_dir.name}"})
     application = ET.SubElement(root, "application", {f"{{{ANDROID_NS}}}icon": "@mipmap/ic_launcher"})
 
     if args.nsfw:
