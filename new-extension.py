@@ -39,7 +39,7 @@ def validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser
     args.baseurl = f"{baseurl.scheme}://{baseurl.netloc}{baseurl.path}".rstrip("/")
 
     # Validate extension repo path
-    path = Path(args.path).resolve()
+    path = Path(args.path.strip()).resolve()
     if not path.is_dir():
         parser.error(f"invalid path: '{path}' (directory does not exist)")
     elif not (path / "common").is_dir() or not (path / "core").is_dir():
@@ -68,7 +68,7 @@ def parse_arguments() -> argparse.Namespace:
         help="Is the extension NSFW"
     )
     parser.add_argument(
-        "--path", "-p", type=ascii_printable_validator,
+        "--path", "-p", type=str,
         help="Path to extension repo directory (defaults to cwd)",
         required=False, default=".",
     )
@@ -86,7 +86,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     return validate_arguments(parser.parse_args(), parser)
 
-def build_dir_tree(ext_dir: Path) -> Path:
+def build_dir_tree(ext_dir: Path, ext_dir_lang: str, ext_dir_name: str) -> Path:
     if ext_dir.exists():
         print(f"Extension directory already exists: '{ext_dir}'")
         exit(1)
@@ -125,7 +125,9 @@ def write_gradle_file(args: argparse.Namespace, ext_dir: Path, ext_class: str):
 def write_android_manifest_file(
     args: argparse.Namespace,
     ext_dir: Path,
-    ext_dir_lang: str
+    ext_dir_lang: str,
+    ext_dir_name: str,
+    ext_class: str
 ) -> None:
     manifest_file = (ext_dir / "AndroidManifest.xml")
 
@@ -246,11 +248,11 @@ if __name__ == "__main__":
     ext_dir_lang = args.lang.split("-")[0]
     ext_dir = args.path / "src" / ext_dir_lang / ext_dir_name
 
-    ext_package_dir = build_dir_tree(ext_dir)
+    ext_package_dir = build_dir_tree(ext_dir, ext_dir_lang, ext_dir_name)
     
     write_gradle_file(args, ext_dir, ext_class)
 
-    write_android_manifest_file(args, ext_dir, ext_dir_lang)
+    write_android_manifest_file(args, ext_dir, ext_dir_lang, ext_dir_name, ext_class)
 
     write_source_file(args, ext_package_dir, ext_dir_lang, ext_class, ext_dir_name)
     print("╔═════════════════════╗")
