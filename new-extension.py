@@ -125,8 +125,7 @@ def write_gradle_file(args: argparse.Namespace, ext_dir: Path, ext_class: str):
 def write_android_manifest_file(
     args: argparse.Namespace,
     ext_dir: Path,
-    ext_class: str,
-    ext_dir_name: str
+    ext_dir_lang: str
 ) -> None:
     manifest_file = (ext_dir / "AndroidManifest.xml")
 
@@ -148,7 +147,7 @@ def write_android_manifest_file(
         path_patterns = args.activity_path_patterns
 
         activity = ET.SubElement(application, "activity", {
-            f"{{{ANDROID_NS}}}name": f".fr.{ext_dir_name}.{ext_class}UrlActivity",
+            f"{{{ANDROID_NS}}}name": f".{ext_dir_lang}.{ext_dir_name}.{ext_class}UrlActivity",
             f"{{{ANDROID_NS}}}exported": "true",
             f"{{{ANDROID_NS}}}theme": "@android:style/Theme.NoDisplay",
             f"{{{ANDROID_NS}}}excludeFromRecents": "true",
@@ -251,7 +250,7 @@ if __name__ == "__main__":
     
     write_gradle_file(args, ext_dir, ext_class)
 
-    write_android_manifest_file(args, ext_dir, ext_class, ext_dir_name)
+    write_android_manifest_file(args, ext_dir, ext_dir_lang)
 
     write_source_file(args, ext_package_dir, ext_dir_lang, ext_class, ext_dir_name)
     print("╔═════════════════════╗")
