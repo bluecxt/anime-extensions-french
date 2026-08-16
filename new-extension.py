@@ -12,7 +12,7 @@ def ascii_printable_validator(value: str) -> str:
     if not cleaned:
         raise argparse.ArgumentTypeError(f"invalid value: '{value}' (must not be empty)")
 
-    if not (value.isascii() and value.isprintable()):
+    if not (cleaned.isascii() and cleaned.isprintable()):
         raise argparse.ArgumentTypeError(f"invalid value: '{value}' (must contain only printable ASCII characters)")
     return cleaned
 
