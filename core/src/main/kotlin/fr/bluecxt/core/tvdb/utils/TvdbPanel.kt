@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.tvdb.utils
 
 import fr.bluecxt.core.Source

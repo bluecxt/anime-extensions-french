@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core
 
 import uy.kohesive.injekt.api.get

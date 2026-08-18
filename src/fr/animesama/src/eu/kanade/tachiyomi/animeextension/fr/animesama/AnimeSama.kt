@@ -1,4 +1,4 @@
-// Copyright 2024 The Aniyomi Open Source Project
+// Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
@@ -21,7 +21,6 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportEpisodeIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportHosterIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportIncompleteness
@@ -516,8 +515,7 @@ class AnimeSama :
 
         val maxEpisodes = servers.maxOfOrNull { it.size } ?: run {
             Log.w(ANIMESAMA_LOG, "fetchPlayers: 0 server arrays matched in $jsUrl")
-            ErrorWebhook.sendWebhook(
-                baseUrl = baseUrl,
+            sendErrorWebhook(
                 url = jsUrl,
                 context = "Échec du parsing de $jsUrl (0 tableau de serveurs vidéo 'eps' trouvé)",
                 exception = IllegalStateException("epsArrayRegex matched 0 server arrays in $jsUrl"),
@@ -628,8 +626,7 @@ class AnimeSama :
             }.distinctBy { it.url }
 
         if (medias.isEmpty() && !link.contains("404")) {
-            ErrorWebhook.sendWebhook(
-                baseUrl = baseUrl,
+            sendErrorWebhook(
                 url = "$baseUrl$link",
                 context = "Échec du parsing des saisons (panneauAnime) : aucun média trouvé dans le script HTML",
                 exception = IllegalStateException("panneauRegex matched 0 season panels for $link"),

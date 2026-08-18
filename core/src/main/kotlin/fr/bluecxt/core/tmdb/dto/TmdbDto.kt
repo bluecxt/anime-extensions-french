@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.tmdb.dto
 
 import kotlinx.serialization.SerialName

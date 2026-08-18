@@ -185,7 +185,7 @@ def write_source_file(
 ) -> None:
     source_file_path = (ext_package_dir / (ext_class + ".kt"))
     source_file: list[str] = []
-    source_file.append("// Copyright 2024 The Aniyomi Open Source Project\n// SPDX-License-Identifier: Apache-2.0")
+    source_file.append("// Copyright bluecxt\n// SPDX-License-Identifier: Apache-2.0")
     source_file.append(f"package eu.kanade.tachiyomi.animeextension.{ext_dir_lang}.{ext_dir_name}\n")
     source_file.append("""import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList

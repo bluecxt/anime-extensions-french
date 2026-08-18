@@ -1,4 +1,4 @@
-// Copyright 2024 The Aniyomi Open Source Project
+// Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.wiflix
 
