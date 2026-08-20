@@ -134,7 +134,7 @@ def write_android_manifest_file(
     ANDROID_NS = "http://schemas.android.com/apk/res/android"
     ET.register_namespace("android", ANDROID_NS)
     
-    root = ET.Element("manifest", {"package": f"eu.kanade.tachiyomi.animeextension.{ext_dir_lang}.{ext_dir.name}"})
+    root = ET.Element("manifest")
     application = ET.SubElement(root, "application", {f"{{{ANDROID_NS}}}icon": "@mipmap/ic_launcher"})
 
     if args.nsfw:
@@ -201,15 +201,16 @@ import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
+import fr.bluecxt.core.utils.JsoupExtensions
 import fr.bluecxt.core.utils.safeRelativePath
-import fr.bluecxt.core.utils.selectFirstLog
 import keiyoushi.utils.get
-import keiyoushi.utils.post
 import keiyoushi.utils.parallelMap
+import keiyoushi.utils.post
 """)
     source_file.append(f"class {ext_class} :")
     source_file.append("\tSource(),")
-    source_file.append("\tCommonPreferences {\n")
+    source_file.append("\tCommonPreferences,")
+    source_file.append("\tJsoupExtensions {\n")
     source_file.append(f"\toverride val name = \"{args.extname}\"")
     source_file.append(f"\toverride val defaultBaseUrl = \"{args.baseurl}\"\n")
     source_file.append("\toverride val supportedServers = listOf(\"\")")
