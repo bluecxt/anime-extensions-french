@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.monitoring
 
 import android.app.Application
@@ -50,6 +52,7 @@ object ErrorWebhook {
     private val sentWebhooksCache = ConcurrentHashMap<Int, Long>()
     private val webhookMutex = Mutex()
     private const val CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000L // 24 hours
+    private const val WEBHOOK_VERSION = "2.0"
 
     /**
      * Ultra-fast 32-bit FNV-1a non-cryptographic hash for zero-allocation payload hashing.
@@ -125,27 +128,57 @@ object ErrorWebhook {
         return "Unknown"
     }
 
+    /**
+     * Dispatch an error webhook notification for the given base URL and target URL.
+     *
+     * If [extensionName] or [extensionVersion] are not provided, caller info is dynamically resolved
+     * from the current thread stack trace as a fallback mechanism.
+     *
+     * @param baseUrl Target domain or host name.
+     * @param url Full target request URL.
+     * @param additionalContext List of diagnostic messages, errors, or context markers.
+     * @param extensionName Optional explicit extension name.
+     * @param extensionVersion Optional explicit extension version.
+     */
     fun sendWebhook(
         baseUrl: String,
         url: String,
         additionalContext: List<String>,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ) {
-        val (extensionName, extensionVersion, callerDetails) = getCallerInfo()
-        val enrichedContext = additionalContext + "Caller: $callerDetails"
-        sendWebhook(baseUrl, url, extensionName, extensionVersion, enrichedContext)
+        val (resolvedName, resolvedVersion, callerDetails) = if (!extensionName.isNullOrBlank() && !extensionVersion.isNullOrBlank()) {
+            Triple(extensionName, extensionVersion, "Explicit")
+        } else {
+            getCallerInfo()
+        }
+        val enrichedContext = if (callerDetails == "Explicit") additionalContext else additionalContext + "Caller: $callerDetails"
+        sendWebhook(baseUrl, url, resolvedName, resolvedVersion, enrichedContext)
     }
 
+    /**
+     * Overload to dispatch an error webhook notification with a single context message and optional exception.
+     *
+     * @param baseUrl Target domain or host name.
+     * @param url Full target request URL.
+     * @param context Descriptive message outlining the error context.
+     * @param exception Optional exception instance associated with the failure.
+     * @param extensionName Optional explicit extension name.
+     * @param extensionVersion Optional explicit extension version.
+     */
     fun sendWebhook(
         baseUrl: String,
         url: String,
         context: String,
         exception: Throwable? = null,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ) {
         val details = mutableListOf(context)
         if (exception != null) {
             details.add("Exception: ${exception::class.java.simpleName} - ${exception.message}")
         }
-        sendWebhook(baseUrl, url, details)
+        sendWebhook(baseUrl, url, details, extensionName, extensionVersion)
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -155,40 +188,42 @@ object ErrorWebhook {
         extensionName: String,
         extensionVersion: String,
         additionalContext: List<String>,
-    ) = GlobalScope.launch(Dispatchers.IO) {
-        if (WEBHOOK_URL.isBlank()) return@launch
+    ) {
+        if (WEBHOOK_URL.isBlank()) return
 
-        val rawKey = "$extensionName:$extensionVersion:$baseUrl:$url:${additionalContext.joinToString("|")}"
-        val hashKey = fastHash(rawKey)
-        val shouldProceed = webhookMutex.withLock {
-            shouldSend(hashKey)
-        }
-        if (!shouldProceed) return@launch
+        GlobalScope.launch(Dispatchers.IO) {
+            val rawKey = "$extensionName:$extensionVersion:$baseUrl:$url:${additionalContext.joinToString("|")}"
+            val hashKey = fastHash(rawKey)
+            val shouldProceed = webhookMutex.withLock {
+                shouldSend(hashKey)
+            }
+            if (!shouldProceed) return@launch
 
-        try {
-            val contextFormatted = additionalContext.joinToString("\n") { "• $it" }
-            val payload = DiscordWebhookPayload(
-                embeds = listOf(
-                    DiscordEmbed(
-                        title = "🚨 Erreur Extension: $extensionName (v$extensionVersion)",
-                        color = 15158332,
-                        fields = listOf(
-                            DiscordEmbedField(name = "🌐 Domaine", value = baseUrl, inline = true),
-                            DiscordEmbedField(name = "🔗 URL", value = url.take(1024), inline = false),
-                            DiscordEmbedField(name = "📝 Contexte / Erreur", value = contextFormatted.take(1024).ifBlank { "Aucun détail" }, inline = false),
+            try {
+                val contextFormatted = additionalContext.joinToString("\n") { "• $it" }
+                val payload = DiscordWebhookPayload(
+                    embeds = listOf(
+                        DiscordEmbed(
+                            title = "🚨 Erreur Extension: $extensionName (v$extensionVersion) [WH v$WEBHOOK_VERSION]",
+                            color = 15158332,
+                            fields = listOf(
+                                DiscordEmbedField(name = "🌐 Domaine", value = baseUrl, inline = true),
+                                DiscordEmbedField(name = "🔗 URL", value = url.take(1024), inline = false),
+                                DiscordEmbedField(name = "📝 Contexte / Erreur", value = contextFormatted.take(1024).ifBlank { "Aucun détail" }, inline = false),
+                            ),
                         ),
                     ),
-                ),
-            )
+                )
 
-            val request = Request.Builder()
-                .url(WEBHOOK_URL)
-                .post(json.encodeToString(DiscordWebhookPayload.serializer(), payload).toRequestBody(mediaType))
-                .build()
+                val request = Request.Builder()
+                    .url(WEBHOOK_URL)
+                    .post(json.encodeToString(DiscordWebhookPayload.serializer(), payload).toRequestBody(mediaType))
+                    .build()
 
-            client.newCall(request).execute().close()
-        } catch (_: Exception) {
-            // Fail silently to avoid interrupting scraper/application flow
+                client.newCall(request).execute().close()
+            } catch (_: Exception) {
+                // Fail silently to avoid interrupting scraper/application flow
+            }
         }
     }
 }

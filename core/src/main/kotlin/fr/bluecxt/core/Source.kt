@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core
 
 import android.app.Application
@@ -15,6 +17,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.network.CloudflareInterceptor
 import fr.bluecxt.core.network.ErrorInterceptor
 import fr.bluecxt.core.tmdb.TmdbMetadata
@@ -71,6 +74,15 @@ abstract class Source :
         }
     }
 
+    /**
+     * Determines whether the source domain has been manually overridden by the user.
+     */
+    val isCustomDomain: Boolean
+        get() {
+            val defaultUrl = (this as? CommonPreferences)?.defaultBaseUrl
+            return !defaultUrl.isNullOrBlank() && currentBaseUrl != defaultUrl
+        }
+
     open val json: Json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
@@ -108,7 +120,7 @@ abstract class Source :
                 },
             )
             .addInterceptor(CloudflareInterceptor(network.client))
-            .addInterceptor(ErrorInterceptor())
+            .addInterceptor(ErrorInterceptor(currentName, currentVersion) { isCustomDomain })
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())
@@ -119,6 +131,31 @@ abstract class Source :
         client.newBuilder().apply {
             interceptors().removeAll { it.javaClass.simpleName.contains("Cloudflare") }
         }.build()
+    }
+
+    /**
+     * Sends an error webhook payload to the telemetry service with explicit extension metadata.
+     *
+     * This utility allows extension implementations to report custom parsing or scraping failures
+     * (e.g., failed regex matches or HTML structure changes) while ensuring that the extension's
+     * name and version are accurately attached to the report.
+     *
+     * @param url The target URL associated with the failure.
+     * @param context Descriptive context or details outlining the nature of the error.
+     * @param exception Optional exception instance associated with the failure for diagnostic output.
+     */
+    fun sendErrorWebhook(url: String, context: String, exception: Throwable? = null) {
+        if (isCustomDomain) return
+        ErrorWebhook.sendWebhook(
+            baseUrl = baseUrl,
+            url = url,
+            extensionName = currentName,
+            extensionVersion = currentVersion,
+            additionalContext = listOfNotNull(
+                context,
+                exception?.let { "${it::class.java.simpleName}: ${it.message}" },
+            ),
+        )
     }
 
     // ============================ Utils =============================

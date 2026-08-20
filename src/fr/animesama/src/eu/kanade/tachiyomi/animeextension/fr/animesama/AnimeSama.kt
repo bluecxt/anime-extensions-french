@@ -30,9 +30,9 @@ import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
+import fr.bluecxt.core.utils.JsoupExtensions
 import fr.bluecxt.core.utils.normalize
 import fr.bluecxt.core.utils.safeRelativePath
-import fr.bluecxt.core.utils.selectFirstLog
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
@@ -51,7 +51,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 class AnimeSama :
     Source(),
-    CommonPreferences {
+    CommonPreferences,
+    JsoupExtensions {
 
     override val name = "Anime-Sama"
 
