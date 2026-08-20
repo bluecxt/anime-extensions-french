@@ -4,6 +4,7 @@ package fr.bluecxt.core.utils
 
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
@@ -110,4 +111,17 @@ fun Response.toDoc(url: String): Document = this.use { res ->
         throw ExtractionException("HTTP ${res.code} (${res.message}) for $url".trim())
     }
     res.asJsoup()
+}
+
+/**
+ * Parses a status string into SAnime status integer constants.
+ */
+fun String.parseStatus(): Int = when (this.trim().lowercase()) {
+    "en cours", "ongoing", "en-cours", "releasing", "airing", "en diffusion", "en cours de diffusion", "broadcasting" -> SAnime.ONGOING
+    "terminé", "termine", "completed", "end", "finished", "fini", "complete", "complété" -> SAnime.COMPLETED
+    "licencié", "licencie", "licensed" -> SAnime.LICENSED
+    "publishing finished" -> SAnime.PUBLISHING_FINISHED
+    "annulé", "annule", "canceled", "cancelled", "abandonné", "abandonne" -> SAnime.CANCELLED
+    "en pause", "on-hold", "on hold", "on_hiatus", "hiatus", "en attente", "paused" -> SAnime.ON_HIATUS
+    else -> SAnime.UNKNOWN
 }
