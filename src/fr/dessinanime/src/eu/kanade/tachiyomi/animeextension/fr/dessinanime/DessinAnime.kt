@@ -456,10 +456,11 @@ class DessinAnime :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
 
-        androidx.preference.SwitchPreferenceCompat(screen.context).apply {
+        val context = screen.context
+        androidx.preference.SwitchPreferenceCompat(context).apply {
             key = PREF_USE_FALLBACK_KEY
-            title = "Desactiver le proxy"
-            summary = "Plus lent, a utiliser si aucun serveur n'est trouvée"
+            title = context.getString(keiyoushi.core.R.string.pref_disable_proxy_title)
+            summary = context.getString(keiyoushi.core.R.string.pref_disable_proxy_summary)
             setDefaultValue(PREF_USE_FALLBACK_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putBoolean(PREF_USE_FALLBACK_KEY, newValue as Boolean).apply()

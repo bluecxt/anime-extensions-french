@@ -17,6 +17,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
@@ -143,7 +144,13 @@ class CloudflareInterceptor(
             val retryResponse = chain.proceed(solvedRequest)
             if (isCloudflareChallenge(retryResponse)) {
                 retryResponse.close()
-                throw IOException("Cloudflare WebView solve did not clear challenge for $host")
+                val message = try {
+                    val app = Injekt.get<Application>()
+                    app.getString(keiyoushi.core.R.string.cloudflare_bypass_timeout, host)
+                } catch (_: Exception) {
+                    "Cloudflare WebView solve did not clear challenge for $host"
+                }
+                throw IOException(message)
             }
             return retryResponse
         } finally {

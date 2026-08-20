@@ -328,7 +328,7 @@ class AnimeSama :
                 )
             }
             .ifEmpty {
-                throw IllegalStateException("Aucun épisode n'a pu être récupéré sur Anime-Sama. Vérifiez votre connexion Internet.")
+                throw IllegalStateException(context.getString(keiyoushi.core.R.string.error_no_episodes_found))
             }
 
         val titles = parsedUrl.titles

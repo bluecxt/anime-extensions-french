@@ -134,8 +134,6 @@ class PreferenceDelegate<T>(
  */
 fun <T> SharedPreferences.delegate(key: String, default: T) = PreferenceDelegate(this, key, default)
 
-private const val RESTART_MESSAGE = "Restart the app to apply the new setting."
-
 /**
  * Get an [EditTextPreference] preference
  *
@@ -212,7 +210,7 @@ fun PreferenceScreen.getEditTextPreference(
         val isValid = onChange(pref, value)
         if (isValid) {
             if (restartRequired) {
-                Toast.makeText(context, RESTART_MESSAGE, Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(keiyoushi.core.R.string.pref_restart_message), Toast.LENGTH_LONG).show()
             }
 
             this.summary = getSummary(value)
@@ -285,7 +283,7 @@ fun PreferenceScreen.getListPreference(
         val isValid = onChange(pref, value)
         if (isValid) {
             if (restartRequired) {
-                Toast.makeText(context, RESTART_MESSAGE, Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(keiyoushi.core.R.string.pref_restart_message), Toast.LENGTH_LONG).show()
             }
             onComplete(value)
         }
@@ -351,7 +349,7 @@ fun PreferenceScreen.getSetPreference(
         val isValid = onChange(pref, values)
         if (isValid) {
             if (restartRequired) {
-                Toast.makeText(context, RESTART_MESSAGE, Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(keiyoushi.core.R.string.pref_restart_message), Toast.LENGTH_LONG).show()
             }
             onComplete(values)
         }
@@ -412,7 +410,7 @@ fun PreferenceScreen.getSwitchPreference(
         val isValid = onChange(pref, value)
         if (isValid) {
             if (restartRequired) {
-                Toast.makeText(context, RESTART_MESSAGE, Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(keiyoushi.core.R.string.pref_restart_message), Toast.LENGTH_LONG).show()
             }
             onComplete(value)
         }
