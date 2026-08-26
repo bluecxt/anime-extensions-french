@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
-import app.cash.quickjs.QuickJs
+import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -22,25 +22,24 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 // a retirer en juillet 2027
 
+private const val LEGACY_LOG = "AnimeSamaLegacy"
+
 class LegacyAnimeSama {
     companion object {
-        val LANG_VALUES = listOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
-
-        private val quickJsThreadLocal = ThreadLocal.withInitial { QuickJs.create() }
-
-        fun quickJs(): QuickJs = quickJsThreadLocal.get()!!
-
-        fun closeCurrentQuickJs() {
-            quickJs().close()
-            quickJsThreadLocal.remove()
-        }
+        val LANG_VALUES = listOf("vostfr", "vf", "vj", "var", "vcn", "vqc", "vkr", "va", "vf1", "vf2")
     }
 }
 
+private val epsArrayRegex = Regex("""(?:var|let|const)?\s*eps(\w+)\s*=\s*(\[[^\]]*\])""", RegexOption.DOT_MATCHES_ALL)
+private val urlInArrayRegex = Regex("""['"]([^'"]+)['"]""")
+
 // Helper extension functions to handle legacy URLs (non-JSON format) without TMDB integration.
 suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
-    val animeUrlPath = anime.url.substringBefore("#")
-    val response = client.newCall(GET("$baseUrl$animeUrlPath")).awaitSuccess()
+    Log.d(LEGACY_LOG, "getLegacyAnimeDetails: input url = '${anime.url}'")
+    val animeUrlPath = anime.url.substringBefore("#").removeSuffix("/")
+    Log.d(LEGACY_LOG, "getLegacyAnimeDetails: requesting '$baseUrl$animeUrlPath'")
+    val response = client.newCall(GET("$baseUrl$animeUrlPath", headers)).awaitSuccess()
+
     val doc = response.asJsoup()
 
     val descriptionText = doc.selectFirst("p#synopsisText")?.text() ?: ""
@@ -58,8 +57,10 @@ suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
 }
 
 suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
-    val animeUrlPath = anime.url.substringBefore("#")
-    val response = client.newCall(GET("$baseUrl$animeUrlPath")).awaitSuccess()
+    Log.d(LEGACY_LOG, "getLegacySeasonList: input url = '${anime.url}'")
+    val animeUrlPath = anime.url.substringBefore("#").removeSuffix("/")
+    Log.d(LEGACY_LOG, "getLegacySeasonList: requesting '$baseUrl$animeUrlPath'")
+    val response = client.newCall(GET("$baseUrl$animeUrlPath", headers)).awaitSuccess()
     val animeDoc = response.asJsoup()
 
     val animeName = (animeDoc.selectFirst("div.my-2 > h1")?.text() ?: "").trim()
@@ -69,25 +70,39 @@ suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
     val scripts = animeDoc.select("script").toString()
     val commentRegex = Regex("""//.*|/\*[\s\S]*?\*/""")
     val uncommented = commentRegex.replace(scripts, "")
+    val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
     val seasonRegex = Regex("""(?:episodes|var|let|const)\s+([\w\d_]+)\s*=\s*['"]([^'"]+)['"]""")
 
-    val distinctSeasons = seasonRegex.findAll(uncommented).toList()
-        .filter {
-            val stem = it.groupValues[2].trim().removeSuffix("/")
-            val isLangOnly = stem.equals("vostfr", true) || stem.equals("vf", true) ||
-                stem.equals("vf1", true) || stem.equals("vf2", true) ||
-                stem.equals("va", true) || stem.equals("vcn", true) ||
-                stem.equals("vj", true) || stem.equals("vkr", true) ||
-                stem.equals("vqc", true)
-            stem.contains("/") && !isLangOnly
+    val panneauMatches = panneauRegex.findAll(uncommented).map {
+        val name = it.groupValues[1].trim()
+        var stem = it.groupValues[2].trim().removeSuffix("/")
+        for (lang in LegacyAnimeSama.LANG_VALUES) {
+            if (stem.endsWith("/$lang", ignoreCase = true)) {
+                stem = stem.substringBeforeLast("/")
+                break
+            }
         }
-        .distinctBy {
-            it.groupValues[2].trim().removeSuffix("/")
-                .substringBeforeLast("/", it.groupValues[2].trim().removeSuffix("/"))
-        }
+        name to stem
+    }.toList()
 
-    return distinctSeasons.map { match ->
-        val (seasonName, seasonStem) = match.destructured
+    val seasonMatches = seasonRegex.findAll(uncommented).mapNotNull {
+        val name = it.groupValues[1].trim()
+        val stem = it.groupValues[2].trim().removeSuffix("/")
+        val isLangOnly = LegacyAnimeSama.LANG_VALUES.any { lang -> stem.equals(lang, ignoreCase = true) }
+        if (stem.contains("/") && !isLangOnly) {
+            name to stem
+        } else {
+            null
+        }
+    }.toList()
+
+    val distinctSeasons = (panneauMatches + seasonMatches)
+        .filter { it.second.isNotBlank() }
+        .distinctBy { it.second }
+
+    Log.d(LEGACY_LOG, "getLegacySeasonList: found ${distinctSeasons.size} seasons")
+
+    return distinctSeasons.map { (seasonName, seasonStem) ->
         val cleanSeasonName = seasonName
             .replace(Regex("""(?i)\s*-\s*(?:Saison|Season)\s*1(?!\d)"""), "")
             .replace(Regex("""(?i)\s*(?:Saison|Season)\s*1(?!\d)"""), "")
@@ -113,6 +128,7 @@ suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
 }
 
 suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
+    Log.d(LEGACY_LOG, "getLegacyEpisodeList: input url = '${anime.url}'")
     val animeUrlPath = anime.url.substringBefore("#").removeSuffix("/")
     val movieIndex = anime.url.substringAfter("#", "").takeIf { it.isNotBlank() && !it.startsWith("s") }?.toIntOrNull()
 
@@ -121,7 +137,9 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
     val isHub = rawUrl.pathSegments.size <= 2
 
     if (isHub) {
-        val response = client.newCall(GET("$baseUrl$animeUrlPath/")).await()
+        val hubUrl = "$baseUrl$animeUrlPath/"
+        Log.d(LEGACY_LOG, "getLegacyEpisodeList: isHub=true, requesting '$hubUrl'")
+        val response = client.newCall(GET(hubUrl, headers)).await()
         if (!response.isSuccessful) return emptyList()
         val doc = response.asJsoup()
         val scripts = doc.select("script").toString()
@@ -147,6 +165,8 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
         }
     }
 
+    Log.d(LEGACY_LOG, "getLegacyEpisodeList: resolved seasonRootPath = '$seasonRootPath'")
+
     val players = coroutineScope {
         LegacyAnimeSama.LANG_VALUES.map { lang ->
             async { fetchLegacyPlayers("$baseUrl$seasonRootPath/$lang") }
@@ -154,42 +174,37 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
     }
 
     val episodes = legacyPlayersToEpisodes(players)
+    Log.d(LEGACY_LOG, "getLegacyEpisodeList: total extracted episodes = ${episodes.size}")
     return if (movieIndex == null) episodes.reversed() else listOf(episodes[movieIndex])
 }
 
 private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>> {
     val cleanUrl = url.substringBefore("#")
     val docUrl = "${cleanUrl.removeSuffix("/")}/episodes.js"
+    Log.d(LEGACY_LOG, "fetchLegacyPlayers: requesting '$docUrl'")
     val doc = try {
-        client.newCall(GET(docUrl)).await().use {
-            if (!it.isSuccessful) return emptyList()
+        client.newCall(GET(docUrl, headers)).await().use {
+            if (!it.isSuccessful) {
+                Log.d(LEGACY_LOG, "fetchLegacyPlayers: HTTP error ${it.code} for '$docUrl'")
+                return emptyList()
+            }
             it.body.string()
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        Log.e(LEGACY_LOG, "fetchLegacyPlayers: network exception for '$docUrl': ${e.message}")
         return emptyList()
     }
 
     if (doc.trim().startsWith("<")) return emptyList()
 
-    val urls = try {
-        val qjs = LegacyAnimeSama.quickJs()
-        qjs.evaluate(doc)
-        val json = qjs.evaluate(
-            """
-            JSON.stringify(
-                Array.from({length: 40}, (e, i) => this['eps' + (i + 1)])
-                    .filter(e => e !== undefined && e !== null)
-            )
-            """,
-        ) as String
-        Json.decodeFromString<List<List<String>>>(json)
-    } catch (e: Exception) {
-        emptyList()
-    }
+    val servers = epsArrayRegex.findAll(doc).map { match ->
+        val arrayContent = match.groupValues[2]
+        urlInArrayRegex.findAll(arrayContent).map { it.groupValues[1].trim() }.toList()
+    }.filter { it.isNotEmpty() }.toList()
 
-    if (urls.isEmpty() || urls[0].isEmpty()) return emptyList()
-    val maxEpisodes = urls.maxOfOrNull { it.size } ?: 0
-    return List(maxEpisodes) { i -> urls.mapNotNull { it.getOrNull(i) }.distinct() }
+    if (servers.isEmpty()) return emptyList()
+    val maxEpisodes = servers.maxOfOrNull { it.size } ?: 0
+    return List(maxEpisodes) { i -> servers.mapNotNull { it.getOrNull(i) }.distinct() }
 }
 
 private fun AnimeSama.legacyPlayersToEpisodes(
@@ -227,7 +242,7 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
 
     playerUrls.forEachIndexed { i, playerUrl ->
         if (playerUrl.isEmpty()) return@forEachIndexed
-        val lang = LegacyAnimeSama.LANG_VALUES.getOrElse(i) { "VOSTFR" }
+        val lang = LegacyAnimeSama.LANG_VALUES.getOrElse(i) { "vostfr" }.uppercase()
         hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(playerUrl) + "|" + lang))
     }
     return hosters.coreSortHosters()
