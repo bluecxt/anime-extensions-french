@@ -416,13 +416,14 @@ class AnimeSama :
         autoS0Offset: Int = 0,
     ): List<SEpisode> {
         val contentType = ContentType.from(animeTitle, season ?: "")
-        val defaultPrefix = contentType.getPrefix()
+        val seasonNum = season?.filter { it.isDigit() }?.toIntOrNull() ?: 1
+        val defaultPrefix = contentType.getPrefix(seasonNum)
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
         val episodeOffset = tvdbMetadata?.episodeOffset ?: 0
 
         return this.map { episode ->
             val epNum = episode.episodeNumber
-            val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType, autoS0Offset)
+            val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType, defaultPrefix, autoS0Offset)
             val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, season, epMeta?.first, tvdbMetadata?.title, this.size)
             val finalName = "$prefix$baseName".trim()
 
@@ -444,11 +445,11 @@ class AnimeSama :
         tvdbMetadata: TvdbMetadata?,
         s0Metadata: TvdbMetadata?,
         contentType: ContentType,
+        defaultPrefix: String,
         autoS0Offset: Int = 0,
     ): Pair<String, Triple<String?, String?, String?>?> {
         val offset = tvdbMetadata?.episodeOffset ?: 0
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
-        val defaultPrefix = contentType.getPrefix()
 
         val epMeta = tvdbMetadata?.episodeSummaries?.get(epNum + offset)
         if (isSeasonOverflow(epMeta, contentType, epNum, tvdbEpCount, s0Metadata)) {

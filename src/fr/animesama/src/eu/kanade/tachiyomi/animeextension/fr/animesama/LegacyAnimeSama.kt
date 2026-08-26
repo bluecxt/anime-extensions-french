@@ -26,7 +26,7 @@ private const val LEGACY_LOG = "AnimeSamaLegacy"
 
 class LegacyAnimeSama {
     companion object {
-        val LANG_VALUES = listOf("vostfr", "vf", "vj", "var", "vcn", "vqc", "vkr", "va", "vf1", "vf2")
+        val LANG_VALUES = listOf("vostfr", "vf", "vf1", "vf2", "va", "vcn", "vj", "vkr", "vqc")
     }
 }
 
@@ -226,6 +226,9 @@ private fun AnimeSama.legacyPlayersToEpisodes(
                 episode_number = (i + 1).toFloat()
                 name = "Épisode ${i + 1}"
                 url = json.encodeToString(epUrls)
+                scanlator = epUrls.mapIndexedNotNull { index, urls ->
+                    if (urls.isNotEmpty()) LegacyAnimeSama.LANG_VALUES.getOrNull(index) else null
+                }.joinToString().uppercase()
             },
         )
     }
