@@ -37,3 +37,6 @@ trigger: always_on
    - JSON : `myObject.toJsonString()`, `string.parseAs<T>()`, `response.parseAs<T>()`.
    - Concurrence : Utiliser `parallelMap` / `parallelMapNotNull` (`keiyoushi.utils.Coroutines`).
    - Requêtes multiples indépendantes : Obligation d'utiliser `coroutineScope { async { ... } }` pour exécuter les appels réseau en parallèle.
+7. **Validation & Compilation Obligatoire :**
+   - **Toujours tester chaque modification avec `assembleDebug`** (sur le module concerné, ex: `./gradlew :src:fr:<extension>:assembleDebug`, ou globalement) avant de conclure une tâche pour garantir l'absence d'erreurs de compilation, de syntaxe ou de packaging APK.
+
