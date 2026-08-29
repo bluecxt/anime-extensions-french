@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 private const val TVDB_BASE_URL = "https://api4.thetvdb.com/v4"
 private const val TVDB_ARTWORK_BASE_URL = "https://artworks.thetvdb.com"
-private val DEFAULT_TVDB_API_KEY = BuildConfig.TVDB_API
+private const val DEFAULT_TVDB_API_KEY = BuildConfig.TVDB_API
 
 private val tvdbJson = Json {
     ignoreUnknownKeys = true
