@@ -89,36 +89,33 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
 
         val cleanTitle = title.dropLastWhile { it.isDigit() }.trim()
         val seasonNumber = title.takeLastWhile { it.isDigit() }.toIntOrNull() ?: 1
-        val metadata = fetchTvdbMetadata(cleanTitle, seasonNumber)
+        val metadata = fetchTvdbMetadata(cleanTitle, seasonNumber) ?: return@apply
 
-        if (metadata != null) {
-            if (description.isNullOrBlank() && !metadata.summary.isNullOrBlank()) {
-                val date = metadata.releaseDate
-                description = if (!date.isNullOrBlank()) {
-                    "Date de sortie : $date\n\n${metadata.summary}"
-                } else {
-                    metadata.summary
+        if (description.isNullOrBlank() && !metadata.summary.isNullOrBlank()) {
+            description = buildString {
+                metadata.releaseDate?.takeIf { it.isNotBlank() }?.let { date ->
+                    append("Date de sortie : ")
+                    appendLine(date)
+                    appendLine()
                 }
+                append(metadata.summary)
             }
+        }
 
-            if (thumbnail_url.isNullOrBlank()) {
-                thumbnail_url = metadata.seasonPosterUrl ?: metadata.mainPosterUrl
-            }
-
-            if (genre.isNullOrBlank()) {
-                genre = metadata.genre
-            }
-
-            if (author.isNullOrBlank()) {
-                author = metadata.author
-            }
-            if (artist.isNullOrBlank()) {
-                artist = metadata.artist
-            }
-
-            if (status == SAnime.UNKNOWN && metadata.status != 0) {
-                status = metadata.status
-            }
+        if (thumbnail_url.isNullOrBlank()) {
+            thumbnail_url = metadata.seasonPosterUrl ?: metadata.mainPosterUrl
+        }
+        if (genre.isNullOrBlank()) {
+            genre = metadata.genre
+        }
+        if (author.isNullOrBlank()) {
+            author = metadata.author
+        }
+        if (artist.isNullOrBlank()) {
+            artist = metadata.artist
+        }
+        if (status == SAnime.UNKNOWN && metadata.status != 0) {
+            status = metadata.status
         }
     }
 
