@@ -85,8 +85,6 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
 
     // ============================== Anime Details ===============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime = super.getAnimeDetails(anime).apply {
-        scope.launch { itHasVf(url, title) }
-
         val cleanTitle = title.dropLastWhile { it.isDigit() }.trim()
         val seasonNumber = title.takeLastWhile { it.isDigit() }.toIntOrNull() ?: 1
         val metadata = fetchTvdbMetadata(cleanTitle, seasonNumber) ?: return@apply
