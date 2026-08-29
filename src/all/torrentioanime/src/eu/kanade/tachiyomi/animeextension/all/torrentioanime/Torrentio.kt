@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.Source
+import keiyoushi.core.R
 import keiyoushi.utils.bodyString
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
@@ -507,24 +508,24 @@ class Torrentio : Source() {
         // Debrid provider
         ListPreference(context).apply {
             key = PREF_DEBRID_KEY
-            title = context.getString(keiyoushi.core.R.string.pref_debrid_title)
+            title = context.getString(R.string.pref_debrid_title)
             entries = PREF_DEBRID_ENTRIES
             entryValues = PREF_DEBRID_VALUES
             setDefaultValue("none")
-            summary = context.getString(keiyoushi.core.R.string.pref_debrid_summary)
+            summary = context.getString(R.string.pref_debrid_summary)
         }.also(screen::addPreference)
 
         // Token
         EditTextPreference(context).apply {
             key = PREF_TOKEN_KEY
-            title = context.getString(keiyoushi.core.R.string.pref_token_title)
+            title = context.getString(R.string.pref_token_title)
             setDefaultValue(PREF_TOKEN_DEFAULT)
             summary = PREF_TOKEN_SUMMARY
 
             setOnPreferenceChangeListener { _, newValue ->
                 runCatching {
                     val value = (newValue as String).trim().ifBlank { PREF_TOKEN_DEFAULT }
-                    Toast.makeText(context, context.getString(keiyoushi.core.R.string.pref_restart_message), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, context.getString(R.string.pref_restart_message), Toast.LENGTH_LONG).show()
                     preferences.edit().putString(key, value).commit()
                 }.getOrDefault(false)
             }
@@ -533,7 +534,7 @@ class Torrentio : Source() {
         // Provider
         MultiSelectListPreference(context).apply {
             key = PREF_PROVIDER_KEY
-            title = context.getString(keiyoushi.core.R.string.pref_providers_title)
+            title = context.getString(R.string.pref_providers_title)
             entries = PREF_PROVIDERS
             entryValues = PREF_PROVIDERS_VALUE
             setDefaultValue(PREF_PROVIDERS_DEFAULT)

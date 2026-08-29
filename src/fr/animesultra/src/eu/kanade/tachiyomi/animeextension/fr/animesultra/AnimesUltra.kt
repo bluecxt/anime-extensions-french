@@ -65,11 +65,11 @@ class AnimesUltra :
         if (page > 1) return AnimesPage(emptyList(), false)
         val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
         val document = response.asJsoup()
-        val items = document.select(".block_area_trending .swiper-slide").map { element ->
+        val items = document.select(".block_area_trending .swiper-slide").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a.film-poster")!!
                 title = link.attr("title").ifBlank { element.selectFirst(".film-title")?.text() ?: "" }
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
@@ -77,11 +77,11 @@ class AnimesUltra :
     }
 
     private fun parseAnimesPage(document: Document): AnimesPage {
-        val items = document.select("div.flw-item").map { element ->
+        val items = document.select("div.flw-item").mapNotNull { element ->
             SAnime.create().apply {
-                val link = element.selectFirst("h3.film-name a")!!
-                title = link.text()
-                url = link.safeRelativePath()
+                val link = element.selectFirst("h3.film-name a")
+                title = link?.text() ?: ""
+                url = link?.safeRelativePath() ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
