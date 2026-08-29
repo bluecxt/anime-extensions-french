@@ -72,7 +72,7 @@ abstract class Madara(
         }
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (page > 1) addPathSegment("page/$page")
+            if (page > 1) addPathSegments("page/$page")
 
             addQueryParameter("s", trimmedQuery)
             addQueryParameter("post_type", "wp-manga")
