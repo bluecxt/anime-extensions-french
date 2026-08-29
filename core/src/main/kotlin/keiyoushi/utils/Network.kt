@@ -1,7 +1,10 @@
+@file:Suppress("FunctionName")
+
 package keiyoushi.utils
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.CacheControl
@@ -9,6 +12,7 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -33,6 +37,40 @@ suspend fun OkHttpClient.get(
     headers: Headers = DEFAULT_HEADERS,
     cache: CacheControl = DEFAULT_CACHE_CONTROL,
 ): Response = newCall(GET(url, headers, cache)).awaitSuccess()
+
+fun HEAD(
+    url: String,
+    headers: Headers = DEFAULT_HEADERS,
+    cache: CacheControl = DEFAULT_CACHE_CONTROL,
+): Request = Request.Builder()
+    .url(url)
+    .headers(headers)
+    .cacheControl(cache)
+    .head()
+    .build()
+
+fun HEAD(
+    url: HttpUrl,
+    headers: Headers = DEFAULT_HEADERS,
+    cache: CacheControl = DEFAULT_CACHE_CONTROL,
+): Request = Request.Builder()
+    .url(url)
+    .headers(headers)
+    .cacheControl(cache)
+    .head()
+    .build()
+
+suspend fun OkHttpClient.head(
+    url: String,
+    headers: Headers = DEFAULT_HEADERS,
+    cache: CacheControl = DEFAULT_CACHE_CONTROL,
+): Response = newCall(HEAD(url, headers, cache)).await()
+
+suspend fun OkHttpClient.head(
+    url: HttpUrl,
+    headers: Headers = DEFAULT_HEADERS,
+    cache: CacheControl = DEFAULT_CACHE_CONTROL,
+): Response = newCall(HEAD(url, headers, cache)).await()
 
 suspend fun OkHttpClient.post(
     url: String,
