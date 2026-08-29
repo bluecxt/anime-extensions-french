@@ -48,7 +48,7 @@ import org.jsoup.Jsoup.parse
 import uy.kohesive.injekt.injectLazy
 
 private const val ITEMS_PER_PAGE = 100
-private val CACHE_EXPIRATION = 24 * 60 * 60 * 1000L
+private const val CACHE_EXPIRATION = 24 * 60 * 60 * 1000L
 
 class AnimeUltime :
     Source(),
@@ -164,7 +164,13 @@ class AnimeUltime :
 
     private suspend fun parseAnimes(animeList: List<SearchResponseItem>): AnimesPage {
         val animes = animeList.parallelMapNotNull { animeItem ->
-            val jsonUrl = json.encodeToString(UrlContent(id = animeItem.id, url = animeItem.url.safeRelativePath(baseUrl), searchType = animeItem.searchType))
+            val jsonUrl = json.encodeToString(
+                UrlContent(
+                    id = animeItem.id,
+                    url = animeItem.url.safeRelativePath(baseUrl) ?: return@parallelMapNotNull null,
+                    searchType = animeItem.searchType,
+                ),
+            )
             SAnime.create().apply {
                 url = jsonUrl
                 thumbnail_url = animeItem.img_url

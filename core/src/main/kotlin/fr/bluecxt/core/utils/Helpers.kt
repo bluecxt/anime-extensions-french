@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.utils
 
+import android.app.Application
 import android.content.SharedPreferences
+import androidx.annotation.StringRes
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
@@ -17,13 +20,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * Safely extracts the relative path from an element's href attribute.
  * Uses abs:href to ensure a full URL is parsed, then returns only the encoded path.
  */
-fun Element.safeRelativePath(): String {
-    val url = this.attr("abs:href").toHttpUrlOrNull() ?: return ""
+fun Element.safeRelativePath(): String? {
+    val url = this.attr("abs:href").toHttpUrlOrNull() ?: return null
     val query = url.encodedQuery
     return if (query.isNullOrBlank()) url.encodedPath else "${url.encodedPath}?$query"
 }
@@ -32,8 +37,8 @@ fun Element.safeRelativePath(): String {
  * Resolves a URL (relative or absolute) against a base URL and returns the cleaned relative path.
  * Uses OkHttp's resolve engine to handle normalization and special characters.
  */
-fun String.safeRelativePath(base: String): String {
-    val url = base.toHttpUrlOrNull()?.resolve(this) ?: return ""
+fun String.safeRelativePath(base: String): String? {
+    val url = base.toHttpUrlOrNull()?.resolve(this) ?: return null
     val query = url.encodedQuery
     return if (query.isNullOrBlank()) url.encodedPath else "${url.encodedPath}?$query"
 }
@@ -47,11 +52,11 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
     val builder = this.headers?.newBuilder() ?: Headers.Builder()
 
     if (this.headers?.get("User-Agent") == null) {
-        builder.set("User-Agent", DEFAULT_USER_AGENT)
+        builder["User-Agent"] = DEFAULT_USER_AGENT
     }
 
     if (this.headers?.get("Referer") == null) {
-        builder.set("Referer", "$baseUrl/")
+        builder["Referer"] = "$baseUrl/"
     }
 
     return this.copy(headers = builder.build())
@@ -110,4 +115,17 @@ fun Response.toDoc(url: String): Document = this.use { res ->
         throw ExtractionException("HTTP ${res.code} (${res.message}) for $url".trim())
     }
     res.asJsoup()
+}
+
+/**
+ * Parses a status string into SAnime status integer constants.
+ */
+fun String.parseStatus(): Int = when (this.trim().lowercase()) {
+    "en cours", "ongoing", "en-cours", "releasing", "airing", "en diffusion", "en cours de diffusion", "broadcasting" -> SAnime.ONGOING
+    "terminé", "termine", "completed", "end", "finished", "fini", "complete", "complété" -> SAnime.COMPLETED
+    "licencié", "licencie", "licensed" -> SAnime.LICENSED
+    "publishing finished" -> SAnime.PUBLISHING_FINISHED
+    "annulé", "annule", "canceled", "cancelled", "abandonné", "abandonne" -> SAnime.CANCELLED
+    "en pause", "on-hold", "on hold", "on_hiatus", "hiatus", "en attente", "paused" -> SAnime.ON_HIATUS
+    else -> SAnime.UNKNOWN
 }

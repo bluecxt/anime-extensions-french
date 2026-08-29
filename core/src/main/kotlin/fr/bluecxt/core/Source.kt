@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import fr.bluecxt.core.filters.FilterProvider
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.network.CloudflareInterceptor
@@ -35,6 +36,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 import kotlin.random.Random
@@ -53,9 +56,18 @@ private val extractionSemaphore = Semaphore(10)
  */
 abstract class Source :
     AnimeHttpSource(),
-    ConfigurableAnimeSource {
+    ConfigurableAnimeSource,
+    FilterProvider {
 
     val preferences: SharedPreferences by getPreferencesLazy()
+
+    override fun getFilterList(): AnimeFilterList = buildFilterList()
+
+    fun getString(@androidx.annotation.StringRes resId: Int, vararg formatArgs: Any): String {
+        val app = Injekt.get<Application>()
+        val pkgName = this::class.java.`package`?.name ?: ""
+        return app.createPackageContext(pkgName, 0).getString(resId, *formatArgs)
+    }
 
     protected val currentName: String by lazy {
         try {
@@ -322,7 +334,7 @@ abstract class Source :
     /**
      * Standardized hoster sorting based on language tags and user preferences.
      */
-    fun List<Hoster>.coreSortHosters(): List<Hoster> {
+    override fun List<Hoster>.sortHosters(): List<Hoster> {
         val prefVoice = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val prefServer = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
         val langRegex = Regex("\\((.*?)\\)")
@@ -335,6 +347,9 @@ abstract class Source :
                 .thenByDescending { it.hosterName.contains(prefServer, true) },
         )
     }
+
+    @Deprecated("Use sortHosters() instead", replaceWith = ReplaceWith("sortHosters()"))
+    fun List<Hoster>.coreSortHosters(): List<Hoster> = sortHosters()
 
     // ============================ Season Engine =============================
 

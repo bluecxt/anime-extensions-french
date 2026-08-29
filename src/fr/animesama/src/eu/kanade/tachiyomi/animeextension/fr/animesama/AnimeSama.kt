@@ -33,6 +33,7 @@ import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
 import fr.bluecxt.core.utils.JsoupExtensions
 import fr.bluecxt.core.utils.normalize
 import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.core.R
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
@@ -328,7 +329,7 @@ class AnimeSama :
                 )
             }
             .ifEmpty {
-                throw IllegalStateException(context.getString(keiyoushi.core.R.string.error_no_episodes_found))
+                throw IllegalStateException(getString(R.string.error_no_episodes_found))
             }
 
         val titles = parsedUrl.titles
@@ -387,7 +388,7 @@ class AnimeSama :
                 hosterName = lang.uppercase(),
                 internalData = json.encodeToString(langPlayers),
             )
-        }.coreSortHosters()
+        }.sortHosters()
         return hosters.checkAndReportHosterIssues(baseUrl, episode.url, episode.name)
     }
 
@@ -616,7 +617,7 @@ class AnimeSama :
                     val rawUrl = match.groupValues[2]
                     val rawFolder = rawUrl.substringBefore("/")
                     val subFolder = if (rawFolder.lowercase() in langList) "" else rawFolder
-                    val urlClean = subFolder.safeRelativePath("$baseUrl$hubLink/").removeSuffix("/")
+                    val urlClean = subFolder.safeRelativePath("$baseUrl$hubLink/")?.removeSuffix("/") ?: return@mapNotNull null
                     Log.d(ANIMESAMA_LOG, "parseMedias: found rawUrl = '$rawUrl' -> urlClean = '$urlClean'")
                     UrlContent(
                         url = urlClean,

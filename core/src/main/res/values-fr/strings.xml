@@ -23,4 +23,7 @@
     <!-- Error and UI feedback messages -->
     <string name="cloudflare_bypass_timeout">Délai de contournement Cloudflare dépassé pour %1$s. Essayez d\'ouvrir dans la WebView.</string>
     <string name="error_no_episodes_found">Aucun épisode n\'a pu être récupéré. Vérifiez votre connexion Internet ou ouvrez la WebView.</string>
+
+    <!-- Metadata labels -->
+    <string name="metadata_release_date_prefix">"Date de sortie : "</string>
 </resources>

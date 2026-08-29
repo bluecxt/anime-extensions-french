@@ -149,7 +149,7 @@ def write_android_manifest_file(
         path_patterns = args.activity_path_patterns
 
         activity = ET.SubElement(application, "activity", {
-            f"{{{ANDROID_NS}}}name": f".{ext_dir_lang}.{ext_dir_name}.{ext_class}UrlActivity",
+            f"{{{ANDROID_NS}}}name": "keiyoushi.source.UrlActivity",
             f"{{{ANDROID_NS}}}exported": "true",
             f"{{{ANDROID_NS}}}theme": "@android:style/Theme.NoDisplay",
             f"{{{ANDROID_NS}}}excludeFromRecents": "true",

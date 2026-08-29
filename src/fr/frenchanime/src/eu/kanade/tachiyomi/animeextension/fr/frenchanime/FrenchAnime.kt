@@ -63,10 +63,10 @@ class FrenchAnime :
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/animes-vostfr/page/$page/", headers)).awaitSuccess()
         val document = response.asJsoup()
-        val animes = document.select("div#dle-content > div.mov").map { element ->
+        val animes = document.select("div#dle-content > div.mov").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a[href]") ?: throw SelectorException("link not found")
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
 
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
                 title = "${link.text()} ${element.selectFirst("span.block-sai")?.text() ?: ""}".trim()
@@ -88,7 +88,7 @@ class FrenchAnime :
         val animes = document.select("div#dle-content > div.mov").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a[href]") ?: throw SelectorException("link not found")
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
 
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
 

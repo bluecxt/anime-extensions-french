@@ -25,6 +25,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.core.R
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -114,7 +115,7 @@ class DessinAnime :
                 "div[data-slot=carousel]:contains(NOUVEAUX AJOUTS (FILMS)) a.group",
         ).mapNotNull { element ->
             SAnime.create().apply {
-                url = element.safeRelativePath().ifBlank { null } ?: return@mapNotNull null
+                url = element.safeRelativePath() ?: return@mapNotNull null
 
                 val rawImgSrc = element.selectFirst("img")?.attr("src")
                 thumbnail_url = rawImgSrc?.nextJsToDirectUrl() ?: POSTER_PLACEHOLDER
@@ -247,7 +248,7 @@ class DessinAnime :
 
         val siteSeasons = soup.select("a.bg-card").mapNotNull { element ->
             val saisonNum = element.selectFirst("p.line-clamp-1")?.text()?.filter { it.isDigit() }?.toIntOrNull() ?: 1
-            val path = element.safeRelativePath().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val path = element.safeRelativePath() ?: return@mapNotNull null
             val seasonTitle = if (saisonNum == 1) anime.title else "${anime.title} Saison $saisonNum"
             Triple(seasonTitle, path, saisonNum)
         }.sortedBy { it.third }
@@ -285,7 +286,7 @@ class DessinAnime :
         val episodes = if (episodeList.isNotEmpty()) {
             episodeList.mapNotNull { element ->
                 val epName = element.selectFirst("p.text-sm")?.text()?.substringBefore("(")?.trim()
-                val link = element.safeRelativePath().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val link = element.safeRelativePath() ?: return@mapNotNull null
                 val sNum = "$baseUrl$link".toHttpUrl().pathSegments.getOrNull(2)?.toIntOrNull() ?: 1
                 SEpisode.create().apply {
                     episode_number = link.removeSuffix("/").substringAfterLast("/").toFloatOrNull() ?: 1f
@@ -459,8 +460,8 @@ class DessinAnime :
         val context = screen.context
         androidx.preference.SwitchPreferenceCompat(context).apply {
             key = PREF_USE_FALLBACK_KEY
-            title = context.getString(keiyoushi.core.R.string.pref_disable_proxy_title)
-            summary = context.getString(keiyoushi.core.R.string.pref_disable_proxy_summary)
+            title = getString(R.string.pref_disable_proxy_title)
+            summary = getString(R.string.pref_disable_proxy_summary)
             setDefaultValue(PREF_USE_FALLBACK_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putBoolean(PREF_USE_FALLBACK_KEY, newValue as Boolean).apply()

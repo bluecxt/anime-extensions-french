@@ -150,7 +150,7 @@ class AnimeSamaFan :
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
             val response = client.newCall(GET("$baseUrl/anime/$id", headers)).awaitSuccess()
-            return parseSearchPage(response.asJsoup())
+            return urlparseDetailsAsSearchResult(response.asJsoup())
         }
 
         val searchFilters = AnimeSamaFanCatalogueFilters.getSearchFilters(filters)
@@ -166,7 +166,7 @@ class AnimeSamaFan :
         return parseAnimePage(response.asJsoup(), page)
     }
 
-    private fun parseSearchPage(document: Document): AnimesPage {
+    private fun urlparseDetailsAsSearchResult(document: Document): AnimesPage {
         val titleElement = document.selectFirst("h1.anime-title") ?: document.selectFirst("h1")
         val isAnimePage = document.selectFirst(".anime-cover, .synopsis-content, .seasons-grid") != null
 
@@ -174,7 +174,7 @@ class AnimeSamaFan :
             title = titleElement?.text()?.replace("VOSTFR", "", true)?.replace("VF", "", true)?.trim() ?: "Unknown Title"
             thumbnail_url = document.selectFirst(".anime-cover img")?.attr("abs:src")
                 ?: document.selectFirst("meta[property=og:image]")?.attr("content")
-            url = document.location().safeRelativePath(baseUrl)
+            url = document.location().safeRelativePath(baseUrl) ?: ""
         }
         return AnimesPage(listOf(anime), false)
     }
@@ -295,7 +295,7 @@ class AnimeSamaFan :
             }
         }
 
-        tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
+        tmdbMetadata?.mainPosterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
         tmdbMetadata?.status?.let { anime.status = it }
@@ -329,14 +329,15 @@ class AnimeSamaFan :
         val baseTitle = sanitizeTitle(anime.title)
 
         val seasonCards = document.select(".seasons-grid a.season-card")
-        val siteSeasons = seasonCards.map { element ->
+        val siteSeasons = seasonCards.mapNotNull { element ->
             val sHref = element.attr("href")
             val siteSNum = getSeasonNumber(sHref)
             val sTitle = element.selectFirst(".season-title")?.text() ?: element.text().trim()
+            val url = element.safeRelativePath() ?: return@mapNotNull null
 
             // Format full title for the engine: "[Name] - Saison [X]"
             val fullSeasonTitle = if (!sTitle.contains(baseTitle, true)) "$baseTitle - $sTitle" else sTitle
-            Triple(fullSeasonTitle, element.safeRelativePath(), siteSNum)
+            Triple(fullSeasonTitle, url, siteSNum)
         }
 
         return coreBuildSeasonList(baseTitle, siteSeasons, anime.status).onEach { it.coreSetSeasonNumber(-2.0) }
@@ -355,7 +356,7 @@ class AnimeSamaFan :
         val gridCards = initialDoc.select(".seasons-grid a.season-card")
 
         val (doc, path) = if (episodeCards.isEmpty() && gridCards.isNotEmpty()) {
-            val firstUrl = gridCards.first()!!.safeRelativePath()
+            val firstUrl = gridCards.first()!!.safeRelativePath()!!
             client.newCall(GET("$baseUrl$firstUrl", headers)).awaitSuccess().asJsoup() to firstUrl
         } else {
             initialDoc to initialPath
@@ -373,7 +374,7 @@ class AnimeSamaFan :
         val (finalOffset, finalOavOffset, finalTargetSNum) = if (tabs.isEmpty()) {
             Triple(0, 0, siteSNum)
         } else {
-            val seasonLinks = tabs.map { it.safeRelativePath() }.distinct()
+            val seasonLinks = tabs.mapNotNull { it.safeRelativePath() ?: return@mapNotNull null }.distinct()
             val currentIdx = seasonLinks.indexOfFirst { it == path }
             val seasonsToAnalyze = if (currentIdx >= 0) seasonLinks.take(currentIdx + 1) else listOf(path)
 
@@ -453,7 +454,7 @@ class AnimeSamaFan :
             if (hasKnownPlayerIframe || embeddedPlayerUrl != null) {
                 return listOf(
                     SEpisode.create().apply {
-                        this.url = url.safeRelativePath(baseUrl)
+                        this.url = url.safeRelativePath(baseUrl) ?: return emptyList()
                         name = "[Movie] Film"
                         episode_number = 1f
                         scanlator = "VOSTFR, VF"
@@ -462,8 +463,8 @@ class AnimeSamaFan :
             }
         }
 
-        val rawEpisodes = episodeCards.map { card ->
-            val epUrl = card.safeRelativePath()
+        val rawEpisodes = episodeCards.mapNotNull { card ->
+            val epUrl = card.safeRelativePath() ?: return@mapNotNull null
             val availableLangs = mutableListOf<String>()
             val langs = card.attr("data-langs").uppercase()
             if (langs.contains("VOSTFR")) availableLangs.add("VOSTFR")

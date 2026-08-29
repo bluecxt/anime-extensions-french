@@ -24,8 +24,8 @@ Ce document définit les normes obligatoires pour toutes les extensions Aniyomi 
 - **Résolution :** Pour une même langue, triez par résolution décroissante (ex: `1080p` > `720p` > `480p`).
 - **Analyse de la Qualité :** Utilisez une Regex pour extraire le nombre de pixels (ex: `(\d+)p`) afin de garantir un tri numérique fiable.
 
-## 5. Métadonnées (TMDB)
-- **Date de Sortie :** Utilisez toujours le libellé français exact `Date de sortie :` (au début de la description) pour garantir la cohérence entre les sources.
+## 5. Métadonnées (TMDB / Sources)
+- **Date de Sortie :** Utilisez obligatoirement la ressource partagée `getString(R.string.metadata_release_date_prefix)` (au début de la description) pour garantir la cohérence et l'internationalisation automatique entre toutes les sources (ex: `Date de sortie : ` en FR, `Release date: ` en EN).
 - **Studios/Créateurs :** Utilisez le champ `Artist` (pour les studios) et le champ `Author` (pour les créateurs/mangakas) fournis par le moteur TMDB.
 - **Débordement de Saison :** Si une saison sur le site contient plus d'épisodes que ce qui est listé sur TMDB, mappez les épisodes supplémentaires à la Saison 0 de TMDB (Spéciaux/OAV).
 

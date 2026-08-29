@@ -53,10 +53,10 @@ class VoirAnime :
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/series/?page=$page&order=popular", headers)).awaitSuccess()
         val document = response.asJsoup()
-        val items = document.select("div.listupd article.bs").map { element ->
+        val items = document.select("div.listupd article.bs").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
                 title = link.selectFirst(".tt")?.ownText() ?: "Inconnu"
                 thumbnail_url = link.selectFirst("img")?.attr("abs:src")?.substringBefore("?")
             }
@@ -68,10 +68,10 @@ class VoirAnime :
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/series/?page=$page&order=update", headers)).awaitSuccess()
         val document = response.asJsoup()
-        val items = document.select("div.listupd article.bs").map { element ->
+        val items = document.select("div.listupd article.bs").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
                 title = link.selectFirst(".tt")?.ownText() ?: "Inconnu"
                 thumbnail_url = link.selectFirst("img")?.attr("abs:src")?.substringBefore("?")
             }
@@ -164,14 +164,14 @@ class VoirAnime :
         val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
         val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
 
-        return document.select("div.eplister ul li a").map { element ->
+        return document.select("div.eplister ul li a").mapNotNull { element ->
             val numStr = element.selectFirst(".epl-num")?.text() ?: "0"
             val num = numStr.toIntOrNull() ?: 0
             val subText = element.selectFirst(".epl-sub")?.text() ?: "VOSTFR"
             val lang = if (subText.contains("VF", true)) "VF" else "VOSTFR"
 
             SEpisode.create().apply {
-                url = element.safeRelativePath()
+                url = element.safeRelativePath() ?: return@mapNotNull null
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(num)
                 val tmdbName = epMeta?.first
                 val baseName = if (tmdbName != null) "Episode $numStr - $tmdbName" else "Episode $numStr"

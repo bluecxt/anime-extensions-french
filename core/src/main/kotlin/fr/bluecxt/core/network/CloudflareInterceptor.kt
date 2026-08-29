@@ -11,6 +11,7 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import keiyoushi.core.R
 import okhttp3.Cookie
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
@@ -146,7 +147,7 @@ class CloudflareInterceptor(
                 retryResponse.close()
                 val message = try {
                     val app = Injekt.get<Application>()
-                    app.getString(keiyoushi.core.R.string.cloudflare_bypass_timeout, host)
+                    app.getString(R.string.cloudflare_bypass_timeout, host)
                 } catch (_: Exception) {
                     "Cloudflare WebView solve did not clear challenge for $host"
                 }

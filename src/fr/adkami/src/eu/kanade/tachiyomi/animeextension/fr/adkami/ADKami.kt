@@ -72,10 +72,9 @@ class ADKami :
 
     private fun parseLatestPage(response: Response): AnimesPage {
         val document = response.asJsoup()
-        val animes = document.select("div.h-card").map { element: Element ->
+        val animes = document.select("div.h-card").mapNotNull { element: Element ->
             SAnime.create().apply {
-                val link = element.selectFirst("a")
-                url = link?.safeRelativePath() ?: return@map this
+                url = element.selectFirst("a")?.safeRelativePath() ?: return@mapNotNull null
                 title = element.selectFirst(".title")?.text()?.trim() ?: ""
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: ""
             }
@@ -374,10 +373,10 @@ class ADKami :
     // ============================ Helpers =============================
     private fun parseAnimesPage(response: Response, selector: String = "div.video-item-list"): AnimesPage {
         val document = response.asJsoup()
-        val animes = document.select(selector).map { element: Element ->
+        val animes = document.select(selector).mapNotNull { element: Element ->
             SAnime.create().apply {
-                val link: Element = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return@map this
-                url = link.safeRelativePath()
+                val link = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]")
+                url = link?.safeRelativePath() ?: return@mapNotNull null
                 title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
                 thumbnail_url = maxQuality(element.selectFirst("img")?.attr("data-original") ?: "")
                 url = cleanUrl(url)
