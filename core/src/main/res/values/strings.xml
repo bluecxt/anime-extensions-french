@@ -23,4 +23,7 @@
     <!-- Error and UI feedback messages -->
     <string name="cloudflare_bypass_timeout">Cloudflare challenge bypass timed out for %1$s. Try opening in WebView.</string>
     <string name="error_no_episodes_found">No episodes could be retrieved. Check your internet connection or open in WebView.</string>
+
+    <!-- Metadata labels -->
+    <string name="metadata_release_date_prefix">"Release date: "</string>
 </resources>

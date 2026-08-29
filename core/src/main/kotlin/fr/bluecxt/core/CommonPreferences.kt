@@ -7,6 +7,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
+import keiyoushi.core.R
 import keiyoushi.utils.addEditTextPreference
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -83,14 +84,14 @@ interface CommonPreferences : ConfigurableAnimeSource {
         val prefs = source.preferences
         val context = screen.context
 
-        screen.addBaseUrlPreference(prefs, defaultBaseUrl, key = PREF_URL_KEY, summary = baseUrlSummary)
+        screen.addBaseUrlPreference(source, prefs, defaultBaseUrl, key = PREF_URL_KEY, summary = baseUrlSummary)
         // Gestion des Langues
         val showVoices = forceShowVoicesPreference ?: (supportedVoices.size > 1)
         if (showVoices) {
             ListPreference(context).apply {
                 key = PREF_VOICES_KEY
-                title = context.getString(keiyoushi.core.R.string.pref_voices_title)
-                entries = supportedVoices.map { if (it == "VOSTFR" || it == "VF") context.getString(keiyoushi.core.R.string.pref_voices_entry_prefer, it) else it }.toTypedArray()
+                title = source.getString(R.string.pref_voices_title)
+                entries = supportedVoices.map { if (it == "VOSTFR" || it == "VF") source.getString(R.string.pref_voices_entry_prefer, it) else it }.toTypedArray()
                 entryValues = supportedVoices
                 setDefaultValue(defaultVoice)
                 summary = "%s"
@@ -103,7 +104,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
         if (showQuality) {
             ListPreference(context).apply {
                 key = PREF_QUALITY_KEY
-                title = context.getString(keiyoushi.core.R.string.pref_quality_title)
+                title = source.getString(R.string.pref_quality_title)
                 entries = supportedQualities.map { q -> if (q.all { it.isDigit() }) "${q}p" else q }.toTypedArray()
                 entryValues = supportedQualities
                 setDefaultValue(defaultQuality)
@@ -117,7 +118,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
         if (showServerPref) {
             ListPreference(context).apply {
                 key = PREF_SERVER_KEY
-                title = context.getString(keiyoushi.core.R.string.pref_server_title)
+                title = source.getString(R.string.pref_server_title)
                 entries = supportedServers.toTypedArray()
                 entryValues = supportedServers.toTypedArray()
                 setDefaultValue(defaultServer ?: "")
@@ -129,8 +130,8 @@ interface CommonPreferences : ConfigurableAnimeSource {
         if (supportedServers.any { it.equals("Filemoon", ignoreCase = true) }) {
             SwitchPreferenceCompat(context).apply {
                 key = PREF_DISABLE_FILEMOON_KEY
-                title = context.getString(keiyoushi.core.R.string.pref_disable_filemoon_title)
-                summary = context.getString(keiyoushi.core.R.string.pref_disable_filemoon_summary)
+                title = source.getString(R.string.pref_disable_filemoon_title)
+                summary = source.getString(R.string.pref_disable_filemoon_summary)
                 setDefaultValue(false)
                 setOnPreferenceChangeListener { _, _ -> true }
             }.also(screen::addPreference)
@@ -143,9 +144,10 @@ interface CommonPreferences : ConfigurableAnimeSource {
      * If the field is cleared, it resets the preference to the default URL.
      */
     private fun PreferenceScreen.addBaseUrlPreference(
+        source: Source,
         preferences: SharedPreferences,
         defaultUrl: String,
-        title: String = context.getString(keiyoushi.core.R.string.pref_base_url_title),
+        title: String = source.getString(R.string.pref_base_url_title),
         key: String = "base_url_pref",
         summary: String? = null,
         onComplete: (String) -> Unit = {},
@@ -156,14 +158,14 @@ interface CommonPreferences : ConfigurableAnimeSource {
             key = key,
             title = title,
             summary = buildString {
-                append(context.getString(keiyoushi.core.R.string.pref_base_url_summary, currentUrl))
+                append(source.getString(R.string.pref_base_url_summary, currentUrl))
                 if (!summary.isNullOrBlank()) append("\n$summary")
             },
             default = defaultUrl,
             getSummary = { newValue ->
                 buildString {
                     val urlToDisplay = if (!newValue.isNullOrBlank()) newValue.removeSuffix("/") else currentUrl
-                    append(context.getString(keiyoushi.core.R.string.pref_base_url_summary, urlToDisplay))
+                    append(source.getString(R.string.pref_base_url_summary, urlToDisplay))
                     if (!summary.isNullOrBlank()) append("\n$summary")
                 }
             },
@@ -171,7 +173,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
                 url.isBlank() || url.toHttpUrlOrNull() != null
             },
             validationMessage = {
-                context.getString(keiyoushi.core.R.string.pref_base_url_invalid)
+                source.getString(R.string.pref_base_url_invalid)
             },
             onChange = { _, newValue ->
                 val cleanUrl = newValue.trim().removeSuffix("/")
