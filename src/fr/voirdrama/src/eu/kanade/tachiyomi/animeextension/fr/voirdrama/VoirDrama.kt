@@ -18,12 +18,10 @@ import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get
 import keiyoushi.utils.head
 import keiyoushi.utils.parallelCatchingFlatMap
-import keiyoushi.utils.parallelMapNotNull
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -88,9 +86,40 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
     // ============================== Anime Details ===============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime = super.getAnimeDetails(anime).apply {
         scope.launch { itHasVf(url, title) }
+
         val cleanTitle = title.dropLastWhile { it.isDigit() }.trim()
-        val seasonNumber = title.takeLastWhile { it.isDigit() }.toInt()
+        val seasonNumber = title.takeLastWhile { it.isDigit() }.toIntOrNull() ?: 1
         val metadata = fetchTvdbMetadata(cleanTitle, seasonNumber)
+
+        if (metadata != null) {
+            if (description.isNullOrBlank() && !metadata.summary.isNullOrBlank()) {
+                val date = metadata.releaseDate
+                description = if (!date.isNullOrBlank()) {
+                    "Date de sortie : $date\n\n${metadata.summary}"
+                } else {
+                    metadata.summary
+                }
+            }
+
+            if (thumbnail_url.isNullOrBlank()) {
+                thumbnail_url = metadata.seasonPosterUrl ?: metadata.mainPosterUrl
+            }
+
+            if (genre.isNullOrBlank()) {
+                genre = metadata.genre
+            }
+
+            if (author.isNullOrBlank()) {
+                author = metadata.author
+            }
+            if (artist.isNullOrBlank()) {
+                artist = metadata.artist
+            }
+
+            if (status == SAnime.UNKNOWN && metadata.status != 0) {
+                status = metadata.status
+            }
+        }
     }
 
     // ============================== Episodes ===============================
