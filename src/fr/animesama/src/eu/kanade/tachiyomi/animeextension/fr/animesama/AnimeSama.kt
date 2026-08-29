@@ -480,10 +480,10 @@ class AnimeSama :
 
             cleanTvdbName.isNullOrBlank() || contentType == ContentType.SPECIAL -> "Épisode $epNum"
 
-            cleanTvdbName.matches(Regex("""(?i)^(?:Épisode|Episode)\s*\d+$""")) -> "Épisode $epNum"
+            cleanTvdbName.matches(episodeBasicRegex) -> "Épisode $epNum"
 
-            cleanTvdbName.matches(Regex("""(?i)^(?:Épisode|Episode)\s*\d+\s*[-:]\s*(.+)""")) -> {
-                val realTitle = Regex("""(?i)^(?:Épisode|Episode)\s*\d+\s*[-:]\s*(.+)""").find(cleanTvdbName)?.groupValues?.get(1)?.trim()
+            cleanTvdbName.matches(episodeWithTitleRegex) -> {
+                val realTitle = episodeWithTitleRegex.find(cleanTvdbName)?.groupValues?.get(1)?.trim()
                 if (!realTitle.isNullOrBlank()) "Épisode $epNum - $realTitle" else "Épisode $epNum"
             }
 
@@ -556,10 +556,10 @@ class AnimeSama :
 
         if (cleanSeason.equals("Saison 1", ignoreCase = true)) return seriesTitle
 
-        if (cleanSeason.matches(Regex("""(?i)^Saison\s*\d+.*"""))) {
+        if (cleanSeason.matches(seasonRegex)) {
             val shortSeason = cleanSeason
-                .replace(Regex("""(?i)\s*Saison\s*"""), " ")
-                .replace(Regex("""(?i)Partie\s*(\d+)"""), "Part $1")
+                .replace(seasonReplaceRegex, " ")
+                .replace(partReplaceRegex, "Part $1")
                 .trim()
             return "$seriesTitle $shortSeason"
         }
@@ -692,5 +692,11 @@ class AnimeSama :
         )
         const val CACHE_LIFETIME = 30000L
         private val langList = listOf("vostfr", "vf", "vj", "var", "vcn", "vqc", "vkr", "va", "vf1", "vf2")
+
+        private val episodeBasicRegex = Regex("""(?i)^(?:Épisode|Episode)\s*\d+$""")
+        private val episodeWithTitleRegex = Regex("""(?i)^(?:Épisode|Episode)\s*\d+\s*[-:]\s*(.+)""")
+        private val seasonRegex = Regex("""(?i)^Saison\s*\d+.*""")
+        private val seasonReplaceRegex = Regex("""(?i)\s*Saison\s*""")
+        private val partReplaceRegex = Regex("""(?i)Partie\s*(\d+)""")
     }
 }

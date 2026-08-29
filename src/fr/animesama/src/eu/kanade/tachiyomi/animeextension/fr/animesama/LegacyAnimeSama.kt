@@ -32,6 +32,15 @@ class LegacyAnimeSama {
 
 private val epsArrayRegex = Regex("""(?:var|let|const)?\s*eps(\w+)\s*=\s*(\[[^\]]*\])""", RegexOption.DOT_MATCHES_ALL)
 private val urlInArrayRegex = Regex("""['"]([^'"]+)['"]""")
+private val animeNameCleanupRegex = Regex("""(?i)\s*(?:-\s*)?(?:Saison|Season|Film|Movie|OAV|OVA|Partie|Part)\b.*""")
+private val commentRegex = Regex("""//.*|/\*[\s\S]*?\*/""")
+private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
+private val seasonRegex = Regex("""(?:episodes|var|let|const)\s+([\w\d_]+)\s*=\s*['"]([^'"]+)['"]""")
+private val seasonCleanRegex1 = Regex("""(?i)\s*-\s*(?:Saison|Season)\s*1(?!\d)""")
+private val seasonCleanRegex2 = Regex("""(?i)\s*(?:Saison|Season)\s*1(?!\d)""")
+private val seasonCleanRegex3 = Regex("""(?i)\s*-\s*(?:Saison|Season)\s*(\d+)""")
+private val seasonCleanRegex4 = Regex("""(?i)\s*(?:saison|season)\s*(\d+)""")
+private val partCleanRegex = Regex("""(?i)Partie\s*(\d+)""")
 
 // Helper extension functions to handle legacy URLs (non-JSON format) without TMDB integration.
 suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
@@ -64,14 +73,11 @@ suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
     val animeDoc = response.asJsoup()
 
     val animeName = (animeDoc.selectFirst("div.my-2 > h1")?.text() ?: "").trim()
-        .replace(Regex("""(?i)\s*(?:-\s*)?(?:Saison|Season|Film|Movie|OAV|OVA|Partie|Part)\b.*"""), "")
+        .replace(animeNameCleanupRegex, "")
         .trim()
 
     val scripts = animeDoc.select("script").toString()
-    val commentRegex = Regex("""//.*|/\*[\s\S]*?\*/""")
     val uncommented = commentRegex.replace(scripts, "")
-    val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
-    val seasonRegex = Regex("""(?:episodes|var|let|const)\s+([\w\d_]+)\s*=\s*['"]([^'"]+)['"]""")
 
     val panneauMatches = panneauRegex.findAll(uncommented).map {
         val name = it.groupValues[1].trim()
@@ -104,11 +110,11 @@ suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
 
     return distinctSeasons.map { (seasonName, seasonStem) ->
         val cleanSeasonName = seasonName
-            .replace(Regex("""(?i)\s*-\s*(?:Saison|Season)\s*1(?!\d)"""), "")
-            .replace(Regex("""(?i)\s*(?:Saison|Season)\s*1(?!\d)"""), "")
-            .replace(Regex("""(?i)\s*-\s*(?:Saison|Season)\s*(\d+)"""), " $1")
-            .replace(Regex("""(?i)\s*(?:saison|season)\s*(\d+)"""), " $1")
-            .replace(Regex("""(?i)Partie\s*(\d+)"""), "Part $1")
+            .replace(seasonCleanRegex1, "")
+            .replace(seasonCleanRegex2, "")
+            .replace(seasonCleanRegex3, " $1")
+            .replace(seasonCleanRegex4, " $1")
+            .replace(partCleanRegex, "Part $1")
             .trim()
 
         val fullTitle = if (cleanSeasonName.contains(animeName, true)) {
@@ -143,10 +149,7 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
         if (!response.isSuccessful) return emptyList()
         val doc = response.asJsoup()
         val scripts = doc.select("script").toString()
-        val commentRegex = Regex("""//.*|/\*[\s\S]*?\*/""")
         val uncommented = commentRegex.replace(scripts, "")
-        val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
-        val seasonRegex = Regex("""(?:episodes|var|let|const)\s+([\w\d_]+)\s*=\s*['"]([^'"]+)['"]""")
 
         val panneaux = panneauRegex.findAll(uncommented).map { it.groupValues[2].trim().removeSuffix("/") }.toList()
         val legacySeasons = seasonRegex.findAll(uncommented).map { it.groupValues[2].trim().removeSuffix("/") }.toList()
@@ -210,29 +213,22 @@ private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>
 private fun AnimeSama.legacyPlayersToEpisodes(
     list: List<List<List<String>>>,
 ): List<SEpisode> {
-    val maxEpisodes = list.fold(0) { acc, sublist -> maxOf(acc, sublist.size) }
-    val episodes = mutableListOf<SEpisode>()
+    val maxEpisodes = list.maxOfOrNull { it.size } ?: 0
 
-    for (i in 0 until maxEpisodes) {
-        val epUrls = mutableListOf<List<String>>()
-        for (langIndex in list.indices) {
-            val epList = list[langIndex]
-            val urls = epList.getOrNull(i) ?: emptyList()
-            epUrls.add(urls)
+    return List(maxEpisodes) { i ->
+        val epUrls = List(list.size) { langIndex ->
+            list[langIndex].getOrNull(i) ?: emptyList()
         }
 
-        episodes.add(
-            SEpisode.create().apply {
-                episode_number = (i + 1).toFloat()
-                name = "Épisode ${i + 1}"
-                url = json.encodeToString(epUrls)
-                scanlator = epUrls.mapIndexedNotNull { index, urls ->
-                    if (urls.isNotEmpty()) LegacyAnimeSama.LANG_VALUES.getOrNull(index) else null
-                }.joinToString().uppercase()
-            },
-        )
+        SEpisode.create().apply {
+            episode_number = (i + 1).toFloat()
+            name = "Épisode ${i + 1}"
+            url = json.encodeToString(epUrls)
+            scanlator = epUrls.mapIndexedNotNull { index, urls ->
+                if (urls.isNotEmpty()) LegacyAnimeSama.LANG_VALUES.getOrNull(index) else null
+            }.joinToString().uppercase()
+        }
     }
-    return episodes
 }
 
 fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
@@ -241,14 +237,12 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
     } catch (_: Exception) {
         return emptyList()
     }
-    val hosters = mutableListOf<Hoster>()
 
-    playerUrls.forEachIndexed { i, playerUrl ->
-        if (playerUrl.isEmpty()) return@forEachIndexed
+    return playerUrls.mapIndexedNotNull { i, playerUrl ->
+        if (playerUrl.isEmpty()) return@mapIndexedNotNull null
         val lang = LegacyAnimeSama.LANG_VALUES.getOrElse(i) { "vostfr" }.uppercase()
-        hosters.add(Hoster(hosterName = lang, internalData = json.encodeToString(playerUrl) + "|" + lang))
-    }
-    return hosters.coreSortHosters()
+        Hoster(hosterName = lang, internalData = json.encodeToString(playerUrl) + "|" + lang)
+    }.coreSortHosters()
 }
 
 suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
