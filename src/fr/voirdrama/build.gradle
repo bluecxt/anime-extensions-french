@@ -1,8 +1,10 @@
 ext {
-	extName = 'VoirDrama'
-	extClass = '.VoirDrama'
-	extVersionCode = 1
-	isNsfw = true
+    extName = 'VoirDrama'
+    extClass = '.VoirDrama'
+    themePkg = 'madara'
+    baseUrl = 'https://voirdrama.to'
+    overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
