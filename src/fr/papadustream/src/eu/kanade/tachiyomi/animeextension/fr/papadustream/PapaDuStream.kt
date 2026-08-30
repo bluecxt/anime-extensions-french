@@ -383,18 +383,16 @@ class PapaDuStream :
         fallbackStatus: Int,
     ): SAnime {
         val tvdbMeta = fetchTvdbMetadata(baseTitle, season.num)
-        val isContinuation = season.num > 1 && (tvdbMeta == null || tvdbMeta.episodeSummaries.size < 2)
-        val finalMeta = if (isContinuation) fetchTvdbMetadata(baseTitle, season.num - 1) else tvdbMeta
 
         return SAnime.create().apply {
             this.title = season.title
             this.url = season.url
-            thumbnail_url = finalMeta?.seasonPosterUrl ?: finalMeta?.mainPosterUrl ?: season.poster
-            description = finalMeta?.summary
-            genre = finalMeta?.genre
-            author = finalMeta?.author
-            artist = finalMeta?.artist
-            status = if (index < totalSeasons - 1) SAnime.COMPLETED else (finalMeta?.status ?: fallbackStatus)
+            thumbnail_url = tvdbMeta?.seasonPosterUrl ?: tvdbMeta?.mainPosterUrl ?: season.poster
+            description = tvdbMeta?.summary
+            genre = tvdbMeta?.genre
+            author = tvdbMeta?.author
+            artist = tvdbMeta?.artist
+            status = if (index < totalSeasons - 1) SAnime.COMPLETED else (tvdbMeta?.status ?: fallbackStatus)
 
             coreSetFetchType(FetchType.Episodes)
             coreSetSeasonNumber(season.num.toDouble())
