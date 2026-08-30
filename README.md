@@ -71,6 +71,7 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 | **Movix** | ✅ | Films et séries via l'API TMDB. | VOSTFR, VF | Non |
 | **Movix Anime** | ✅ | Animes via l'API TMDB. | VOSTFR, VF | Non |
 | **Wiflix** | ✅ | Grand catalogue de films et séries. | VOSTFR, VF | Non |
+| **PapaDuStream** | ⚠️ | Extraction lente des hosts - 100% vibecodé. | VOSTFR, VF | Non |
 | **Torrentio** | ✅ | Moteur de recherche Torrent / Debrid (Cinemeta/JustWatch). | Multi (All)    | Non     |
 | **Torrentio Anime** | ✅ | Version optimisée Anime pour Torrentio (Anilist). | Multi (All)    | Non     |
 

@@ -162,6 +162,18 @@ TODO : ajouter les informations manquantes avec l'API Anilist "https://anilist.c
 - [x] **Episode Thumbnail**: [Provider: TMDB]
 - [x] **Episode Summary**: [Provider: TMDB]
 
+## PapaDuStream
+- [x] **Title**: [Provider: Self]
+- [x] **Author**: [Provider: TVDB/Self]
+- [x] **Artist**: [Provider: TVDB/Self]
+- [x] **Description**: [Provider: TVDB/Self]
+- [x] **Genre**: [Provider: Self/TVDB]
+- [x] **Status**: [Provider: TVDB/Self]
+- [x] **Release Date**: [Provider: TVDB/Self]
+- [x] **Thumbnail**: [Provider: TVDB/Self]
+- [x] **Episode Thumbnail**: [Provider: TVDB]
+- [x] **Episode Summary**: [Provider: TVDB]
+
 ## VoirAnime
 - [x] **Title**: [Provider: Self]
 - [ ] **Author**: [Provider: Self]
