@@ -17,6 +17,7 @@ const val HUB_SEASON_NUMBER = -2.0
 
 // utils logs
 
+const val EXTENSION_RESOURCES_LOG: String = "ExtensionResourcesLog"
 const val TMDB_LOG: String = "tmdbLog"
 const val TVDB_LOG: String = "tvdbLog"
 const val SERVER_LOG: String = "serverLog"

@@ -25,6 +25,7 @@ import fr.bluecxt.core.network.ErrorInterceptor
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
+import fr.bluecxt.core.utils.ExtensionResources
 import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
@@ -66,8 +67,20 @@ abstract class Source :
 
     fun getString(@androidx.annotation.StringRes resId: Int, vararg formatArgs: Any): String {
         val app = Injekt.get<Application>()
-        val pkgName = this::class.java.`package`?.name ?: ""
-        return app.createPackageContext(pkgName, 0).getString(resId, *formatArgs)
+        return try {
+            val res = ExtensionResources.getResources(app, this.javaClass) ?: app.resources
+            if (formatArgs.isNotEmpty()) {
+                res.getString(resId, *formatArgs)
+            } else {
+                res.getString(resId)
+            }
+        } catch (_: Exception) {
+            try {
+                app.getString(resId, *formatArgs)
+            } catch (_: Exception) {
+                ""
+            }
+        }
     }
 
     protected val currentName: String by lazy {
@@ -80,8 +93,18 @@ abstract class Source :
 
     protected val currentVersion: String by lazy {
         try {
-            val pkgName = this.javaClass.`package`?.name ?: context.packageName
-            context.packageManager.getPackageInfo(pkgName, 0).versionName ?: "Unknown"
+            val app = Injekt.get<Application>()
+            ExtensionResources.getVersionName(app, this.javaClass)
+                ?: (
+                    this.javaClass.`package`?.name?.let { pkg ->
+                        try {
+                            app.packageManager.getPackageInfo(pkg, 0).versionName
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    )
+                ?: "Unknown"
         } catch (_: Exception) {
             "Unknown"
         }
