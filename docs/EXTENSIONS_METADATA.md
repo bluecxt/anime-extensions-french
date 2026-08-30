@@ -32,15 +32,15 @@ TODO : ajouter les informations manquantes avec l'API Anilist "https://anilist.c
 
 ## Anime-Sama
 - [x] **Title**: [Provider: Self]
-- [x] **Author**: [Provider: TMDB]
-- [x] **Artist**: [Provider: TMDB]
-- [x] **Description**: [Provider: TMDB/Self]
-- [x] **Genre**: [Provider: TMDB/Self]
-- [x] **Status**: [Provider: TMDB/Self]
-- [x] **Release Date**: [Provider: TMDB]
-- [x] **Thumbnail**: [Provider: TMDB/Self]
-- [x] **Episode Thumbnail**: [Provider: TMDB]
-- [x] **Episode Summary**: [Provider: TMDB]
+- [x] **Author**: [Provider: TVDB]
+- [x] **Artist**: [Provider: TVDB]
+- [x] **Description**: [Provider: TVDB/Self]
+- [x] **Genre**: [Provider: TVDB/Self]
+- [x] **Status**: [Provider: TVDB/Self]
+- [x] **Release Date**: [Provider: TVDB]
+- [x] **Thumbnail**: [Provider: TVDB/Self]
+- [x] **Episode Thumbnail**: [Provider: TVDB]
+- [x] **Episode Summary**: [Provider: TVDB]
 
 ## AnimeSamaFan
 - [x] **Title**: [Provider: Self]
