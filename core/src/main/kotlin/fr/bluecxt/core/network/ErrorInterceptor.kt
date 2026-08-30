@@ -97,18 +97,20 @@ class ErrorInterceptor(
             if (!isDeviceOnline()) throw e
 
             // 2. Filter transient network/socket exceptions based on their specific exception types
-            val isTransientOrLocal = when (e) {
-                is StreamResetException -> true
+            val isTransientOrLocal = when {
+                e is StreamResetException -> true
 
-                is InterruptedIOException -> e !is SocketTimeoutException
+                e is InterruptedIOException -> e !is SocketTimeoutException
 
-                is SocketException -> {
+                e is SocketException -> {
                     val msg = e.message.orEmpty().lowercase()
                     msg.contains("socket closed") ||
                         msg.contains("connection reset") ||
                         msg.contains("broken pipe") ||
                         msg.contains("shutdown")
                 }
+
+                e.message?.contains("canceled", ignoreCase = true) == true -> true
 
                 else -> false
             }
