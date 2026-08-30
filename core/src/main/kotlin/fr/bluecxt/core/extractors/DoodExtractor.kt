@@ -5,6 +5,7 @@ package fr.bluecxt.core.extractors
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,7 +48,7 @@ class DoodExtractor(private val client: OkHttpClient) {
             .build()
 
         if ("Video not found" in html || "Video not found | DoodStream" in html || html.contains("video you are looking for is not found", ignoreCase = true)) {
-            throw fr.bluecxt.core.ContentUnavailableException("Doodstream: Video not found")
+            throw ContentUnavailableException("Doodstream: Video not found")
         }
 
         // Check for iframe
@@ -55,7 +56,7 @@ class DoodExtractor(private val client: OkHttpClient) {
         if (iframeMatch != null) {
             val src = iframeMatch.groupValues[1]
             if (src == "/e/" || src == "/e") {
-                throw fr.bluecxt.core.ContentUnavailableException("Doodstream: Video not found")
+                throw ContentUnavailableException("Doodstream: Video not found")
             }
             val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: throw Exception("Doodstream: Could not resolve iframe URL")
             response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccess()
