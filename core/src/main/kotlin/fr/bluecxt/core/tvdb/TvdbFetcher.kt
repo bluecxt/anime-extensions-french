@@ -18,6 +18,7 @@ import fr.bluecxt.core.tvdb.dto.TvdbExtendedResponse
 import fr.bluecxt.core.tvdb.dto.TvdbSearchResponse
 import fr.bluecxt.core.tvdb.dto.TvdbSearchResult
 import fr.bluecxt.core.tvdb.dto.TvdbSeasonExtendedResponse
+import fr.bluecxt.core.tvdb.dto.TvdbTranslationResponse
 import fr.bluecxt.core.utils.normalize
 import keiyoushi.core.BuildConfig
 import kotlinx.coroutines.sync.Mutex
@@ -212,6 +213,7 @@ suspend fun Source.fetchTvdbMetadata(
         var targetSeasonId: Long? = null
         var tvdbGenres: String? = null
         var tvdbCompanies: String? = null
+        var seasonOverview: String? = null
 
         try {
             val response = executeTvdbRequest(extendedUrl, apiKey)
@@ -234,6 +236,14 @@ suspend fun Source.fetchTvdbMetadata(
                             val langPoster = artworks.find { it.language?.equals(lang, ignoreCase = true) == true }?.image
                             val bestArt = langPoster ?: artworks.firstOrNull()?.image
                             rawSeasonPoster = bestArt ?: sDto.data?.image
+                        }
+                    } catch (_: Exception) {}
+                    try {
+                        val translationUrl = "$TVDB_BASE_URL/seasons/$targetSeasonId/translations/$lang"
+                        val trResp = executeTvdbRequest(translationUrl, apiKey)
+                        if (trResp != null) {
+                            val trDto = tvdbJson.decodeFromString<TvdbTranslationResponse>(trResp)
+                            seasonOverview = trDto.data?.overview?.takeIf { it.isNotBlank() }
                         }
                     } catch (_: Exception) {}
                 }
@@ -297,7 +307,7 @@ suspend fun Source.fetchTvdbMetadata(
 
         val metadata = TvdbMetadata(
             title = tvdbTitle,
-            summary = frenchOverview,
+            summary = seasonOverview ?: frenchOverview,
             releaseDate = seasonReleaseDate ?: tvdbReleaseDate,
             mainPosterUrl = posterUrl,
             seasonPosterUrl = seasonPosterUrl ?: posterUrl,

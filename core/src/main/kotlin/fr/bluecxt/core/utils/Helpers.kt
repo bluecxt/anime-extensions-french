@@ -107,7 +107,7 @@ suspend fun Call.awaitSuccessOrUnavailable(url: String = ""): Response {
 /**
  * Convert a response to jsoup document with handling in the different error used in extractors
  */
-fun Response.toDoc(url: String): Document = this.use { res ->
+fun Response.toDoc(url: String = ""): Document = this.use { res ->
     if (res.code == 404 || res.code == 410) {
         throw ContentUnavailableException("Video unavailable (${res.code}) $url".trim())
     }
@@ -115,6 +115,19 @@ fun Response.toDoc(url: String): Document = this.use { res ->
         throw ExtractionException("HTTP ${res.code} (${res.message}) for $url".trim())
     }
     res.asJsoup()
+}
+
+/**
+ * Returns response body string, throwing ContentUnavailableException on 404 or 410.
+ */
+fun Response.bodyStringOrUnavailable(url: String = ""): String = this.use { res ->
+    if (res.code == 404 || res.code == 410) {
+        throw ContentUnavailableException("Video unavailable (${res.code}) $url".trim())
+    }
+    if (!res.isSuccessful) {
+        throw ExtractionException("HTTP ${res.code} (${res.message}) for $url".trim())
+    }
+    res.body.string()
 }
 
 /**

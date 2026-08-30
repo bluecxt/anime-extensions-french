@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.VIDOZA_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -27,8 +28,8 @@ class VidozaExtractor(private val client: OkHttpClient) {
 
         val headers = defaultHeaders()
 
-        val response = client.newCall(GET(embedUrl, headers)).awaitSuccess()
-        val html = response.body.string()
+        val response = client.newCall(GET(embedUrl, headers)).awaitSuccessOrUnavailable(embedUrl)
+        val html = response.use { it.body.string() }
 
         val regex1 = Regex("""["']?\s*(?:file|src)\s*["']?\s*[:=,]?\s*["']([^"']+)(?:[^}>\]]+)["']?\s*res\s*["']?\s*[:=]\s*["']?([^"',]+)""")
         val regex2 = Regex("""(?:file|src)\s*[:=]\s*["']([^"']+)["'].*?(?:label|res)\s*[:=]\s*["']?(\d+)""")

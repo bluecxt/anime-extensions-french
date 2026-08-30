@@ -240,8 +240,16 @@ class AnimeSama :
             background_url = metadata.backdropUrl ?: metadata.mainPosterUrl
         }
 
+        val targetSummary = if (season != null && !isHub) {
+            tvdbMetadata?.summary?.takeIf { it.isNotBlank() } ?: descriptionText
+        } else {
+            descriptionText.ifBlank { tvdbMetadata?.summary.orEmpty() }
+        }
+
         val year = tvdbMetadata?.releaseDate ?: rawYear
-        if (description.isNullOrEmpty()) description = buildDescription(descriptionText, year)
+        if (description.isNullOrEmpty() || (season != null && !isHub && !tvdbMetadata?.summary.isNullOrBlank())) {
+            description = buildDescription(targetSummary, year)
+        }
     }
 
     // ============================== Season ==============================

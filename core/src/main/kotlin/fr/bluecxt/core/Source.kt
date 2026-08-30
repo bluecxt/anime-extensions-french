@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
 import fr.bluecxt.core.filters.FilterProvider
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.monitoring.ErrorWebhook
@@ -222,7 +223,10 @@ abstract class Source :
                 throw e
             }
 
-            if (e is ContentUnavailableException) {
+            val isUnavailable = e is ContentUnavailableException ||
+                (e is HttpException && (e.code == 404 || e.code == 410))
+
+            if (isUnavailable) {
                 Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")
                 emptyList()
             } else if (e is RateLimitException) {
@@ -275,7 +279,7 @@ abstract class Source :
     /**
      * Safely sets the fetch type using reflection for backward compatibility.
      */
-    protected fun SAnime.coreSetFetchType(type: eu.kanade.tachiyomi.animesource.model.FetchType) {
+    protected fun SAnime.coreSetFetchType(type: FetchType) {
         try {
             val methods = this.javaClass.methods
             val setter = methods.find { it.name == "setFetch_type" }
@@ -421,7 +425,7 @@ abstract class Source :
             status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else (finalMeta?.status ?: defStatus)
 
             coreOptimizeDisplayTitle(sTitle, baseTitle)
-            coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+            coreSetFetchType(FetchType.Episodes)
             coreSetSeasonNumber(siteSNum.toDouble())
             initialized = true
         }
@@ -485,14 +489,14 @@ abstract class Source :
      * Maps raw episodes to TMDB metadata with offsets and formatting.
      */
     protected fun coreMapEpisodes(
-        rawEpisodes: List<eu.kanade.tachiyomi.animesource.model.SEpisode>,
+        rawEpisodes: List<SEpisode>,
         tmdbMetadata: TmdbMetadata?,
         tmdbS0Metadata: TmdbMetadata?,
         offsets: Pair<Int, Int>, // Pair(siteOffset, oavOffset)
         sNum: Int,
         isMovie: Boolean = false,
         isOav: Boolean = false,
-    ): List<eu.kanade.tachiyomi.animesource.model.SEpisode> {
+    ): List<SEpisode> {
         val (siteOffset, oavOffset) = offsets
         val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
 
