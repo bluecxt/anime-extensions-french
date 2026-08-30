@@ -168,7 +168,7 @@ jobs:
         run: |
           SAMPLE_APK=$(find repo/apk -name "*.apk" | head -n 1)
           if [ -n "$SAMPLE_APK" ]; then
-            FINGERPRINT=$(keytool -printcert -jarfile "$SAMPLE_APK" | grep "SHA256:" | head -n 1 | awk -F': ' '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
+            FINGERPRINT=$(apksigner verify --print-certs "$SAMPLE_APK" | grep "SHA-256 digest:" | head -n 1 | awk '{print $NF}')
             REPO_ICON_URL="https://bluecxt.github.io/anime-extensions-french/${{ inputs.channel }}/icon.png"
             echo "{\"meta\":{\"name\":\"${{ inputs.repo_name }}\",\"shortName\":\"${{ inputs.short_name }}\",\"website\":\"https://github.com/bluecxt/anime-extensions-french\",\"signingKeyFingerprint\":\"$FINGERPRINT\",\"iconUrl\":\"$REPO_ICON_URL\",\"author\":\"${{ inputs.author }}\"}}" > repo/repo.json
             echo "Successfully generated repo.json with name: ${{ inputs.repo_name }}"
