@@ -68,6 +68,13 @@ class FrenchStream :
 
     // ============================== Search ===============================
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        if (query.startsWith(PREFIX_SEARCH)) {
+            val mediaId = query.removePrefix(PREFIX_SEARCH).trim()
+            val anime = SAnime.create().apply {
+                url = mediaId
+            }
+            return AnimesPage(listOf(getAnimeDetails(anime)), false)
+        }
         val url = "$baseUrl/engine/ajax/search.php"
         val formBody = FormBody.Builder().apply {
             add("query", query)
