@@ -142,3 +142,15 @@ fun String.parseStatus(): Int = when (this.trim().lowercase()) {
     "en pause", "on-hold", "on hold", "on_hiatus", "hiatus", "en attente", "paused" -> SAnime.ON_HIATUS
     else -> SAnime.UNKNOWN
 }
+
+/**
+ * Runs a block of code, returning its result or null on normal exceptions,
+ * while ensuring that coroutine CancellationException is always rethrown.
+ */
+inline fun <T> runCatchingCancelable(block: () -> T): T? = try {
+    block()
+} catch (e: kotlinx.coroutines.CancellationException) {
+    throw e
+} catch (_: Throwable) {
+    null
+}

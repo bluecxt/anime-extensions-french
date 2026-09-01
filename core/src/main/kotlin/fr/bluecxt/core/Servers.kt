@@ -5,6 +5,7 @@ package fr.bluecxt.core
 import fr.bluecxt.core.extractors.AbyssExtractor
 import fr.bluecxt.core.extractors.DoodExtractor
 import fr.bluecxt.core.extractors.Embed4meExtractor
+import fr.bluecxt.core.extractors.FSVidExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
 import fr.bluecxt.core.extractors.LuluExtractor
@@ -128,7 +129,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Filemoon" -> VideoServer(
         name = "Filemoon",
-        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "boosteradx.online", "byse.sx"),
+        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "boosteradx.online", "byse.sx", "bysewihe.com"),
         extractor = { url -> FilemoonExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
@@ -158,7 +159,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "dood.stream", "ds2play.com", "doods.pro", "ds2video.com", "d0o0d.com", "do0od.com",
             "d0000d.com", "d000d.com", "dood.li", "dood.work", "dooodster.com", "vidply.com",
             "all3do.com", "do7go.com", "doodcdn.io", "doply.net", "vide0.net", "vvide0.com",
-            "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com",
+            "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com", "kakaflix.lol", "fr.kakaflix.lol",
         ),
         extractor = { url -> DoodExtractor(source.extractorClient).videosFromUrl(url) },
     )
@@ -193,6 +194,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "voeunblock1.com", "voeunblock2.com", "voeunblock3.com", "voeunblock4.com", "voeunblock5.com",
             "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
             "jessicayeahcatch.com", "kathyinformationwhether.com", "ralphysuccessfull.org", "bryantenunder.com",
+            "sandratableother.com",
         ),
         extractor = { url -> VoeExtractor(source.extractorClient).videosFromUrl(url) },
     )
@@ -211,13 +213,14 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "filelions.live", "filelions.online", "filelions.to", "kinoger.be",
             "vidhidehub.com", "vidhidevip.com", "vidhidepre.com", "smoothpre.com",
             "dhtpre.com", "peytonepre.com", "movearnpre.com", "dintezuvio.com",
+            "kokoflix.lol", "kitchenstories.fit",
         ),
         extractor = { url -> LuluExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
     "Uqload" -> VideoServer(
         name = "Uqload",
-        hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz", "uqload.io", "uqload.cx"),
+        hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz", "uqload.io", "uqload.cx", "uqload.vc", "uqload.net", "uqload.ws"),
         extractor = { url -> UqloadExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
@@ -271,8 +274,14 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidzy" -> VideoServer(
         name = "Vidzy",
-        hosts = listOf("Vidzy.live"),
+        hosts = listOf("vidzy.live", "vidzy.cc", "vidzy.org"),
         extractor = { url -> VidzyExtractor(source.extractorClient).videosFromUrl(url) },
+    )
+
+    "FSVid" -> VideoServer(
+        name = "FSVid",
+        hosts = listOf("fsvid.lol"),
+        extractor = { url -> FSVidExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
     else -> null
