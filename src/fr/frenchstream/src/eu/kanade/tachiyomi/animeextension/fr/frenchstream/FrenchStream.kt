@@ -1,0 +1,132 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
+package eu.kanade.tachiyomi.animeextension.fr.frenchstream
+
+import android.util.Log
+import eu.kanade.tachiyomi.animeextension.fr.frenchstream.dto.CatalogDto
+import eu.kanade.tachiyomi.animeextension.fr.frenchstream.dto.DetailsItemDto
+import eu.kanade.tachiyomi.animeextension.fr.frenchstream.dto.EpisodeUrlDto
+import eu.kanade.tachiyomi.animeextension.fr.frenchstream.dto.MovieDto
+import eu.kanade.tachiyomi.animeextension.fr.frenchstream.dto.SeriesDataDto
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.FetchType
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.CommonPreferences
+import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.HUB_SEASON_NUMBER
+import fr.bluecxt.core.Source
+import fr.bluecxt.core.tvdb.fetchTvdbMetadata
+import fr.bluecxt.core.utils.JsoupExtensions
+import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.get
+import keiyoushi.utils.parallelFlatMap
+import keiyoushi.utils.parallelMap
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.post
+import keiyoushi.utils.useAsJsoup
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
+
+const val MOVIE_EP_NUMBER = -1
+
+class FrenchStream :
+    Source(),
+    CommonPreferences,
+    JsoupExtensions {
+
+    override val name = "French Stream"
+    override val defaultBaseUrl = "https://french-stream.one"
+
+    override val supportedServers = listOf(
+        "Vidzy",
+        "Uqload",
+        "Filemoon",
+        "Vidara",
+        "Voe",
+        "Dood",
+        "Lulu",
+        "FSVid",
+    )
+    override val supportedVoices: Array<String> = arrayOf("VOSTFR", "VF", "VQF", "VO")
+    override val lang = "fr"
+    override val supportsLatest = true
+
+    override fun getAnimeUrl(anime: SAnime): String = throw UnsupportedOperationException()
+
+    // ============================== Popular ===============================
+    override suspend fun getPopularAnime(page: Int): AnimesPage = CatalogDto.from(client.get("$baseUrl/index.php?cstart=$page", headers).useAsJsoup())
+
+    // ============================== Latest ===============================
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = CatalogDto.from(client.get("$baseUrl/index.php?do=cat&category=s-tv&cstart=$page", headers).useAsJsoup())
+
+    // ============================== Search ===============================
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        val url = "$baseUrl/engine/ajax/search.php"
+        val formBody = FormBody.Builder().apply {
+            add("query", query)
+            add("page", page.toString())
+        }.build()
+        return CatalogDto.from(client.post(url, headers, formBody).useAsJsoup(), isSearch = true)
+    }
+
+    // ============================== Anime Details ===============================
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = DetailsItemDto.from(client.get("$baseUrl/index.php?newsid=${anime.url}").useAsJsoup()).populate(anime)
+
+    // ============================== Episodes ===============================
+    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = coroutineScope {
+        val mediaId = anime.url
+
+        val movieDeferred = async {
+            runCatching {
+                val movieDto: MovieDto = client.get("$baseUrl/engine/ajax/film_api.php?id=$mediaId", headers).parseAs()
+                if (movieDto.error != null) return@async null
+                movieDto.toEpisodeList(mediaId)
+            }.getOrNull()
+        }
+        val seriesDeferred = async {
+            runCatching {
+                val seriesDto: SeriesDataDto = client.get("$baseUrl/static/series/$mediaId.js", headers).parseAs()
+                if (seriesDto.allEpisodes.isEmpty()) return@async null
+                seriesDto.toEpisodeList(mediaId)
+            }.getOrNull()
+        }
+        val seriesEpisodes = seriesDeferred.await()
+        val movieEpisodes = movieDeferred.await()
+        seriesEpisodes
+            ?: movieEpisodes
+            ?: emptyList()
+    }
+
+    // ============================== Hosters ===============================
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val episodeDto: EpisodeUrlDto = episode.url.parseAs()
+        val isMovie = episodeDto.epNum == MOVIE_EP_NUMBER.toString()
+
+        return if (isMovie) {
+            val movieDto: MovieDto = client.get("$baseUrl/engine/ajax/film_api.php?id=${episodeDto.mediaId}", headers).parseAs()
+            movieDto.toHosterList(episodeDto.mediaId, episodeDto.epNum, episodeDto.langs)
+        } else {
+            val seriesDto: SeriesDataDto = client.get("$baseUrl/static/series/${episodeDto.mediaId}.js", headers).parseAs()
+            seriesDto.toHosterList(episodeDto.mediaId, episodeDto.epNum, episodeDto.langs)
+        }
+    }
+
+    // ============================== Videos ===============================
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val links: List<String> = hoster.hosterUrl.parseAs()
+
+        return links.parallelFlatMap { link ->
+            extractVideos(link, hoster.hosterName, supportedServers)
+        }
+    }
+    companion object {
+        const val PREFIX_SEARCH = "id:"
+    }
+}
