@@ -18,6 +18,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.WaveplayerExtractor
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -59,7 +60,7 @@ class WaveAnime :
     }
 
     private fun parseAnimePage(response: Response): AnimesPage {
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val items = document.select("div.component.serie-card").mapNotNull { element ->
             val link = element.selectFirst("a") ?: return@mapNotNull null
             SAnime.create().apply {
@@ -91,7 +92,7 @@ class WaveAnime :
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val info = document.selectFirst("div.serie-info")
         val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
@@ -144,7 +145,7 @@ class WaveAnime :
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
         val episodes = mutableListOf<SEpisode>()
         val seasonGrids = document.select("div.component.episode-card-grid")
@@ -205,7 +206,7 @@ class WaveAnime :
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val episodeUrl = hoster.internalData
         val response = client.newCall(GET(baseUrl + episodeUrl, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val html = document.toString()
 
         val episodeId = episodeUrl.substringAfter("?v=").substringBefore("&")

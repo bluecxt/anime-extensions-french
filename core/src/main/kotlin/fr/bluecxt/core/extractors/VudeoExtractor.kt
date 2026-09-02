@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -13,7 +14,7 @@ import okhttp3.OkHttpClient
 class VudeoExtractor(private val client: OkHttpClient) {
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val doc = client.newCall(GET(url)).awaitSuccess()
-            .asJsoup()
+            .useAsJsoup()
 
         val sources = doc.selectFirst("script:containsData(sources: [)")?.data()
             ?: return emptyList()

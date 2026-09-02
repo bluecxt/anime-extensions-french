@@ -27,6 +27,7 @@ import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
@@ -108,7 +109,7 @@ class DessinAnime :
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
-        val document = response.use { it.asJsoup() }.apply { resolveSuspense() }
+        val document = response.use { it.useAsJsoup() }.apply { resolveSuspense() }
 
         val animes = document.select(
             "div[data-slot=carousel]:contains(NOUVEAUX EPISODES) a.group, " +
@@ -188,7 +189,7 @@ class DessinAnime :
 
     private suspend fun parseAnimePage(pageUrl: HttpUrl): AnimesPage {
         val response = client.newCall(GET(pageUrl, headers)).awaitSuccess()
-        val document = response.asJsoup().apply { resolveSuspense() }
+        val document = response.useAsJsoup().apply { resolveSuspense() }
 
         val animes = document.select("div.group").mapNotNull { element ->
             val thumbnail = element.selectFirst("img")?.attr("abs:src") ?: POSTER_PLACEHOLDER
@@ -244,7 +245,7 @@ class DessinAnime :
     // ============================ Seasons =============================
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
-        val soup = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess().asJsoup().apply { resolveSuspense() }
+        val soup = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess().useAsJsoup().apply { resolveSuspense() }
 
         val siteSeasons = soup.select("a.bg-card").mapNotNull { element ->
             val saisonNum = element.selectFirst("p.line-clamp-1")?.text()?.filter { it.isDigit() }?.toIntOrNull() ?: 1

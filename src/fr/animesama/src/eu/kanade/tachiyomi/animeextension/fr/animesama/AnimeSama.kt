@@ -38,6 +38,7 @@ import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
@@ -73,13 +74,13 @@ class AnimeSama :
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val url = "$baseUrl/catalogue?page=$page"
-        val document = client.get(url, headers).asJsoup()
+        val document = client.get(url, headers).useAsJsoup()
         return parseCatalogue(document, page)
     }
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val document = client.get(baseUrl, headers).asJsoup()
+        val document = client.get(baseUrl, headers).useAsJsoup()
         return parseMainPage(document)
     }
 
@@ -101,7 +102,7 @@ class AnimeSama :
         url.addQueryParameter("search", query.trim())
         url.addQueryParameter("page", "$page")
 
-        val document = client.get(url.build(), headers).asJsoup()
+        val document = client.get(url.build(), headers).useAsJsoup()
         return parseCatalogue(document, page)
     }
 
@@ -149,7 +150,7 @@ class AnimeSama :
     override suspend fun fetchRelatedAnimeList(anime: SAnime): List<SAnime> {
         val (parsedUrl, _) = urlParser(anime.url)
         val link = parsedUrl.url
-        val document = client.get("$baseUrl$link", headers).asJsoup()
+        val document = client.get("$baseUrl$link", headers).useAsJsoup()
         return parseCatalogue(document, 0).animes
     }
 
@@ -591,7 +592,7 @@ class AnimeSama :
             getCachedDocument(link)?.let { return it }
 
             val targetUrl = "$baseUrl$link"
-            client.get(targetUrl, headers).asJsoup().also { doc ->
+            client.get(targetUrl, headers).useAsJsoup().also { doc ->
                 putCachedDocument(link, doc)
                 documentMutexes.remove(link)
             }

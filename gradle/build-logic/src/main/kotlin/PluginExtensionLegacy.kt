@@ -110,7 +110,7 @@ class PluginExtensionLegacy : Plugin<Project> {
                     proguardFiles(
                         getDefaultProguardFile("proguard-android-optimize.txt"),
                         rootProject.file("config/proguard-rules.pro"),
-                        rootProject.file("config/proguard-rules-release.pro")
+                        rootProject.file("config/proguard-rules-release.pro"),
                     )
                     @Suppress("UnstableApiUsage")
                     vcsInfo.include = false
@@ -121,7 +121,7 @@ class PluginExtensionLegacy : Plugin<Project> {
                     isMinifyEnabled = true
                     proguardFiles(
                         getDefaultProguardFile("proguard-android-optimize.txt"),
-                        rootProject.file("config/proguard-rules.pro")
+                        rootProject.file("config/proguard-rules.pro"),
                     )
                     signingConfig = signingConfigs.getByName("dev")
                     matchingFallbacks.addAll(listOf("debug", "release"))

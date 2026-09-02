@@ -15,6 +15,7 @@ import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
+import keiyoushi.utils.useAsJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -62,7 +63,7 @@ class VidzyExtractor(private val client: OkHttpClient) {
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val downloadUrl = getDownloadUrl(url) ?: throw ExtractionException("could not parse the url")
         val headers = getHeaders(url)
-        val document = client.newCall(GET(downloadUrl, headers)).awaitSuccess().asJsoup()
+        val document = client.newCall(GET(downloadUrl, headers)).awaitSuccess().useAsJsoup()
 
         val op = document.selectFirst("input[name=op]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find op")
         val id = document.selectFirst("input[name=id]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find id")
@@ -76,7 +77,7 @@ class VidzyExtractor(private val client: OkHttpClient) {
             .add("hash", hash)
             .build()
 
-        val downloadDocument = client.newCall(POST(downloadUrl, headers, formBody)).awaitSuccess().asJsoup()
+        val downloadDocument = client.newCall(POST(downloadUrl, headers, formBody)).awaitSuccess().useAsJsoup()
 
         Log.d(VIDZY_LOG, "post on $downloadUrl, headers = $url as referer and useragent classic")
         Log.d(VIDZY_LOG, "formbody: op = $op, id = $id mode = $mode hash = $hash")

@@ -17,6 +17,7 @@ import fr.bluecxt.core.utils.parseStatus
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
 import keiyoushi.utils.get
+import keiyoushi.utils.useAsJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 
@@ -34,7 +35,7 @@ abstract class Madara(
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage = parseAnime(
-        client.get(if (page > 1) "$baseUrl/page/$page" else baseUrl, headers).asJsoup(),
+        client.get(if (page > 1) "$baseUrl/page/$page" else baseUrl, headers).useAsJsoup(),
         popularAnimeSelector(),
         popularAnimeNameSelector(),
     )
@@ -44,7 +45,7 @@ abstract class Madara(
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage = parseAnime(
-        client.get(if (page > 1) "$baseUrl/nouveaux-ajouts/page/$page/" else "$baseUrl/nouveaux-ajouts", headers).asJsoup(),
+        client.get(if (page > 1) "$baseUrl/nouveaux-ajouts/page/$page/" else "$baseUrl/nouveaux-ajouts", headers).useAsJsoup(),
         latestAnimeSelector(),
         latestAnimeNameSelector(),
     )
@@ -79,7 +80,7 @@ abstract class Madara(
             applyFilters(filters)
         }.build()
 
-        val document = client.get(url, headers).asJsoup()
+        val document = client.get(url, headers).useAsJsoup()
 
         return parseAnime(document, searchAnimeSelector(), searchAnimeNameSelector())
     }
@@ -116,7 +117,7 @@ abstract class Madara(
 
     // ============================== Anime Details ===============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime.apply {
-        val document = client.get("$baseUrl$url", headers).asJsoup()
+        val document = client.get("$baseUrl$url", headers).useAsJsoup()
 
         if (description.isNullOrBlank()) {
             val date = document.selectFirst("div:contains(Start date) > div.summary-content")?.text()

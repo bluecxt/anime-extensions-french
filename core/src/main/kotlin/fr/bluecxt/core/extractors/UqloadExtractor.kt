@@ -12,6 +12,7 @@ import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -37,7 +38,7 @@ class UqloadExtractor(private val client: OkHttpClient) {
         if (path == "/" || path.isEmpty()) {
             throw ContentUnavailableException("Uqload: Video not found (redirected to host homepage: ${finalUrl.host})")
         }
-        val soup = response.asJsoup()
+        val soup = response.useAsJsoup()
 
         val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: throw Exception("Could not find script with video data in Uqload")
 

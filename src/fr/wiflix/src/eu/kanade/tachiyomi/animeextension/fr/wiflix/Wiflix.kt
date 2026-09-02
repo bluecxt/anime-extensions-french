@@ -21,6 +21,7 @@ import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.WIFLIX_LOG
 import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -63,7 +64,7 @@ class Wiflix :
     // ============================== Search ================================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
-        val hashDoc = client.newCall(GET(baseUrl)).execute().asJsoup()
+        val hashDoc = client.newCall(GET(baseUrl)).execute().useAsJsoup()
 
         val userHash = hashDoc.select("script")
             .firstOrNull { it.data().contains("dle_login_hash") }
@@ -94,7 +95,7 @@ class Wiflix :
     }
 
     override fun searchAnimeParse(response: Response): AnimesPage {
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val anime = document.select("div.fast-search-result").mapNotNull { element ->
             val anchor = element.selectFirst("a.fsr-wrap") ?: return@mapNotNull null
@@ -115,7 +116,7 @@ class Wiflix :
     override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/serie-en-streaming/page/$page/")
 
     override fun popularAnimeParse(response: Response): AnimesPage {
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val animes = document.select("div.mov").mapNotNull { element ->
             SAnime.create().apply {
@@ -133,7 +134,7 @@ class Wiflix :
         val url = "$baseUrl${anime.url}"
         Log.d(WIFLIX_LOG, url)
         val response = client.newCall(GET(url)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val description = document.selectFirst("p[itemprop=description]")?.text()
             ?.substringAfter("Synopsis:")?.trim()
@@ -154,7 +155,7 @@ class Wiflix :
     // ============================== Episodes ==============================
 
     override fun episodeListParse(response: Response): List<SEpisode> {
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val anime = SAnime.create()
         val animeUrl = response.request.url.encodedPath
 
@@ -195,7 +196,7 @@ class Wiflix :
         val fragment = episode.url.substringAfter("#")
 
         val response = client.newCall(GET(baseUrl.removeSuffix("/") + animeUrl)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val hosters = mutableListOf<Hoster>()
 
@@ -232,7 +233,7 @@ class Wiflix :
         val fragment = url.substringAfter("#")
 
         val response = client.newCall(GET(animeUrl)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val serverLinks = if (fragment.startsWith("group-")) {
             val epNum = fragment.substringAfter("group-").substringBefore("-")

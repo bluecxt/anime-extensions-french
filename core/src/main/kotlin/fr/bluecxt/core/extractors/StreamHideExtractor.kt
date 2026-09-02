@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
@@ -17,7 +18,7 @@ class StreamHideExtractor(private val client: OkHttpClient, private val headers:
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> = runCatching {
         val response = client.newCall(GET(getEmbedUrl(url), headers)).awaitSuccess()
-        val doc = response.asJsoup()
+        val doc = response.useAsJsoup()
         val scriptBody = doc.selectFirst("script:containsData(m3u8)")?.data()
             ?.let { script ->
                 if (script.contains("eval(function(p,a,c")) {

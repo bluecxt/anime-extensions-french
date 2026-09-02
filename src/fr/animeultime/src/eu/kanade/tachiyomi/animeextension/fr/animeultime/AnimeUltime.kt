@@ -84,7 +84,7 @@ class AnimeUltime :
         Log.d(ANIMEULTIME_LOG, "Fetching latest updates for page $page")
         val animeItems: List<SearchResponseItem> = Categories.entries.parallelMapNotNull { categorie ->
             val response = client.get("$baseUrl/$categorie.html")
-            val document = response.asJsoup()
+            val document = response.useAsJsoup()
 
             document.select("div.slides li").mapNotNull { element ->
                 SearchResponseItem(
@@ -189,7 +189,7 @@ class AnimeUltime :
             add("id", id.toString())
         }.build()
         val response = client.post("$baseUrl/SerieOverview.html", headers, formBody)
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val productYear = document.selectFirst("li > span.alignleft:contains(Année de production) + span")?.text()?.trim() ?: ""
         val description = document.selectFirst("p")?.text()?.trim() ?: ""

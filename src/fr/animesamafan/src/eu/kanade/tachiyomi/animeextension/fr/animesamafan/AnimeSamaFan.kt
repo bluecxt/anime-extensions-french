@@ -24,6 +24,7 @@ import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.filterSmartMetadata
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -105,13 +106,13 @@ class AnimeSamaFan :
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(catalogueRequest(page = page)).awaitSuccess()
-        return parseAnimePage(response.asJsoup(), page)
+        return parseAnimePage(response.useAsJsoup(), page)
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
         val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
-        val doc = response.asJsoup()
+        val doc = response.useAsJsoup()
         return AnimesPage(parseLatestFromHome(doc), false)
     }
 
@@ -150,7 +151,7 @@ class AnimeSamaFan :
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
             val response = client.newCall(GET("$baseUrl/anime/$id", headers)).awaitSuccess()
-            return urlparseDetailsAsSearchResult(response.asJsoup())
+            return urlparseDetailsAsSearchResult(response.useAsJsoup())
         }
 
         val searchFilters = AnimeSamaFanCatalogueFilters.getSearchFilters(filters)
@@ -163,7 +164,7 @@ class AnimeSamaFan :
             ),
         ).awaitSuccess()
 
-        return parseAnimePage(response.asJsoup(), page)
+        return parseAnimePage(response.useAsJsoup(), page)
     }
 
     private fun urlparseDetailsAsSearchResult(document: Document): AnimesPage {
@@ -224,7 +225,7 @@ class AnimeSamaFan :
     // ================== Details ==================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val docTitle = document.selectFirst("h1.anime-title")?.text()?.trim()
             ?: document.selectFirst("h1.season-title")?.text()?.trim()
@@ -325,7 +326,7 @@ class AnimeSamaFan :
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val baseTitle = sanitizeTitle(anime.title)
 
         val seasonCards = document.select(".seasons-grid a.season-card")
@@ -348,7 +349,7 @@ class AnimeSamaFan :
         val initialPath = anime.url
         Log.d("AnimeSamaFan", "getEpisodeList: initialPath='$initialPath'")
 
-        val initialDoc = client.newCall(GET("$baseUrl$initialPath", headers)).awaitSuccess().asJsoup()
+        val initialDoc = client.newCall(GET("$baseUrl$initialPath", headers)).awaitSuccess().useAsJsoup()
 
         // If it's a hub page with no episodes but has a seasons grid, follow the first one
         // (Avoids aggregation but ensures we find episodes for single-season animes)
@@ -357,7 +358,7 @@ class AnimeSamaFan :
 
         val (doc, path) = if (episodeCards.isEmpty() && gridCards.isNotEmpty()) {
             val firstUrl = gridCards.first()!!.safeRelativePath()!!
-            client.newCall(GET("$baseUrl$firstUrl", headers)).awaitSuccess().asJsoup() to firstUrl
+            client.newCall(GET("$baseUrl$firstUrl", headers)).awaitSuccess().useAsJsoup() to firstUrl
         } else {
             initialDoc to initialPath
         }
@@ -411,7 +412,7 @@ class AnimeSamaFan :
                 Log.d("AnimeSamaFan", "tryGetDocument failed: code=${response.code}")
                 return null
             }
-            response.asJsoup()
+            response.useAsJsoup()
         } catch (e: Exception) {
             Log.d("AnimeSamaFan", "tryGetDocument exception: ${e.message}")
             null
@@ -511,7 +512,7 @@ class AnimeSamaFan :
             "$episodeUrl?lang=${lang.lowercase()}"
         }
 
-        val doc = client.newCall(GET("$baseUrl$urlWithLang", headers)).awaitSuccess().asJsoup()
+        val doc = client.newCall(GET("$baseUrl$urlWithLang", headers)).awaitSuccess().useAsJsoup()
         val playerUrls = mutableListOf<String>()
 
         val iframes = doc.select("iframe")

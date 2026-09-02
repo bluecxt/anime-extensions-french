@@ -34,6 +34,7 @@ import keiyoushi.core.R
 import keiyoushi.utils.parallelCatchingFlatMap
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -109,7 +110,7 @@ class PapaDuStream :
         val url = "$baseUrl/cat-series/page/$page/"
         Log.d(PAPADUSTREAM_LOG, "getPopularAnime page=$page -> $url")
         val response = client.newCall(GET(url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         return parseAnimeGrid(document)
     }
 
@@ -118,7 +119,7 @@ class PapaDuStream :
         val url = if (page == 1) "$baseUrl/" else "$baseUrl/page/$page/"
         Log.d(PAPADUSTREAM_LOG, "getLatestUpdates page=$page -> $url")
         val response = client.newCall(GET(url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         return parseAnimeGrid(document)
     }
 
@@ -174,7 +175,7 @@ class PapaDuStream :
 
         Log.d(PAPADUSTREAM_LOG, "Browse filtered url: $url")
         val response = client.newCall(GET(url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         return parseAnimeGrid(document)
     }
 
@@ -182,7 +183,7 @@ class PapaDuStream :
         val path = if (query.startsWith("id:")) query.removePrefix("id:").trim() else query
         val fullUrl = if (path.startsWith("http")) path else "$baseUrl$path"
         val response = client.newCall(GET(fullUrl, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val rawH1 = document.selectFirst("h1")?.text() ?: "Titre"
         val title = rawH1.removePrefixes("Série ", "Serie ").substringBeforeAny(" en streaming").trim()
         val thumbnail = document.selectFirst(".full_content-poster")?.extractAbsoluteImgUrl()
@@ -195,7 +196,7 @@ class PapaDuStream :
     }
 
     private suspend fun searchAjax(trimmed: String): AnimesPage {
-        val homeDoc = client.newCall(GET(baseUrl, headers)).awaitSuccess().asJsoup()
+        val homeDoc = client.newCall(GET(baseUrl, headers)).awaitSuccess().useAsJsoup()
         val userHash = homeDoc.select("script").joinToString("\n") { it.data() }.extractJsVar("dle_login_hash")
 
         val formBody = FormBody.Builder()
@@ -212,7 +213,7 @@ class PapaDuStream :
             POST("$baseUrl/engine/ajax/controller.php?mod=search", searchHeaders, formBody),
         ).awaitSuccess()
 
-        val searchDoc = searchResponse.asJsoup()
+        val searchDoc = searchResponse.useAsJsoup()
         val animes = searchDoc.select("a").mapNotNull { a ->
             val title = a.selectFirst(".searchheading")?.text()?.trim() ?: return@mapNotNull null
             val path = a.safeRelativePath() ?: a.attr("href").safeRelativePath(baseUrl) ?: return@mapNotNull null
@@ -248,7 +249,7 @@ class PapaDuStream :
         val cleanUrl = anime.cleanUrl
         Log.d(PAPADUSTREAM_LOG, "getAnimeDetails: '${anime.title}', url='$cleanUrl'")
         val documentDeferred = async {
-            client.newCall(GET("$baseUrl$cleanUrl", headers)).awaitSuccess().asJsoup()
+            client.newCall(GET("$baseUrl$cleanUrl", headers)).awaitSuccess().useAsJsoup()
         }
         val sNumFromPage = extractPapaSeasonNumber(cleanUrl, anime.title)
         val cleanTitle = cleanAnimeTitle(anime.title)
@@ -349,7 +350,7 @@ class PapaDuStream :
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val cleanUrl = anime.cleanUrl
         Log.d(PAPADUSTREAM_LOG, "getSeasonList for '${anime.title}', url='$cleanUrl'")
-        val document = client.newCall(GET("$baseUrl$cleanUrl", headers)).awaitSuccess().asJsoup()
+        val document = client.newCall(GET("$baseUrl$cleanUrl", headers)).awaitSuccess().useAsJsoup()
 
         val baseTitle = cleanAnimeTitle(anime.title)
         val siteSeasons = parseSeasonElements(document, baseTitle)
@@ -405,7 +406,7 @@ class PapaDuStream :
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = coroutineScope {
         val cleanUrl = anime.cleanUrl
         Log.d(PAPADUSTREAM_LOG, "getEpisodeList for '${anime.title}', url='$cleanUrl'")
-        var document = client.newCall(GET("$baseUrl$cleanUrl", headers)).awaitSuccess().asJsoup()
+        var document = client.newCall(GET("$baseUrl$cleanUrl", headers)).awaitSuccess().useAsJsoup()
 
         val seasonElements = document.select("a.th-hover")
         val hasDirectEpisodes = document.selectFirst("a:has(div.fsa-ep)") != null ||
@@ -416,7 +417,7 @@ class PapaDuStream :
         if (!hasDirectEpisodes && seasonElements.isNotEmpty()) {
             val targetSeasonUrl = seasonElements.lastOrNull()?.safeRelativePath() ?: seasonElements.firstNotNullOfOrNull { it.safeRelativePath() }
             if (targetSeasonUrl != null) {
-                document = client.newCall(GET("$baseUrl$targetSeasonUrl", headers)).awaitSuccess().asJsoup()
+                document = client.newCall(GET("$baseUrl$targetSeasonUrl", headers)).awaitSuccess().useAsJsoup()
             }
         }
 
@@ -471,7 +472,7 @@ class PapaDuStream :
         val cleanUrl = episode.cleanUrl
         Log.d(PAPADUSTREAM_LOG, "getHosterList for '${episode.name}', url='$cleanUrl'")
         val response = client.newCall(GET("$baseUrl$cleanUrl", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val scriptData = document.select("script").joinToString("\n") { it.data() }
         val pageToken = scriptData.extractJsVar("xfPageToken")
