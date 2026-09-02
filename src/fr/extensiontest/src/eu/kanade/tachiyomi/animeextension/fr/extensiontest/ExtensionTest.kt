@@ -82,58 +82,77 @@ class ExtensionTest :
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = listOf(
         SEpisode.create().apply {
-            name = "Episode Test - Extracteurs"
-            url = "/episode-test"
+            name = "Épisode 1 - Test Hosters LAZY (Délais 3s à la demande)"
+            url = "/episode-lazy"
             episode_number = 1f
+        },
+        SEpisode.create().apply {
+            name = "Épisode 2 - Test Hosters NON-LAZY (Délais 3s immédiat)"
+            url = "/episode-non-lazy"
+            episode_number = 2f
         },
     )
 
-    override suspend fun getHosterList(episode: SEpisode): List<Hoster> = listOf(Hoster(hosterName = "Tests", internalData = "all_tests"))
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val isLazy = episode.url == "/episode-lazy"
+        return listOf(
+            Hoster(
+                hosterName = "Serveur Rapide (Sibnet)",
+                internalData = "fast",
+                lazy = isLazy,
+            ),
+            Hoster(
+                hosterName = "Serveur Lent 1 (DoodStream - 3s delay)",
+                internalData = "slow_1",
+                lazy = isLazy,
+            ),
+            Hoster(
+                hosterName = "Serveur Lent 2 (Voe - 4s delay)",
+                internalData = "slow_2",
+                lazy = isLazy,
+            ),
+            Hoster(
+                hosterName = "Serveur Très Lent (Filemoon - 6s delay)",
+                internalData = "slow_3",
+                lazy = isLazy,
+            ),
+        )
+    }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val testLinks = listOf(
-            "Vidoza" to "https://videzz.net/embed-y34qudiino2n.html",
-            "Uqload" to "https://uqload.is/embed-hkhff5k2pjp7.html",
-            "UqloadManual" to "https://uqload.is/embed-hkhff5k2pjp7.html",
-            "Streamtape" to "https://streamtape.com/e/4RjVoMZ0zWcKQDb/",
-            "Lulu" to "https://luluvdo.com/e/5q4zzr3cbn7k",
-            "Vidara" to "https://vidara.to/e/E0PwlcdTTVuTZ",
-            "Cda" to "https://ebd.cda.pl/1055x594/27664708b6",
-            "Sibnet" to "https://video.sibnet.ru/shell.php?videoid=1028952",
-            "Voe" to "https://jessicayeahcatch.com/e/jp2cdfcagow2",
-            "Vidnest" to "https://vidnest.io/embed-5xsbjc4ohpyo.html",
-            "Doodstream" to "https://dood.yt/e/aorzlvboafi6",
-            "Mp4upload" to "https://www.mp4upload.com/y8xh3ip7qxey",
-            "Savefiles" to "https://bigwarp.io/e/q8554e8tzewc.html",
-            "Filemoon" to "https://rupertisdivingintoocean.com/eyi/qgdk9knxn0d3",
-            "Okru" to "https://ok.ru/videoembed/4511946705484",
-            "Veev" to "https://veev.to/e/2EvjtvNM7IF2vqAWgGH8ug7pAb9eIlagSuKIInw",
-            "Vidguard" to "https://listeamed.net/e/JzkPxzX4NpAObyd",
-            "Lycoris" to "https://www.lycoris.cafe/embed?id=181447&episode=10",
-            "Pixeldrain" to "https://pixeldrain.com/u/rkHjhTWZ?embed",
-            "Abstream" to "https://abstream.to/embed/blshnz6jt14e",
-            "Streamup" to "https://strmup.to/c74b4341041c1",
-            "GoogleDrive" to "https://drive.usercontent.google.com/download?id=1kp9oGevIWTAXmymgvRRB29qUvINU-3Qs&confirm=t&uuid=a45d4b4b-b284-4e14-836f-9a78ce980c1c",
-            "Rumble" to "https://rumble.com/v716bwo-frixttwakrnin05.html",
-            "Abyss" to "https://abysscdn.com/?v=Q1a8w6rjA",
-            "Buzz" to "https://buzzheavier.com/hg1gtctkofos",
-            "Earnvid" to "https://dhtpre.com/embed/grins3nycf6t",
-            "Hqq" to "https://hqq.tv/e/NEYvTktac2pMOTFtQTNjNUhHUy9EUT09",
-            "Dailymotion" to "https://www.dailymotion.com/embed/video/x9ybkyu",
-            "Sendvid" to "https://sendvid.com/embed/nzhbbd7k",
-        )
+        Log.d("ExtensionTest", "getVideoList appelé pour : ${hoster.hosterName} (internalData=${hoster.internalData})")
 
-        return testLinks.parallelCatchingFlatMap { (serverName, url) ->
-            Log.d("ExtensionTest", "Testing $serverName with URL: $url")
-            if (serverName == "UqloadManual") {
-                UqloadExtractor(client).videosFromUrl(url).map {
-                    it.copy(quality = null).buildFromSource(null, "Uqload Manual")
-                }
-            } else {
-                extractVideos(
-                    playerUrl = url,
-                    allowedServers = supportedServers,
-                )
+        // Simulation de délais réseau lourds selon le hoster
+        when (hoster.internalData) {
+            "fast" -> {
+                kotlinx.coroutines.delay(300)
+                return listOf(Video(videoUrl = "https://example.com/fast.mp4", videoTitle = "Sibnet 720p (300ms)"))
+            }
+
+            "slow_1" -> {
+                Log.d("ExtensionTest", "Début extraction DoodStream (3s)...")
+                kotlinx.coroutines.delay(3000)
+                Log.d("ExtensionTest", "Fin extraction DoodStream")
+                return listOf(Video(videoUrl = "https://example.com/slow1.mp4", videoTitle = "DoodStream 1080p (3s)"))
+            }
+
+            "slow_2" -> {
+                Log.d("ExtensionTest", "Début extraction Voe (4s)...")
+                kotlinx.coroutines.delay(4000)
+                Log.d("ExtensionTest", "Fin extraction Voe")
+                return listOf(Video(videoUrl = "https://example.com/slow2.mp4", videoTitle = "Voe HD (4s)"))
+            }
+
+            "slow_3" -> {
+                Log.d("ExtensionTest", "Début extraction Filemoon (6s)...")
+                kotlinx.coroutines.delay(6000)
+                Log.d("ExtensionTest", "Fin extraction Filemoon")
+                return listOf(Video(videoUrl = "https://example.com/slow3.mp4", videoTitle = "Filemoon 1080p (6s)"))
+            }
+
+            else -> {
+                kotlinx.coroutines.delay(1000)
+                return listOf(Video(videoUrl = "https://example.com/default.mp4", videoTitle = "Défaut 720p"))
             }
         }
     }
