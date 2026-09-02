@@ -149,7 +149,7 @@ def write_android_manifest_file(
         path_patterns = args.activity_path_patterns
 
         activity = ET.SubElement(application, "activity", {
-            f"{{{ANDROID_NS}}}name": "keiyoushi.source.UrlActivity",
+            f"{{{ANDROID_NS}}}name": f".{ext_class}UrlActivity",
             f"{{{ANDROID_NS}}}exported": "true",
             f"{{{ANDROID_NS}}}theme": "@android:style/Theme.NoDisplay",
             f"{{{ANDROID_NS}}}excludeFromRecents": "true",
@@ -176,6 +176,23 @@ def write_android_manifest_file(
 
     print(f"Created android manifest file: {manifest_file}")
 
+def write_url_activity_file(
+    ext_package_dir: Path,
+    ext_dir_lang: str,
+    ext_class: str,
+    ext_dir_name: str
+) -> None:
+    activity_file_path = (ext_package_dir / f"{ext_class}UrlActivity.kt")
+    activity_file: list[str] = [
+        "// Copyright bluecxt",
+        "// SPDX-License-Identifier: Apache-2.0",
+        f"package eu.kanade.tachiyomi.animeextension.{ext_dir_lang}.{ext_dir_name}\n",
+        "import fr.bluecxt.core.UrlActivity\n",
+        f"class {ext_class}UrlActivity : UrlActivity()\n"
+    ]
+    activity_file_path.write_text("\n".join(activity_file))
+    print(f"Created url activity file: {activity_file_path}")
+
 def write_source_file(
     args: argparse.Namespace,
     ext_package_dir: Path,
@@ -195,7 +212,7 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.useAsJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
@@ -254,6 +271,8 @@ if __name__ == "__main__":
     write_gradle_file(args, ext_dir, ext_class)
 
     write_android_manifest_file(args, ext_dir, ext_dir_lang, ext_dir_name, ext_class)
+
+    write_url_activity_file(ext_package_dir, ext_dir_lang, ext_class, ext_dir_name)
 
     write_source_file(args, ext_package_dir, ext_dir_lang, ext_class, ext_dir_name)
     print("╔═════════════════════╗")

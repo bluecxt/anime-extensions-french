@@ -62,6 +62,7 @@ class AnimeSama :
     override val supportedVoices = arrayOf("VOSTFR", "VF", "VA")
     override val lang = "fr"
     override val supportsLatest = true
+    override val defaultServer = "Vidmoly"
 
     override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", DEFAULT_USER_AGENT)

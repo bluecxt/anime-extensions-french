@@ -129,6 +129,7 @@ fun Source.filterSmartMetadata(meta: TmdbMetadata, isSpecialSeason: Boolean = fa
 
 /**
  * Fetches TMDB metadata directly by ID.
+ * the type can be "tv", "series" or "movie"
  */
 suspend fun Source.fetchTmdbMetadataById(id: Int, type: String, season: Int = 1, lang: String = "fr-FR"): TmdbMetadata? = try {
     val typeClean = if (type == "tv" || type == "series") "tv" else "movie"

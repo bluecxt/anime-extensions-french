@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.VOIRDRAMA_LOG
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.core.R
 import keiyoushi.utils.get
 import keiyoushi.utils.head
 import keiyoushi.utils.parallelCatchingFlatMap
@@ -92,7 +93,7 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
         if (description.isNullOrBlank() && !metadata.summary.isNullOrBlank()) {
             description = buildString {
                 metadata.releaseDate?.takeIf { it.isNotBlank() }?.let { date ->
-                    append("Date de sortie : ")
+                    append(getString(R.string.metadata_release_date_prefix))
                     appendLine(date)
                     appendLine()
                 }
