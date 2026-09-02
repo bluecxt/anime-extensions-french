@@ -14,6 +14,7 @@ import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -114,7 +115,7 @@ fun Response.toDoc(url: String = ""): Document = this.use { res ->
     if (!res.isSuccessful) {
         throw ExtractionException("HTTP ${res.code} (${res.message}) for $url".trim())
     }
-    res.asJsoup()
+    res.useAsJsoup()
 }
 
 /**

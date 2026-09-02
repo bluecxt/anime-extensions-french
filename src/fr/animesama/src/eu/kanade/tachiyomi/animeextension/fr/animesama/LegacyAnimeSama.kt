@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parallelMap
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -49,7 +50,7 @@ suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
     Log.d(LEGACY_LOG, "getLegacyAnimeDetails: requesting '$baseUrl$animeUrlPath'")
     val response = client.newCall(GET("$baseUrl$animeUrlPath", headers)).awaitSuccess()
 
-    val doc = response.asJsoup()
+    val doc = response.useAsJsoup()
 
     val descriptionText = doc.selectFirst("p#synopsisText")?.text() ?: ""
     val genres = doc.select("div.genres-wrap > span").joinToString { it.text() }
@@ -70,7 +71,7 @@ suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
     val animeUrlPath = anime.url.substringBefore("#").removeSuffix("/")
     Log.d(LEGACY_LOG, "getLegacySeasonList: requesting '$baseUrl$animeUrlPath'")
     val response = client.newCall(GET("$baseUrl$animeUrlPath", headers)).awaitSuccess()
-    val animeDoc = response.asJsoup()
+    val animeDoc = response.useAsJsoup()
 
     val animeName = (animeDoc.selectFirst("div.my-2 > h1")?.text() ?: "").trim()
         .replace(animeNameCleanupRegex, "")
@@ -147,7 +148,7 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
         Log.d(LEGACY_LOG, "getLegacyEpisodeList: isHub=true, requesting '$hubUrl'")
         val response = client.newCall(GET(hubUrl, headers)).await()
         if (!response.isSuccessful) return emptyList()
-        val doc = response.asJsoup()
+        val doc = response.useAsJsoup()
         val scripts = doc.select("script").toString()
         val uncommented = commentRegex.replace(scripts, "")
 

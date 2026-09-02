@@ -20,6 +20,7 @@ import keiyoushi.utils.get
 import keiyoushi.utils.head
 import keiyoushi.utils.parallelCatchingFlatMap
 import keiyoushi.utils.tryParse
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -120,7 +121,7 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
 
     // ============================== Episodes ===============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = with(anime) {
-        val document = client.get("$baseUrl$url", headers).asJsoup()
+        val document = client.get("$baseUrl$url", headers).useAsJsoup()
         val hasVf = itHasVf(url)
 
         parseEpisodes(document, hasVf)

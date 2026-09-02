@@ -21,6 +21,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMovieMetadata
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -188,7 +189,7 @@ class AnimoFlix :
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
         val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
-        val doc = response.asJsoup()
+        val doc = response.useAsJsoup()
         return AnimesPage(parseLatestFromHome(doc), false)
     }
 
@@ -294,7 +295,7 @@ class AnimoFlix :
     // ================== Details ==================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val fullTitle = document.selectFirst("h1.anime-title-pro, h1")?.text() ?: anime.title
         val sSegment = anime.url.trim('/').split("/").lastOrNull() ?: ""
@@ -333,7 +334,7 @@ class AnimoFlix :
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val hubUrl = getHubUrl(anime.url)
         val response = client.newCall(GET(baseUrl + hubUrl, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val seasonCards = document.select(".seasons-grid a.season-card")
 
         return if (seasonCards.isNotEmpty()) {
@@ -355,7 +356,7 @@ class AnimoFlix :
     // ================== Episodes ==================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val episodeCards = document.select("a.episode-card")
         val seasonCards = document.select(".seasons-grid a.season-card")
 
@@ -369,7 +370,7 @@ class AnimoFlix :
                         val seasonUrl = card.attr("href").let { if (it.startsWith("http")) it else baseUrl + it }
                         val seasonResponse = client.newCall(GET(seasonUrl, headers)).awaitSuccess()
 
-                        parseEpisodesFromSeasonPage(seasonResponse.asJsoup(), seasonName, seasonCards.size, anime.title, seasonUrl)
+                        parseEpisodesFromSeasonPage(seasonResponse.useAsJsoup(), seasonName, seasonCards.size, anime.title, seasonUrl)
                     }
                 }.awaitAll().flatten().asReversed()
             }
@@ -470,7 +471,7 @@ class AnimoFlix :
         val url = hoster.hosterUrl
 
         val response = client.newCall(GET(url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         return document.select("select#lecteurSelect option").flatMap { option ->
             extractVideos(

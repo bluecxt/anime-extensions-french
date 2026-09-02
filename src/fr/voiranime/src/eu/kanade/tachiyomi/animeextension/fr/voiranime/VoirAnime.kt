@@ -22,6 +22,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.VOIRANIME_LOG
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -52,7 +53,7 @@ class VoirAnime :
 // ============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/series/?page=$page&order=popular", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val items = document.select("div.listupd article.bs").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
@@ -67,7 +68,7 @@ class VoirAnime :
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/series/?page=$page&order=update", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val items = document.select("div.listupd article.bs").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
@@ -85,7 +86,7 @@ class VoirAnime :
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
             val response = client.newCall(GET("$baseUrl/series/$id", headers)).awaitSuccess()
-            val document = response.asJsoup()
+            val document = response.useAsJsoup()
             val anime = SAnime.create().apply {
                 title = document.selectFirst("h1.entry-title")?.text() ?: ""
                 setUrlWithoutDomain(document.location())
@@ -138,7 +139,7 @@ class VoirAnime :
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         anime.title = document.selectFirst("h1.entry-title")?.text() ?: anime.title
         anime.description = document.select(".entry-content[itemprop=description]").text()
@@ -156,7 +157,7 @@ class VoirAnime :
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val tmdbMetadata = fetchTmdbMetadata(anime.title)
         val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
@@ -198,7 +199,7 @@ class VoirAnime :
         val lang = hoster.hosterName
 
         val response = client.newCall(GET(url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val videos = document.select("select.mirror option[data-index]").mapNotNull { element ->
             val base64Value = element.attr("value")

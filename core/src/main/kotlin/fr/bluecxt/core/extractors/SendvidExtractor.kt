@@ -11,6 +11,7 @@ import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.defaultHeaders
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -38,7 +39,7 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
         }.use { res ->
             if (res.code == 404) throw ContentUnavailableException("Video non available (404) $url")
             if (!res.isSuccessful) throw ExtractionException("failed for $url with ${res.code}: ${res.message}")
-            res.asJsoup()
+            res.useAsJsoup()
         }
         val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: throw Exception("Could not find video source in Sendvid")
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
