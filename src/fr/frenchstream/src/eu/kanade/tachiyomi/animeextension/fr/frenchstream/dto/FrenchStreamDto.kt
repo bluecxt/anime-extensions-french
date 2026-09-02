@@ -177,6 +177,11 @@ data class SeriesDataDto(
             .distinct()
             .sortedBy { it.toIntOrNull() ?: 0 }
 
+    val incompleteEpisodeData: Boolean
+        get() = allEpisodes.any { epNum ->
+            info[epNum]?.poster.isNullOrBlank() || info[epNum]?.synopsis.isNullOrBlank()
+        }
+
     fun toEpisodeList(mediaId: String): List<SEpisode> = allEpisodes.map { epNum ->
         val availableLangs = allLanguages.filter { it.value.containsKey(epNum) }.map { it.key }
 
@@ -191,8 +196,8 @@ data class SeriesDataDto(
             }
             episode_number = epNum.toFloatOrNull() ?: 1F
             scanlator = availableLangs.joinToString(", ")
-            info[epNum]?.poster?.let { preview_url = it }
-            info[epNum]?.synopsis?.let { summary = it }
+            info[epNum]?.poster?.takeIf { it.isNotBlank() }?.let { preview_url = it }
+            info[epNum]?.synopsis?.takeIf { it.isNotBlank() }?.let { summary = it }
         }
     }.reversed()
 

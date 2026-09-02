@@ -18,10 +18,14 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.FRENCHSTREAM_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.JsoupExtensions
+import fr.bluecxt.core.utils.runCatchingCancelable
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelFlatMap
@@ -53,12 +57,14 @@ class FrenchStream :
         "Dood",
         "Lulu",
         "FSVid",
+        "Kakaflix",
+        "Kokoflix",
     )
     override val supportedVoices: Array<String> = arrayOf("VOSTFR", "VF", "VQF", "VO")
     override val lang = "fr"
     override val supportsLatest = true
 
-    override fun getAnimeUrl(anime: SAnime): String = throw UnsupportedOperationException()
+    override fun getAnimeUrl(anime: SAnime): String = "$baseUrl/index.php?newsid=${anime.url}"
 
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage = CatalogDto.from(client.get("$baseUrl/index.php?cstart=$page", headers).useAsJsoup())
@@ -91,24 +97,62 @@ class FrenchStream :
         val mediaId = anime.url
 
         val movieDeferred = async {
-            runCatching {
+            runCatchingCancelable {
                 val movieDto: MovieDto = client.get("$baseUrl/engine/ajax/film_api.php?id=$mediaId", headers).parseAs()
                 if (movieDto.error != null) return@async null
-                movieDto.toEpisodeList(mediaId)
-            }.getOrNull()
+                movieDto
+            }
         }
         val seriesDeferred = async {
-            runCatching {
+            runCatchingCancelable {
                 val seriesDto: SeriesDataDto = client.get("$baseUrl/static/series/$mediaId.js", headers).parseAs()
                 if (seriesDto.allEpisodes.isEmpty()) return@async null
-                seriesDto.toEpisodeList(mediaId)
-            }.getOrNull()
+                seriesDto
+            }
         }
+
         val seriesEpisodes = seriesDeferred.await()
         val movieEpisodes = movieDeferred.await()
-        seriesEpisodes
-            ?: movieEpisodes
+
+        Log.d(FRENCHSTREAM_LOG, "incompleteEpisodeData = ${seriesEpisodes?.incompleteEpisodeData}")
+        if (seriesEpisodes?.incompleteEpisodeData ?: false) {
+            fillingMissingData(
+                seriesEpisodes.toEpisodeList(mediaId),
+                movieEpisodes?.meta?.tmdbId,
+                anime.title,
+            )?.run { return@coroutineScope this }
+        }
+
+        seriesEpisodes?.toEpisodeList(mediaId)
+            ?: movieEpisodes?.toEpisodeList(mediaId)
             ?: emptyList()
+    }
+
+    private suspend fun fillingMissingData(episodes: List<SEpisode>, tmdbId: String?, animeName: String): List<SEpisode>? {
+        val extractedId = tmdbId?.substringAfter("-")?.toIntOrNull() ?: return null
+        val rawType = tmdbId.substringBefore("-")
+        val type = if (rawType == "f") "movie" else "tv"
+        val season = animeName.substringAfter("Saison").filter { it.isDigit() }.toIntOrNull() ?: 1
+
+        val tmdbMetadata: TmdbMetadata = fetchTmdbMetadataById(extractedId, type, season, "fr-FR") ?: return null
+        return episodes.map { episode ->
+            val epNumber = episode.episode_number.toInt()
+            val episodeMetaData = tmdbMetadata.episodeSummaries[epNumber] ?: return@map episode
+            val metaName = episodeMetaData.first
+            val metaThumb = episodeMetaData.second
+            val metaSummary = episodeMetaData.third
+            episode.apply {
+                if (!name.contains("-")) {
+                    name = buildString {
+                        append("Épisode $epNumber")
+                        if (metaName != null) append(" - $metaName")
+                    }
+                }
+                preview_url = preview_url ?: metaThumb
+                summary = summary ?: metaSummary
+            }
+            episode
+        }
     }
 
     // ============================== Hosters ===============================
