@@ -8,6 +8,8 @@ import fr.bluecxt.core.extractors.Embed4meExtractor
 import fr.bluecxt.core.extractors.FSVidExtractor
 import fr.bluecxt.core.extractors.FilemoonExtractor
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
+import fr.bluecxt.core.extractors.KakaflixExtractor
+import fr.bluecxt.core.extractors.KokoflixExtractor
 import fr.bluecxt.core.extractors.LuluExtractor
 import fr.bluecxt.core.extractors.MinochinosExtractor
 import fr.bluecxt.core.extractors.MymailExtractor
@@ -159,14 +161,14 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "dood.stream", "ds2play.com", "doods.pro", "ds2video.com", "d0o0d.com", "do0od.com",
             "d0000d.com", "d000d.com", "dood.li", "dood.work", "dooodster.com", "vidply.com",
             "all3do.com", "do7go.com", "doodcdn.io", "doply.net", "vide0.net", "vvide0.com",
-            "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com", "kakaflix.lol", "fr.kakaflix.lol",
+            "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com",
         ),
         extractor = { url -> DoodExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
     "Vidara" -> VideoServer(
         name = "Vidara",
-        hosts = listOf("vidara.so", "vidara.to", "vidaraa.cc", "vidavaca.cc", "viewdara.com", "vidchampions.com", "thebesthosterv.com"),
+        hosts = listOf("vidara.so", "vidara.to", "vidaraa.cc", "vidavaca.cc", "viewdara.com", "vidchampions.com", "thebesthosterv.com", "kitchenstories.fit"),
         extractor = { url -> VidaraExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
@@ -213,7 +215,6 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "filelions.live", "filelions.online", "filelions.to", "kinoger.be",
             "vidhidehub.com", "vidhidevip.com", "vidhidepre.com", "smoothpre.com",
             "dhtpre.com", "peytonepre.com", "movearnpre.com", "dintezuvio.com",
-            "kokoflix.lol", "kitchenstories.fit",
         ),
         extractor = { url -> LuluExtractor(source.extractorClient).videosFromUrl(url) },
     )
@@ -282,6 +283,18 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         name = "FSVid",
         hosts = listOf("fsvid.lol"),
         extractor = { url -> FSVidExtractor(source.extractorClient).videosFromUrl(url) },
+    )
+
+    "Kakaflix" -> VideoServer(
+        name = "Kakaflix",
+        hosts = listOf("kakaflix.lol", "fr.kakaflix.lol"),
+        extractor = { url -> KakaflixExtractor(source.extractorClient).videosFromUrl(url) },
+    )
+
+    "Kokoflix" -> VideoServer(
+        name = "Kokoflix",
+        hosts = listOf("kokoflix.lol"),
+        extractor = { url -> KokoflixExtractor(source).videosFromUrl(url) },
     )
 
     else -> null

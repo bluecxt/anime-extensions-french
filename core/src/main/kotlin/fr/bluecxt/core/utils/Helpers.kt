@@ -144,13 +144,13 @@ fun String.parseStatus(): Int = when (this.trim().lowercase()) {
 }
 
 /**
- * Runs a block of code, returning its result or null on normal exceptions,
- * while ensuring that coroutine CancellationException is always rethrown.
+ * Runs a block of code, returning its result or null on exceptions other than
+ * coroutine CancellationException, which is always rethrown.
  */
 inline fun <T> runCatchingCancelable(block: () -> T): T? = try {
     block()
 } catch (e: kotlinx.coroutines.CancellationException) {
     throw e
-} catch (_: Throwable) {
+} catch (_: Exception) {
     null
 }
