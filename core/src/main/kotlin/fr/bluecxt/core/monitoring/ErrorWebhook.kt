@@ -62,15 +62,7 @@ object ErrorWebhook {
     private val isDebug = BuildConfig.DEBUG && !isDev
 
     // Webhook target URL computed once at startup
-    private val webhookEndpoint: String = run {
-        val base = WEBHOOK_URL.trimEnd('/')
-        when {
-            isDebug && base.contains("/webhook/") -> base.replace("/webhook/", "/webhook-test/")
-            isDebug -> "$base/webhook-test/extension-error"
-            base.contains("/webhook-test/") -> base.replace("/webhook-test/", "/webhook/")
-            else -> "$base/webhook/extension-error"
-        }
-    }
+    private val webhookEndpoint = "${WEBHOOK_URL.trimEnd('/')}/webhook/extension-error"
 
     /**
      * Ultra-fast 32-bit FNV-1a non-cryptographic hash for zero-allocation payload deduplication.
@@ -101,7 +93,7 @@ object ErrorWebhook {
         extensionName: String? = null,
         extensionVersion: String? = null,
     ) {
-        if (WEBHOOK_URL.isBlank()) return
+        if (WEBHOOK_URL.isBlank() || BuildConfig.DEBUG) return
 
         val httpCode = additionalContext.firstOrNull { it.startsWith("HTTP_ERROR_") }
             ?.removePrefix("HTTP_ERROR_")
