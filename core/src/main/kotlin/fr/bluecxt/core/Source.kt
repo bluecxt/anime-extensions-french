@@ -568,6 +568,7 @@ abstract class Source :
 
     @android.annotation.SuppressLint("HardwareIds")
     private fun logUsage() {
+        if (BuildConfig.DEBUG) return
         try {
             // Daily check: only ping once per day per extension
             val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
