@@ -93,7 +93,7 @@ object ErrorWebhook {
         extensionName: String? = null,
         extensionVersion: String? = null,
     ) {
-        if (WEBHOOK_URL.isBlank() || BuildConfig.DEBUG) return
+        if (WEBHOOK_URL.isBlank() || isDebug) return
 
         val httpCode = additionalContext.firstOrNull { it.startsWith("HTTP_ERROR_") }
             ?.removePrefix("HTTP_ERROR_")
@@ -101,7 +101,7 @@ object ErrorWebhook {
 
         val errorType = additionalContext.firstOrNull {
             it.startsWith("HTTP_ERROR_") || it in listOf("DNS_FAILURE", "SSL_ERROR", "TIMEOUT", "NETWORK_ERROR", "SELECTOR_ERROR")
-        } ?: if (httpCode != null) "HTTP_$httpCode" else "GENERIC_ERROR"
+        } ?: "GENERIC_ERROR"
 
         val rawKey = "${extensionName.orEmpty()}:$baseUrl:$url:$errorType:${additionalContext.joinToString("|")}"
         val hashKey = fastHash(rawKey)
@@ -161,7 +161,10 @@ object ErrorWebhook {
                     .post(json.encodeToString(MonitoringErrorPayload.serializer(), payload).toRequestBody(mediaType))
                     .build()
 
-                client.newCall(request).execute().close()
+                client.newCall(request).enqueue(object : okhttp3.Callback {
+                    override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {}
+                    override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) = response.close()
+                })
             } catch (_: Exception) {
                 // Fail silently — never interrupt the scraper flow
             }
