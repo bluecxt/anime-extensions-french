@@ -36,6 +36,8 @@ on:
         required: true
       webhook_url:
         required: true
+      webhook_secret:
+        required: true
 
 permissions:
   contents: write
@@ -88,6 +90,7 @@ jobs:
           TMDB_API: ${{ secrets.tmdb_api }}
           TVDB_API: ${{ secrets.tvdb_api }}
           WEBHOOK_URL: ${{ secrets.webhook_url }}
+          WEBHOOK_SECRET: ${{ secrets.webhook_secret }}
         run: |
           ./gradlew ${{ inputs.gradle_task }} && ls ${{ inputs.apk_path }}
 

@@ -28,3 +28,4 @@ jobs:
       tmdb_api: ${{ secrets.TMDB_API }}
       tvdb_api: ${{ secrets.TVDB_API }}
       webhook_url: ${{ secrets.WEBHOOK_URL }}
+      webhook_secret: ${{ secrets.WEBHOOK_SECRET }}
