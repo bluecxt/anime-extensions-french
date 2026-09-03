@@ -6,9 +6,9 @@ import android.app.Application
 import fr.bluecxt.core.network.INTERCEPTOR_VERSION
 import fr.bluecxt.core.utils.JSOUP_EXTENSIONS_VERSION
 import keiyoushi.core.BuildConfig
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -62,6 +62,7 @@ object ErrorWebhook {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Long>): Boolean = size > MAX_CACHE_SIZE
     }.let { java.util.Collections.synchronizedMap(it) }
     private val webhookMutex = Mutex()
+    private val monitoringScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private const val CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000L // 24 hours
     private const val MAX_CACHE_SIZE = 500
 
@@ -86,9 +87,7 @@ object ErrorWebhook {
         return true
     }
 
-    private fun getCallerAndBuildInfo(): CallerAndBuildInfo {
-        val stackTrace = Thread.currentThread().stackTrace
-
+    private fun getCallerAndBuildInfo(stackTrace: Array<StackTraceElement> = Thread.currentThread().stackTrace): CallerAndBuildInfo {
         // 1. Prefer caller from actual extension package
         val extCaller = stackTrace.firstOrNull { element ->
             element.className.contains("animeextension")
@@ -218,7 +217,10 @@ object ErrorWebhook {
         val rawKey = "${extensionName.orEmpty()}:$baseUrl:$url:$errorType:${additionalContext.joinToString("|")}"
         val hashKey = fastHash(rawKey)
 
-        dispatchPayload(hashKey, baseUrl, url, additionalContext, httpCode, errorType, extensionName, extensionVersion)
+        // Capture stacktrace on the calling thread before switching to IO dispatcher
+        val callerStackTrace = Thread.currentThread().stackTrace
+
+        dispatchPayload(hashKey, baseUrl, url, additionalContext, httpCode, errorType, extensionName, extensionVersion, callerStackTrace)
     }
 
     /**
@@ -239,7 +241,6 @@ object ErrorWebhook {
         sendWebhook(baseUrl, url, details, extensionName, extensionVersion)
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun dispatchPayload(
         hashKey: Int,
         baseUrl: String,
@@ -249,14 +250,15 @@ object ErrorWebhook {
         errorType: String,
         extensionName: String?,
         extensionVersion: String?,
+        callerStackTrace: Array<StackTraceElement>,
     ) {
-        GlobalScope.launch(Dispatchers.IO) {
-            // Cache check first — before any expensive stacktrace/reflection work
+        monitoringScope.launch {
+            // Cache check first — before any expensive reflection work
             val shouldProceed = webhookMutex.withLock { shouldSend(hashKey) }
             if (!shouldProceed) return@launch
 
-            // Only now resolve caller info via stacktrace & reflection
-            val info = getCallerAndBuildInfo()
+            // Use pre-captured stacktrace from the calling thread (not the IO thread)
+            val info = getCallerAndBuildInfo(callerStackTrace)
             val effectiveName = extensionName?.takeIf { it.isNotBlank() } ?: info.extensionName
             val effectiveVersion = extensionVersion?.takeIf { it.isNotBlank() } ?: info.version
 
