@@ -3,6 +3,8 @@
 package fr.bluecxt.core.monitoring
 
 import android.app.Application
+import fr.bluecxt.core.network.INTERCEPTOR_VERSION
+import fr.bluecxt.core.utils.JSOUP_EXTENSIONS_VERSION
 import keiyoushi.core.BuildConfig
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -20,25 +22,33 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
 
 private val WEBHOOK_URL = BuildConfig.WEBHOOK_URL
+private val WEBHOOK_SECRET = BuildConfig.WEBHOOK_SECRET
 
 @Serializable
-private data class DiscordEmbedField(
-    val name: String,
-    val value: String,
-    val inline: Boolean = false,
+data class MonitoringErrorPayload(
+    val timestamp: Long = System.currentTimeMillis(),
+    val extensionName: String,
+    val extensionVersion: String,
+    val interceptorVersion: String = INTERCEPTOR_VERSION,
+    val jsoupVersion: String = JSOUP_EXTENSIONS_VERSION,
+    val buildType: String,
+    val isDev: Boolean = false,
+    val isDebug: Boolean = false,
+    val domain: String,
+    val url: String,
+    val errorType: String,
+    val httpCode: Int? = null,
+    val caller: String? = null,
+    val details: List<String> = emptyList(),
 )
 
-@Serializable
-private data class DiscordEmbed(
-    val title: String,
-    val color: Int = 15158332, // Red (0xE74C3C)
-    val fields: List<DiscordEmbedField>,
-)
-
-@Serializable
-private data class DiscordWebhookPayload(
-    val username: String = "Anime Extensions Alert",
-    val embeds: List<DiscordEmbed>,
+private data class CallerAndBuildInfo(
+    val extensionName: String,
+    val version: String,
+    val buildType: String,
+    val isDev: Boolean,
+    val isDebug: Boolean,
+    val callerDetails: String,
 )
 
 object ErrorWebhook {
@@ -52,7 +62,6 @@ object ErrorWebhook {
     private val sentWebhooksCache = ConcurrentHashMap<Int, Long>()
     private val webhookMutex = Mutex()
     private const val CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000L // 24 hours
-    private const val WEBHOOK_VERSION = "2.0"
 
     /**
      * Ultra-fast 32-bit FNV-1a non-cryptographic hash for zero-allocation payload hashing.
@@ -80,15 +89,15 @@ object ErrorWebhook {
         return true
     }
 
-    private fun getCallerInfo(): Triple<String, String, String> {
+    private fun getCallerAndBuildInfo(): CallerAndBuildInfo {
         val stackTrace = Thread.currentThread().stackTrace
 
-        // 1. Prefer caller from actual extension package (e.g. eu.kanade.tachiyomi.animeextension...)
+        // 1. Prefer caller from actual extension package
         val extCaller = stackTrace.firstOrNull { element ->
             element.className.contains("animeextension")
         }
 
-        // 2. Fallback to bluecxt core caller excluding monitoring and utility helpers
+        // 2. Fallback to bluecxt core caller
         val caller = extCaller ?: stackTrace.firstOrNull { element ->
             val cls = element.className
             cls.contains("bluecxt") &&
@@ -98,63 +107,98 @@ object ErrorWebhook {
                 !cls.contains("SourceAuditor")
         }
 
-        return if (caller != null) {
-            val extensionClass = caller.className.substringAfterLast(".")
-            val pkgName = extCaller?.className?.substringBeforeLast(".") ?: caller.className.substringBeforeLast(".")
-            val version = resolveVersion(pkgName, caller.className)
-            Triple(extensionClass, version, "${caller.methodName}(${caller.fileName}:${caller.lineNumber})")
-        } else {
-            Triple("UnknownExtension", "Unknown", "UnknownMethod")
-        }
+        val extensionClass = caller?.className?.substringAfterLast(".") ?: "UnknownExtension"
+        val pkgName = extCaller?.className?.substringBeforeLast(".") ?: caller?.className?.substringBeforeLast(".").orEmpty()
+        val callerMethod = caller?.let { "${it.methodName}(${it.fileName}:${it.lineNumber})" } ?: "UnknownMethod"
+
+        val (version, buildType, isDev, isDebug) = resolveBuildInfo(pkgName, caller?.className)
+
+        return CallerAndBuildInfo(
+            extensionName = extensionClass,
+            version = version,
+            buildType = buildType,
+            isDev = isDev,
+            isDebug = isDebug,
+            callerDetails = callerMethod,
+        )
     }
 
-    private fun resolveVersion(pkgName: String, callerClassName: String? = null): String {
+    private fun resolveBuildInfo(pkgName: String, callerClassName: String? = null): Tuple4<String, String, Boolean, Boolean> {
+        var version = "Unknown"
+        var buildType = "release"
+        var isDebug = false
+
         val app = try {
             Injekt.get<Application>()
         } catch (_: Exception) {
             null
         }
 
-        // 1. Try resolving via ExtensionResources if caller class is available
+        // 1. Try resolving version via ExtensionResources
         if (app != null && callerClassName != null) {
             try {
                 val clazz = Class.forName(callerClassName)
                 val ver = fr.bluecxt.core.utils.ExtensionResources.getVersionName(app, clazz)
-                if (!ver.isNullOrBlank()) return ver
+                if (!ver.isNullOrBlank()) version = ver
             } catch (_: Exception) {}
         }
 
-        // 2. Inspect BuildConfig.VERSION_NAME generated by Gradle for the extension
-        try {
-            val buildConfigCls = Class.forName("$pkgName.BuildConfig")
-            val field = buildConfigCls.getField("VERSION_NAME")
-            val ver = field.get(null) as? String
-            if (!ver.isNullOrBlank()) return ver
-        } catch (_: Exception) {}
+        // 2. Inspect BuildConfig of extension
+        if (pkgName.isNotBlank()) {
+            try {
+                val buildConfigCls = Class.forName("$pkgName.BuildConfig")
+                (buildConfigCls.getField("VERSION_NAME").get(null) as? String)?.takeIf { it.isNotBlank() }?.let { version = it }
+                (buildConfigCls.getField("BUILD_TYPE").get(null) as? String)?.takeIf { it.isNotBlank() }?.let { buildType = it.lowercase() }
+                (buildConfigCls.getField("DEBUG").get(null) as? Boolean)?.let { isDebug = it }
+            } catch (_: Exception) {}
+        }
 
-        // 3. Query Android PackageManager for the extension or host application
-        if (app != null) {
+        // Fallback to core BuildConfig if buildType remains default
+        if (buildType == "release") {
+            try {
+                val coreBuildType = BuildConfig.BUILD_TYPE.lowercase()
+                if (coreBuildType.isNotBlank()) buildType = coreBuildType
+                if (BuildConfig.DEBUG) isDebug = true
+            } catch (_: Exception) {}
+        }
+
+        // 3. Fallback PackageManager for version
+        if (version == "Unknown" && app != null && pkgName.isNotBlank()) {
             try {
                 val ver = app.packageManager.getPackageInfo(pkgName, 0).versionName
                     ?: app.packageManager.getPackageInfo(app.packageName, 0).versionName
-                if (!ver.isNullOrBlank()) return ver
+                if (!ver.isNullOrBlank()) version = ver
             } catch (_: Exception) {}
         }
 
-        return "Unknown"
+        val isDev = buildType == "dev"
+        val effectiveIsDebug = isDebug && !isDev
+
+        return Tuple4(version, buildType, isDev, effectiveIsDebug)
+    }
+
+    private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
+
+    /**
+     * Resolves the target n8n webhook URL.
+     * Uses `webhook-test` for debug builds, and `webhook` for dev/release builds.
+     */
+    private fun getWebhookEndpoint(isDebug: Boolean): String {
+        val cleanBase = WEBHOOK_URL.trimEnd('/')
+        val endpoint = if (isDebug) "webhook-test/extension-error" else "webhook/extension-error"
+        return if (cleanBase.contains("/webhook")) {
+            if (isDebug) {
+                cleanBase.replace("/webhook/", "/webhook-test/")
+            } else {
+                cleanBase.replace("/webhook-test/", "/webhook/")
+            }
+        } else {
+            "$cleanBase/$endpoint"
+        }
     }
 
     /**
      * Dispatch an error webhook notification for the given base URL and target URL.
-     *
-     * If [extensionName] or [extensionVersion] are not provided, caller info is dynamically resolved
-     * from the current thread stack trace as a fallback mechanism.
-     *
-     * @param baseUrl Target domain or host name.
-     * @param url Full target request URL.
-     * @param additionalContext List of diagnostic messages, errors, or context markers.
-     * @param extensionName Optional explicit extension name.
-     * @param extensionVersion Optional explicit extension version.
      */
     fun sendWebhook(
         baseUrl: String,
@@ -163,24 +207,38 @@ object ErrorWebhook {
         extensionName: String? = null,
         extensionVersion: String? = null,
     ) {
-        val (resolvedName, resolvedVersion, callerDetails) = if (!extensionName.isNullOrBlank() && !extensionVersion.isNullOrBlank()) {
-            Triple(extensionName, extensionVersion, "Explicit")
-        } else {
-            getCallerInfo()
-        }
-        val enrichedContext = if (callerDetails == "Explicit") additionalContext else additionalContext + "Caller: $callerDetails"
-        sendWebhook(baseUrl, url, resolvedName, resolvedVersion, enrichedContext)
+        val info = getCallerAndBuildInfo()
+        val effectiveName = extensionName?.takeIf { it.isNotBlank() } ?: info.extensionName
+        val effectiveVersion = extensionVersion?.takeIf { it.isNotBlank() } ?: info.version
+
+        val httpCode = additionalContext.firstOrNull { it.startsWith("HTTP_ERROR_") }
+            ?.removePrefix("HTTP_ERROR_")
+            ?.toIntOrNull()
+
+        val errorType = additionalContext.firstOrNull {
+            it.startsWith("HTTP_ERROR_") || it in listOf("DNS_FAILURE", "SSL_ERROR", "TIMEOUT", "NETWORK_ERROR", "SELECTOR_ERROR")
+        } ?: if (httpCode != null) "HTTP_$httpCode" else "GENERIC_ERROR"
+
+        val payload = MonitoringErrorPayload(
+            timestamp = System.currentTimeMillis(),
+            extensionName = effectiveName,
+            extensionVersion = effectiveVersion,
+            buildType = info.buildType,
+            isDev = info.isDev,
+            isDebug = info.isDebug,
+            domain = baseUrl,
+            url = url,
+            errorType = errorType,
+            httpCode = httpCode,
+            caller = info.callerDetails,
+            details = additionalContext,
+        )
+
+        dispatchPayload(payload)
     }
 
     /**
      * Overload to dispatch an error webhook notification with a single context message and optional exception.
-     *
-     * @param baseUrl Target domain or host name.
-     * @param url Full target request URL.
-     * @param context Descriptive message outlining the error context.
-     * @param exception Optional exception instance associated with the failure.
-     * @param extensionName Optional explicit extension name.
-     * @param extensionVersion Optional explicit extension version.
      */
     fun sendWebhook(
         baseUrl: String,
@@ -198,17 +256,11 @@ object ErrorWebhook {
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    fun sendWebhook(
-        baseUrl: String,
-        url: String,
-        extensionName: String,
-        extensionVersion: String,
-        additionalContext: List<String>,
-    ) {
+    private fun dispatchPayload(payload: MonitoringErrorPayload) {
         if (WEBHOOK_URL.isBlank()) return
 
         GlobalScope.launch(Dispatchers.IO) {
-            val rawKey = "$extensionName:$extensionVersion:$baseUrl:$url:${additionalContext.joinToString("|")}"
+            val rawKey = "${payload.extensionName}:${payload.extensionVersion}:${payload.domain}:${payload.url}:${payload.errorType}:${payload.details.joinToString("|")}"
             val hashKey = fastHash(rawKey)
             val shouldProceed = webhookMutex.withLock {
                 shouldSend(hashKey)
@@ -216,24 +268,11 @@ object ErrorWebhook {
             if (!shouldProceed) return@launch
 
             try {
-                val contextFormatted = additionalContext.joinToString("\n") { "• $it" }
-                val payload = DiscordWebhookPayload(
-                    embeds = listOf(
-                        DiscordEmbed(
-                            title = "🚨 Erreur Extension: $extensionName (v$extensionVersion) [WH v$WEBHOOK_VERSION]",
-                            color = 15158332,
-                            fields = listOf(
-                                DiscordEmbedField(name = "🌐 Domaine", value = baseUrl, inline = true),
-                                DiscordEmbedField(name = "🔗 URL", value = url.take(1024), inline = false),
-                                DiscordEmbedField(name = "📝 Contexte / Erreur", value = contextFormatted.take(1024).ifBlank { "Aucun détail" }, inline = false),
-                            ),
-                        ),
-                    ),
-                )
-
+                val targetUrl = getWebhookEndpoint(payload.isDebug)
                 val request = Request.Builder()
-                    .url(WEBHOOK_URL)
-                    .post(json.encodeToString(DiscordWebhookPayload.serializer(), payload).toRequestBody(mediaType))
+                    .url(targetUrl)
+                    .header("X-Monitoring-Secret", WEBHOOK_SECRET)
+                    .post(json.encodeToString(MonitoringErrorPayload.serializer(), payload).toRequestBody(mediaType))
                     .build()
 
                 client.newCall(request).execute().close()

@@ -101,11 +101,7 @@ class PluginExtensionLegacy : Plugin<Project> {
 
             buildTypes {
                 named("release") {
-                    signingConfig = if (rootProject.file("signingkey.jks").exists()) {
-                        signingConfigs.getByName("release")
-                    } else {
-                        signingConfigs.getByName("debug")
-                    }
+                    signingConfig = signingConfigs.getByName("release")
                     isMinifyEnabled = true
                     proguardFiles(
                         getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -123,7 +119,11 @@ class PluginExtensionLegacy : Plugin<Project> {
                         getDefaultProguardFile("proguard-android-optimize.txt"),
                         rootProject.file("config/proguard-rules.pro"),
                     )
-                    signingConfig = signingConfigs.getByName("dev")
+                    signingConfig = if (rootProject.file("signingkey.jks").exists()) {
+                        signingConfigs.getByName("dev")
+                    } else {
+                        signingConfigs.getByName("debug")
+                    }
                     matchingFallbacks.addAll(listOf("debug", "release"))
                 }
             }

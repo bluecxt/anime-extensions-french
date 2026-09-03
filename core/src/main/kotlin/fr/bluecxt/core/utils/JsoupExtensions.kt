@@ -4,6 +4,8 @@ import fr.bluecxt.core.Source
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 
+const val JSOUP_EXTENSIONS_VERSION = "1.0"
+
 /**
  * Interface providing JSoup logging helper extensions.
  *

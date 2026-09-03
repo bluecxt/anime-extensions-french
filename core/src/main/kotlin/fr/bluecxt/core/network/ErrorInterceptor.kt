@@ -17,6 +17,8 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
+const val INTERCEPTOR_VERSION = "1.0"
+
 /**
  * Network error monitoring interceptor.
  *
