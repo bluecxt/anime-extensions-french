@@ -19,7 +19,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.concurrent.ConcurrentHashMap
 
 private val WEBHOOK_URL = BuildConfig.WEBHOOK_URL
 private val WEBHOOK_SECRET = BuildConfig.WEBHOOK_SECRET
@@ -59,9 +58,12 @@ object ErrorWebhook {
     private val json = Json { encodeDefaults = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
-    private val sentWebhooksCache = ConcurrentHashMap<Int, Long>()
+    private val sentWebhooksCache: MutableMap<Int, Long> = object : LinkedHashMap<Int, Long>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Long>): Boolean = size > MAX_CACHE_SIZE
+    }.let { java.util.Collections.synchronizedMap(it) }
     private val webhookMutex = Mutex()
     private const val CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000L // 24 hours
+    private const val MAX_CACHE_SIZE = 500
 
     /**
      * Ultra-fast 32-bit FNV-1a non-cryptographic hash for zero-allocation payload hashing.
@@ -80,11 +82,6 @@ object ErrorWebhook {
         if (lastSent != null && (now - lastSent) < CACHE_LIFETIME_MS) {
             return false
         }
-
-        if (sentWebhooksCache.size > 500) {
-            sentWebhooksCache.entries.removeIf { now - it.value >= CACHE_LIFETIME_MS }
-        }
-
         sentWebhooksCache[hashKey] = now
         return true
     }
@@ -207,9 +204,7 @@ object ErrorWebhook {
         extensionName: String? = null,
         extensionVersion: String? = null,
     ) {
-        val info = getCallerAndBuildInfo()
-        val effectiveName = extensionName?.takeIf { it.isNotBlank() } ?: info.extensionName
-        val effectiveVersion = extensionVersion?.takeIf { it.isNotBlank() } ?: info.version
+        if (WEBHOOK_URL.isBlank()) return
 
         val httpCode = additionalContext.firstOrNull { it.startsWith("HTTP_ERROR_") }
             ?.removePrefix("HTTP_ERROR_")
@@ -219,22 +214,11 @@ object ErrorWebhook {
             it.startsWith("HTTP_ERROR_") || it in listOf("DNS_FAILURE", "SSL_ERROR", "TIMEOUT", "NETWORK_ERROR", "SELECTOR_ERROR")
         } ?: if (httpCode != null) "HTTP_$httpCode" else "GENERIC_ERROR"
 
-        val payload = MonitoringErrorPayload(
-            timestamp = System.currentTimeMillis(),
-            extensionName = effectiveName,
-            extensionVersion = effectiveVersion,
-            buildType = info.buildType,
-            isDev = info.isDev,
-            isDebug = info.isDebug,
-            domain = baseUrl,
-            url = url,
-            errorType = errorType,
-            httpCode = httpCode,
-            caller = info.callerDetails,
-            details = additionalContext,
-        )
+        // Compute cache key early — before the expensive stacktrace inspection
+        val rawKey = "${extensionName.orEmpty()}:$baseUrl:$url:$errorType:${additionalContext.joinToString("|")}"
+        val hashKey = fastHash(rawKey)
 
-        dispatchPayload(payload)
+        dispatchPayload(hashKey, baseUrl, url, additionalContext, httpCode, errorType, extensionName, extensionVersion)
     }
 
     /**
@@ -256,16 +240,40 @@ object ErrorWebhook {
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun dispatchPayload(payload: MonitoringErrorPayload) {
-        if (WEBHOOK_URL.isBlank()) return
-
+    private fun dispatchPayload(
+        hashKey: Int,
+        baseUrl: String,
+        url: String,
+        additionalContext: List<String>,
+        httpCode: Int?,
+        errorType: String,
+        extensionName: String?,
+        extensionVersion: String?,
+    ) {
         GlobalScope.launch(Dispatchers.IO) {
-            val rawKey = "${payload.extensionName}:${payload.extensionVersion}:${payload.domain}:${payload.url}:${payload.errorType}:${payload.details.joinToString("|")}"
-            val hashKey = fastHash(rawKey)
-            val shouldProceed = webhookMutex.withLock {
-                shouldSend(hashKey)
-            }
+            // Cache check first — before any expensive stacktrace/reflection work
+            val shouldProceed = webhookMutex.withLock { shouldSend(hashKey) }
             if (!shouldProceed) return@launch
+
+            // Only now resolve caller info via stacktrace & reflection
+            val info = getCallerAndBuildInfo()
+            val effectiveName = extensionName?.takeIf { it.isNotBlank() } ?: info.extensionName
+            val effectiveVersion = extensionVersion?.takeIf { it.isNotBlank() } ?: info.version
+
+            val payload = MonitoringErrorPayload(
+                timestamp = System.currentTimeMillis(),
+                extensionName = effectiveName,
+                extensionVersion = effectiveVersion,
+                buildType = info.buildType,
+                isDev = info.isDev,
+                isDebug = info.isDebug,
+                domain = baseUrl,
+                url = url,
+                errorType = errorType,
+                httpCode = httpCode,
+                caller = info.callerDetails,
+                details = additionalContext,
+            )
 
             try {
                 val targetUrl = getWebhookEndpoint(payload.isDebug)
