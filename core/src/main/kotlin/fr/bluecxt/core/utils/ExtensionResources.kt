@@ -41,7 +41,7 @@ object ExtensionResources {
         try {
             clazz.protectionDomain?.codeSource?.location?.path?.let { path ->
                 val clean = path.substringBefore("!/").removePrefix("file:")
-                if (clean.endsWith(".apk")) {
+                if (clean.endsWith(".apk") || clean.endsWith(".ext")) {
                     Log.d(EXTENSION_RESOURCES_LOG, "[Solution 1 - CodeSource] Found APK: $clean for ${clazz.name}")
                     return clean
                 }
@@ -64,7 +64,7 @@ object ExtensionResources {
                         fileField?.isAccessible = true
                         val file = fileField?.get(element)
                         val path = file?.toString()
-                        if (path != null && path.endsWith(".apk")) {
+                        if (path != null && (path.endsWith(".apk") || path.endsWith(".ext"))) {
                             Log.d(EXTENSION_RESOURCES_LOG, "[Solution 2 - ClassLoader] Found APK: $path for ${clazz.name}")
                             return path
                         }
