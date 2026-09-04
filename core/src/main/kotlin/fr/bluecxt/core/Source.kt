@@ -83,7 +83,7 @@ abstract class Source :
         }
     }
 
-    protected val currentName: String by lazy {
+    val currentName: String by lazy {
         try {
             name
         } catch (_: Exception) {
@@ -91,7 +91,7 @@ abstract class Source :
         }
     }
 
-    protected val currentVersion: String by lazy {
+    val currentVersion: String by lazy {
         try {
             val app = Injekt.get<Application>()
             ExtensionResources.getVersionName(app, this.javaClass)
