@@ -27,7 +27,7 @@ if REPO_APK_DIR.exists():
         for lang_dir in src_dir.iterdir():
             if lang_dir.is_dir():
                 for ext_dir in lang_dir.iterdir():
-                    if ext_dir.is_dir():
+                    if ext_dir.is_dir() and not (ext_dir / ".ignore").exists():
                         active_extensions.add(f"{lang_dir.name}.{ext_dir.name}")
     
     # Check all APKs in the repo
