@@ -52,7 +52,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
@@ -61,13 +61,13 @@ jobs:
         run: echo "build.task=${{ inputs.gradle_task }}-${{ inputs.channel }}" >> gradle.properties
 
       - name: Set up Java
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           java-version: 17
           distribution: temurin
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
 
       - name: Clean up runner gradle.properties
         run: rm -f ~/.gradle/gradle.properties
@@ -119,19 +119,19 @@ jobs:
           path: ~/apk-artifacts
 
       - name: Set up JDK
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           java-version: 17
           distribution: temurin
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
 
       - name: Checkout repo branch
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         continue-on-error: true
         with:
           ref: gh-pages
@@ -186,7 +186,7 @@ jobs:
           echo "LATEST_COMMIT_HASH=$LATEST_HASH" >> $GITHUB_ENV
 
       - name: Deploy to repo branch
-        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f
+        uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445
         with:
           branch: gh-pages
           folder: repo
