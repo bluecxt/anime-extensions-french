@@ -56,10 +56,24 @@ object ErrorWebhook {
     private const val CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000L
     private const val MAX_CACHE_SIZE = 500
 
-    // Resolved once at object init — no runtime reflection or stacktrace inspection
-    private val buildType = BuildConfig.BUILD_TYPE.lowercase()
+    // Resolved once at object init from the extension's BuildConfig (not core's)
+    private val buildType = run {
+        try {
+            val cls = Class.forName("eu.kanade.tachiyomi.animeextension.BuildConfig")
+            (cls.getField("BUILD_TYPE").get(null) as? String)?.lowercase() ?: "release"
+        } catch (_: Exception) {
+            "release"
+        }
+    }
     private val isDev = buildType == "dev"
-    private val isDebug = BuildConfig.DEBUG && !isDev
+    val isDebug = run {
+        try {
+            val cls = Class.forName("eu.kanade.tachiyomi.animeextension.BuildConfig")
+            (cls.getField("DEBUG").get(null) as? Boolean) ?: false
+        } catch (_: Exception) {
+            false
+        }
+    } && !isDev
 
     // Webhook target URL computed once at startup
     private val webhookEndpoint = "${WEBHOOK_URL.trimEnd('/')}/webhook/extension-error"
