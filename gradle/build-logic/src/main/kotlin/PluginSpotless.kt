@@ -19,9 +19,14 @@ class PluginSpotless : Plugin<Project> {
 
         // Configuration should be synced with [/gradle/build-logic/build.gradle.kts]
         val ktlintVersion = libs.ktlint.bom.get().version
+        val isRoot = target == rootProject
         spotless {
             kotlin {
-                target("src/**/*.kt", "*.kts")
+                if (isRoot) {
+                    target("*.kts", "gradle/**/*.kt")
+                } else {
+                    target("src/**/*.kt")
+                }
                 ktlint(ktlintVersion)
                     .editorConfigOverride(
                         mapOf(
@@ -33,12 +38,14 @@ class PluginSpotless : Plugin<Project> {
                 addStep(RandomUACheck.create())
             }
 
-            java {
-                target("src/**/*.java")
-                googleJavaFormat()
-                removeUnusedImports()
-                trimTrailingWhitespace()
-                endWithNewline()
+            if (!isRoot) {
+                java {
+                    target("src/**/*.java")
+                    googleJavaFormat()
+                    removeUnusedImports()
+                    trimTrailingWhitespace()
+                    endWithNewline()
+                }
             }
 
             format("gradle") {
@@ -47,10 +54,12 @@ class PluginSpotless : Plugin<Project> {
                 endWithNewline()
             }
 
-            format("xml") {
-                target("src/**/*.xml")
-                trimTrailingWhitespace()
-                endWithNewline()
+            if (!isRoot) {
+                format("xml") {
+                    target("src/**/*.xml")
+                    trimTrailingWhitespace()
+                    endWithNewline()
+                }
             }
         }
     }

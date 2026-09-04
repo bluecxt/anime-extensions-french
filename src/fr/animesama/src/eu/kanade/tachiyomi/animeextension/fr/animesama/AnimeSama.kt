@@ -657,6 +657,12 @@ class AnimeSama :
         )
         Pair(parsedUrl, true)
     } catch (_: SerializationException) { // legacy
+        parseLegacyUrl(jsonUrl)
+    } catch (_: IllegalArgumentException) { // legacy malformed json
+        parseLegacyUrl(jsonUrl)
+    }
+
+    private fun parseLegacyUrl(jsonUrl: String): Pair<UrlContent, Boolean> {
         val link = jsonUrl.substringBefore("#")
 
         val titleFromUrl = jsonUrl.substringAfter("|", "").takeIf { it.isNotBlank() }
@@ -667,7 +673,7 @@ class AnimeSama :
             add(slugTitle)
         }
         val parsedUrl = UrlContent(link, titles, null)
-        Pair(parsedUrl, false)
+        return Pair(parsedUrl, false)
     }
 
     private fun parseMainPage(document: Document): AnimesPage = parseCatalogue(

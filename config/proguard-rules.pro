@@ -22,6 +22,7 @@
 # Garde les classes d'extension déclarées dans le Manifest
 -keep class eu.kanade.tachiyomi.animeextension.** extends eu.kanade.tachiyomi.animesource.online.AnimeHttpSource { *; }
 -keep class eu.kanade.tachiyomi.animeextension.** extends fr.bluecxt.core.Source { *; }
+-keep class eu.kanade.tachiyomi.animeextension.BuildConfig { *; }
 
 # Garde aussi les AnimeSources (interface)
 -keep class * implements eu.kanade.tachiyomi.animesource.AnimeSource { *; }

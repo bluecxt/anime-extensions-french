@@ -7,8 +7,9 @@ on:
     paths:
       - "src/**"
       - "core/**"
+      - "lib-multisrc/**"
       - "gradle/**"
-      - "common.gradle"
+      - "config/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - ".github/scripts/**"

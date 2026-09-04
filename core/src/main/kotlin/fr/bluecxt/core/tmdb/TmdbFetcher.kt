@@ -26,7 +26,11 @@ import java.net.URLEncoder
 
 private val TMDB_API_KEY = BuildConfig.TMDB_API
 private const val TMDB_BASE_URL = "https://api.themoviedb.org/3"
-private val tmdbCache = mutableMapOf<String, TmdbMetadata?>()
+private val tmdbCache: MutableMap<String, TmdbMetadata?> = java.util.Collections.synchronizedMap(
+    object : LinkedHashMap<String, TmdbMetadata?>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TmdbMetadata?>): Boolean = size > 250
+    },
+)
 
 private val tmdbJson = Json {
     ignoreUnknownKeys = true

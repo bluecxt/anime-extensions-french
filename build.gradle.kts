@@ -26,7 +26,7 @@ tasks {
 
 subprojects {
     val hasSourceDir = file("src").exists()
-    
+
     if (hasSourceDir) {
         apply(plugin = "io.gitlab.arturbosch.detekt")
 
@@ -40,9 +40,9 @@ subprojects {
                     include("**/*.kt")
                     exclude("**/resources/**")
                     exclude("**/build/**")
-                }
+                },
             )
-            
+
             config.setFrom(files("${rootProject.projectDir}/config/detekt.yml"))
             buildUponDefaultConfig = true
             allRules = false
