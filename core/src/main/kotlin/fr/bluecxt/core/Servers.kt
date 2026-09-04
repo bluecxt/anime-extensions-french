@@ -168,7 +168,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidara" -> VideoServer(
         name = "Vidara",
-        hosts = listOf("vidara.so", "vidara.to", "vidaraa.cc", "vidavaca.cc", "viewdara.com", "vidchampions.com", "thebesthosterv.com", "kitchenstories.fit"),
+        hosts = listOf("vidara.so", "vidara.to", "vidaraa.cc", "vidavaca.cc", "viewdara.com", "vidchampions.com", "thebesthosterv.com", "kitchenstories.fit", "odysseusa.cc", "shadowbyte.site"),
         extractor = { url -> VidaraExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
