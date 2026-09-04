@@ -1,14 +1,18 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.UQLOAD_LOG
-import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -32,9 +36,9 @@ class UqloadExtractor(private val client: OkHttpClient) {
         val finalUrl = response.request.url
         val path = finalUrl.encodedPath
         if (path == "/" || path.isEmpty()) {
-            throw fr.bluecxt.core.ContentUnavailableException("Uqload: Video not found (redirected to host homepage: ${finalUrl.host})")
+            throw ContentUnavailableException("Uqload: Video not found (redirected to host homepage: ${finalUrl.host})")
         }
-        val soup = response.asJsoup()
+        val soup = response.useAsJsoup()
 
         val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: throw Exception("Could not find script with video data in Uqload")
 
@@ -49,6 +53,8 @@ class UqloadExtractor(private val client: OkHttpClient) {
                     masterHeaders = streamingHeaders,
                     videoHeaders = streamingHeaders,
                 )
+            } catch (e: ContentUnavailableException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(UQLOAD_LOG, "Error parsing HLS playlist", e)
                 listOf(

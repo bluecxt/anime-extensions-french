@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
 import android.util.Log
@@ -6,8 +8,9 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.SIBNET_LOG
-import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.defaultHeaders
+import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -16,7 +19,7 @@ import okhttp3.OkHttpClient
 class SibnetExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        var document = client.newCall(GET(url)).awaitSuccess().asJsoup()
+        var document = client.newCall(GET(url)).awaitSuccess().useAsJsoup()
 
         var script = document.selectFirst("script:containsData(player.src)")?.data()
 
@@ -28,7 +31,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
 
             Log.d(SIBNET_LOG, "Player script not found, retrying in 1s...")
             kotlinx.coroutines.delay(1000)
-            document = client.newCall(GET(url)).awaitSuccess().asJsoup()
+            document = client.newCall(GET(url)).awaitSuccess().useAsJsoup()
             script = document.selectFirst("script:containsData(player.src)")?.data()
 
             if (script == null) {

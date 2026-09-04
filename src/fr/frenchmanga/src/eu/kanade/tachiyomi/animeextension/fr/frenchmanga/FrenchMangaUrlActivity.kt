@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.frenchmanga
 
 import android.app.Activity

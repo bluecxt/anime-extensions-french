@@ -40,14 +40,6 @@ Si vous rencontrez des problèmes de chargement des lecteurs, il est fortement r
 
 Ce repository inclut des outils pour valider les extensions.
 
-### 🧪 Validation des Extensions
-Chaque module dispose d'un validateur qui vérifie si le flux de données distant est toujours conforme aux schémas attendus.
-
-**Lancer tous les tests :**
-```bash
-python3 audit_extensions.py
-```
-
 ### 🔨 Build des Artifacts
 Pour compiler un module spécifique (Android Debug APK) :
 ```bash
@@ -79,8 +71,47 @@ Le repository a été optimisé pour ne conserver que les extensions les plus pe
 | **Movix** | ✅ | Films et séries via l'API TMDB. | VOSTFR, VF | Non |
 | **Movix Anime** | ✅ | Animes via l'API TMDB. | VOSTFR, VF | Non |
 | **Wiflix** | ✅ | Grand catalogue de films et séries. | VOSTFR, VF | Non |
+| **PapaDuStream** | ⚠️ | Extraction lente des hosts - 100% vibecodé. | VOSTFR, VF | Non |
 | **Torrentio** | ✅ | Moteur de recherche Torrent / Debrid (Cinemeta/JustWatch). | Multi (All)    | Non     |
 | **Torrentio Anime** | ✅ | Version optimisée Anime pour Torrentio (Anilist). | Multi (All)    | Non     |
+
+---
+
+## 🔍 Télémétrie & Rapports d'erreurs
+
+Les builds officiels intègrent deux mécanismes de rapport automatique actifs uniquement lorsque la clé secrète `WEBHOOK_URL` est présente (builds CI signés par le mainteneur).
+
+**1. Erreurs de parsing** (`ErrorWebhook`) — déclenché manuellement dans certaines extensions :
+- Le domaine et l'URL de la page ayant échoué
+- Le message d'erreur et le nom de la méthode
+- La version de l'extension
+- Un même événement ne peut être envoyé qu'une fois toutes les 24h (déduplication par hash)
+
+**2. Erreurs réseau** (`ErrorInterceptor`) — déclenché automatiquement sur toute réponse HTTP non-2xx (hors 404, 3xx, 502-504) :
+- Le domaine et l'URL de la requête
+- Le code HTTP et la méthode (`GET`, `POST`...)
+- Les 200 premiers caractères du corps de la réponse (message d'erreur du serveur)
+
+**Dans les deux cas :**
+- La clé webhook (`WEBHOOK_URL`) **n'est pas incluse** dans les builds compilés depuis les sources publiques — tout build sans cette clé ne transmet rien
+- Aucune donnée personnelle (compte, historique, identifiants) n'est transmise
+- Les envois sont asynchrones et n'affectent pas le fonctionnement de l'extension
+
+---
+
+## 📊 Statistiques d'usage anonymes
+
+Les extensions envoient une fois par jour un ping anonyme afin de connaître les sources les plus utilisées et d'orienter les priorités de maintenance.
+
+**Ce qui est transmis :**
+- Le nom et la version de l'extension utilisée
+- Un identifiant anonyme à usage unique (ANDROID_ID haché en SHA-256, tronqué à 16 caractères — non réversible, non lié à un compte)
+
+**Ce qui n'est pas transmis :**
+- Aucune donnée de navigation (titres regardés, URLs, historique)
+- Aucune information personnelle ou d'appareil identifiable
+
+Un même appareil ne peut envoyer qu'un ping par extension par jour. Ces données sont utilisées uniquement à des fins statistiques internes (popularité des sources) et ne sont ni revendues ni partagées.
 
 ---
 

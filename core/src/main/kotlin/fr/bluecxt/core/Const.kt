@@ -1,10 +1,13 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core
 
+import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 val DEFAULT_USER_AGENT: String by lazy {
     try {
-        uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
+        Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
     } catch (_: Throwable) {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
     }
@@ -14,7 +17,9 @@ const val HUB_SEASON_NUMBER = -2.0
 
 // utils logs
 
+const val EXTENSION_RESOURCES_LOG: String = "ExtensionResourcesLog"
 const val TMDB_LOG: String = "tmdbLog"
+const val TVDB_LOG: String = "tvdbLog"
 const val SERVER_LOG: String = "serverLog"
 const val PLAYLIST_LOG: String = "PlaylistLog"
 
@@ -45,3 +50,6 @@ const val VOIRANIME_LOG: String = "VoiranimeLog"
 const val DESSINANIME_LOG: String = "DessinanimeLog"
 const val ANIMEULTIME_LOG: String = "AnimeultimeLog"
 const val ANIMESULTRA_LOG: String = "AnimesultraLog"
+const val VOIRDRAMA_LOG: String = "VoirdramaLog"
+const val PAPADUSTREAM_LOG: String = "PapadustreamLog"
+const val FRENCHSTREAM_LOG: String = "FrenchstreamLog"

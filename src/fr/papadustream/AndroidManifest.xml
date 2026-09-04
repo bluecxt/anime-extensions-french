@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:icon="@mipmap/ic_launcher">
+        <activity android:name="keiyoushi.source.UrlActivity" android:exported="true" android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="papadustreami.autos" />
+                <data android:host="papadustreami.space" />
+                <data android:pathPattern="/cat-series/..*" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

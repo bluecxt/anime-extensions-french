@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core
 
 import android.app.Application
@@ -14,8 +16,17 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
+import fr.bluecxt.core.filters.FilterProvider
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.network.CloudflareInterceptor
+import fr.bluecxt.core.network.ErrorInterceptor
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
+import fr.bluecxt.core.utils.ExtensionResources
+import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CancellationException
@@ -27,6 +38,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 import kotlin.random.Random
@@ -37,7 +50,7 @@ val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 30000L else 60000L
  * Global semaphore to limit the number of concurrent extractions.
  * Prevents overwhelming video servers and local DNS/OkHttp connection pools.
  */
-private val extractionSemaphore = Semaphore(4)
+private val extractionSemaphore = Semaphore(10)
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
@@ -45,9 +58,66 @@ private val extractionSemaphore = Semaphore(4)
  */
 abstract class Source :
     AnimeHttpSource(),
-    ConfigurableAnimeSource {
+    ConfigurableAnimeSource,
+    FilterProvider {
 
     val preferences: SharedPreferences by getPreferencesLazy()
+
+    override fun getFilterList(): AnimeFilterList = buildFilterList()
+
+    fun getString(@androidx.annotation.StringRes resId: Int, vararg formatArgs: Any): String {
+        val app = Injekt.get<Application>()
+        return try {
+            val res = ExtensionResources.getResources(app, this.javaClass) ?: app.resources
+            if (formatArgs.isNotEmpty()) {
+                res.getString(resId, *formatArgs)
+            } else {
+                res.getString(resId)
+            }
+        } catch (_: Exception) {
+            try {
+                app.getString(resId, *formatArgs)
+            } catch (_: Exception) {
+                ""
+            }
+        }
+    }
+
+    val currentName: String by lazy {
+        try {
+            name
+        } catch (_: Exception) {
+            "Unknown"
+        }
+    }
+
+    val currentVersion: String by lazy {
+        try {
+            val app = Injekt.get<Application>()
+            ExtensionResources.getVersionName(app, this.javaClass)
+                ?: (
+                    this.javaClass.`package`?.name?.let { pkg ->
+                        try {
+                            app.packageManager.getPackageInfo(pkg, 0).versionName
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    )
+                ?: "Unknown"
+        } catch (_: Exception) {
+            "Unknown"
+        }
+    }
+
+    /**
+     * Determines whether the source domain has been manually overridden by the user.
+     */
+    val isCustomDomain: Boolean
+        get() {
+            val defaultUrl = (this as? CommonPreferences)?.defaultBaseUrl
+            return !defaultUrl.isNullOrBlank() && currentBaseUrl != defaultUrl
+        }
 
     open val json: Json = Json {
         ignoreUnknownKeys = true
@@ -57,6 +127,7 @@ abstract class Source :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
+        .set("Connection", "close")
 
     open val currentBaseUrl: String
         get() {
@@ -85,10 +156,42 @@ abstract class Source :
                 },
             )
             .addInterceptor(CloudflareInterceptor(network.client))
+            .addInterceptor(ErrorInterceptor(currentName, currentVersion) { isCustomDomain })
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())
             }.build()
+    }
+
+    val extractorClient: okhttp3.OkHttpClient by lazy {
+        client.newBuilder().apply {
+            interceptors().removeAll { it.javaClass.simpleName.contains("Cloudflare") }
+        }.build()
+    }
+
+    /**
+     * Sends an error webhook payload to the telemetry service with explicit extension metadata.
+     *
+     * This utility allows extension implementations to report custom parsing or scraping failures
+     * (e.g., failed regex matches or HTML structure changes) while ensuring that the extension's
+     * name and version are accurately attached to the report.
+     *
+     * @param url The target URL associated with the failure.
+     * @param context Descriptive context or details outlining the nature of the error.
+     * @param exception Optional exception instance associated with the failure for diagnostic output.
+     */
+    fun sendErrorWebhook(url: String, context: String, exception: Throwable? = null) {
+        if (isCustomDomain) return
+        ErrorWebhook.sendWebhook(
+            baseUrl = baseUrl,
+            url = url,
+            extensionName = currentName,
+            extensionVersion = currentVersion,
+            additionalContext = listOfNotNull(
+                context,
+                exception?.let { "${it::class.java.simpleName}: ${it.message}" },
+            ),
+        )
     }
 
     // ============================ Utils =============================
@@ -143,7 +246,10 @@ abstract class Source :
                 throw e
             }
 
-            if (e is ContentUnavailableException) {
+            val isUnavailable = e is ContentUnavailableException ||
+                (e is HttpException && (e.code == 404 || e.code == 410))
+
+            if (isUnavailable) {
                 Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")
                 emptyList()
             } else if (e is RateLimitException) {
@@ -151,7 +257,7 @@ abstract class Source :
                 if (keiyoushi.core.BuildConfig.DEBUG) {
                     listOf(
                         ExtractedSource(
-                            url = "https://localhost/ratelimit",
+                            url = playerUrl,
                             quality = "Rate Limited: ${server.name}",
                         ),
                     )
@@ -163,7 +269,7 @@ abstract class Source :
                 if (keiyoushi.core.BuildConfig.DEBUG) {
                     listOf(
                         ExtractedSource(
-                            url = "https://localhost/error",
+                            url = playerUrl,
                             quality = e.message ?: e.javaClass.simpleName,
                         ),
                     )
@@ -176,7 +282,7 @@ abstract class Source :
             if (keiyoushi.core.BuildConfig.DEBUG) {
                 listOf(
                     ExtractedSource(
-                        url = "https://localhost/timeout",
+                        url = playerUrl,
                         quality = "Timeout (${EXTRACTOR_TIMEOUT}ms)",
                     ),
                 )
@@ -196,7 +302,7 @@ abstract class Source :
     /**
      * Safely sets the fetch type using reflection for backward compatibility.
      */
-    protected fun SAnime.coreSetFetchType(type: eu.kanade.tachiyomi.animesource.model.FetchType) {
+    protected fun SAnime.coreSetFetchType(type: FetchType) {
         try {
             val methods = this.javaClass.methods
             val setter = methods.find { it.name == "setFetch_type" }
@@ -224,7 +330,7 @@ abstract class Source :
     /**
      * Standardized video sorting based on user preferences.
      */
-    override fun List<Video>.sortVideos(): List<Video> {
+    public override fun List<Video>.sortVideos(): List<Video> {
         val voices = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val player = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
         val prefQualStr = preferences.getString(CommonPreferences.PREF_QUALITY_KEY, "Highest")!!
@@ -255,19 +361,22 @@ abstract class Source :
     /**
      * Standardized hoster sorting based on language tags and user preferences.
      */
-    protected fun List<Hoster>.coreSortHosters(): List<Hoster> {
+    override fun List<Hoster>.sortHosters(): List<Hoster> {
         val prefVoice = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val prefServer = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
         val langRegex = Regex("\\((.*?)\\)")
 
         return this.sortedWith(
-            compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) }
+            compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) || it.hosterName.contains(prefVoice, true) }
                 .thenBy {
                     langRegex.find(it.hosterName)?.value ?: "(Unknown)"
                 }
                 .thenByDescending { it.hosterName.contains(prefServer, true) },
         )
     }
+
+    @Deprecated("Use sortHosters() instead", replaceWith = ReplaceWith("sortHosters()"))
+    fun List<Hoster>.coreSortHosters(): List<Hoster> = sortHosters()
 
     // ============================ Season Engine =============================
 
@@ -331,7 +440,7 @@ abstract class Source :
         SAnime.create().apply {
             this.title = sTitle
             this.url = sUrl
-            thumbnail_url = finalMeta?.posterUrl
+            thumbnail_url = finalMeta?.seasonPosterUrl ?: finalMeta?.mainPosterUrl
             description = finalMeta?.summary
             genre = finalMeta?.genre
             author = finalMeta?.author
@@ -339,7 +448,7 @@ abstract class Source :
             status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else (finalMeta?.status ?: defStatus)
 
             coreOptimizeDisplayTitle(sTitle, baseTitle)
-            coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+            coreSetFetchType(FetchType.Episodes)
             coreSetSeasonNumber(siteSNum.toDouble())
             initialized = true
         }
@@ -403,14 +512,14 @@ abstract class Source :
      * Maps raw episodes to TMDB metadata with offsets and formatting.
      */
     protected fun coreMapEpisodes(
-        rawEpisodes: List<eu.kanade.tachiyomi.animesource.model.SEpisode>,
+        rawEpisodes: List<SEpisode>,
         tmdbMetadata: TmdbMetadata?,
         tmdbS0Metadata: TmdbMetadata?,
         offsets: Pair<Int, Int>, // Pair(siteOffset, oavOffset)
         sNum: Int,
         isMovie: Boolean = false,
         isOav: Boolean = false,
-    ): List<eu.kanade.tachiyomi.animesource.model.SEpisode> {
+    ): List<SEpisode> {
         val (siteOffset, oavOffset) = offsets
         val tmdbSeasonEpisodeCount = tmdbMetadata?.episodeSummaries?.size ?: 0
 
@@ -459,13 +568,8 @@ abstract class Source :
 
     @android.annotation.SuppressLint("HardwareIds")
     private fun logUsage() {
+        if (BuildConfig.DEBUG) return
         try {
-            val currentName = try {
-                name
-            } catch (_: Exception) {
-                "Unknown"
-            }
-
             // Daily check: only ping once per day per extension
             val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
             val lastPingDate = preferences.getString("last_usage_ping", "")
@@ -479,14 +583,6 @@ abstract class Source :
                 android.provider.Settings.Secure.ANDROID_ID,
             ) ?: "unknown"
 
-            // Récupérer la version de l'extension
-            val version = try {
-                val pkgName = this.javaClass.`package`?.name ?: context.packageName
-                context.packageManager.getPackageInfo(pkgName, 0).versionName
-            } catch (_: Exception) {
-                "Unknown"
-            }
-
             // Hash simple pour l'anonymat (SHA-256)
             val bytes = androidId.toByteArray()
             val md = java.security.MessageDigest.getInstance("SHA-256")
@@ -496,7 +592,7 @@ abstract class Source :
             val url = "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
                 "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
                 "&uid=$hashedId" +
-                "&version=${java.net.URLEncoder.encode(version, "UTF-8")}"
+                "&version=${java.net.URLEncoder.encode(currentVersion, "UTF-8")}"
 
             Log.d("SourceTelemetry", "Envoi usage quotidien vers : $url")
 
@@ -539,11 +635,11 @@ abstract class Source :
     override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
     override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
     override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException()
+    open suspend fun fetchRelatedAnimeList(anime: SAnime): List<SAnime> = throw UnsupportedOperationException()
 
     companion object {
         const val PREF_VOICES_KEY = "preferred_voices"
         const val PREF_VOICES_DEFAULT = "VOSTFR"
-
         const val PREF_PLAYER_KEY = "preferred_server"
         const val PREF_PLAYER_DEFAULT = "sibnet"
     }

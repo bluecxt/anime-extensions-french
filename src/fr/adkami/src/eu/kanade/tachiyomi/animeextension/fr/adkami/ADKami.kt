@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.adkami
 
 import android.util.Base64
@@ -20,10 +22,11 @@ import fr.bluecxt.core.ADKAMI_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.defaultHeaders
-import fr.bluecxt.core.safeRelativePath
-import fr.bluecxt.core.withDefaultHeaders
+import fr.bluecxt.core.utils.defaultHeaders
+import fr.bluecxt.core.utils.safeRelativePath
+import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.utils.parallelMapNotNull
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -69,11 +72,10 @@ class ADKami :
     }
 
     private fun parseLatestPage(response: Response): AnimesPage {
-        val document = response.asJsoup()
-        val animes = document.select("div.h-card").map { element: Element ->
+        val document = response.useAsJsoup()
+        val animes = document.select("div.h-card").mapNotNull { element: Element ->
             SAnime.create().apply {
-                val link = element.selectFirst("a")
-                url = link?.safeRelativePath() ?: return@map this
+                url = element.selectFirst("a")?.safeRelativePath() ?: return@mapNotNull null
                 title = element.selectFirst(".title")?.text()?.trim() ?: ""
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: ""
             }
@@ -86,7 +88,7 @@ class ADKami :
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
             val response = client.newCall(GET("$baseUrl/hentai/$id", headers)).awaitSuccess()
-            val document = response.asJsoup()
+            val document = response.useAsJsoup()
             val anime = SAnime.create().apply {
                 title = document.selectFirst(".fiche-info h1")?.text() ?: ""
                 setUrlWithoutDomain(document.location())
@@ -222,7 +224,7 @@ class ADKami :
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val descElement = document.selectFirst("p.m-hidden")
         anime.description = if (descElement != null) {
@@ -263,7 +265,7 @@ class ADKami :
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val episodes = mutableListOf<SEpisode>()
 
         val elements = document.select("#row-nav-episode ul li")
@@ -357,7 +359,7 @@ class ADKami :
         val url = hoster.hosterUrl
         Log.d(ADKAMI_LOG, "anime url = $url")
 
-        val document = client.newCall(GET(url, defaultHeaders(referer = baseUrl))).awaitSuccess().asJsoup()
+        val document = client.newCall(GET(url, defaultHeaders(referer = baseUrl))).awaitSuccess().useAsJsoup()
 
         val urls = document.select("div.video-iframe").mapNotNull { iframe ->
             val encodedUrl = iframe.attr("data-url")
@@ -371,11 +373,11 @@ class ADKami :
 
     // ============================ Helpers =============================
     private fun parseAnimesPage(response: Response, selector: String = "div.video-item-list"): AnimesPage {
-        val document = response.asJsoup()
-        val animes = document.select(selector).map { element: Element ->
+        val document = response.useAsJsoup()
+        val animes = document.select(selector).mapNotNull { element: Element ->
             SAnime.create().apply {
-                val link: Element = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]") ?: return@map this
-                url = link.safeRelativePath()
+                val link = element.selectFirst("a[href*=/hentai/], a[href*=/anime/]")
+                url = link?.safeRelativePath() ?: return@mapNotNull null
                 title = element.selectFirst(".title")?.text()?.trim() ?: link.text().trim()
                 thumbnail_url = maxQuality(element.selectFirst("img")?.attr("data-original") ?: "")
                 url = cleanUrl(url)

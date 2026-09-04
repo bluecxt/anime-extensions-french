@@ -1,8 +1,8 @@
 ext {
     extName = 'ADKami'
     extClass = '.ADKami'
-    extVersionCode = 15
+    extVersionCode = 16
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

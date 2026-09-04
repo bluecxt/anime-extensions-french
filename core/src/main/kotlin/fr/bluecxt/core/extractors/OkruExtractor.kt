@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
 import android.util.Log
@@ -7,6 +9,7 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import keiyoushi.utils.useAsJsoup
 import okhttp3.OkHttpClient
 
 class OkruExtractor(private val client: OkHttpClient) {
@@ -27,7 +30,7 @@ class OkruExtractor(private val client: OkHttpClient) {
     }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val document = client.newCall(GET(url)).awaitSuccess().asJsoup()
+        val document = client.newCall(GET(url)).awaitSuccess().useAsJsoup()
         val videoString = document.selectFirst("div[data-options]")
             ?.attr("data-options")
             ?: throw Exception("Could not find video data in Okru")

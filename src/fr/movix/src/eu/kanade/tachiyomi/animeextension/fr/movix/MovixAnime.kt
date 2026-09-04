@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.movix
 
 import android.util.Log
@@ -14,8 +16,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.MOVIXANIME_LOG
-import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.filterSmartMetadata
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.filterSmartMetadata
 import keiyoushi.core.BuildConfig
 import kotlinx.serialization.encodeToString
 import okhttp3.Response
@@ -207,7 +210,7 @@ class MovixAnime : BaseMovix("Movix Anime") {
 
     override fun animeDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    private suspend fun fetchSmartTmdbMetadata(title: String, isMovieHint: Boolean = false): fr.bluecxt.core.TmdbMetadata? {
+    private suspend fun fetchSmartTmdbMetadata(title: String, isMovieHint: Boolean = false): TmdbMetadata? {
         if (title.isBlank()) return null
 
         val seasonRegex = Regex("""(?i)(.*?)\s+\b(?:Saison|Season)\b\s*(\d+)""")

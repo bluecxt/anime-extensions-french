@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 @file:Suppress("SpellCheckingInspection")
 
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
@@ -18,8 +20,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.VOIRANIME_LOG
-import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -50,11 +53,11 @@ class VoirAnime :
 // ============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/series/?page=$page&order=popular", headers)).awaitSuccess()
-        val document = response.asJsoup()
-        val items = document.select("div.listupd article.bs").map { element ->
+        val document = response.useAsJsoup()
+        val items = document.select("div.listupd article.bs").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
                 title = link.selectFirst(".tt")?.ownText() ?: "Inconnu"
                 thumbnail_url = link.selectFirst("img")?.attr("abs:src")?.substringBefore("?")
             }
@@ -65,11 +68,11 @@ class VoirAnime :
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/series/?page=$page&order=update", headers)).awaitSuccess()
-        val document = response.asJsoup()
-        val items = document.select("div.listupd article.bs").map { element ->
+        val document = response.useAsJsoup()
+        val items = document.select("div.listupd article.bs").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a")!!
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
                 title = link.selectFirst(".tt")?.ownText() ?: "Inconnu"
                 thumbnail_url = link.selectFirst("img")?.attr("abs:src")?.substringBefore("?")
             }
@@ -83,7 +86,7 @@ class VoirAnime :
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
             val response = client.newCall(GET("$baseUrl/series/$id", headers)).awaitSuccess()
-            val document = response.asJsoup()
+            val document = response.useAsJsoup()
             val anime = SAnime.create().apply {
                 title = document.selectFirst("h1.entry-title")?.text() ?: ""
                 setUrlWithoutDomain(document.location())
@@ -136,7 +139,7 @@ class VoirAnime :
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         anime.title = document.selectFirst("h1.entry-title")?.text() ?: anime.title
         anime.description = document.select(".entry-content[itemprop=description]").text()
@@ -154,7 +157,7 @@ class VoirAnime :
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val tmdbMetadata = fetchTmdbMetadata(anime.title)
         val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
@@ -162,14 +165,14 @@ class VoirAnime :
         val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
         val sPrefix = if (sNumMatch != null) "[S$sNum] " else ""
 
-        return document.select("div.eplister ul li a").map { element ->
+        return document.select("div.eplister ul li a").mapNotNull { element ->
             val numStr = element.selectFirst(".epl-num")?.text() ?: "0"
             val num = numStr.toIntOrNull() ?: 0
             val subText = element.selectFirst(".epl-sub")?.text() ?: "VOSTFR"
             val lang = if (subText.contains("VF", true)) "VF" else "VOSTFR"
 
             SEpisode.create().apply {
-                url = element.safeRelativePath()
+                url = element.safeRelativePath() ?: return@mapNotNull null
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(num)
                 val tmdbName = epMeta?.first
                 val baseName = if (tmdbName != null) "Episode $numStr - $tmdbName" else "Episode $numStr"
@@ -195,8 +198,8 @@ class VoirAnime :
         val url = baseUrl + hoster.hosterUrl
         val lang = hoster.hosterName
 
-        val response = client.newCall(GET(url)).awaitSuccess()
-        val document = response.asJsoup()
+        val response = client.newCall(GET(url, headers)).awaitSuccess()
+        val document = response.useAsJsoup()
 
         val videos = document.select("select.mirror option[data-index]").mapNotNull { element ->
             val base64Value = element.attr("value")

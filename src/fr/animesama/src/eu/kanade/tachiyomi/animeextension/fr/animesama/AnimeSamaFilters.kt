@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
@@ -19,6 +21,10 @@ object AnimeSamaFilters {
     private fun getOptions(key: String): Array<Pair<String, String>> = filterData[key]?.map { it[0] to it[1] }?.toTypedArray() ?: emptyArray()
 
     open class CheckBoxFilterList(name: String, values: List<CheckBox>) : AnimeFilter.Group<AnimeFilter.CheckBox>(name, values)
+
+    open class TextFilterDual(name: String, values: List<Text>) : AnimeFilter.Group<AnimeFilter.Text>(name, values)
+
+    private class TextVal(name: String, state: String = "") : AnimeFilter.Text(name, state)
 
     private class CheckBoxVal(name: String, state: Boolean = false) : AnimeFilter.CheckBox(name, state)
 
@@ -47,6 +53,21 @@ object AnimeSamaFilters {
             getOptions("LANGUAGES").map { CheckBoxVal(it.first, false) },
         )
 
+    class StatutFilter :
+        CheckBoxFilterList(
+            "Statut",
+            getOptions("STATUT").map { CheckBoxVal(it.first, false) },
+        )
+
+    class YearFilter :
+        TextFilterDual(
+            "Année (Min - Max)",
+            listOf(
+                TextVal("Année Min", ""),
+                TextVal("Année Max", ""),
+            ),
+        )
+
     class GenresFilter :
         CheckBoxFilterList(
             "Genre",
@@ -56,21 +77,34 @@ object AnimeSamaFilters {
     val FILTER_LIST get() = AnimeFilterList(
         TypesFilter(),
         LangFilter(),
+        StatutFilter(),
+        YearFilter(),
         GenresFilter(),
     )
 
     data class SearchFilters(
         val types: List<String> = emptyList(),
         val language: List<String> = emptyList(),
+        val statut: List<String> = emptyList(),
+        val yearMin: String = "",
+        val yearMax: String = "",
         val genres: List<String> = emptyList(),
     )
 
     fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
         if (filters.isEmpty()) return SearchFilters()
+
+        val yearFilter = filters.filterIsInstance<YearFilter>().firstOrNull()
+        val yearMin: String = yearFilter?.state?.get(0)?.state ?: ""
+        val yearMax: String = yearFilter?.state?.get(1)?.state ?: ""
+
         return SearchFilters(
-            filters.parseCheckbox<TypesFilter>(getOptions("TYPES")),
-            filters.parseCheckbox<LangFilter>(getOptions("LANGUAGES")),
-            filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
+            types = filters.parseCheckbox<TypesFilter>(getOptions("TYPES")),
+            language = filters.parseCheckbox<LangFilter>(getOptions("LANGUAGES")),
+            statut = filters.parseCheckbox<StatutFilter>(getOptions("STATUT")),
+            yearMin = yearMin,
+            yearMax = yearMax,
+            genres = filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
         )
     }
 }

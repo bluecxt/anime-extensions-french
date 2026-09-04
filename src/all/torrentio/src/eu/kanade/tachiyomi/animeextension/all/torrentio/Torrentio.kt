@@ -20,8 +20,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.fetchTmdbMetadataById
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
+import keiyoushi.core.R
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -497,7 +498,7 @@ class Torrentio : Source() {
                         name = "[Movie] Film"
                         tmdbSeasonsMeta?.get(1)?.let { meta ->
                             summary = meta.summary ?: ""
-                            preview_url = meta.episodeThumbUrl
+                            preview_url = meta.episodeSummaries[1]?.second
                         }
                     },
                 ).asReversed()
@@ -632,14 +633,16 @@ class Torrentio : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val context = screen.context
+
         // Debrid provider
-        ListPreference(screen.context).apply {
+        ListPreference(context).apply {
             key = PREF_DEBRID_KEY
-            title = "Debrid Provider"
+            title = context.getString(R.string.pref_debrid_title)
             entries = PREF_DEBRID_ENTRIES
             entryValues = PREF_DEBRID_VALUES
             setDefaultValue("none")
-            summary = "Choose 'None' for Torrent. If you select a Debrid provider, enter your token key. No token key is needed if 'None' is selected."
+            summary = context.getString(R.string.pref_debrid_summary)
 
             setOnPreferenceChangeListener { _, newValue ->
                 val selected = newValue as String
@@ -650,25 +653,25 @@ class Torrentio : Source() {
         }.also(screen::addPreference)
 
         // Token
-        EditTextPreference(screen.context).apply {
+        EditTextPreference(context).apply {
             key = PREF_TOKEN_KEY
-            title = "Token"
+            title = context.getString(R.string.pref_token_title)
             setDefaultValue(PREF_TOKEN_DEFAULT)
             summary = PREF_TOKEN_SUMMARY
 
             setOnPreferenceChangeListener { _, newValue ->
                 runCatching {
                     val value = (newValue as String).trim().ifBlank { PREF_TOKEN_DEFAULT }
-                    Toast.makeText(screen.context, "Restart App to apply new setting.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, context.getString(R.string.pref_restart_message), Toast.LENGTH_LONG).show()
                     preferences.edit().putString(key, value).commit()
                 }.getOrDefault(false)
             }
         }.also(screen::addPreference)
 
         // Provider
-        MultiSelectListPreference(screen.context).apply {
+        MultiSelectListPreference(context).apply {
             key = PREF_PROVIDER_KEY
-            title = "Enable/Disable Providers"
+            title = context.getString(R.string.pref_providers_title)
             entries = PREF_PROVIDERS
             entryValues = PREF_PROVIDERS_VALUE
             setDefaultValue(PREF_PROVIDERS_DEFAULT)

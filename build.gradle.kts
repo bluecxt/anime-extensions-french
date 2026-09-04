@@ -1,49 +1,52 @@
-plugins {
-    id("io.gitlab.arturbosch.detekt") version "1.23.6" 
-}
-
-allprojects {
-    repositories {
-        mavenCentral()
-        google()
-        maven(url = "https://jitpack.io")
-    }
-}
+import org.gradle.api.artifacts.VersionCatalogsExtension
 
 buildscript {
-    repositories {
-        mavenCentral()
-        google()
-        maven(url = "https://jitpack.io")
-    }
     dependencies {
-        classpath(libs.gradle.kotlin)
+        classpath(libs.kotlin.gradle)
+    }
+}
+
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.detekt)
+
+    alias(kei.plugins.spotless)
+}
+
+val buildLogic: IncludedBuild = gradle.includedBuild("build-logic")
+tasks {
+    listOf("clean", "spotlessApply", "spotlessCheck").forEach { task ->
+        named(task) {
+            dependsOn(buildLogic.task(":$task"))
+        }
     }
 }
 
 subprojects {
-    // Condition de sécurité : On n'applique Detekt que si le sous-module possède un dossier 'src'
     val hasSourceDir = file("src").exists()
-    
+
     if (hasSourceDir) {
         apply(plugin = "io.gitlab.arturbosch.detekt")
 
+        val catalog = rootProject.extensions.getByType(VersionCatalogsExtension::class.java).named("libs")
+        val detektVersion = catalog.findVersion("detekt").get().toString()
+
         detekt {
-            toolVersion = "1.23.6"
-            
-            // Configuration dynamique de la source : s'adapte que le code soit dans 'src/' ou 'src/main/kotlin/'
+            toolVersion = detektVersion
             source.setFrom(
                 fileTree("src") {
                     include("**/*.kt")
                     exclude("**/resources/**")
                     exclude("**/build/**")
-                }
+                },
             )
-            
-            config.setFrom(files("${rootProject.projectDir}/config/detekt/detekt.yml"))
+
+            config.setFrom(files("${rootProject.projectDir}/config/detekt.yml"))
             buildUponDefaultConfig = true
             allRules = false
-            ignoreFailures = true // Permet de collecter les rapports de TOUTES les extensions sans bloquer
+            ignoreFailures = true
         }
 
         tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
@@ -51,9 +54,7 @@ subprojects {
                 html.required.set(true)
                 xml.required.set(false)
                 txt.required.set(true)
-
-                // Génère un rapport isolé dans le dossier build de chaque extension active
-                html.outputLocation.set(layout.buildDirectory.file("outputs/detekt-report.html").get().asFile)
+                sarif.required.set(true)
             }
         }
     }

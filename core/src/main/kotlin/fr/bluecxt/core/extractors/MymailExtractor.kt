@@ -1,8 +1,13 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.ContentUnavailableException
+import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -15,7 +20,9 @@ class MymailExtractor(private val client: OkHttpClient) {
         val id = url.trimEnd('/').substringAfterLast("/")
         val apiUrl = API + id
 
-        val response = client.newCall(GET(apiUrl)).awaitSuccess()
+        val response = client.newCall(GET(apiUrl)).await()
+        if (!response.isSuccessful) if (response.code == 404) throw ContentUnavailableException("404 not available") else throw ExtractionException("failed for a unknown reason")
+
         val responseBody = response.body.string()
 
         val json = JSONObject(responseBody)

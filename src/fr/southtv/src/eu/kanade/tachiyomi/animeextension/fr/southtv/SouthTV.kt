@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.southtv
 
 import androidx.preference.PreferenceScreen
@@ -12,9 +14,9 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.TmdbMetadata
-import fr.bluecxt.core.fetchTmdbMetadataById
-import fr.bluecxt.core.withDefaultHeaders
+import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
+import fr.bluecxt.core.utils.withDefaultHeaders
 import okhttp3.Request
 
 private const val TMDB_ID_SOUTHPARK = 2190

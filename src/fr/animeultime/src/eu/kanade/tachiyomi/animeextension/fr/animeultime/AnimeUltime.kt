@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animeultime
 
 import android.util.Log
@@ -25,7 +27,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelFlatMap
 import keiyoushi.utils.parallelMap
@@ -46,7 +48,7 @@ import org.jsoup.Jsoup.parse
 import uy.kohesive.injekt.injectLazy
 
 private const val ITEMS_PER_PAGE = 100
-private val CACHE_EXPIRATION = 24 * 60 * 60 * 1000L
+private const val CACHE_EXPIRATION = 24 * 60 * 60 * 1000L
 
 class AnimeUltime :
     Source(),
@@ -82,7 +84,7 @@ class AnimeUltime :
         Log.d(ANIMEULTIME_LOG, "Fetching latest updates for page $page")
         val animeItems: List<SearchResponseItem> = Categories.entries.parallelMapNotNull { categorie ->
             val response = client.get("$baseUrl/$categorie.html")
-            val document = response.asJsoup()
+            val document = response.useAsJsoup()
 
             document.select("div.slides li").mapNotNull { element ->
                 SearchResponseItem(
@@ -162,7 +164,13 @@ class AnimeUltime :
 
     private suspend fun parseAnimes(animeList: List<SearchResponseItem>): AnimesPage {
         val animes = animeList.parallelMapNotNull { animeItem ->
-            val jsonUrl = json.encodeToString(UrlContent(id = animeItem.id, url = animeItem.url.safeRelativePath(baseUrl), searchType = animeItem.searchType))
+            val jsonUrl = json.encodeToString(
+                UrlContent(
+                    id = animeItem.id,
+                    url = animeItem.url.safeRelativePath(baseUrl) ?: return@parallelMapNotNull null,
+                    searchType = animeItem.searchType,
+                ),
+            )
             SAnime.create().apply {
                 url = jsonUrl
                 thumbnail_url = animeItem.img_url
@@ -181,7 +189,7 @@ class AnimeUltime :
             add("id", id.toString())
         }.build()
         val response = client.post("$baseUrl/SerieOverview.html", headers, formBody)
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val productYear = document.selectFirst("li > span.alignleft:contains(Année de production) + span")?.text()?.trim() ?: ""
         val description = document.selectFirst("p")?.text()?.trim() ?: ""

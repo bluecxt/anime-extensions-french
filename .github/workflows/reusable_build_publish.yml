@@ -31,7 +31,13 @@ on:
       key_password:
         required: true
       tmdb_api:
-        required: false
+        required: true
+      tvdb_api:
+        required: true
+      webhook_url:
+        required: true
+      webhook_secret:
+        required: true
 
 permissions:
   contents: write
@@ -82,6 +88,9 @@ jobs:
           KEY_STORE_PASSWORD: ${{ secrets.key_store_password }}
           KEY_PASSWORD: ${{ secrets.key_password }}
           TMDB_API: ${{ secrets.tmdb_api }}
+          TVDB_API: ${{ secrets.tvdb_api }}
+          WEBHOOK_URL: ${{ secrets.webhook_url }}
+          WEBHOOK_SECRET: ${{ secrets.webhook_secret }}
         run: |
           ./gradlew ${{ inputs.gradle_task }} && ls ${{ inputs.apk_path }}
 
@@ -153,28 +162,20 @@ jobs:
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
 
       - name: Generate Repository Metadata
+        env:
+          REPO_NAME: ${{ inputs.repo_name }}
+          SHORT_NAME: ${{ inputs.short_name }}
+          CHANNEL: ${{ inputs.channel }}
+          AUTHOR: ${{ inputs.author }}
         run: |
           java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
           python3 ./.github/scripts/create-repo.py
           cp repo/index.min.json repo/index.json
 
-      - name: Generate repo.json
-        run: |
-          SAMPLE_APK=$(find repo/apk -name "*.apk" | head -n 1)
-          if [ -n "$SAMPLE_APK" ]; then
-            FINGERPRINT=$(keytool -printcert -jarfile "$SAMPLE_APK" | grep "SHA256:" | head -n 1 | awk -F': ' '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
-            REPO_ICON_URL="https://bluecxt.github.io/anime-extensions-french/${{ inputs.channel }}/icon.png"
-            echo "{\"meta\":{\"name\":\"${{ inputs.repo_name }}\",\"shortName\":\"${{ inputs.short_name }}\",\"website\":\"https://github.com/bluecxt/anime-extensions-french\",\"signingKeyFingerprint\":\"$FINGERPRINT\",\"iconUrl\":\"$REPO_ICON_URL\",\"author\":\"${{ inputs.author }}\"}}" > repo/repo.json
-            echo "Successfully generated repo.json with name: ${{ inputs.repo_name }}"
-          else
-            echo "Error: No APK found to extract fingerprint!"
-            exit 1
-          fi
-
       - name: Generate Repo Icon
         run: |
           sudo apt-get update && sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 512 -h 512 repo_logo.svg -o repo/icon.png
+          rsvg-convert -w 512 -h 512 assets/repo_logo.svg -o repo/icon.png
           cp repo/icon.png repo/logo.png
 
       - name: Collect Commit Information

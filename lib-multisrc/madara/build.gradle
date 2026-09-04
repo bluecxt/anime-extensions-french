@@ -1,0 +1,5 @@
+ext {
+    baseVersionCode = 1
+}
+
+apply plugin: "kei.plugins.multisrc"

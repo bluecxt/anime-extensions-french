@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common preferences -->
+    <string name="pref_base_url_title">Base URL</string>
+    <string name="pref_base_url_summary">Actual URL %1$s</string>
+    <string name="pref_base_url_invalid">The URL must be valid (e.g. https://example.com)</string>
+    <string name="pref_voices_title">Voice preference</string>
+    <string name="pref_voices_entry_prefer">Prefer %1$s</string>
+    <string name="pref_quality_title">Preferred quality</string>
+    <string name="pref_server_title">Preferred server</string>
+    <string name="pref_disable_filemoon_title">Disable Filemoon player</string>
+    <string name="pref_disable_filemoon_summary">Filemoon uses a security system (PoW) that may cause performance drops on lower-end devices. Disable it if you experience lags.</string>
+    <string name="pref_restart_message">Restart the app to apply the new setting.</string>
+
+    <!-- Specific extension preferences -->
+    <string name="pref_disable_proxy_title">Disable proxy</string>
+    <string name="pref_disable_proxy_summary">Slower, use if no server is found</string>
+    <string name="pref_debrid_title">Debrid Provider</string>
+    <string name="pref_debrid_summary">Choose \'None\' for Torrent. If you select a Debrid provider, enter your token key. No token key is needed if \'None\' is selected.</string>
+    <string name="pref_token_title">Token</string>
+    <string name="pref_providers_title">Enable/Disable Providers</string>
+
+    <!-- Error and UI feedback messages -->
+    <string name="cloudflare_bypass_timeout">Cloudflare challenge bypass timed out for %1$s. Try opening in WebView.</string>
+    <string name="error_no_episodes_found">No episodes could be retrieved. Check your internet connection or open in WebView.</string>
+
+    <!-- Metadata labels -->
+    <string name="metadata_release_date_prefix">"Release date: "</string>
+</resources>

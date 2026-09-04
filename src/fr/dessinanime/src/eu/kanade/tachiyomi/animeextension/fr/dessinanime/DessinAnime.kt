@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.dessinanime
 
 import android.util.Log
@@ -21,9 +23,13 @@ import fr.bluecxt.core.DESSINANIME_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.safeRelativePath
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.core.R
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.useAsJsoup
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -34,6 +40,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup.parse
 import org.jsoup.select.QueryParser
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
 
 class DessinAnime :
     Source(),
@@ -52,18 +59,21 @@ class DessinAnime :
 
     // =============================== Popular ===============================
 
-    private val paginationMapPopular = mutableMapOf<Int, String>()
+    private val paginationMapPopular = ConcurrentHashMap<Int, String>()
+    private val paginationMutex = Mutex()
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("api/catalogue")
 
-        if (page == 1) {
-            paginationMapPopular.clear()
-        } else {
-            val cursor = paginationMapPopular[page]
-            if (cursor != null) {
-                urlBuilder.addQueryParameter("cursor", cursor)
+        paginationMutex.withLock {
+            if (page == 1) {
+                paginationMapPopular.clear()
+            } else {
+                val cursor = paginationMapPopular[page]
+                if (cursor != null) {
+                    urlBuilder.addQueryParameter("cursor", cursor)
+                }
             }
         }
 
@@ -87,9 +97,9 @@ class DessinAnime :
 
         if (hasNextPage) {
             val lastElementId = data.last().id
-
-            // Verrouillage de l'état pour l'itération N+1
-            paginationMapPopular[page + 1] = lastElementId.toString()
+            paginationMutex.withLock {
+                paginationMapPopular[page + 1] = lastElementId.toString()
+            }
             Log.d(DESSINANIME_LOG, "page = $page lastId = $lastElementId, hasNextPage=$hasNextPage")
         }
         return AnimesPage(animes, hasNextPage)
@@ -99,14 +109,14 @@ class DessinAnime :
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
-        val document = response.use { it.asJsoup() }.apply { resolveSuspense() }
+        val document = response.use { it.useAsJsoup() }.apply { resolveSuspense() }
 
         val animes = document.select(
             "div[data-slot=carousel]:contains(NOUVEAUX EPISODES) a.group, " +
                 "div[data-slot=carousel]:contains(NOUVEAUX AJOUTS (FILMS)) a.group",
         ).mapNotNull { element ->
             SAnime.create().apply {
-                url = element.safeRelativePath().ifBlank { null } ?: return@mapNotNull null
+                url = element.safeRelativePath() ?: return@mapNotNull null
 
                 val rawImgSrc = element.selectFirst("img")?.attr("src")
                 thumbnail_url = rawImgSrc?.nextJsToDirectUrl() ?: POSTER_PLACEHOLDER
@@ -179,7 +189,7 @@ class DessinAnime :
 
     private suspend fun parseAnimePage(pageUrl: HttpUrl): AnimesPage {
         val response = client.newCall(GET(pageUrl, headers)).awaitSuccess()
-        val document = response.asJsoup().apply { resolveSuspense() }
+        val document = response.useAsJsoup().apply { resolveSuspense() }
 
         val animes = document.select("div.group").mapNotNull { element ->
             val thumbnail = element.selectFirst("img")?.attr("abs:src") ?: POSTER_PLACEHOLDER
@@ -235,11 +245,11 @@ class DessinAnime :
     // ============================ Seasons =============================
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
-        val soup = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess().asJsoup().apply { resolveSuspense() }
+        val soup = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess().useAsJsoup().apply { resolveSuspense() }
 
         val siteSeasons = soup.select("a.bg-card").mapNotNull { element ->
             val saisonNum = element.selectFirst("p.line-clamp-1")?.text()?.filter { it.isDigit() }?.toIntOrNull() ?: 1
-            val path = element.safeRelativePath().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val path = element.safeRelativePath() ?: return@mapNotNull null
             val seasonTitle = if (saisonNum == 1) anime.title else "${anime.title} Saison $saisonNum"
             Triple(seasonTitle, path, saisonNum)
         }.sortedBy { it.third }
@@ -277,7 +287,7 @@ class DessinAnime :
         val episodes = if (episodeList.isNotEmpty()) {
             episodeList.mapNotNull { element ->
                 val epName = element.selectFirst("p.text-sm")?.text()?.substringBefore("(")?.trim()
-                val link = element.safeRelativePath().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val link = element.safeRelativePath() ?: return@mapNotNull null
                 val sNum = "$baseUrl$link".toHttpUrl().pathSegments.getOrNull(2)?.toIntOrNull() ?: 1
                 SEpisode.create().apply {
                     episode_number = link.removeSuffix("/").substringAfterLast("/").toFloatOrNull() ?: 1f
@@ -448,10 +458,11 @@ class DessinAnime :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
 
-        androidx.preference.SwitchPreferenceCompat(screen.context).apply {
+        val context = screen.context
+        androidx.preference.SwitchPreferenceCompat(context).apply {
             key = PREF_USE_FALLBACK_KEY
-            title = "Desactiver le proxy"
-            summary = "Plus lent, a utiliser si aucun serveur n'est trouvée"
+            title = getString(R.string.pref_disable_proxy_title)
+            summary = getString(R.string.pref_disable_proxy_summary)
             setDefaultValue(PREF_USE_FALLBACK_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putBoolean(PREF_USE_FALLBACK_KEY, newValue as Boolean).apply()

@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.wiflix
 
 import android.util.Log
@@ -18,7 +20,8 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.WIFLIX_LOG
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -39,7 +42,7 @@ class Wiflix :
 
     override val name = "Wiflix"
 
-    override val defaultBaseUrl = "https://flemmix.city"
+    override val defaultBaseUrl = "https://flemmix.men"
 
     override val lang = "fr"
 
@@ -61,7 +64,7 @@ class Wiflix :
     // ============================== Search ================================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
-        val hashDoc = client.newCall(GET(baseUrl)).execute().asJsoup()
+        val hashDoc = client.newCall(GET(baseUrl)).execute().useAsJsoup()
 
         val userHash = hashDoc.select("script")
             .firstOrNull { it.data().contains("dle_login_hash") }
@@ -92,14 +95,15 @@ class Wiflix :
     }
 
     override fun searchAnimeParse(response: Response): AnimesPage {
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val anime = document.select("div.fast-search-result").mapNotNull { element ->
             val anchor = element.selectFirst("a.fsr-wrap") ?: return@mapNotNull null
 
             SAnime.create().apply {
                 title = anchor.selectFirst("span.fsr-title")?.text() ?: "Title not found"
-                url = anchor.selectFirst("a.fsr-wrap")?.attr("href")?.substringAfter(baseUrl) ?: ""
+                val href = anchor.attr("href").ifEmpty { return@mapNotNull null }
+                url = if (href.startsWith(baseUrl)) href.removePrefix(baseUrl) else href
                 thumbnail_url = anchor.selectFirst("img")?.attr("abs:src") ?: "https://http.cat/404.jpg"
             }
         }
@@ -112,11 +116,11 @@ class Wiflix :
     override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/serie-en-streaming/page/$page/")
 
     override fun popularAnimeParse(response: Response): AnimesPage {
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val animes = document.select("div.mov").mapNotNull { element ->
             SAnime.create().apply {
-                title = element.selectFirst("a.mov-t")?.text() ?: "failed selector"
+                title = element.selectFirst("a.mov-t")?.text() ?: ""
                 url = element.selectFirst("a.mov-t")?.safeRelativePath() ?: ""
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: "https://http.cat/404.jpg"
             }
@@ -130,7 +134,7 @@ class Wiflix :
         val url = "$baseUrl${anime.url}"
         Log.d(WIFLIX_LOG, url)
         val response = client.newCall(GET(url)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val description = document.selectFirst("p[itemprop=description]")?.text()
             ?.substringAfter("Synopsis:")?.trim()
@@ -151,7 +155,7 @@ class Wiflix :
     // ============================== Episodes ==============================
 
     override fun episodeListParse(response: Response): List<SEpisode> {
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val anime = SAnime.create()
         val animeUrl = response.request.url.encodedPath
 
@@ -192,7 +196,7 @@ class Wiflix :
         val fragment = episode.url.substringAfter("#")
 
         val response = client.newCall(GET(baseUrl.removeSuffix("/") + animeUrl)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val hosters = mutableListOf<Hoster>()
 
@@ -229,7 +233,7 @@ class Wiflix :
         val fragment = url.substringAfter("#")
 
         val response = client.newCall(GET(animeUrl)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val serverLinks = if (fragment.startsWith("group-")) {
             val epNum = fragment.substringAfter("group-").substringBefore("-")

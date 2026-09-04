@@ -1,10 +1,9 @@
-apply plugin: 'com.android.application'
 
 ext {
     extName = 'AnimeSamaFan'
     extClass = '.AnimeSamaFan'
-    extVersionCode = 30
+    extVersionCode = 31
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

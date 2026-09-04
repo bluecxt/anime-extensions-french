@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.frenchanime
 
 import androidx.preference.PreferenceScreen
@@ -9,24 +11,18 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.SelectorException
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
-// import eu.kanade.tachiyomi.lib.streamhidevidextractor.StreamHideVidExtractor
-// import eu.kanade.tachiyomi.lib.streamhubextractor.StreamHubExtractor
-// import eu.kanade.tachiyomi.lib.streamvidextractor.StreamVidExtractor
-// import eu.kanade.tachiyomi.lib.streamwishextractor.StreamWishExtractor
-// import eu.kanade.tachiyomi.lib.upstreamextractor.UpstreamExtractor
-// import eu.kanade.tachiyomi.lib.vidoextractor.VidoExtractor
 
 class FrenchAnime :
     Source(),
@@ -36,7 +32,7 @@ class FrenchAnime :
     override val defaultBaseUrl = "https://french-anime.com"
 
     override val lang = "fr"
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     override val supportedServers = listOf(
         "Filemoon",
@@ -60,11 +56,11 @@ class FrenchAnime :
 // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/animes-vostfr/page/$page/", headers)).awaitSuccess()
-        val document = response.asJsoup()
-        val animes = document.select("div#dle-content > div.mov").map { element ->
+        val document = response.useAsJsoup()
+        val animes = document.select("div#dle-content > div.mov").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a[href]") ?: throw SelectorException("link not found")
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
 
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
                 title = "${link.text()} ${element.selectFirst("span.block-sai")?.text() ?: ""}".trim()
@@ -82,11 +78,11 @@ class FrenchAnime :
     // =============================== Search ===============================
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query&search_start=$page", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val animes = document.select("div#dle-content > div.mov").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a[href]") ?: throw SelectorException("link not found")
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
 
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
 
@@ -109,7 +105,7 @@ class FrenchAnime :
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         val h1 = document.selectFirst("h1")
         anime.thumbnail_url = document.selectFirst("#posterimg")?.absUrl("src") ?: anime.thumbnail_url
@@ -127,7 +123,7 @@ class FrenchAnime :
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val episodeList = mutableListOf<SEpisode>()
         val lang = if (document.baseUri().contains("-vf")) "VF" else "VOSTFR"
 

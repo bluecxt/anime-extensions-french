@@ -1,10 +1,12 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.bodyString
 import keiyoushi.utils.parallelCatchingFlatMap

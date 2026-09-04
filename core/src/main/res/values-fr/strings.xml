@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common preferences -->
+    <string name="pref_base_url_title">URL de base</string>
+    <string name="pref_base_url_summary">URL actuelle %1$s</string>
+    <string name="pref_base_url_invalid">L\'URL doit être valide (ex: https://example.com)</string>
+    <string name="pref_voices_title">Préférence des voix</string>
+    <string name="pref_voices_entry_prefer">Préférer %1$s</string>
+    <string name="pref_quality_title">Qualité préférée</string>
+    <string name="pref_server_title">Serveur préféré</string>
+    <string name="pref_disable_filemoon_title">Désactiver le lecteur Filemoon</string>
+    <string name="pref_disable_filemoon_summary">Filemoon utilise un système de sécurité (PoW) qui peut ralentir les appareils peu puissants. Désactivez-le si vous rencontrez des lags.</string>
+    <string name="pref_restart_message">Redémarrez l\'application pour appliquer les nouveaux paramètres.</string>
+
+    <!-- Specific extension preferences -->
+    <string name="pref_disable_proxy_title">Désactiver le proxy</string>
+    <string name="pref_disable_proxy_summary">Plus lent, à utiliser si aucun serveur n\'est trouvé</string>
+    <string name="pref_debrid_title">Fournisseur Debrid</string>
+    <string name="pref_debrid_summary">Choisissez \'Aucun\' pour le mode Torrent. Si vous sélectionnez un fournisseur Debrid, entrez votre jeton (token). Aucun jeton n\'est nécessaire si \'Aucun\' est sélectionné.</string>
+    <string name="pref_token_title">Jeton (Token)</string>
+    <string name="pref_providers_title">Activer/Désactiver les fournisseurs</string>
+
+    <!-- Error and UI feedback messages -->
+    <string name="cloudflare_bypass_timeout">Délai de contournement Cloudflare dépassé pour %1$s. Essayez d\'ouvrir dans la WebView.</string>
+    <string name="error_no_episodes_found">Aucun épisode n\'a pu être récupéré. Vérifiez votre connexion Internet ou ouvrez la WebView.</string>
+
+    <!-- Metadata labels -->
+    <string name="metadata_release_date_prefix">"Date de sortie : "</string>
+</resources>

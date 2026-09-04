@@ -1,8 +1,8 @@
 ext {
     extName = 'Wiflix'
     extClass = '.Wiflix'
-    baseUrl = 'https://flemmix.win'
-    extVersionCode = 8
+    baseUrl = 'https://flemmix.men'
+    extVersionCode = 9
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

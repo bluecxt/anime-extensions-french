@@ -9,7 +9,6 @@ interface SEpisode {
     var episode_number: Float
     var scanlator: String?
 
-    // Add metadata fields used in AnimeSamaFan
     var preview_url: String?
     var summary: String?
 

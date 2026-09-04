@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.utils
 
 import android.net.Uri
@@ -5,7 +7,9 @@ import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.PLAYLIST_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.UrlUtils
@@ -88,6 +92,9 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                     .awaitSuccess().bodyString()
                 break
             } catch (e: Exception) {
+                if (e is HttpException && (e.code == 404 || e.code == 410)) {
+                    throw ContentUnavailableException("HLS playlist unavailable (${e.code}): $playlistUrl")
+                }
                 attempts++
                 if (attempts >= 3) {
                     Log.e(PLAYLIST_LOG, "Failed to fetch HLS playlist after 3 attempts: $playlistUrl", e)

@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core
 
 import android.content.SharedPreferences
@@ -5,7 +7,9 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
+import keiyoushi.core.R
 import keiyoushi.utils.addEditTextPreference
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 interface CommonPreferences : ConfigurableAnimeSource {
 
@@ -78,15 +82,16 @@ interface CommonPreferences : ConfigurableAnimeSource {
     fun setupCommonPreferences(screen: PreferenceScreen) {
         val source = this as Source
         val prefs = source.preferences
+        val context = screen.context
 
-        screen.addBaseUrlPreference(prefs, defaultBaseUrl, key = PREF_URL_KEY, summary = baseUrlSummary)
+        screen.addBaseUrlPreference(source, prefs, defaultBaseUrl, key = PREF_URL_KEY, summary = baseUrlSummary)
         // Gestion des Langues
         val showVoices = forceShowVoicesPreference ?: (supportedVoices.size > 1)
         if (showVoices) {
-            ListPreference(screen.context).apply {
+            ListPreference(context).apply {
                 key = PREF_VOICES_KEY
-                title = "Préférence des voix"
-                entries = supportedVoices.map { if (it == "VOSTFR" || it == "VF") "Préférer $it" else it }.toTypedArray()
+                title = source.getString(R.string.pref_voices_title)
+                entries = supportedVoices.map { if (it == "VOSTFR" || it == "VF") source.getString(R.string.pref_voices_entry_prefer, it) else it }.toTypedArray()
                 entryValues = supportedVoices
                 setDefaultValue(defaultVoice)
                 summary = "%s"
@@ -97,9 +102,9 @@ interface CommonPreferences : ConfigurableAnimeSource {
         // Gestion de la Qualité
         val showQuality = forceShowQualityPreference ?: (supportedQualities.size > 1)
         if (showQuality) {
-            ListPreference(screen.context).apply {
+            ListPreference(context).apply {
                 key = PREF_QUALITY_KEY
-                title = "Qualité préférée"
+                title = source.getString(R.string.pref_quality_title)
                 entries = supportedQualities.map { q -> if (q.all { it.isDigit() }) "${q}p" else q }.toTypedArray()
                 entryValues = supportedQualities
                 setDefaultValue(defaultQuality)
@@ -111,9 +116,9 @@ interface CommonPreferences : ConfigurableAnimeSource {
         // Gestion du Serveur
         val showServerPref = forceShowServerPreference ?: (supportedServers.size > 1)
         if (showServerPref) {
-            ListPreference(screen.context).apply {
+            ListPreference(context).apply {
                 key = PREF_SERVER_KEY
-                title = "Serveur préféré"
+                title = source.getString(R.string.pref_server_title)
                 entries = supportedServers.toTypedArray()
                 entryValues = supportedServers.toTypedArray()
                 setDefaultValue(defaultServer ?: "")
@@ -123,10 +128,10 @@ interface CommonPreferences : ConfigurableAnimeSource {
         }
 
         if (supportedServers.any { it.equals("Filemoon", ignoreCase = true) }) {
-            SwitchPreferenceCompat(screen.context).apply {
+            SwitchPreferenceCompat(context).apply {
                 key = PREF_DISABLE_FILEMOON_KEY
-                title = "Désactiver le lecteur Filemoon"
-                summary = "Filemoon utilise un système de sécurité (PoW) qui peut ralentir les appareils peu puissants. Désactivez-le si vous rencontrez des lags."
+                title = source.getString(R.string.pref_disable_filemoon_title)
+                summary = source.getString(R.string.pref_disable_filemoon_summary)
                 setDefaultValue(false)
                 setOnPreferenceChangeListener { _, _ -> true }
             }.also(screen::addPreference)
@@ -139,9 +144,10 @@ interface CommonPreferences : ConfigurableAnimeSource {
      * If the field is cleared, it resets the preference to the default URL.
      */
     private fun PreferenceScreen.addBaseUrlPreference(
+        source: Source,
         preferences: SharedPreferences,
         defaultUrl: String,
-        title: String = "Base URL",
+        title: String = source.getString(R.string.pref_base_url_title),
         key: String = "base_url_pref",
         summary: String? = null,
         onComplete: (String) -> Unit = {},
@@ -152,20 +158,22 @@ interface CommonPreferences : ConfigurableAnimeSource {
             key = key,
             title = title,
             summary = buildString {
-                append("Actual URL $currentUrl")
+                append(source.getString(R.string.pref_base_url_summary, currentUrl))
                 if (!summary.isNullOrBlank()) append("\n$summary")
             },
             default = defaultUrl,
             getSummary = { newValue ->
                 buildString {
-                    append("Actual URL ")
-                    if (!newValue.isNullOrBlank()) {
-                        append(newValue.removeSuffix("/"))
-                    } else {
-                        append(currentUrl)
-                    }
+                    val urlToDisplay = if (!newValue.isNullOrBlank()) newValue.removeSuffix("/") else currentUrl
+                    append(source.getString(R.string.pref_base_url_summary, urlToDisplay))
                     if (!summary.isNullOrBlank()) append("\n$summary")
                 }
+            },
+            validate = { url ->
+                url.isBlank() || url.toHttpUrlOrNull() != null
+            },
+            validationMessage = {
+                source.getString(R.string.pref_base_url_invalid)
             },
             onChange = { _, newValue ->
                 val cleanUrl = newValue.trim().removeSuffix("/")

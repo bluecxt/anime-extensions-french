@@ -2,8 +2,8 @@ ext {
     extName = 'French Anime'
     extClass = '.FrenchAnime'
     baseUrl = 'https://french-anime.com'
-    extVersionCode = 42
+    extVersionCode = 43
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

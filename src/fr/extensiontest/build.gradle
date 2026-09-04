@@ -3,8 +3,8 @@ apply plugin: 'com.android.application'
 ext {
     extName = 'Extension-Test'
     extClass = '.ExtensionTest'
-    extVersionCode = 1
+    extVersionCode = 2
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

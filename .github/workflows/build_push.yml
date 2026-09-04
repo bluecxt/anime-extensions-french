@@ -5,11 +5,16 @@ on:
     branches:
       - main
     paths:
-      - "**"
-      - "!**.md"
-      - "!.github/**"
+      - "src/**"
+      - "core/**"
+      - "lib-multisrc/**"
+      - "gradle/**"
+      - "config/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
       - ".github/scripts/**"
       - ".github/workflows/build_push.yml"
+      - ".github/workflows/reusable_build_publish.yml"
   workflow_dispatch:
 
 permissions:
@@ -35,3 +40,6 @@ jobs:
       key_store_password: ${{ secrets.KEY_STORE_PASSWORD }}
       key_password: ${{ secrets.KEY_PASSWORD }}
       tmdb_api: ${{ secrets.TMDB_API }}
+      tvdb_api: ${{ secrets.TVDB_API }}
+      webhook_url: ${{ secrets.WEBHOOK_URL }}
+      webhook_secret: ${{ secrets.WEBHOOK_SECRET }}

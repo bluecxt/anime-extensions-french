@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesultra
 
 import android.util.Log
@@ -16,8 +18,9 @@ import fr.bluecxt.core.ANIMESULTRA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.fetchTmdbMetadata
-import fr.bluecxt.core.safeRelativePath
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.utils.safeRelativePath
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -62,12 +65,12 @@ class AnimesUltra :
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
         val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
-        val document = response.asJsoup()
-        val items = document.select(".block_area_trending .swiper-slide").map { element ->
+        val document = response.useAsJsoup()
+        val items = document.select(".block_area_trending .swiper-slide").mapNotNull { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a.film-poster")!!
                 title = link.attr("title").ifBlank { element.selectFirst(".film-title")?.text() ?: "" }
-                url = link.safeRelativePath()
+                url = link.safeRelativePath() ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
@@ -75,11 +78,11 @@ class AnimesUltra :
     }
 
     private fun parseAnimesPage(document: Document): AnimesPage {
-        val items = document.select("div.flw-item").map { element ->
+        val items = document.select("div.flw-item").mapNotNull { element ->
             SAnime.create().apply {
-                val link = element.selectFirst("h3.film-name a")!!
-                title = link.text()
-                url = link.safeRelativePath()
+                val link = element.selectFirst("h3.film-name a")
+                title = link?.text() ?: ""
+                url = link?.safeRelativePath() ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img.film-poster-img")?.attr("abs:data-src") ?: element.selectFirst("img.film-poster-img")?.attr("abs:src")
             }
         }
@@ -104,12 +107,12 @@ class AnimesUltra :
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/xfsearch/statut/En%20Cours/page/$page/", headers)).awaitSuccess()
-        return parseAnimesPage(response.asJsoup())
+        return parseAnimesPage(response.useAsJsoup())
     }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query", headers)).awaitSuccess()
-        return parseAnimesPage(response.asJsoup())
+        return parseAnimesPage(response.useAsJsoup())
     }
 
     // =========================== Anime Details ============================
@@ -125,7 +128,7 @@ class AnimesUltra :
         }
 
         val targetUrl = urlMap.vostfr ?: urlMap.vf ?: return anime
-        val document = client.newCall(GET(baseUrl + targetUrl, headers)).awaitSuccess().asJsoup()
+        val document = client.newCall(GET(baseUrl + targetUrl, headers)).awaitSuccess().useAsJsoup()
 
         val pageTitle = document.selectFirst("h2.film-name")?.text() ?: anime.title
         val cleanedTitle = cleanTitle(pageTitle)
@@ -167,7 +170,7 @@ class AnimesUltra :
         val newMap = currentMap.copy()
         try {
             val searchResponse = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$cleanedTitle", headers)).awaitSuccess()
-            val searchDoc = searchResponse.asJsoup()
+            val searchDoc = searchResponse.useAsJsoup()
             searchDoc.select("div.flw-item h3.film-name a").forEach { link ->
                 val foundUrl = link.attr("abs:href").substringAfter(baseUrl)
                 val foundTitle = link.text()
@@ -284,7 +287,7 @@ class AnimesUltra :
             } catch (_: Exception) {
                 null
             } ?: return@forEach
-            val document = response.asJsoup()
+            val document = response.useAsJsoup()
 
             val foundPlayers = mutableListOf<Pair<String, String>>()
 

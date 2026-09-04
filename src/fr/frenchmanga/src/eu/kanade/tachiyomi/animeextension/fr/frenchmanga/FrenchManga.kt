@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.frenchmanga
 
 import androidx.preference.EditTextPreference
@@ -13,7 +15,8 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -64,7 +67,7 @@ open class FrenchManga(
     // ============================== Popular ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/manga-streaming-1/coups-de-cur/page/$page/?m_orderby=views", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val animes = document.select("div.short").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a.short-poster")!!
@@ -108,7 +111,7 @@ open class FrenchManga(
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         val response = client.newCall(GET("$baseUrl/manga-streaming/page/$page/", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val animes = document.select("div.short").map { element ->
             SAnime.create().apply {
                 val link = element.selectFirst("a.short-poster")!!
@@ -128,7 +131,7 @@ open class FrenchManga(
         if (query.startsWith(PREFIX_SEARCH)) {
             val id = query.removePrefix(PREFIX_SEARCH)
             val response = client.newCall(GET("$baseUrl/index.php?newsid=$id", headers)).awaitSuccess()
-            val document = response.asJsoup()
+            val document = response.useAsJsoup()
             val anime = SAnime.create().apply {
                 title = document.selectFirst("h1")?.text() ?: ""
                 url = json.encodeToString(AnimeUrl(listOf(id)))
@@ -180,7 +183,7 @@ open class FrenchManga(
             listOf(anime.url)
         }
         val response = client.newCall(GET("$baseUrl/index.php?newsid=${ids.first()}", headers)).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
 
         anime.artist = document.selectFirst("li:contains(Studio)")?.ownText()?.trim() ?: ""
         anime.author = document.select("li:contains(Director) a").joinToString { it.text().trim() }

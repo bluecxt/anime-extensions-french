@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.lesporoiniens
 
 import androidx.preference.PreferenceScreen
@@ -14,7 +16,8 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
-import fr.bluecxt.core.fetchTmdbMetadata
+import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -94,7 +97,7 @@ class LesPoroiniens :
     // --- Détails ---
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}")).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: throw Exception("Données introuvables")
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val animeInfo = obj["anime"]?.jsonArray?.firstOrNull()?.jsonObject
@@ -111,7 +114,7 @@ class LesPoroiniens :
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET("$baseUrl${anime.url}")).awaitSuccess()
-        val document = response.asJsoup()
+        val document = response.useAsJsoup()
         val jsonString = document.select("script#series-data-placeholder").first()?.data() ?: return emptyList()
         val obj = json.decodeFromString<JsonObject>(jsonString)
         val episodes = mutableListOf<SEpisode>()

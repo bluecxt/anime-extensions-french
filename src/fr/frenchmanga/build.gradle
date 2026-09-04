@@ -1,8 +1,8 @@
 ext {
     extName = 'French-Manga'
     extClass = '.FrenchManga'
-    extVersionCode = 18
+    extVersionCode = 19
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

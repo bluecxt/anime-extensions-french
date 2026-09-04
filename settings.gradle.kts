@@ -1,7 +1,40 @@
+@file:Suppress("ktlint:standard:kdoc")
+
+pluginManagement {
+    includeBuild("gradle/build-logic")
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+        maven(url = "https://www.jitpack.io")
+    }
+}
+
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("kei") {
+            from(files("gradle/kei.versions.toml"))
+        }
+    }
+    @Suppress("UnstableApiUsage")
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    @Suppress("UnstableApiUsage")
+    repositories {
+        google()
+        mavenCentral()
+        maven(url = "https://www.jitpack.io")
+    }
+}
+
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+rootProject.name = "Yuzono-Anime"
+
 /**
  * Add or remove modules to load as needed for local development here.
  */
 loadAllIndividualExtensions()
+// loadIndividualExtension("all", "jellyfin")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
@@ -12,7 +45,7 @@ include(":core")
 // File(rootDir, "lib").eachDir { include("lib:${it.name}") }
 
 // Load all modules under /lib-multisrc
-//File(rootDir, "lib-multisrc").eachDir { include("lib-multisrc:${it.name}") }
+File(rootDir, "lib-multisrc").eachDir { include("lib-multisrc:${it.name}") }
 
 /**
  * ======================================== HELPER FUNCTION ========================================
@@ -32,7 +65,6 @@ fun File.eachDir(block: (File) -> Unit) {
     val files = listFiles() ?: return
     for (file in files) {
         val isIgnored = File(file, ".ignore").exists()
-
         if (file.isDirectory && !isIgnored && file.name != ".gradle" && file.name != "build") {
             block(file)
         }

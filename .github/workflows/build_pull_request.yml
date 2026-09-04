@@ -80,6 +80,11 @@ jobs:
 
       - id: generate-matrices
         name: Generate build matrices
+        env:
+          TMDB_API: ${{ secrets.TMDB_API }}
+          TVDB_API: ${{ secrets.TVDB_API }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           python3 ./.github/scripts/generate-build-matrices.py origin/main ${{ secrets.SIGNING_KEY != '' && 'Release' || 'Debug' }}
 
@@ -128,6 +133,9 @@ jobs:
           KISSKH_SUB_API: ${{ secrets.KISSKH_SUB_API }}
           KAISVA: ${{ secrets.KAISVA }}
           TMDB_API: ${{ secrets.TMDB_API }}
+          TVDB_API: ${{ secrets.TVDB_API }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
           MODULES: ${{ join(matrix.chunk.modules, ' ') }}
         run: |
           ./gradlew $MODULES

@@ -1,3 +1,5 @@
+// Copyright bluecxt
+// SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
 import android.util.Base64
@@ -6,9 +8,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VOE_LOG
-import fr.bluecxt.core.defaultHeaders
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.detectMp4Resolution
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
