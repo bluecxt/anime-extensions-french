@@ -84,6 +84,8 @@ private suspend fun Source.getTvdbToken(apiKey: String = DEFAULT_TVDB_API_KEY, f
                 url = "$TVDB_BASE_URL/login",
                 context = "Échec d'authentification TVDB v4 (Clé API invalide ou révoquée)",
                 exception = e,
+                extensionName = currentName,
+                extensionVersion = currentVersion,
             )
             null
         }
@@ -113,6 +115,8 @@ private suspend fun Source.executeTvdbRequest(url: String, apiKey: String): Stri
                     url = url,
                     context = "API TVDB v4 inaccessible (HTTP ${retryRes.code}) après rafraîchissement du token",
                     exception = IllegalStateException("TVDB API v4 returned HTTP ${retryRes.code} for $url"),
+                    extensionName = currentName,
+                    extensionVersion = currentVersion,
                 )
                 null
             }

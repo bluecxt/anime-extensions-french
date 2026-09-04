@@ -21,18 +21,22 @@ object SourceAuditor {
     fun SAnime.checkAndReportIncompleteness(
         baseUrl: String,
         getAnimeUrl: (SAnime) -> String,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ) {
         val resolvedPath = try {
             getAnimeUrl(this).removePrefix(baseUrl)
         } catch (_: Exception) {
             this.url
         }
-        checkAndReportIncompleteness(baseUrl, resolvedPath)
+        checkAndReportIncompleteness(baseUrl, resolvedPath, extensionName, extensionVersion)
     }
 
     fun SAnime.checkAndReportIncompleteness(
         baseUrl: String,
         urlPath: String,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ) {
         val issues = mutableListOf<String>()
         if (status == SAnime.UNKNOWN) issues.add("status is UNKNOWN (0)")
@@ -56,6 +60,8 @@ object SourceAuditor {
                 baseUrl = baseUrl,
                 url = "$baseUrl$urlPath",
                 additionalContext = details,
+                extensionName = extensionName,
+                extensionVersion = extensionVersion,
             )
         }
     }
@@ -66,6 +72,8 @@ object SourceAuditor {
         baseUrl: String,
         animeTitle: String,
         getAnimeUrl: (SAnime) -> String,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ): List<SAnime> {
         val invalidSeasons = filter { season ->
             val resolvedUrl = try {
@@ -83,6 +91,8 @@ object SourceAuditor {
                     "Anime: $animeTitle",
                     "Issue: ${invalidSeasons.size} season(s) have blank title or invalid URL",
                 ),
+                extensionName = extensionName,
+                extensionVersion = extensionVersion,
             )
         }
         return this
@@ -92,6 +102,8 @@ object SourceAuditor {
         baseUrl: String,
         urlPath: String,
         animeTitle: String,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ): List<SAnime> {
         val invalidSeasons = filter { it.title.isBlank() || !isValidHttpUrl(baseUrl, it.url) }
         if (invalidSeasons.isNotEmpty()) {
@@ -102,6 +114,8 @@ object SourceAuditor {
                     "Anime: $animeTitle",
                     "Issue: ${invalidSeasons.size} season(s) have blank title or invalid URL",
                 ),
+                extensionName = extensionName,
+                extensionVersion = extensionVersion,
             )
         }
         return this
@@ -113,6 +127,8 @@ object SourceAuditor {
         baseUrl: String,
         urlPath: String,
         animeTitle: String,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ): List<SEpisode> {
         val invalidEpisodes = filter { it.name.isBlank() || it.url.isBlank() }
         if (invalidEpisodes.isNotEmpty()) {
@@ -123,6 +139,8 @@ object SourceAuditor {
                     "Anime: $animeTitle",
                     "Issue: ${invalidEpisodes.size} episode(s) have blank name or URL",
                 ),
+                extensionName = extensionName,
+                extensionVersion = extensionVersion,
             )
         }
         return this
@@ -135,6 +153,8 @@ object SourceAuditor {
         urlPath: String,
         episodeName: String,
         checkInternalData: Boolean = true,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ): List<Hoster> {
         val invalidHosters = filter {
             it.hosterName.isBlank() || (checkInternalData && it.internalData.isBlank())
@@ -147,6 +167,8 @@ object SourceAuditor {
                     "Episode: $episodeName",
                     "Issue: ${invalidHosters.size} hoster(s) have blank hosterName or internalData",
                 ),
+                extensionName = extensionName,
+                extensionVersion = extensionVersion,
             )
         }
         return this
@@ -158,6 +180,8 @@ object SourceAuditor {
         baseUrl: String,
         urlPath: String,
         hosterName: String,
+        extensionName: String? = null,
+        extensionVersion: String? = null,
     ): List<Video> {
         val invalidVideos = filter {
             it.videoUrl.isBlank() || it.videoUrl.toHttpUrlOrNull() == null
@@ -171,6 +195,8 @@ object SourceAuditor {
                     "Hoster: $hosterName",
                     "Issue: ${invalidVideos.size} video(s) have invalid or malformed videoUrl (sample: '$sampleUrl')",
                 ),
+                extensionName = extensionName,
+                extensionVersion = extensionVersion,
             )
         }
         return this
