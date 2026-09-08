@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.VOIRDRAMA_LOG
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.safeRelativePath
@@ -21,9 +20,6 @@ import keiyoushi.utils.head
 import keiyoushi.utils.parallelCatchingFlatMap
 import keiyoushi.utils.tryParse
 import keiyoushi.utils.useAsJsoup
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -201,7 +197,6 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
         private val dramaSlugRegex = Regex("""(/drama/[^/]+)""")
 
         const val HAS_VF_KEY = "meta_has_vf_"
-        private val scope = CoroutineScope(Dispatchers.IO)
 
         private val GENRE_LIST = listOf(
             "Action" to "action", "Affaires" to "affaires", "Amitié" to "amitie", "Arts martiaux" to "arts-martiaux",
