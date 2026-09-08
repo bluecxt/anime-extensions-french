@@ -15,10 +15,8 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.HttpException
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportEpisodeIssues
@@ -64,10 +62,6 @@ class AnimeSama :
     override val lang = "fr"
     override val supportsLatest = true
     override val defaultServer = "Vidmoly"
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
-        .add("Referer", "$baseUrl/")
 
     override fun getAnimeUrl(anime: SAnime): String = "$baseUrl${urlParser(anime.url).first.url}"
 
@@ -229,6 +223,7 @@ class AnimeSama :
     private fun SAnime.enrichWithTvdb(tvdbMetadata: TvdbMetadata?, document: Document, season: String?, isHub: Boolean) {
         val rawYear = document.selectFirst("div.info-grid > span:contains(Année) + .info-val")?.text()
         val descriptionText = document.selectFirst("p#synopsisText")?.text().orEmpty()
+        val monoSeason = (season != null && !isHub)
 
         tvdbMetadata?.let { metadata ->
             if (artist.isNullOrBlank()) artist = metadata.artist
@@ -237,19 +232,20 @@ class AnimeSama :
             if (status == SAnime.UNKNOWN) status = metadata.status
 
             val pageCover = document.getElementById("coverOeuvre")?.attr("abs:src")
-            val targetPoster = if (season != null && !isHub) (metadata.seasonPosterUrl ?: metadata.mainPosterUrl) else metadata.mainPosterUrl
+            val targetPoster = if (monoSeason) (metadata.seasonPosterUrl ?: metadata.mainPosterUrl) else metadata.mainPosterUrl
             thumbnail_url = targetPoster ?: pageCover ?: thumbnail_url
             background_url = metadata.backdropUrl ?: metadata.mainPosterUrl
         }
 
-        val targetSummary = if (season != null && !isHub) {
-            tvdbMetadata?.summary?.takeIf { it.isNotBlank() } ?: descriptionText
-        } else {
-            descriptionText.ifBlank { tvdbMetadata?.summary.orEmpty() }
-        }
+        enrichDescription(tvdbMetadata, monoSeason, descriptionText, rawYear)
+    }
 
-        val year = tvdbMetadata?.releaseDate ?: rawYear
-        if (description.isNullOrEmpty() || (season != null && !isHub && !tvdbMetadata?.summary.isNullOrBlank())) {
+    private fun SAnime.enrichDescription(tvdbMetadata: TvdbMetadata?, monoSeason: Boolean, descriptionText: String, backupYear: String?) {
+        val targetSummary = tvdbMetadata?.summary?.takeIf { (it.isNotBlank() && monoSeason) || descriptionText.isBlank() } ?: descriptionText
+
+        val year = tvdbMetadata?.releaseDate ?: backupYear
+        val dedicatedSeasonDescriptionNeeded = (monoSeason && !tvdbMetadata?.summary.isNullOrBlank())
+        if (description.isNullOrEmpty() || dedicatedSeasonDescriptionNeeded) {
             description = buildDescription(targetSummary, year)
         }
     }
@@ -348,25 +344,8 @@ class AnimeSama :
         val isMovie = isMovieContent(rawSeason, link, contentType, medias)
         val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, titles, isMovie = isMovie)
 
-        // 3. Gestion de l'overflow (Saisons avec OAV rajoutés en fin de liste)
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
-        var autoS0Offset = 0
-        if (episodes.size > tvdbEpCount && tvdbEpCount > 0) {
-            val currentMediaIndex = medias.indexOfFirst { it.url == link }.takeIf { it >= 0 } ?: medias.size
-            for (i in 0 until currentMediaIndex) {
-                val m = medias[i]
-                val mSeasonName = m.season.orEmpty()
-                val mSeasonNum = extractSeasonNumber(mSeasonName)
-                if (mSeasonNum != null && mSeasonNum > 0) {
-                    val mPlayers = fetchPlayers(m.url, "vostfr")
-                    val mAnimeSamaCount = mPlayers.size
-                    val mTvdbCount = tvdbMetadata?.seasonEpisodeCounts?.get(mSeasonNum) ?: 0
-                    if (mAnimeSamaCount > mTvdbCount && mTvdbCount > 0) {
-                        autoS0Offset += (mAnimeSamaCount - mTvdbCount)
-                    }
-                }
-            }
-        }
+        val autoS0Offset = calculateAutoS0Offset(tvdbMetadata, tvdbEpCount, episodes.size, medias, link)
 
         val s0Metadata = if (episodes.size > tvdbEpCount && tvdbEpCount > 0) {
             fetchTvdbMetadata(anime.title, season = 0)
@@ -381,6 +360,37 @@ class AnimeSama :
             s0Metadata = s0Metadata,
             autoS0Offset = autoS0Offset,
         ).reversed().checkAndReportEpisodeIssues(baseUrl, link, anime.title)
+    }
+
+    private suspend fun calculateAutoS0Offset(
+        tvdbMetadata: TvdbMetadata?,
+        tvdbEpCount: Int,
+        epSize: Int,
+        medias: List<UrlContent>,
+        currentLink: String,
+    ): Int {
+        if (epSize <= tvdbEpCount || tvdbEpCount <= 0) return 0
+
+        var autoS0Offset = 0
+
+        val currentMediaIndex = medias.indexOfFirst { it.url == currentLink }.takeIf { it >= 0 } ?: medias.size
+
+        for (i in 0 until currentMediaIndex) {
+            val media = medias[i]
+            val mediaSeasonName = media.season.orEmpty()
+            val mediaSeasonNum = extractSeasonNumber(mediaSeasonName) ?: continue
+
+            val mediaTvdbCount = tvdbMetadata?.seasonEpisodeCounts?.get(mediaSeasonNum) ?: 0
+            if (mediaSeasonNum <= 0 || mediaTvdbCount <= 0) continue
+
+            val mediaPlayers = fetchPlayers(media.url, "vostfr")
+            val mediaAnimeSamaCount = mediaPlayers.size
+
+            if (mediaAnimeSamaCount <= mediaTvdbCount) continue
+
+            autoS0Offset += (mediaAnimeSamaCount - mediaTvdbCount)
+        }
+        return autoS0Offset
     }
 
     // ============================== Hosters ==============================
