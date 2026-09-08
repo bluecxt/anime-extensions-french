@@ -145,13 +145,16 @@ fun String.parseStatus(): Int = when (this.trim().lowercase()) {
 }
 
 /**
- * Runs a block of code, returning its result or null on exceptions other than
- * coroutine CancellationException, which is always rethrown.
+ * Calls the specified function [block] and returns its encapsulated result if invocation was successful,
+ * or the encapsulated exception on failure.
+ *
+ * Any [kotlinx.coroutines.CancellationException] thrown inside [block] is rethrown immediately
+ * to preserve coroutine cooperative cancellation.
  */
-inline fun <T> runCatchingCancelable(block: () -> T): T? = try {
-    block()
+inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try {
+    Result.success(block())
 } catch (e: kotlinx.coroutines.CancellationException) {
     throw e
-} catch (_: Exception) {
-    null
+} catch (e: Throwable) {
+    Result.failure(e)
 }
