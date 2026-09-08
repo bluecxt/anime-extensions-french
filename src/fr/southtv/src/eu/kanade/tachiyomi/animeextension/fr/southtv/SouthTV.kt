@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.southtv
 
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
@@ -72,7 +71,7 @@ class SouthTV :
             title = media.title
             url = media.urlSuffix
             status = if (media.isMovie) SAnime.COMPLETED else SAnime.ONGOING
-            thumbnail_url = meta?.posterUrl
+            thumbnail_url = meta?.seasonPosterUrl ?: meta?.mainPosterUrl ?: anime.thumbnail_url
         }
     }
 
@@ -98,7 +97,7 @@ class SouthTV :
         anime.artist = meta.artist
         anime.genre = meta.genre
         anime.status = meta.status
-        anime.thumbnail_url = meta.posterUrl ?: anime.thumbnail_url
+        anime.thumbnail_url = meta?.seasonPosterUrl ?: meta?.mainPosterUrl ?: anime.thumbnail_url
 
         anime.description = buildString {
             if (meta.releaseDate != null) append("Date de sortie : ${meta.releaseDate}\n\n")
@@ -120,7 +119,7 @@ class SouthTV :
             title = anime.title + " Saison $seasonIndex"
             season_number = HUB_SEASON_NUMBER // seasonIndex.toDouble()
             url = anime.url + "#s=$seasonIndex"
-            thumbnail_url = meta?.posterUrl ?: anime.thumbnail_url
+            thumbnail_url = meta?.seasonPosterUrl ?: meta?.mainPosterUrl ?: anime.thumbnail_url
         }
     }
 
