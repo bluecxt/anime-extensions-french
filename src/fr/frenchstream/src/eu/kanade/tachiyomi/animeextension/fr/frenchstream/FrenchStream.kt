@@ -25,7 +25,7 @@ import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.JsoupExtensions
-import fr.bluecxt.core.utils.runCatchingCancelable
+import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelFlatMap
@@ -97,18 +97,16 @@ class FrenchStream :
         val mediaId = anime.url
 
         val movieDeferred = async {
-            runCatchingCancelable {
+            runCatchingCancellable {
                 val movieDto: MovieDto = client.get("$baseUrl/engine/ajax/film_api.php?id=$mediaId", headers).parseAs()
-                if (movieDto.error != null) return@async null
-                movieDto
-            }
+                movieDto.takeIf { it.error == null }
+            }.getOrNull()
         }
         val seriesDeferred = async {
-            runCatchingCancelable {
+            runCatchingCancellable {
                 val seriesDto: SeriesDataDto = client.get("$baseUrl/static/series/$mediaId.js", headers).parseAs()
-                if (seriesDto.allEpisodes.isEmpty()) return@async null
-                seriesDto
-            }
+                seriesDto.takeIf { it.allEpisodes.isNotEmpty() }
+            }.getOrNull()
         }
 
         val seriesEpisodes = seriesDeferred.await()

@@ -11,24 +11,21 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
+import fr.bluecxt.core.utils.runCatchingCancellable
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 // a retirer en juillet 2027
 
 private const val LEGACY_LOG = "AnimeSamaLegacy"
 
-class LegacyAnimeSama {
-    companion object {
-        val LANG_VALUES = listOf("vostfr", "vf", "vf1", "vf2", "va", "vcn", "vj", "vkr", "vqc")
-    }
+object LegacyAnimeSama {
+    val LANG_VALUES = listOf("vostfr", "vf", "vf1", "vf2", "va", "vcn", "vj", "vkr", "vqc")
 }
 
 private val epsArrayRegex = Regex("""(?:var|let|const)?\s*eps(\w+)\s*=\s*(\[[^\]]*\])""", RegexOption.DOT_MATCHES_ALL)
@@ -186,7 +183,7 @@ private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>
     val cleanUrl = url.substringBefore("#")
     val docUrl = "${cleanUrl.removeSuffix("/")}/episodes.js"
     Log.d(LEGACY_LOG, "fetchLegacyPlayers: requesting '$docUrl'")
-    val doc = try {
+    val doc = runCatchingCancellable {
         client.newCall(GET(docUrl, headers)).await().use {
             if (!it.isSuccessful) {
                 Log.d(LEGACY_LOG, "fetchLegacyPlayers: HTTP error ${it.code} for '$docUrl'")
@@ -194,10 +191,10 @@ private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>
             }
             it.body.string()
         }
-    } catch (e: Exception) {
+    }.onFailure { e ->
         Log.e(LEGACY_LOG, "fetchLegacyPlayers: network exception for '$docUrl': ${e.message}")
         return emptyList()
-    }
+    }.getOrNull() ?: return emptyList()
 
     if (doc.trim().startsWith("<")) return emptyList()
 
@@ -243,7 +240,7 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
         if (playerUrl.isEmpty()) return@mapIndexedNotNull null
         val lang = LegacyAnimeSama.LANG_VALUES.getOrElse(i) { "vostfr" }.uppercase()
         Hoster(hosterName = lang, internalData = json.encodeToString(playerUrl) + "|" + lang)
-    }.coreSortHosters()
+    }
 }
 
 suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
@@ -258,5 +255,5 @@ suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
 
     return urls.parallelMap { playerUrl ->
         extractVideos(playerUrl, lang, supportedServers)
-    }.flatten().sortVideos()
+    }.flatten()
 }

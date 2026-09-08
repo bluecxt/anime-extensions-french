@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.waveanime
 
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -12,12 +11,12 @@ import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.WaveplayerExtractor
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.utils.runCatchingCancellable
 import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -122,7 +121,7 @@ class WaveAnime :
             anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
         }
 
-        tmdbMetadata?.posterUrl?.let { anime.thumbnail_url = it }
+        tmdbMetadata?.mainPosterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
         tmdbMetadata?.status?.let { anime.status = it }
@@ -218,24 +217,7 @@ class WaveAnime :
         val masterUrl = baseUrl + playbackPath
 
         // Fetch tracks (subtitles) via API WaveAnime
-        val tracks = mutableListOf<Track>()
-        try {
-            val tracksResponse = client.newCall(GET("$baseUrl/api/episodes/tracks?episodeId=$episodeId", headers)).awaitSuccess()
-            if (tracksResponse.isSuccessful) {
-                val data = json.decodeFromString<TracksResponse>(tracksResponse.body.string())
-                data.subtitles.forEach { (key, value) ->
-                    if (value == 1) {
-                        val label = when (key) {
-                            "fr_full" -> "Français (Complets)"
-                            "fr_forced" -> "Français (Forcés)"
-                            else -> key
-                        }
-                        val suffix = key.replace("_", "-")
-                        tracks.add(Track("$baseUrl/assets/subtitles/$episodeId-$suffix.ass", label))
-                    }
-                }
-            }
-        } catch (_: Exception) {}
+        val tracks = fetchSub(episodeId)
 
         // Utilise l'extracteur du Core (maintenant simplifié)
         val rawSources = waveplayerExtractor.videosFromUrl(masterUrl, baseUrl + episodeUrl, tracks)
@@ -244,4 +226,27 @@ class WaveAnime :
             source.buildFromSource(lang = null, name = "(DASH) WavePlayer")
         }
     }
+
+    // ============================== Utils ===============================
+
+    private suspend fun fetchSub(episodeId: String): List<Track> = runCatchingCancellable {
+        val response = client.newCall(GET("$baseUrl/api/episodes/tracks?episodeId=$episodeId", headers)).awaitSuccess()
+        val data = response.use { json.decodeFromString<TracksResponse>(it.body.string()) }
+
+        val tracks = mutableListOf<Track>()
+
+        data.subtitles.forEach { (key, value) ->
+            if (value != 1) return@forEach
+
+            val label = when (key) {
+                "fr_full" -> "Français (Complets)"
+                "fr_forced" -> "Français (Forcés)"
+                else -> key
+            }
+            val suffix = key.replace("_", "-")
+            tracks.add(Track("$baseUrl/assets/subtitles/$episodeId-$suffix.ass", label))
+        }
+
+        tracks
+    }.getOrDefault(emptyList())
 }
