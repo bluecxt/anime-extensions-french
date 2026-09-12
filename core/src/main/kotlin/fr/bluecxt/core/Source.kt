@@ -246,8 +246,9 @@ abstract class Source :
                 throw e
             }
 
+            val httpCode = e.safeHttpCode
             val isUnavailable = e is ContentUnavailableException ||
-                (e is HttpException && (e.code == 404 || e.code == 410))
+                httpCode == 404 || httpCode == 410
 
             if (isUnavailable) {
                 Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")
