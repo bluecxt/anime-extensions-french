@@ -47,33 +47,41 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk # Si nécessaire
 ./gradlew :src:fr:exemple:assembleDebug
 ```
 
-## ✅ État des Extensions (Mai 2026)
+## ✅ État des Extensions (Septembre 2026)
 
-Le repository a été optimisé pour ne conserver que les extensions les plus performantes.
+Le repository regroupe les sources francophones les plus fiables et maintenues. Pour le détail des sources de métadonnées, consultez [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
 
-| Extension | État | Description | Langues        | +18     |
-| :--- | :--- | :--- |:---------------|:--------|
-| **Anime-Sama** | ✅ | Plus grosse source pour les sorties d'animes récents. | VOSTFR, VF, VA | Non     |
-| **Anime-Sama (FAN)** | ✅ | Version alternative rapide, utile en secours à Anime-Sama. | VOSTFR, VF     | Non     |
+| Extension | État | Description | Langues | +18 |
+| :--- | :---: | :--- | :--- | :---: |
+| **Anime-Sama** | ✅ | Plus grande source pour les sorties d'animes récents. | VOSTFR, VF, VA | Non |
+| **Anime-Sama (FAN)** | ✅ | Version alternative rapide, utile en secours. | VOSTFR, VF | Non |
 | **ADKami** | ✅ | Catalogue massif incluant une large section Hentai. | VOSTFR, VOSTA, RAW | **Oui** |
-| **AnimoFlix** | ✅ | Source variée proposant également des cartoons. | VOSTFR, VF     | Non     |
-| **Anime-Ultime** | ✅ | Haute qualité de Fantrad sur des titres peu diffusés. | VOSTFR, RAW    | **Oui** |
-| **FrAnime** | ✅ | Plus grosse source de films et d'animes. | VOSTFR, VF     | **Oui** |
-| **French-Manga** | ✅ | Très complet avec flux haute qualité. | VOSTFR, VF     | Non     |
-| **VoirAnime.homes** | ✅ | Miroir de French-Manga. | VOSTFR, VF     | Non     |
-| **French Anime** | ✅ | Source de secours (backup). | VOSTFR, VF     | Non     |
-| **Les Poroïniens** | ✅ | Scrapers très précis et contenu haute qualité. | VOSTFR         | **Oui** |
-| **VoirAnime** | ✅ | Uniquement VOSTFR avec une haute qualité d'image. | VOSTFR         | Non     |
-| **SouthTV** | ✅ | L'intégrale de South Park : épisodes VF et tous les films. | VF             | Non     |
-| **WaveAnime** | ✅ | Flux moderne optimisé au format DASH (Haute résolution). | VOSTFR, VF     | Non     |
-| **AnimesUltra** | ✅ | Alternative de secours de haute qualité. | VOSTFR         | Non     |
+| **AnimoFlix** | ✅ | Source variée proposant également des cartoons. | VOSTFR, VF | Non |
+| **Anime-Ultime** | ✅ | Haute qualité de Fantrad sur des titres peu diffusés. | VOSTFR, RAW | **Oui** |
+| **FrAnime** | ✅ | Grande source de films et d'animes avec API dédiée. | VOSTFR, VF | **Oui** |
+| **French-Manga** | ✅ | Très complet avec flux haute qualité. | VOSTFR, VF | Non |
+| **VoirAnime.homes** | ✅ | Miroir de French-Manga. | VOSTFR, VF | Non |
+| **French Anime** | ✅ | Source de secours (backup). | VOSTFR, VF | Non |
+| **French Stream** | ✅ | Films et séries multi-hébergeurs avec filtres avancés. | VF, VOSTFR | Non |
+| **VoirDrama** | ✅ | Dramas coréens, japonais et chinois. | VOSTFR, VF | Non |
+| **PapaDuStream** | ✅ | Séries TV et streaming (domaine .online). | VOSTFR, VF | Non |
+| **Les Poroïniens** | ✅ | Scrapers très précis et contenu haute qualité. | VOSTFR | **Oui** |
+| **VoirAnime** | ✅ | Uniquement VOSTFR avec une haute qualité d'image. | VOSTFR | Non |
+| **SouthTV** | ✅ | L'intégrale de South Park : épisodes VF et tous les films. | VF | Non |
+| **WaveAnime** | ✅ | Flux moderne optimisé au format DASH (Haute résolution). | VOSTFR, VF | Non |
+| **AnimesUltra** | ✅ | Alternative de secours de haute qualité. | VOSTFR | Non |
 | **Dessin Anime** | ✅ | Dessins animés et séries jeunesse. | VF | Non |
 | **Movix** | ✅ | Films et séries via l'API TMDB. | VOSTFR, VF | Non |
 | **Movix Anime** | ✅ | Animes via l'API TMDB. | VOSTFR, VF | Non |
 | **Wiflix** | ✅ | Grand catalogue de films et séries. | VOSTFR, VF | Non |
-| **PapaDuStream** | ⚠️ | Extraction lente des hosts - 100% vibecodé. | VOSTFR, VF | Non |
-| **Torrentio** | ✅ | Moteur de recherche Torrent / Debrid (Cinemeta/JustWatch). | Multi (All)    | Non     |
-| **Torrentio Anime** | ✅ | Version optimisée Anime pour Torrentio (Anilist). | Multi (All)    | Non     |
+| **Torrentio** | ✅ | Moteur de recherche Torrent / Debrid (Cinemeta/JustWatch). | Multi (All) | Non |
+| **Torrentio Anime** | ✅ | Version optimisée Anime pour Torrentio (AniList). | Multi (All) | Non |
+
+---
+
+## 📜 Règles et Contribution
+
+Pour contribuer, ajouter une extension ou connaître les conventions d'architecture (immutabilité des URLs pour la DB AniZen, formatage des épisodes/films, requêtes parallèles), consultez notre [Guide de Contribution (CONTRIBUTING.md)](CONTRIBUTING.md).
 
 ---
 

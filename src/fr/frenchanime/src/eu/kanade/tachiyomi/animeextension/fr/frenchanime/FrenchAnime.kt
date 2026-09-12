@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.frenchanime
 
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -14,14 +13,9 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.SelectorException
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.json.Json
-import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
 class FrenchAnime :
@@ -107,7 +101,6 @@ class FrenchAnime :
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.useAsJsoup()
 
-        val h1 = document.selectFirst("h1")
         anime.thumbnail_url = document.selectFirst("#posterimg")?.absUrl("src") ?: anime.thumbnail_url
 
         val movList = document.select("ul.mov-list li")
@@ -137,11 +130,11 @@ class FrenchAnime :
         epsData.split(" ").filter { it.isNotBlank() }.forEach {
             val data = it.split("!", limit = 2)
             val epNumStr = data[0]
-            val epNum = epNumStr.toIntOrNull() ?: 1
+            val epNum = epNumStr.toFloatOrNull() ?: 0F
 
             episodeList.add(
                 SEpisode.create().apply {
-                    this.episode_number = epNumStr.toFloatOrNull() ?: 0F
+                    this.episode_number = epNum
                     this.name = "${sPrefix}Episode $epNumStr"
                     this.url = "$lang|${data[1]}"
                     this.scanlator = lang

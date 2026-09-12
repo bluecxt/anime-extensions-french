@@ -14,13 +14,14 @@ trigger: always_on
 
 ---
 
-## 📜 2. Règles Obligatoires du Répertoire (`docs/REPO_RULES.md`)
-**Consultez et appliquez rigoureusement les normes définies dans `docs/REPO_RULES.md`** :
+## 📜 2. Règles Obligatoires du Répertoire (`CONTRIBUTING.md`)
+**Consultez et appliquez rigoureusement les normes définies dans `CONTRIBUTING.md`** :
 
-1. **Formatage des Épisodes :**
-   - Mots-clés entre crochets pour le regroupement AniZen : `[S1]`, `[S2]`, `[Movie]`, `[OAV]`, `[ONA]`, `[Special]`.
-   - Pas de `[S1]` pour la première/unique saison.
-   - Structure : `[S2] Épisode Y - [Titre]` ou `Épisode Y - [Titre]`. Ne pas répéter le préfixe si déjà présent.
+1. **Formatage des Épisodes & Films :**
+   - Épisodes standards : Pas de tag `[SX]` artificiel. Format `Épisode X - [Titre]` ou `Épisode X`.
+   - Films uniques : `Film` ou nom du film direct sans crochets.
+   - Films multiples dans un même SAnime : Préfixer obligatoirement par `[Film] Nom du film` (ex: `[Film] Mugen Train`).
+   - OAV / Spéciaux : Préfixer `[OAV]`, `[Special]` uniquement lorsqu'ils sont mélangés à une série.
 2. **Libellés des Vidéos & Super Packs :**
    - Format : `(Langue) Serveur - Qualité` avec tags `(VOSTFR)`, `(VF)`, `(VA)`.
    - Regroupement des hébergeurs par langue en Super Packs (`VOSTFR`, `VF`, `VA`).
@@ -37,6 +38,11 @@ trigger: always_on
    - JSON : `myObject.toJsonString()`, `string.parseAs<T>()`, `response.parseAs<T>()`.
    - Concurrence : Utiliser `parallelMap` / `parallelMapNotNull` (`keiyoushi.utils.Coroutines`).
    - Requêtes multiples indépendantes : Obligation d'utiliser `coroutineScope { async { ... } }` pour exécuter les appels réseau en parallèle.
-7. **Validation & Compilation Obligatoire :**
-   - **Toujours tester chaque modification avec `assembleDebug`** (sur le module concerné, ex: `./gradlew :src:fr:<extension>:assembleDebug`, ou globalement) avant de conclure une tâche pour garantir l'absence d'erreurs de compilation, de syntaxe ou de packaging APK.
+7. **Intégrité de la Base de Données AniZen & Tachiyomi :**
+   - Immutabilité absolue des `anime.url` et `episode.url`. Ne jamais modifier le schéma d'URL d'une extension sans implémenter un fallback transparent pour les entrées déjà en base SQLite des utilisateurs.
+8. **Validation, Style & Compilation Obligatoires :**
+   - **Toujours valider les modifications** avec la compilation (`./gradlew :src:fr:<extension>:assembleDebug`), le formatage du code (`./gradlew spotlessCheck`) et l'analyse statique (`./gradlew detekt`) avant de conclure une tâche pour garantir l'absence de régression.
+9. **Contraintes Discord & Alertes (STRICT) :**
+   - **Interdiction formelle** d'envoyer des messages ou d'interagir sur Discord en dehors des salons `#error` et `#admin`. Zéro message intempestif dans les salons publics ou communautaires.
+
 

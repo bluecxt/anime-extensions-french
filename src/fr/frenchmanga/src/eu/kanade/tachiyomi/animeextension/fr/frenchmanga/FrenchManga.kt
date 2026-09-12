@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.frenchmanga
 
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -12,10 +10,12 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.utils.runCatchingCancellable
+import keiyoushi.utils.get
+import keiyoushi.utils.parallelMapNotNull
 import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -28,9 +28,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
 open class FrenchManga(
@@ -206,7 +203,6 @@ open class FrenchManga(
         } catch (_: Exception) {
             listOf(anime.url)
         }
-        val episodesMap = mutableMapOf<String, MutableMap<String, JsonObject>>()
 
         val tmdbMetadata = fetchTmdbMetadata(cleanTitle(anime.title))
         val sNumRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)""")
@@ -214,37 +210,16 @@ open class FrenchManga(
         val sNum = sNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
         val sPrefix = if (sNumMatch != null && sNum > 1) "[S$sNum] " else ""
 
-        ids.forEach { newsId ->
-            val ajaxUrl = "$baseUrl/engine/ajax/manga_episodes_api.php?id=$newsId"
-            try {
-                val ajaxResponse = client.newCall(GET(ajaxUrl, headers)).awaitSuccess()
-                val jsonResponse = json.parseToJsonElement(ajaxResponse.body.string()).jsonObject
-
-                listOf("vf", "vostfr").forEach { langType ->
-                    jsonResponse[langType]?.jsonObject?.forEach { (epNum, hosters) ->
-                        val epMap = episodesMap.getOrPut(epNum) { mutableMapOf() }
-                        val existingHosters = epMap[langType]?.toMutableMap() ?: mutableMapOf()
-                        hosters.jsonObject.forEach { (k, v) -> existingHosters[k] = v }
-                        epMap[langType] = JsonObject(existingHosters)
-                    }
-                }
-            } catch (_: Exception) {}
-        }
+        val episodesMap = fetchAndMergeEpisodes(ids)
 
         return episodesMap.map { (epNum, langMap) ->
             val epNumInt = epNum.toIntOrNull() ?: 1
             SEpisode.create().apply {
-                val actualEpNum = epNum.toFloatOrNull() ?: 0f
-                episode_number = actualEpNum
+                episode_number = epNum.toFloatOrNull() ?: 0f
                 name = "${sPrefix}Episode $epNum"
                 url = buildJsonObject {
                     put("epNum", epNum)
-                    put(
-                        "langs",
-                        buildJsonObject {
-                            langMap.forEach { (lang, hosters) -> put(lang, hosters) }
-                        },
-                    )
+                    put("langs", JsonObject(langMap))
                 }.toString()
 
                 scanlator = listOfNotNull(
@@ -258,6 +233,34 @@ open class FrenchManga(
                 summary = epMeta?.third
             }
         }.sortedByDescending { it.episode_number }
+    }
+
+    private suspend fun fetchAndMergeEpisodes(ids: List<String>): Map<String, Map<String, JsonObject>> {
+        val responses = ids.parallelMapNotNull { newsId ->
+            runCatchingCancellable {
+                val ajaxUrl = "$baseUrl/engine/ajax/manga_episodes_api.php?id=$newsId"
+                val ajaxResponse = client.get(ajaxUrl, headers)
+                json.parseToJsonElement(ajaxResponse.body.string()).jsonObject
+            }.getOrNull()
+        }
+
+        val episodesMap = mutableMapOf<String, MutableMap<String, JsonObject>>()
+
+        for (jsonObj in responses) {
+            for (lang in listOf("vf", "vostfr")) {
+                val episodes = jsonObj[lang]?.jsonObject ?: continue
+
+                for ((epNum, hosters) in episodes) {
+                    val epMap = episodesMap.getOrPut(epNum) { mutableMapOf() }
+                    val currentHosters = epMap[lang]?.toMutableMap() ?: mutableMapOf()
+
+                    (hosters as? JsonObject)?.let { currentHosters.putAll(it) }
+                    epMap[lang] = JsonObject(currentHosters)
+                }
+            }
+        }
+
+        return episodesMap
     }
 
     // ============================ Video Links =============================

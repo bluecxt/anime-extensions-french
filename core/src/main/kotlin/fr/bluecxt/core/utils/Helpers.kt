@@ -145,13 +145,46 @@ fun String.parseStatus(): Int = when (this.trim().lowercase()) {
 }
 
 /**
- * Runs a block of code, returning its result or null on exceptions other than
- * coroutine CancellationException, which is always rethrown.
+ * Calls the specified function [block] and returns its encapsulated result if invocation was successful,
+ * or the encapsulated exception on failure.
+ *
+ * Any [kotlinx.coroutines.CancellationException] thrown inside [block] is rethrown immediately
+ * to preserve coroutine cooperative cancellation.
  */
-inline fun <T> runCatchingCancelable(block: () -> T): T? = try {
-    block()
+inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try {
+    Result.success(block())
 } catch (e: kotlinx.coroutines.CancellationException) {
     throw e
-} catch (_: Exception) {
-    null
+} catch (e: Throwable) {
+    Result.failure(e)
 }
+
+/**
+ * Safely extracts the HTTP status code from an exception (especially [eu.kanade.tachiyomi.network.HttpException]).
+ *
+ * Prevents [NoSuchMethodError] on host apps (like AniZen) when R8/ProGuard shrinks or inlines
+ * the getter [eu.kanade.tachiyomi.network.HttpException.getCode].
+ */
+val Throwable.safeHttpCode: Int?
+    get() {
+        if (this.javaClass.name != "eu.kanade.tachiyomi.network.HttpException") {
+            return null
+        }
+        // 1. Direct getter method call (guarded against NoSuchMethodError / IncompatibleClassChangeError)
+        try {
+            val method = this.javaClass.getMethod("getCode")
+            val result = method.invoke(this) as? Int
+            if (result != null) return result
+        } catch (_: Throwable) {}
+
+        // 2. Field reflection
+        try {
+            val field = this.javaClass.getDeclaredField("code").apply { isAccessible = true }
+            val result = field.get(this) as? Int
+            if (result != null) return result
+        } catch (_: Throwable) {}
+
+        // 3. Fallback: Parse status code from message "HTTP error <code...>"
+        val msg = message ?: return null
+        return Regex("""\b(\d{3})\b""").find(msg)?.value?.toIntOrNull()
+    }

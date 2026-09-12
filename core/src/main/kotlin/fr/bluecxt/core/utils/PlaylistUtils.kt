@@ -92,8 +92,9 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                     .awaitSuccess().bodyString()
                 break
             } catch (e: Exception) {
-                if (e is HttpException && (e.code == 404 || e.code == 410)) {
-                    throw ContentUnavailableException("HLS playlist unavailable (${e.code}): $playlistUrl")
+                val httpCode = e.safeHttpCode
+                if (httpCode == 404 || httpCode == 410) {
+                    throw ContentUnavailableException("HLS playlist unavailable ($httpCode): $playlistUrl")
                 }
                 attempts++
                 if (attempts >= 3) {

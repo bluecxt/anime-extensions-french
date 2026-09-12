@@ -2,7 +2,7 @@ ext {
     extName = 'Wiflix'
     extClass = '.Wiflix'
     baseUrl = 'https://flemmix.men'
-    extVersionCode = 9
+    extVersionCode = 10
 }
 
 apply plugin: "kei.plugins.extension.legacy"

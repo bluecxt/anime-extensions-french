@@ -26,6 +26,7 @@ import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.utils.ExtensionResources
+import fr.bluecxt.core.utils.safeHttpCode
 import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
@@ -246,8 +247,9 @@ abstract class Source :
                 throw e
             }
 
+            val httpCode = e.safeHttpCode
             val isUnavailable = e is ContentUnavailableException ||
-                (e is HttpException && (e.code == 404 || e.code == 410))
+                httpCode == 404 || httpCode == 410
 
             if (isUnavailable) {
                 Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")

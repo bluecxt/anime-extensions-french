@@ -2,7 +2,7 @@ ext {
     extName = 'French Anime'
     extClass = '.FrenchAnime'
     baseUrl = 'https://french-anime.com'
-    extVersionCode = 43
+    extVersionCode = 44
     isNsfw = true
 }
 

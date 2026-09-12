@@ -6,8 +6,6 @@ package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import android.util.Base64
 import android.util.Log
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -16,7 +14,6 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.VOIRANIME_LOG
@@ -27,11 +24,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Request
-import okhttp3.Response
 import org.json.JSONObject
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
 class VoirAnime :
@@ -47,8 +41,6 @@ class VoirAnime :
     override val supportedServers = listOf("Vidmoly")
 
     override val json: Json by injectLazy()
-
-    private val whitespaceRegex = Regex("\\s+")
 
 // ============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {

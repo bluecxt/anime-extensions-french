@@ -158,7 +158,7 @@ class FrAnime :
             append(synopsis ?: "")
         }.trim()
 
-        tmdbMetadata?.mainPosterUrl?.let { anime.thumbnail_url = it }
+        (tmdbMetadata?.seasonPosterUrl ?: tmdbMetadata?.mainPosterUrl)?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
 
