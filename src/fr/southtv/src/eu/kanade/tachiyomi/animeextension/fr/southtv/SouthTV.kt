@@ -71,7 +71,7 @@ class SouthTV :
             title = media.title
             url = media.urlSuffix
             status = if (media.isMovie) SAnime.COMPLETED else SAnime.ONGOING
-            thumbnail_url = meta?.seasonPosterUrl ?: meta?.mainPosterUrl ?: anime.thumbnail_url
+            thumbnail_url = meta?.seasonPosterUrl ?: meta?.mainPosterUrl
         }
     }
 
