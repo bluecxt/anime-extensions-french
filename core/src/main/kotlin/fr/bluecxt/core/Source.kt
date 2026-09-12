@@ -26,6 +26,7 @@ import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.utils.ExtensionResources
+import fr.bluecxt.core.utils.safeHttpCode
 import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
 import keiyoushi.utils.getPreferencesLazy
