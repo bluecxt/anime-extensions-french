@@ -1,7 +1,7 @@
 ext {
     extName = 'Movix'
     extClass = '.MovixFactory'
-    extVersionCode = 8
+    extVersionCode = 9
     isNsfw = true
 }
 apply plugin: "kei.plugins.extension.legacy"
