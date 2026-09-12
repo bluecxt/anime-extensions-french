@@ -188,4 +188,3 @@ val Throwable.safeHttpCode: Int?
         val msg = message ?: return null
         return Regex("""\b(\d{3})\b""").find(msg)?.value?.toIntOrNull()
     }
-
