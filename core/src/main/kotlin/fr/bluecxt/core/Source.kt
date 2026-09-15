@@ -44,8 +44,14 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
-val EXTRACTOR_TIMEOUT = if (BuildConfig.DEBUG) 30000L else 60000L
+val EXTRACTOR_TIMEOUT = (if (BuildConfig.DEBUG) 30 else 60).seconds
+
+val QUALITY_REGEX = Regex("""(\d+)p""")
+val FPS_REGEX = Regex("""(\d+)fps""")
+val LANG_REGEX = Regex("\\((.*?)\\)")
 
 /**
  * Global semaphore to limit the number of concurrent extractions.
@@ -215,6 +221,7 @@ abstract class Source :
             headers = this.headers,
             subtitleTracks = this.subtitleTracks,
             audioTracks = this.audioTracks,
+            internalData = if (this.isError) """{"isError": true}""" else "",
         ).withDefaultHeaders(sourceUrl)
 
         Log.d(SERVER_LOG, "title = ${finalVideo.videoTitle} url = ${finalVideo.videoUrl}")
@@ -237,7 +244,7 @@ abstract class Source :
         val rawSources = try {
             extractionSemaphore.withPermit {
                 withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
-                    delay(Random.nextLong(0, 500))
+                    delay(Random.nextLong(0, 500).milliseconds)
                     server.extractor(playerUrl)
                 }
             }
@@ -261,6 +268,7 @@ abstract class Source :
                         ExtractedSource(
                             url = playerUrl,
                             quality = "Rate Limited: ${server.name}",
+                            isError = true,
                         ),
                     )
                 } else {
@@ -273,6 +281,7 @@ abstract class Source :
                         ExtractedSource(
                             url = playerUrl,
                             quality = e.message ?: e.javaClass.simpleName,
+                            isError = true,
                         ),
                     )
                 } else {
@@ -286,6 +295,7 @@ abstract class Source :
                     ExtractedSource(
                         url = playerUrl,
                         quality = "Timeout (${EXTRACTOR_TIMEOUT}ms)",
+                        isError = true,
                     ),
                 )
             } else {
@@ -338,16 +348,12 @@ abstract class Source :
         val prefQualStr = preferences.getString(CommonPreferences.PREF_QUALITY_KEY, "Highest")!!
         val prefQualInt = prefQualStr.toIntOrNull()
 
-        val qualityRegex = Regex("""(\d+)p""")
-        val fpsRegex = Regex("""(\d+)fps""")
-
         return this.sortedWith(
-            // Exception : downloading with sibnet is a little bit fucked with anizen actually
-            compareByDescending<Video> { it.videoTitle.contains(voices, true) }
+            compareByDescending<Video> { it.internalData == """{"isError": true}""" }
+                .thenByDescending { it.videoTitle.contains(voices, true) }
                 .thenByDescending { it.videoTitle.contains(player, true) }
                 .thenByDescending { video ->
-                    val actualQual = qualityRegex.find(video.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-
+                    val actualQual = QUALITY_REGEX.find(video.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                     if (prefQualInt == null) {
                         actualQual
                     } else {
@@ -355,7 +361,7 @@ abstract class Source :
                     }
                 }
                 .thenByDescending { video ->
-                    fpsRegex.find(video.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    FPS_REGEX.find(video.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 },
         )
     }
@@ -366,12 +372,11 @@ abstract class Source :
     override fun List<Hoster>.sortHosters(): List<Hoster> {
         val prefVoice = preferences.getString(CommonPreferences.PREF_VOICES_KEY, "VOSTFR")!!
         val prefServer = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
-        val langRegex = Regex("\\((.*?)\\)")
 
         return this.sortedWith(
             compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) || it.hosterName.contains(prefVoice, true) }
                 .thenBy {
-                    langRegex.find(it.hosterName)?.value ?: "(Unknown)"
+                    LANG_REGEX.find(it.hosterName)?.value ?: "(Unknown)"
                 }
                 .thenByDescending { it.hosterName.contains(prefServer, true) },
         )

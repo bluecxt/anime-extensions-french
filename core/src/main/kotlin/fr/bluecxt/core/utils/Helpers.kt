@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.useAsJsoup
@@ -52,10 +51,6 @@ fun String.safeRelativePath(base: String): String? {
 fun Video.withDefaultHeaders(baseUrl: String): Video {
     val builder = this.headers?.newBuilder() ?: Headers.Builder()
 
-    if (this.headers?.get("User-Agent") == null) {
-        builder["User-Agent"] = DEFAULT_USER_AGENT
-    }
-
     if (this.headers?.get("Referer") == null) {
         builder["Referer"] = "$baseUrl/"
     }
@@ -68,21 +63,19 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
  */
 fun defaultHeaders(
     referer: String = "",
-    userAgent: String = DEFAULT_USER_AGENT,
     origin: String = "",
     accept: String = "",
 ): Headers = Headers.Builder()
-    .add("user-Agent", userAgent)
     .apply {
-        if (!referer.isBlank()) add("Referer", referer)
-        if (!origin.isBlank()) add("Origin", origin)
-        if (!accept.isBlank()) add("Accept", accept)
+        if (referer.isNotBlank()) add("Referer", referer)
+        if (origin.isNotBlank()) add("Origin", origin)
+        if (accept.isNotBlank()) add("Accept", accept)
     }.build()
 
 /**
- * Normalize a String by putting everything in lowercase and removing all the non latin letter
+ * Normalize a String by putting everything in lowercase and keep only letter and digit
  */
-fun String.normalize(): String = this.lowercase().replace(Regex("""[^a-z0-9]"""), "")
+fun String.normalize(): String = this.lowercase().filter { it.isLetterOrDigit() }.trim()
 
 /**
  * Awaits response and verifies status:
