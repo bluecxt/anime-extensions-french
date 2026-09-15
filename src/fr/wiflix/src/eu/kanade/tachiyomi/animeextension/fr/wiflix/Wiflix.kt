@@ -34,16 +34,13 @@ class Wiflix :
 
     override val name = "Wiflix"
 
-    override val defaultBaseUrl = "https://flemmix.men"
+    override val defaultBaseUrl = "https://flemmix.cloud"
 
     override val lang = "fr"
 
     override val supportsLatest = false
 
     override val baseUrlSummary = "https://ww1.wiflix-adresses.fun | https://wiflix-news.site"
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
 
     override val json: Json by injectLazy()
 
