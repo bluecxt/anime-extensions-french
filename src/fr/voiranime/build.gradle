@@ -1,7 +1,9 @@
 ext {
     extName = 'VoirAnime'
     extClass = '.VoirAnime'
-    extVersionCode = 28
+    themePkg = 'madara'
+    baseUrl = 'https://voir-anime.to'
+    overrideVersionCode = 27
 }
 
 apply plugin: "kei.plugins.extension.legacy"

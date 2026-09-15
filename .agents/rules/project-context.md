@@ -44,5 +44,7 @@ trigger: always_on
    - **Toujours valider les modifications** avec la compilation (`./gradlew :src:fr:<extension>:assembleDebug`), le formatage du code (`./gradlew spotlessCheck`) et l'analyse statique (`./gradlew detekt`) avant de conclure une tâche pour garantir l'absence de régression.
 9. **Contraintes Discord & Alertes (STRICT) :**
    - **Interdiction formelle** d'envoyer des messages ou d'interagir sur Discord en dehors des salons `#error` et `#admin`. Zéro message intempestif dans les salons publics ou communautaires.
+10. **Politique de Commit Git (STRICT) :**
+    - **Interdiction formelle de commit sans accord préalable explicite :** Ne JAMAIS exécuter de `git commit` de manière autonome. Toujours présenter un récapitulatif clair des modifications, valider la compilation et les tests, et demander explicitement à l'utilisateur si tout lui convient avant d'effectuer le commit.
 
 

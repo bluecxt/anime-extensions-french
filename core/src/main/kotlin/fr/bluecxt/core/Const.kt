@@ -7,7 +7,7 @@ import uy.kohesive.injekt.api.get
 
 @Deprecated(
     message = "AniZen supprime automatiquement le user agent et le remplace par celui local donc il n'est pas necessaire de le rajouter",
-    replaceWith = ReplaceWith("")
+    replaceWith = ReplaceWith(""),
 )
 val DEFAULT_USER_AGENT: String by lazy {
     try {
