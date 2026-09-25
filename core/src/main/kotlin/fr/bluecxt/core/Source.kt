@@ -214,7 +214,7 @@ abstract class Source :
                 if (!lang.isNullOrBlank()) append("($lang) ")
                 append(name)
                 if (!sourceFrameRate.isNullOrBlank() || !sourceQuality.isNullOrBlank()) append(" ✦ ")
-                if (!sourceQuality.isNullOrBlank()) append("$sourceQuality")
+                if (!sourceQuality.isNullOrBlank()) append(sourceQuality)
                 if (!sourceFrameRate.isNullOrBlank() && !sourceQuality.isNullOrBlank()) append(" ⫻ ")
                 if (!sourceFrameRate.isNullOrBlank()) append(sourceFrameRate)
             },
@@ -349,7 +349,7 @@ abstract class Source :
         val prefQualInt = prefQualStr.toIntOrNull()
 
         return this.sortedWith(
-            compareByDescending<Video> { it.internalData == """{"isError": true}""" }
+            compareByDescending<Video> { it.internalData != """{"isError": true}""" }
                 .thenByDescending { it.videoTitle.contains(voices, true) }
                 .thenByDescending { it.videoTitle.contains(player, true) }
                 .thenByDescending { video ->
