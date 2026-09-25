@@ -14,6 +14,9 @@ import keiyoushi.utils.bodyString
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import fr.bluecxt.core.monitoring.ErrorWebhook
+
+const val VERSION = 1
 
 class FSVidExtractor(private val client: OkHttpClient) {
 
@@ -28,25 +31,50 @@ class FSVidExtractor(private val client: OkHttpClient) {
         )
     }
 
+    private val trollPhrase = "troll"
+
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val headers = getHeaders(url)
         val html = client.newCall(GET(url, headers)).awaitSuccess().bodyString()
 
         val unpacked = if (html.contains("eval(function(p,a,c,k,e")) {
-            autoUnpacker(html) ?: throw ExtractionException("FSVid: Could not unpack script")
+            autoUnpacker(html) ?: throw ExtractionException("Could not unpack script")
         } else {
             html
         }
 
         val m3u8Url = decryptM3u8Url(unpacked, url)
-            ?: throw ExtractionException("FSVid: Could not decrypt m3u8 URL")
+            ?: throw ExtractionException("Could not decrypt m3u8 URL")
 
-        return playlistUtils.extractFromHls(
+        if (m3u8Url.contains(trollPhrase)) {
+            ErrorWebhook.sendWebhook(url, m3u8Url, listOf(headers.toString()), "FSVidExtractor",VERSION.toString())
+            throw ExtractionException("detected as scrapper")
+        }
+
+        val sources = playlistUtils.extractFromHls(
             playlistUrl = m3u8Url,
             referer = url,
             masterHeaders = headers,
             videoHeaders = headers,
         )
+        val validSources = sources.filterNot { source ->
+            val isTroll = source.url.contains(trollPhrase)
+            if (isTroll) {
+                ErrorWebhook.sendWebhook(
+                    baseUrl = url,
+                    url = source.url,
+                    additionalContext = listOf("FSVid HLS stream redirected to troll decoy"),
+                    extensionName = "FSVidExtractor",
+                    extensionVersion = VERSION.toString()
+                )
+            }
+            isTroll
+        }
+        if (validSources.isEmpty() && sources.isNotEmpty()) {
+            throw ExtractionException("detected as scrapper (hls troll)")
+        }
+
+        return validSources
     }
 
     private fun decryptM3u8Url(script: String, url: String): String? {
