@@ -14,6 +14,11 @@ import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.useAsJsoup
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -153,6 +158,33 @@ inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try {
 }
 
 /**
+ * Parallel implementation of [Iterable.mapNotNull], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ *
+ * Catches and ignores failures while preserving coroutine cooperative cancellation.
+ *
+ * Note: Do NOT use [kotlinx.coroutines.withTimeout] inside [f] as it throws
+ * [kotlinx.coroutines.TimeoutCancellationException], which would cancel sibling coroutines.
+ */
+suspend inline fun <A, B> Iterable<A>.parallelCatchingCancellableMapNotNull(
+    crossinline f: suspend (A) -> B?,
+): List<B> = withContext(Dispatchers.IO) {
+    map {
+        async {
+            runCatchingCancellable { f(it) }.getOrNull()
+        }
+    }.awaitAll().filterNotNull()
+}
+
+/**
+ * Thread-blocking parallel implementation of [Iterable.mapNotNull], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ */
+inline fun <A, B> Iterable<A>.parallelCatchingCancellableMapNotNullBlocking(
+    crossinline f: suspend (A) -> B?,
+): List<B> = runBlocking { parallelCatchingCancellableMapNotNull(f) }
+
+/**
  * Safely extracts the HTTP status code from an exception (especially [eu.kanade.tachiyomi.network.HttpException]).
  *
  * Prevents [NoSuchMethodError] on host apps (like AniZen) when R8/ProGuard shrinks or inlines
@@ -181,3 +213,7 @@ val Throwable.safeHttpCode: Int?
         val msg = message ?: return null
         return Regex("""\b(\d{3})\b""").find(msg)?.value?.toIntOrNull()
     }
+
+inline val Int.megabytes: Long get() = this.toLong() * 1024 * 1024
+inline val Int.kilobytes: Long get() = this.toLong() * 1024
+inline val Int.gigabytes: Long get() = this.toLong() * 1024 * 1024 * 1024

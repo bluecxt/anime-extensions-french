@@ -19,8 +19,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-private val WEBHOOK_URL = BuildConfig.WEBHOOK_URL
-private val WEBHOOK_SECRET = BuildConfig.WEBHOOK_SECRET
+private const val WEBHOOK_URL = BuildConfig.WEBHOOK_URL
+private const val WEBHOOK_SECRET = BuildConfig.WEBHOOK_SECRET
 
 @Serializable
 data class MonitoringErrorPayload(
