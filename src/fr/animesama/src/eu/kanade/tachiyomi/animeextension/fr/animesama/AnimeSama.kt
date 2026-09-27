@@ -19,12 +19,18 @@ import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.VoiceLanguage
+import fr.bluecxt.core.model.VoiceLanguage.VA
+import fr.bluecxt.core.model.VoiceLanguage.VF
+import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
+import fr.bluecxt.core.model.VoiceLanguage.VQF
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportEpisodeIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportHosterIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportIncompleteness
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportSeasonIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportVideoIssues
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
+import fr.bluecxt.core.tvdb.TvdbEpisode
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
@@ -58,7 +64,7 @@ class AnimeSama :
 
     override val defaultBaseUrl = "https://anime-sama.to"
     override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Embed4me", "Minochinos")
-    override val supportedVoices = arrayOf("VOSTFR", "VF", "VA")
+    override val supportedVoices = setOf(VOSTFR, VF, VA, VQF)
     override val lang = "fr"
     override val supportsLatest = true
     override val defaultServer = "Vidmoly"
@@ -444,18 +450,18 @@ class AnimeSama :
         return this.map { episode ->
             val epNum = episode.episodeNumber
             val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType, defaultPrefix, autoS0Offset)
-            val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, season, epMeta?.first, tvdbMetadata?.title, this.size)
+            val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, season, epMeta?.title, tvdbMetadata?.title, this.size)
             val finalName = "$prefix$baseName".trim()
 
-            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='${epMeta?.second}', hasSummary=${epMeta?.third != null}")
+            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='${epMeta?.thumbnail}', hasSummary=${epMeta?.summary != null}")
 
             SEpisode.create().apply {
                 name = finalName
                 episode_number = epNum.toFloat()
                 scanlator = episode.getScanlatorString()
                 url = episode.players.toJsonString(json)
-                summary = epMeta?.third ?: tvdbMetadata?.summary
-                preview_url = epMeta?.second ?: tvdbMetadata?.backdropUrl ?: tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl
+                summary = epMeta?.summary ?: tvdbMetadata?.summary
+                preview_url = epMeta?.thumbnail ?: tvdbMetadata?.backdropUrl ?: tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl
             }
         }
     }
@@ -467,7 +473,7 @@ class AnimeSama :
         contentType: ContentType,
         defaultPrefix: String,
         autoS0Offset: Int = 0,
-    ): Pair<String, Triple<String?, String?, String?>?> {
+    ): Pair<String, TvdbEpisode?> {
         val offset = tvdbMetadata?.episodeOffset ?: 0
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
 
@@ -698,7 +704,7 @@ class AnimeSama :
     }
 
     private fun isSeasonOverflow(
-        epMeta: Triple<String?, String?, String?>?,
+        epMeta: TvdbEpisode?,
         contentType: ContentType,
         epNum: Int,
         tvdbEpCount: Int,

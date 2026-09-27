@@ -22,6 +22,9 @@ import fr.bluecxt.core.ADKAMI_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.VoiceLanguage.RAW
+import fr.bluecxt.core.model.VoiceLanguage.VF
+import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.safeRelativePath
 import fr.bluecxt.core.utils.withDefaultHeaders
@@ -48,12 +51,11 @@ class ADKami :
 
     override val defaultBaseUrl = "https://hentai.adkami.com"
 
-    override val supportedVoices = arrayOf("VOSTFR", "VF", "RAW", "VOSTA")
+    override val supportedVoices = setOf(VOSTFR, VF, RAW)
 
     override val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
 // ============================== Popular ===============================

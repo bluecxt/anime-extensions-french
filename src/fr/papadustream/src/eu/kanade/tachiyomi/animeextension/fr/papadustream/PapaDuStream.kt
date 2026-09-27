@@ -70,7 +70,7 @@ class PapaDuStream :
     JsoupExtensions {
 
     override val name = "PapaDuStream"
-    override val defaultBaseUrl = "https://papadustreami.online"
+    override val defaultBaseUrl = "https://papadustreami.pics"
 
     override val supportedServers = listOf(
         "Voe",
@@ -94,12 +94,10 @@ class PapaDuStream :
         "Abyss",
         "Streamix",
     )
-    override val supportedVoices: Array<String> = arrayOf("VF", "VOSTFR")
     override val lang = "fr"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
         .add("Referer", "$baseUrl/")
 
     override fun getAnimeUrl(anime: SAnime): String = "$baseUrl${anime.cleanUrl}"

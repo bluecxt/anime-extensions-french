@@ -21,6 +21,10 @@ import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.FRENCHSTREAM_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.VoiceLanguage.VF
+import fr.bluecxt.core.model.VoiceLanguage.VO
+import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
+import fr.bluecxt.core.model.VoiceLanguage.VQF
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
@@ -60,7 +64,7 @@ class FrenchStream :
         "Kakaflix",
         "Kokoflix",
     )
-    override val supportedVoices: Array<String> = arrayOf("VOSTFR", "VF", "VQF", "VO")
+    override val supportedVoices = setOf(VOSTFR, VF, VQF, VO)
     override val lang = "fr"
     override val supportsLatest = true
 

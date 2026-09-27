@@ -40,7 +40,6 @@ class AnimesUltra :
     override val name = "AnimesUltra"
     override val defaultBaseUrl = "https://ww.animesultra.org"
     override val supportedServers = listOf("UltraCDN", "Vidmoly", "Sibnet", "Sendvid")
-    override val supportedVoices = arrayOf("VOSTFR", "VF")
 
     override val lang = "fr"
     override val supportsLatest = true

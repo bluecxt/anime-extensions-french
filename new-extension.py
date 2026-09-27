@@ -214,9 +214,10 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import keiyoushi.utils.useAsJsoup
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.VoiceLanguage.VF
+import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.JsoupExtensions
 import fr.bluecxt.core.utils.safeRelativePath
@@ -231,7 +232,7 @@ import keiyoushi.utils.post
     source_file.append(f"\toverride val name = \"{args.extname}\"")
     source_file.append(f"\toverride val defaultBaseUrl = \"{args.baseurl}\"\n")
     source_file.append("\toverride val supportedServers = listOf(\"\")")
-    source_file.append("\toverride val supportedVoices: Array<String> = arrayOf(\"\")")
+    source_file.append("\toverride val supportedVoices = setOf(VOSTFR, VF)")
     source_file.append(f"\toverride val lang = \"{ext_dir_lang}\"")
     source_file.append("\toverride val supportsLatest = true\n")
     source_file.append("\toverride fun getAnimeUrl(anime: SAnime): String = throw UnsupportedOperationException()\n")

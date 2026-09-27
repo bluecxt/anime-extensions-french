@@ -15,6 +15,10 @@ import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.VoiceLanguage.VA
+import fr.bluecxt.core.model.VoiceLanguage.VCN
+import fr.bluecxt.core.model.VoiceLanguage.VF
+import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import uy.kohesive.injekt.injectLazy
@@ -34,16 +38,14 @@ abstract class BaseMovix(override val name: String) :
         "Okru", "Mymail", "Vidara", "Streamix",
     )
     override val defaultServer = "Vidmoly"
-
-    // Supported voices
-    override val supportedVoices = arrayOf("VOSTFR", "VF", "VA", "VCN", "VJ", "VKR", "VQC")
+    override val supportedVoices = setOf(VOSTFR, VF, VA, VCN)
 
     protected var dynamicBaseUrl: String? = null
 
     override val baseUrl: String
         get() {
             val prefUrl = currentBaseUrl
-            if (!prefUrl.isNullOrEmpty() && prefUrl != "https://movix.online") {
+            if (prefUrl.isNotEmpty() && prefUrl != "https://movix.online") {
                 dynamicBaseUrl = prefUrl
                 return prefUrl
             }
