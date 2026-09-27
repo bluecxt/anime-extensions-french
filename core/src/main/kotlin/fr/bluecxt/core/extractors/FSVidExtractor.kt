@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
@@ -14,7 +15,6 @@ import keiyoushi.utils.bodyString
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import fr.bluecxt.core.monitoring.ErrorWebhook
 
 const val VERSION = 1
 
@@ -47,7 +47,7 @@ class FSVidExtractor(private val client: OkHttpClient) {
             ?: throw ExtractionException("Could not decrypt m3u8 URL")
 
         if (m3u8Url.contains(trollPhrase)) {
-            ErrorWebhook.sendWebhook(url, m3u8Url, listOf(headers.toString()), "FSVidExtractor",VERSION.toString())
+            ErrorWebhook.sendWebhook(url, m3u8Url, listOf(headers.toString()), "FSVidExtractor", VERSION.toString())
             throw ExtractionException("detected as scrapper")
         }
 
@@ -65,7 +65,7 @@ class FSVidExtractor(private val client: OkHttpClient) {
                     url = source.url,
                     additionalContext = listOf("FSVid HLS stream redirected to troll decoy"),
                     extensionName = "FSVidExtractor",
-                    extensionVersion = VERSION.toString()
+                    extensionVersion = VERSION.toString(),
                 )
             }
             isTroll
