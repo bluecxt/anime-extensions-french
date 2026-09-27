@@ -16,8 +16,6 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.CommonPreferences.Companion.PREF_URL_KEY
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
@@ -36,7 +34,8 @@ import uy.kohesive.injekt.injectLazy
 class AnimeSamaFan :
     Source(),
     CommonPreferences {
-    override val name = "Anime-Sama-Fan"
+    override val name = "AnimeSamaFan"
+    override val id: Long = 5887546926527754620L
 
     override val defaultBaseUrl = "https://animesama.co"
     override val supportedServers = listOf("Sibnet", "Sendvid")
@@ -57,7 +56,6 @@ class AnimeSamaFan :
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("User-Agent", DEFAULT_USER_AGENT)
 
     // ================== Utils ==================
 
@@ -357,7 +355,7 @@ class AnimeSamaFan :
         val gridCards = initialDoc.select(".seasons-grid a.season-card")
 
         val (doc, path) = if (episodeCards.isEmpty() && gridCards.isNotEmpty()) {
-            val firstUrl = gridCards.first()!!.safeRelativePath()!!
+            val firstUrl = gridCards.firstOrNull()?.safeRelativePath() ?: initialPath
             client.newCall(GET("$baseUrl$firstUrl", headers)).awaitSuccess().useAsJsoup() to firstUrl
         } else {
             initialDoc to initialPath
