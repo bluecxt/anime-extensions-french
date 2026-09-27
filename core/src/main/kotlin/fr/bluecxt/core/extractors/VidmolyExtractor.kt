@@ -26,12 +26,15 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
         private val urlsRegex by lazy { Regex("""file\s*:\s*["'](.+?)["']""") }
 
         const val VIDEO_DELETED = "h2:contains(Sorry)"
+
+        private const val DESKTOP_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
     }
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
     private val headers: Headers = headers.newBuilder()
-        .set("User-Agent", DEFAULT_USER_AGENT)
+        .set("User-Agent", DESKTOP_USER_AGENT)
         .set("Referer", "$BASE_URL/")
         .set("Connection", "close")
         .build()
@@ -42,7 +45,7 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
         } else {
             iframeUrl
         }
-        Log.v(VIDMOLY_LOG, if (url != iframeUrl) "url non changed" else "url changed to vidmoly.biz was $iframeUrl")
+        Log.v(VIDMOLY_LOG, if (url == iframeUrl) "url non changed" else "url changed to vidmoly.biz was $iframeUrl")
 
         Log.d(VIDMOLY_LOG, "Fetching Vidmoly page from: $url")
 
@@ -61,7 +64,15 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
             ?: throw ExtractionException("Could not find sources in script for $url")
 
         val urls = urlsRegex.findAll(sources)
-            .mapNotNull { match -> match.groupValues[1].takeIf { it.isNotBlank() } }.toList()
+            .mapNotNull { match -> match.groupValues[1].takeIf { it.isNotBlank() } }
+            .map { rawUrl ->
+                if (rawUrl.contains("_l/master.m3u8")) {
+                    rawUrl.replace("_l/master.m3u8", "_,n,l,.urlset/master.m3u8")
+                } else {
+                    rawUrl
+                }
+            }
+            .toList()
 
         if (urls.isEmpty()) throw ExtractionException("No video URLs found in sources for $url")
 
