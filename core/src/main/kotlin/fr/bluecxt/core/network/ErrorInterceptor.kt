@@ -114,6 +114,8 @@ class ErrorInterceptor(
 
                 e is UnknownHostException && e.message?.contains("timeout", ignoreCase = true) == true -> true
 
+                e.message?.contains("connection closed", ignoreCase = true) == true -> true
+
                 e.message?.contains("canceled", ignoreCase = true) == true -> true
 
                 else -> false
