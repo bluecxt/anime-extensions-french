@@ -198,6 +198,7 @@ abstract class Source :
                 context,
                 exception?.let { "${it::class.java.simpleName}: ${it.message}" },
             ),
+            throwable = exception,
         )
     }
 

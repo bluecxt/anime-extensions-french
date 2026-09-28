@@ -139,6 +139,7 @@ class ErrorInterceptor(
                 ),
                 extensionName = sourceName,
                 extensionVersion = sourceVersion,
+                throwable = e,
             )
 
             throw e
