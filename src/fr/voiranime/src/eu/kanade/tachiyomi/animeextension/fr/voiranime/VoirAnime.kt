@@ -6,6 +6,7 @@ package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import android.util.Base64
 import android.util.Log
+import eu.kanade.tachiyomi.animeextension.fr.voiranime.dto.SearchResponse
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -20,13 +21,10 @@ import fr.bluecxt.core.VOIRANIME_LOG
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.useAsJsoup
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Request
 import org.json.JSONObject
 import org.jsoup.Jsoup
-import uy.kohesive.injekt.injectLazy
 
 class VoirAnime :
     Source(),
@@ -39,8 +37,6 @@ class VoirAnime :
     override val supportsLatest = true
 
     override val supportedServers = listOf("Vidmoly")
-
-    override val json: Json by injectLazy()
 
 // ============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
@@ -101,12 +97,6 @@ class VoirAnime :
         return parseSearchPage(response.body.string())
     }
 
-    @Serializable
-    data class AnimeResult(val post_title: String, val post_image: String, val post_link: String)
-
-    @Serializable
-    data class SearchResponse(val all: List<AnimeResult>)
-
     private fun parseSearchPage(responseString: String): AnimesPage {
         try {
             val responseJson = JSONObject(responseString)
@@ -117,9 +107,9 @@ class VoirAnime :
             val data = json.decodeFromString<SearchResponse>(seriesDataString)
             val items = data.all.map { result ->
                 SAnime.create().apply {
-                    title = result.post_title
-                    thumbnail_url = result.post_image.substringBefore("?")
-                    url = result.post_link.substringAfter(baseUrl)
+                    title = result.postTitle
+                    thumbnail_url = result.postImage.substringBefore("?")
+                    url = result.postLink.substringAfter(baseUrl)
                 }
             }
             return AnimesPage(items, false)
@@ -209,9 +199,9 @@ class VoirAnime :
         }
 
         Log.d(VOIRANIME_LOG, "list url = $videos")
-        return videos.map { playerUrl ->
+        return videos.flatMap { playerUrl ->
             extractVideos(playerUrl, lang, supportedServers)
-        }.flatten()
+        }
     }
 
     companion object {
