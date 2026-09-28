@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.WIFLIX_LOG
 import fr.bluecxt.core.utils.safeRelativePath

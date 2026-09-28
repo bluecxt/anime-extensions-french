@@ -19,7 +19,6 @@ import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
-import fr.bluecxt.core.model.VoiceLanguage
 import fr.bluecxt.core.model.VoiceLanguage.VA
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
