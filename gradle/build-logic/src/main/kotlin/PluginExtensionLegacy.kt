@@ -17,6 +17,7 @@ import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.extra
+import org.gradle.kotlin.dsl.project
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
 
@@ -170,7 +171,7 @@ class PluginExtensionLegacy : Plugin<Project> {
         }
 
         dependencies {
-            if (theme != null) implementation(theme) // Overrides core launcher icons
+            if (theme != null) implementation(project(theme.path)) // Overrides core launcher icons
             implementation(project(":core"))
             compileOnly(libs.bundles.common)
         }
