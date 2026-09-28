@@ -199,7 +199,6 @@ class CloudflareInterceptor(
                 webView.settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    databaseEnabled = true
                     useWideViewPort = true
                     loadWithOverviewMode = false
                     userAgentString = requestHeaders["User-Agent"] ?: userAgent

@@ -5,7 +5,6 @@ package fr.bluecxt.core.extractors
 import android.util.Log
 import eu.kanade.tachiyomi.network.POST
 import fr.bluecxt.core.ContentUnavailableException
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDARA_LOG
 import fr.bluecxt.core.model.ExtractedSource
@@ -39,7 +38,6 @@ open class VidaraExtractor(private val client: OkHttpClient) {
         Log.d(VIDARA_LOG, "API URL: $apiUrl")
 
         val headers = Headers.Builder()
-            .add("User-Agent", DEFAULT_USER_AGENT)
             .add("Referer", url)
             .add("Origin", "https://$host")
             .add("Content-Type", "application/json")

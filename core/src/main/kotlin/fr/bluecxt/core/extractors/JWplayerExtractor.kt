@@ -76,7 +76,6 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                 with(view.settings) {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    databaseEnabled = true
                     userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
                     mediaPlaybackRequiresUserGesture = false
                 }
@@ -103,9 +102,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
 
                         if (isPotentialHtml && reqUrl != url) {
                             try {
-                                val response = runBlocking {
-                                    client.newCall(Request.Builder().url(reqUrl).build()).awaitSuccess()
-                                }
+                                val response = client.newCall(Request.Builder().url(reqUrl).build()).execute()
                                 if (response.header("Content-Type")?.contains("text/html") == true) {
                                     val html = response.body.string()
 
