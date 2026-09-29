@@ -11,10 +11,14 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.useAsJsoup
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -52,10 +56,6 @@ fun String.safeRelativePath(base: String): String? {
 fun Video.withDefaultHeaders(baseUrl: String): Video {
     val builder = this.headers?.newBuilder() ?: Headers.Builder()
 
-    if (this.headers?.get("User-Agent") == null) {
-        builder["User-Agent"] = DEFAULT_USER_AGENT
-    }
-
     if (this.headers?.get("Referer") == null) {
         builder["Referer"] = "$baseUrl/"
     }
@@ -68,21 +68,19 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
  */
 fun defaultHeaders(
     referer: String = "",
-    userAgent: String = DEFAULT_USER_AGENT,
     origin: String = "",
     accept: String = "",
 ): Headers = Headers.Builder()
-    .add("user-Agent", userAgent)
     .apply {
-        if (!referer.isBlank()) add("Referer", referer)
-        if (!origin.isBlank()) add("Origin", origin)
-        if (!accept.isBlank()) add("Accept", accept)
+        if (referer.isNotBlank()) add("Referer", referer)
+        if (origin.isNotBlank()) add("Origin", origin)
+        if (accept.isNotBlank()) add("Accept", accept)
     }.build()
 
 /**
- * Normalize a String by putting everything in lowercase and removing all the non latin letter
+ * Normalize a String by putting everything in lowercase and keep only letter and digit
  */
-fun String.normalize(): String = this.lowercase().replace(Regex("""[^a-z0-9]"""), "")
+fun String.normalize(): String = this.lowercase().filter { it.isLetterOrDigit() }.trim()
 
 /**
  * Awaits response and verifies status:
@@ -160,6 +158,33 @@ inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try {
 }
 
 /**
+ * Parallel implementation of [Iterable.mapNotNull], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ *
+ * Catches and ignores failures while preserving coroutine cooperative cancellation.
+ *
+ * Note: Do NOT use [kotlinx.coroutines.withTimeout] inside [f] as it throws
+ * [kotlinx.coroutines.TimeoutCancellationException], which would cancel sibling coroutines.
+ */
+suspend inline fun <A, B> Iterable<A>.parallelCatchingCancellableMapNotNull(
+    crossinline f: suspend (A) -> B?,
+): List<B> = withContext(Dispatchers.IO) {
+    map {
+        async {
+            runCatchingCancellable { f(it) }.getOrNull()
+        }
+    }.awaitAll().filterNotNull()
+}
+
+/**
+ * Thread-blocking parallel implementation of [Iterable.mapNotNull], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ */
+inline fun <A, B> Iterable<A>.parallelCatchingCancellableMapNotNullBlocking(
+    crossinline f: suspend (A) -> B?,
+): List<B> = runBlocking { parallelCatchingCancellableMapNotNull(f) }
+
+/**
  * Safely extracts the HTTP status code from an exception (especially [eu.kanade.tachiyomi.network.HttpException]).
  *
  * Prevents [NoSuchMethodError] on host apps (like AniZen) when R8/ProGuard shrinks or inlines
@@ -188,3 +213,7 @@ val Throwable.safeHttpCode: Int?
         val msg = message ?: return null
         return Regex("""\b(\d{3})\b""").find(msg)?.value?.toIntOrNull()
     }
+
+inline val Int.megabytes: Long get() = this.toLong() * 1024 * 1024
+inline val Int.kilobytes: Long get() = this.toLong() * 1024
+inline val Int.gigabytes: Long get() = this.toLong() * 1024 * 1024 * 1024

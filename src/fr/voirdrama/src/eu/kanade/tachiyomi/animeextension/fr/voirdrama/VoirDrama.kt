@@ -27,7 +27,6 @@ import java.util.Locale
 class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
 
     override val supportedServers = listOf("Vidmoly", "Mymail", "Voe")
-    override val supportedVoices: Array<String> = arrayOf("VF", "VOSTFR")
 
     // ============================== Filters ===============================
     override fun getFilterList(): AnimeFilterList = super.getFilterList() + listOf(

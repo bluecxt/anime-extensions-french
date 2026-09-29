@@ -41,9 +41,11 @@ class FrAnime :
             val url = request.url.toString()
             if (url.contains("nautiljon.com")) {
                 val newRequest = request.newBuilder()
-                    .header("User-Agent", DEFAULT_USER_AGENT)
+                    .removeHeader("Referer")
+                    .removeHeader("Origin")
+                    .header("Referer", "https://www.nautiljon.com/")
                     .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-                    .header("Sec-Fetch-Site", "none")
+                    .header("Sec-Fetch-Site", "same-origin")
                     .header("Sec-Fetch-Mode", "no-cors")
                     .header("Sec-Fetch-Dest", "image")
                     .build()
@@ -70,7 +72,6 @@ class FrAnime :
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
-        .add("User-Agent", DEFAULT_USER_AGENT)
 
     override val json: Json by injectLazy()
 

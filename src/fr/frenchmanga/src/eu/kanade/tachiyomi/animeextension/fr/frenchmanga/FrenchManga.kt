@@ -9,20 +9,26 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
+import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelMapNotNull
 import keiyoushi.utils.useAsJsoup
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -148,7 +154,17 @@ open class FrenchManga(
                 .headers(headers)
                 .addHeader("X-Requested-With", "XMLHttpRequest")
                 .build(),
-        ).awaitSuccess()
+        ).await()
+
+        if (response.code == 429) {
+            response.close()
+            throw RateLimitException("Trop de requêtes. Veuillez patienter quelques secondes avant de réessayer.")
+        }
+        if (!response.isSuccessful) {
+            val code = response.code
+            response.close()
+            throw HttpException(code)
+        }
 
         val document = org.jsoup.Jsoup.parse(response.body.string(), baseUrl)
         val animes = document.select("div.search-item").map { element ->
@@ -235,32 +251,42 @@ open class FrenchManga(
         }.sortedByDescending { it.episode_number }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     private suspend fun fetchAndMergeEpisodes(ids: List<String>): Map<String, Map<String, JsonObject>> {
         val responses = ids.parallelMapNotNull { newsId ->
             runCatchingCancellable {
                 val ajaxUrl = "$baseUrl/engine/ajax/manga_episodes_api.php?id=$newsId"
-                val ajaxResponse = client.get(ajaxUrl, headers)
-                json.parseToJsonElement(ajaxResponse.body.string()).jsonObject
+                client.get(ajaxUrl, headers).use { res ->
+                    val stream = res.body.byteStream()
+                    json.decodeFromStream<JsonObject>(stream)
+                }
             }.getOrNull()
         }
-
-        val episodesMap = mutableMapOf<String, MutableMap<String, JsonObject>>()
+        val episodesMap = mutableMapOf<String, MutableMap<String, MutableMap<String, JsonElement>>>()
+        val targetLangs = arrayOf("vf", "vostfr")
 
         for (jsonObj in responses) {
-            for (lang in listOf("vf", "vostfr")) {
-                val episodes = jsonObj[lang]?.jsonObject ?: continue
+            for (lang in targetLangs) {
+                val episodes = jsonObj[lang] as? JsonObject ?: continue
 
                 for ((epNum, hosters) in episodes) {
-                    val epMap = episodesMap.getOrPut(epNum) { mutableMapOf() }
-                    val currentHosters = epMap[lang]?.toMutableMap() ?: mutableMapOf()
-
-                    (hosters as? JsonObject)?.let { currentHosters.putAll(it) }
-                    epMap[lang] = JsonObject(currentHosters)
+                    val hosterObj = hosters as? JsonObject ?: continue
+                    val langMap = episodesMap.getOrPut(epNum) { mutableMapOf() }
+                    val targetHosters = langMap.getOrPut(lang) { mutableMapOf() }
+                    targetHosters.putAll(hosterObj)
                 }
             }
         }
+        val finalMap = HashMap<String, Map<String, JsonObject>>(episodesMap.size, 1.0f)
+        for ((epNum, langMap) in episodesMap) {
+            val finalLangMap = HashMap<String, JsonObject>(langMap.size, 1.0f)
+            for ((lang, hostersMap) in langMap) {
+                finalLangMap[lang] = JsonObject(hostersMap)
+            }
+            finalMap[epNum] = finalLangMap
+        }
 
-        return episodesMap
+        return finalMap
     }
 
     // ============================ Video Links =============================

@@ -263,7 +263,7 @@ suspend fun Source.fetchTvdbMetadata(
         } catch (_: Exception) {}
 
         // Fetch Episodes (up to 3 pages) for series
-        val epMap = mutableMapOf<Int, Triple<String?, String?, String?>>()
+        val epMap = mutableMapOf<Int, TvdbEpisode>()
         val seasonCounts = mutableMapOf<Int, Int>()
         var seasonReleaseDate: String? = null
 
@@ -294,7 +294,7 @@ suspend fun Source.fetchTvdbMetadata(
                             val fullImgUrl = ep.episodeImage?.let {
                                 if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                             }
-                            epMap[epNum] = Triple(ep.name, fullImgUrl, ep.overview)
+                            epMap[epNum] = TvdbEpisode(ep.name, fullImgUrl, ep.overview)
                         }
                     }
                 } catch (_: Exception) {

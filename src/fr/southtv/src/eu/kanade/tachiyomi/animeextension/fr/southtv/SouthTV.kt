@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import fr.bluecxt.core.utils.withDefaultHeaders
@@ -56,6 +57,7 @@ class SouthTV :
     override val supportedServers = listOf("SouthTV")
     override val forceShowQualityPreference = false
     override val forceShowVoicesPreference = false
+    override val supportedVoices = setOf(VF)
 
     override val lang = "fr"
     override val supportsLatest = false

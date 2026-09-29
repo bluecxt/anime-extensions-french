@@ -107,7 +107,13 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Abyss" -> VideoServer(
         name = "Abyss",
-        hosts = listOf("abysscdn.com", "hydraxcdn.biz", "short.icu", "embedplayabyss.top"),
+        hosts = listOf(
+            "abysscdn.com",
+            "hydraxcdn.biz",
+            "short.icu",
+            "embedplayabyss.top",
+            "abyssplayer.com",
+        ),
         extractor = { url -> AbyssExtractor(source.extractorClient).videosFromUrl(url) },
     )
 

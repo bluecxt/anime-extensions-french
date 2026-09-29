@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap
 object ExtensionResources {
     private val cache = ConcurrentHashMap<String, Resources>()
 
+    @Suppress("DEPRECATION")
     fun getResources(app: Application, clazz: Class<*>): Resources? {
         val apkPath = getApkPath(app, clazz)
         if (apkPath == null) {

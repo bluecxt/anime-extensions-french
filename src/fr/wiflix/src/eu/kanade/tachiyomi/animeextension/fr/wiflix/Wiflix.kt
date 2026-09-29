@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.WIFLIX_LOG
 import fr.bluecxt.core.utils.safeRelativePath
@@ -34,16 +33,13 @@ class Wiflix :
 
     override val name = "Wiflix"
 
-    override val defaultBaseUrl = "https://flemmix.men"
+    override val defaultBaseUrl = "https://flemmix.cloud"
 
     override val lang = "fr"
 
     override val supportsLatest = false
 
     override val baseUrlSummary = "https://ww1.wiflix-adresses.fun | https://wiflix-news.site"
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("User-Agent", DEFAULT_USER_AGENT)
 
     override val json: Json by injectLazy()
 

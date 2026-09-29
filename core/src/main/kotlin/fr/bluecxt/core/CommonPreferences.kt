@@ -7,6 +7,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
+import fr.bluecxt.core.model.VoiceLanguage
 import keiyoushi.core.R
 import keiyoushi.utils.addEditTextPreference
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -37,12 +38,12 @@ interface CommonPreferences : ConfigurableAnimeSource {
     /**
      * Langues (voix) supportées par l'extension.
      */
-    val supportedVoices: Array<String> get() = arrayOf("VOSTFR", "VF")
+    val supportedVoices: Set<VoiceLanguage> get() = setOf(VoiceLanguage.VOSTFR, VoiceLanguage.VF)
 
     /**
      * Langue par défaut.
      */
-    val defaultVoice: String get() = "VOSTFR"
+    val defaultVoice: VoiceLanguage get() = VoiceLanguage.VOSTFR
 
     /**
      * Force ou masque l'affichage du menu "Préférence des voix".
@@ -91,9 +92,9 @@ interface CommonPreferences : ConfigurableAnimeSource {
             ListPreference(context).apply {
                 key = PREF_VOICES_KEY
                 title = source.getString(R.string.pref_voices_title)
-                entries = supportedVoices.map { if (it == "VOSTFR" || it == "VF") source.getString(R.string.pref_voices_entry_prefer, it) else it }.toTypedArray()
-                entryValues = supportedVoices
-                setDefaultValue(defaultVoice)
+                entries = supportedVoices.map { source.getString(R.string.pref_voices_entry_prefer, it.tag) }.toTypedArray()
+                entryValues = supportedVoices.map { it.tag }.toTypedArray()
+                setDefaultValue(defaultVoice.tag)
                 summary = "%s"
                 setOnPreferenceChangeListener { _, _ -> true }
             }.also(screen::addPreference)

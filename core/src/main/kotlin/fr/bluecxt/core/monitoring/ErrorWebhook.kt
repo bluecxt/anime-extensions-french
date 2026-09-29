@@ -19,8 +19,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-private val WEBHOOK_URL = BuildConfig.WEBHOOK_URL
-private val WEBHOOK_SECRET = BuildConfig.WEBHOOK_SECRET
+private const val WEBHOOK_URL = BuildConfig.WEBHOOK_URL
+private const val WEBHOOK_SECRET = BuildConfig.WEBHOOK_SECRET
 
 @Serializable
 data class MonitoringErrorPayload(
@@ -36,6 +36,7 @@ data class MonitoringErrorPayload(
     val url: String,
     val errorType: String,
     val httpCode: Int? = null,
+    val caller: String? = null,
     val details: List<String> = emptyList(),
 )
 
@@ -97,6 +98,53 @@ object ErrorWebhook {
         return true
     }
 
+    private val IGNORED_CALLER_PREFIXES = listOf(
+        "fr.bluecxt.core.monitoring",
+        "fr.bluecxt.core.network",
+        "okhttp3.",
+        "okio.",
+        "kotlin.",
+        "kotlinx.coroutines.",
+        "java.",
+        "javax.",
+        "android.",
+        "androidx.",
+        "dalvik.",
+        "com.android.",
+    )
+
+    /**
+     * Inspects the call stack to automatically identify the caller extension method.
+     */
+    fun findCallerMethod(throwable: Throwable? = null): String {
+        val trace = throwable?.stackTrace?.takeIf { it.isNotEmpty() }
+            ?: Thread.currentThread().stackTrace
+
+        for (element in trace) {
+            val className = element.className
+            if (IGNORED_CALLER_PREFIXES.none { className.startsWith(it) }) {
+                val simpleClass = className.substringAfterLast('.')
+                var resolvedClass = simpleClass
+                var resolvedMethod = element.methodName
+
+                if (simpleClass.contains('$')) {
+                    val parts = simpleClass.split('$')
+                    resolvedClass = parts[0]
+                    if (resolvedMethod == "invokeSuspend" || resolvedMethod == "invoke") {
+                        val candidate = parts.drop(1).firstOrNull { it.isNotEmpty() && !it.all(Char::isDigit) }
+                        if (candidate != null) {
+                            resolvedMethod = candidate
+                        }
+                    }
+                }
+
+                val lineSuffix = if (element.lineNumber > 0) ":${element.lineNumber}" else ""
+                return "$resolvedClass.$resolvedMethod$lineSuffix"
+            }
+        }
+        return "N/A"
+    }
+
     /**
      * Dispatches an error webhook notification for the given base URL and target URL.
      */
@@ -106,8 +154,12 @@ object ErrorWebhook {
         additionalContext: List<String>,
         extensionName: String? = null,
         extensionVersion: String? = null,
+        caller: String? = null,
+        throwable: Throwable? = null,
     ) {
         if (WEBHOOK_URL.isBlank() || isDebug) return
+
+        val resolvedCaller = caller ?: findCallerMethod(throwable)
 
         val httpCode = additionalContext.firstOrNull { it.startsWith("HTTP_ERROR_") }
             ?.removePrefix("HTTP_ERROR_")
@@ -117,10 +169,10 @@ object ErrorWebhook {
             it.startsWith("HTTP_ERROR_") || it in listOf("DNS_FAILURE", "SSL_ERROR", "TIMEOUT", "NETWORK_ERROR", "SELECTOR_ERROR")
         } ?: "GENERIC_ERROR"
 
-        val rawKey = "${extensionName.orEmpty()}:$baseUrl:$url:$errorType:${additionalContext.joinToString("|")}"
+        val rawKey = "${extensionName.orEmpty()}:$baseUrl:$url:$errorType:$resolvedCaller:${additionalContext.joinToString("|")}"
         val hashKey = fastHash(rawKey)
 
-        dispatchPayload(hashKey, baseUrl, url, additionalContext, httpCode, errorType, extensionName, extensionVersion)
+        dispatchPayload(hashKey, baseUrl, url, additionalContext, httpCode, errorType, extensionName, extensionVersion, resolvedCaller)
     }
 
     /**
@@ -133,12 +185,21 @@ object ErrorWebhook {
         exception: Throwable? = null,
         extensionName: String? = null,
         extensionVersion: String? = null,
+        caller: String? = null,
     ) {
         val details = mutableListOf(context)
         if (exception != null) {
             details.add("${exception::class.java.simpleName}: ${exception.message}")
         }
-        sendWebhook(baseUrl, url, details, extensionName, extensionVersion)
+        sendWebhook(
+            baseUrl = baseUrl,
+            url = url,
+            additionalContext = details,
+            extensionName = extensionName,
+            extensionVersion = extensionVersion,
+            caller = caller,
+            throwable = exception,
+        )
     }
 
     private fun dispatchPayload(
@@ -150,6 +211,7 @@ object ErrorWebhook {
         errorType: String,
         extensionName: String?,
         extensionVersion: String?,
+        caller: String?,
     ) {
         monitoringScope.launch {
             val shouldProceed = webhookMutex.withLock { shouldSend(hashKey) }
@@ -165,6 +227,7 @@ object ErrorWebhook {
                 url = url,
                 errorType = errorType,
                 httpCode = httpCode,
+                caller = caller,
                 details = additionalContext,
             )
 

@@ -27,6 +27,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.VoiceLanguage
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelFlatMap
@@ -59,7 +60,7 @@ class AnimeUltime :
     override val lang = "fr"
     override val supportsLatest = true
     override val supportedServers = emptyList<String>()
-    override val supportedVoices = emptyArray<String>()
+    override val supportedVoices = emptySet<VoiceLanguage>()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("X-Requested-With", "XMLHttpRequest")

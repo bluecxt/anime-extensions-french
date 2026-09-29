@@ -15,11 +15,13 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.seconds
 
 class SibnetExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        var document = client.newCall(GET(url)).awaitSuccess().useAsJsoup()
+        val headers = defaultHeaders(url)
+        var document = client.newCall(GET(url, headers)).awaitSuccess().useAsJsoup()
 
         var script = document.selectFirst("script:containsData(player.src)")?.data()
 
@@ -30,8 +32,8 @@ class SibnetExtractor(private val client: OkHttpClient) {
             }
 
             Log.d(SIBNET_LOG, "Player script not found, retrying in 1s...")
-            kotlinx.coroutines.delay(1000)
-            document = client.newCall(GET(url)).awaitSuccess().useAsJsoup()
+            kotlinx.coroutines.delay(1.seconds)
+            document = client.newCall(GET(url, headers)).awaitSuccess().useAsJsoup()
             script = document.selectFirst("script:containsData(player.src)")?.data()
 
             if (script == null) {
@@ -51,8 +53,6 @@ class SibnetExtractor(private val client: OkHttpClient) {
         } else {
             "https://${url.toHttpUrl().host}$slug"
         }
-
-        val headers = defaultHeaders(url)
 
         return listOf(
             ExtractedSource(

@@ -131,6 +131,7 @@ class DessinAnime :
     // =============================== Search ===============================
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        if (query.length == 1) return AnimesPage(emptyList(), false)
         if (query.isNotBlank()) {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val searchUrl = "$baseUrl/api/search?q=$encodedQuery"

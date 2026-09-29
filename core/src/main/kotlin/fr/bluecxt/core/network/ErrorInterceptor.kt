@@ -78,7 +78,7 @@ class ErrorInterceptor(
             val response = chain.proceed(request)
 
             val code = response.code
-            if (!response.isSuccessful && code != 404 && code !in 300..399 && code !in 502..504) {
+            if (!response.isSuccessful && code != 404 && code != 429 && code !in 300..399 && code !in 502..504 && code !in 522..524) {
                 val responseBody = response.peekBody(512).string().take(200).ifBlank { null }
                 ErrorWebhook.sendWebhook(
                     baseUrl = request.url.host,
@@ -107,10 +107,21 @@ class ErrorInterceptor(
                 e is SocketException -> {
                     val msg = e.message.orEmpty().lowercase()
                     msg.contains("socket closed") ||
+                        msg.contains("socket is closed") ||
                         msg.contains("connection reset") ||
                         msg.contains("broken pipe") ||
-                        msg.contains("shutdown")
+                        msg.contains("shutdown") ||
+                        msg.contains("network is unreachable") ||
+                        msg.contains("enetunreach") ||
+                        msg.contains("software caused connection abort") ||
+                        msg.contains("econnaborted")
                 }
+
+                e is UnknownHostException && e.message?.contains("timeout", ignoreCase = true) == true -> true
+
+                e.message?.contains("connection closed", ignoreCase = true) == true -> true
+
+                e.message?.contains("brotli decoder", ignoreCase = true) == true -> true
 
                 e.message?.contains("canceled", ignoreCase = true) == true -> true
 
@@ -137,6 +148,7 @@ class ErrorInterceptor(
                 ),
                 extensionName = sourceName,
                 extensionVersion = sourceVersion,
+                throwable = e,
             )
 
             throw e

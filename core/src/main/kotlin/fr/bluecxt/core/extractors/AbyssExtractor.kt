@@ -7,7 +7,6 @@ import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import keiyoushi.utils.UrlUtils
@@ -40,7 +39,6 @@ class AbyssExtractor(private val client: OkHttpClient) {
 
         val referer = targetUrl.toHttpUrl().newBuilder().encodedPath("/").build().toString()
         val headers = Headers.Builder().apply {
-            add("User-Agent", DEFAULT_USER_AGENT)
             add("Referer", referer)
             add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         }.build()

@@ -13,4 +13,5 @@ data class ExtractedSource(
     val headers: Headers? = null,
     val subtitleTracks: List<Track> = emptyList(),
     val audioTracks: List<Track> = emptyList(),
+    val isError: Boolean = false,
 )

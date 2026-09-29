@@ -4,7 +4,6 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.model.ExtractedSource
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -15,7 +14,6 @@ class VidstreamExtractor(private val client: OkHttpClient) {
         if (id.isEmpty()) return emptyList()
 
         val headers = Headers.Builder()
-            .add("User-Agent", DEFAULT_USER_AGENT)
             .add("Referer", "https://lb.daisukianime.xyz/")
             .add("Accept", "*/*")
             .build()

@@ -6,7 +6,6 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Cookie
@@ -26,7 +25,6 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
         val initialVideoUrl = "https://drive.usercontent.google.com/download?id=$itemId"
 
         val docHeaders = Headers.Builder().apply {
-            add("User-Agent", DEFAULT_USER_AGENT)
             add("Accept", ACCEPT)
             add("Cookie", cookieList.toStr())
         }.build()
