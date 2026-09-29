@@ -107,6 +107,7 @@ class ErrorInterceptor(
                 e is SocketException -> {
                     val msg = e.message.orEmpty().lowercase()
                     msg.contains("socket closed") ||
+                        msg.contains("socket is closed") ||
                         msg.contains("connection reset") ||
                         msg.contains("broken pipe") ||
                         msg.contains("shutdown")
