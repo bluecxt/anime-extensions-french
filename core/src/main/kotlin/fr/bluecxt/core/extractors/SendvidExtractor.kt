@@ -37,7 +37,7 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
             if (e is kotlinx.coroutines.CancellationException) throw e
             throw ExtractionException("Timeout")
         }.use { res ->
-            if (res.code == 404 || res.code == 502) throw ContentUnavailableException("Video non available (404) $url")
+            if (res.code == 404 || res.code == 502) throw ContentUnavailableException("Video non available (${res.code}) $url")
             if (!res.isSuccessful) throw ExtractionException("failed for $url with ${res.code}: ${res.message}")
             res.useAsJsoup()
         }
