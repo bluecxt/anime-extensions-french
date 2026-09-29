@@ -67,7 +67,7 @@ data class Media(
 ) {
     var mediaUrl: String = ""
     fun toSAnime(): SAnime? {
-        if (anime == null) return null
+        if (anime.isNullOrEmpty()) return null
         val firstAnime = anime.first()
         val lastAnime = anime.last()
         return SAnime.create().apply {
