@@ -110,12 +110,18 @@ class ErrorInterceptor(
                         msg.contains("socket is closed") ||
                         msg.contains("connection reset") ||
                         msg.contains("broken pipe") ||
-                        msg.contains("shutdown")
+                        msg.contains("shutdown") ||
+                        msg.contains("network is unreachable") ||
+                        msg.contains("enetunreach") ||
+                        msg.contains("software caused connection abort") ||
+                        msg.contains("econnaborted")
                 }
 
                 e is UnknownHostException && e.message?.contains("timeout", ignoreCase = true) == true -> true
 
                 e.message?.contains("connection closed", ignoreCase = true) == true -> true
+
+                e.message?.contains("brotli decoder", ignoreCase = true) == true -> true
 
                 e.message?.contains("canceled", ignoreCase = true) == true -> true
 
