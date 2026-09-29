@@ -290,7 +290,7 @@ abstract class Source :
                 }
             }
         } ?: run {
-            Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT ms): ${server.name}")
+            Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT): ${server.name}")
             if (keiyoushi.core.BuildConfig.DEBUG) {
                 listOf(
                     ExtractedSource(
