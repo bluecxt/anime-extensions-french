@@ -295,7 +295,7 @@ abstract class Source :
                 listOf(
                     ExtractedSource(
                         url = playerUrl,
-                        quality = "Timeout (${EXTRACTOR_TIMEOUT}ms)",
+                        quality = "Timeout ($EXTRACTOR_TIMEOUT)",
                         isError = true,
                     ),
                 )
