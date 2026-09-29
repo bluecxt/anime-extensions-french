@@ -78,7 +78,7 @@ class ErrorInterceptor(
             val response = chain.proceed(request)
 
             val code = response.code
-            if (!response.isSuccessful && code != 404 && code !in 300..399 && code !in 502..504 && code !in 522..524) {
+            if (!response.isSuccessful && code != 404 && code != 429 && code !in 300..399 && code !in 502..504 && code !in 522..524) {
                 val responseBody = response.peekBody(512).string().take(200).ifBlank { null }
                 ErrorWebhook.sendWebhook(
                     baseUrl = request.url.host,

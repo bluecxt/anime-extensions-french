@@ -9,8 +9,11 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
+import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable
@@ -151,7 +154,17 @@ open class FrenchManga(
                 .headers(headers)
                 .addHeader("X-Requested-With", "XMLHttpRequest")
                 .build(),
-        ).awaitSuccess()
+        ).await()
+
+        if (response.code == 429) {
+            response.close()
+            throw RateLimitException("Trop de requêtes. Veuillez patienter quelques secondes avant de réessayer.")
+        }
+        if (!response.isSuccessful) {
+            val code = response.code
+            response.close()
+            throw HttpException(code)
+        }
 
         val document = org.jsoup.Jsoup.parse(response.body.string(), baseUrl)
         val animes = document.select("div.search-item").map { element ->
