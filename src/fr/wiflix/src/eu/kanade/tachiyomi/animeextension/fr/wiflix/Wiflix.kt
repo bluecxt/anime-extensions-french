@@ -33,7 +33,7 @@ class Wiflix :
 
     override val name = "Wiflix"
 
-    override val defaultBaseUrl = "https://flemmix.cloud"
+    override val defaultBaseUrl = "https://flemmix.eu"
 
     override val lang = "fr"
 
