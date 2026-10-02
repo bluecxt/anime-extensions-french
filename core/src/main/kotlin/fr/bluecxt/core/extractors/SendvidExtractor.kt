@@ -41,7 +41,7 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
             if (!res.isSuccessful) throw ExtractionException("failed for $url with ${res.code}: ${res.message}")
             res.useAsJsoup()
         }
-        val masterUrl = document.selectFirst("source#video_source")?.attr("src")
+        val masterUrl = document.selectFirst("source#video_source")?.attr("src")?.takeIf { it.isNotBlank() }
             ?: throw Exception("Could not find video source in Sendvid")
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
 
