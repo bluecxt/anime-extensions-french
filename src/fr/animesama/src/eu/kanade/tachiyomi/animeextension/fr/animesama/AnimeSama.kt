@@ -429,7 +429,13 @@ class AnimeSama :
             extractVideos(player.url, player.lang, supportedServers)
         }.flatten().sortVideos()
 
-        return videos.checkAndReportVideoIssues(baseUrl, hoster.hosterName, hoster.hosterName)
+        return videos.checkAndReportVideoIssues(
+            baseUrl = baseUrl,
+            urlPath = "/${hoster.hosterName}",
+            hosterName = hoster.hosterName,
+            extensionName = currentName,
+            extensionVersion = currentVersion,
+        )
     }
 
     // ============================== Utils ===============================
