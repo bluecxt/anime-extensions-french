@@ -26,6 +26,7 @@ import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.utils.ExtensionResources
+import fr.bluecxt.core.utils.addClientHints
 import fr.bluecxt.core.utils.safeHttpCode
 import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
@@ -135,6 +136,7 @@ abstract class Source :
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
         .set("Connection", "close")
+        .addClientHints()
 
     open val currentBaseUrl: String
         get() {

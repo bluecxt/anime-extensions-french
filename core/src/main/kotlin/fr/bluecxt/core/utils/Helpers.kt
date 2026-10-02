@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.model.ExtractedSource
@@ -65,17 +66,42 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
 }
 
 /**
- * Simple builder for basic headers
+ * Automatically infers and adds Sec-CH-UA, Sec-CH-UA-Mobile, and Sec-CH-UA-Platform Client Hints
+ * derived from the given or active User-Agent string.
+ */
+fun Headers.Builder.addClientHints(userAgent: String = DEFAULT_USER_AGENT): Headers.Builder {
+    val chromeMatch = Regex("""Chrome/(\d+)""").find(userAgent)
+    if (chromeMatch != null) {
+        val major = chromeMatch.groupValues[1]
+        val isMobile = userAgent.contains("Mobile", ignoreCase = true)
+        val platform = when {
+            userAgent.contains("Android", ignoreCase = true) -> "\"Android\""
+            userAgent.contains("Windows", ignoreCase = true) -> "\"Windows\""
+            userAgent.contains("Mac", ignoreCase = true) -> "\"macOS\""
+            userAgent.contains("Linux", ignoreCase = true) -> "\"Linux\""
+            else -> "\"Android\""
+        }
+        set("Sec-CH-UA", "\"Chromium\";v=\"$major\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"$major\"")
+        set("Sec-CH-UA-Mobile", if (isMobile) "?1" else "?0")
+        set("Sec-CH-UA-Platform", platform)
+    }
+    return this
+}
+
+/**
+ * Simple builder for basic headers with automatic Client Hints injection
  */
 fun defaultHeaders(
     referer: String = "",
     origin: String = "",
     accept: String = "",
+    addClientHints: Boolean = true,
 ): Headers = Headers.Builder()
     .apply {
         if (referer.isNotBlank()) add("Referer", referer)
         if (origin.isNotBlank()) add("Origin", origin)
         if (accept.isNotBlank()) add("Accept", accept)
+        if (addClientHints) addClientHints()
     }.build()
 
 /**

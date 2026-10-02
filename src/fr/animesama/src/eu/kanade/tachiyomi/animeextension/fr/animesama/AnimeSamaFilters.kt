@@ -2,109 +2,127 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
-import eu.kanade.tachiyomi.animesource.model.AnimeFilter
-import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
-import kotlinx.serialization.json.Json
-
 object AnimeSamaFilters {
 
-    private val filterData by lazy {
-        val jsonStream = AnimeSamaFilters::class.java.getResourceAsStream("filters.json")
-        val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
-        try {
-            Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
-        } catch (_: Exception) {
-            emptyMap()
-        }
-    }
-
-    private fun getOptions(key: String): Array<Pair<String, String>> = filterData[key]?.map { it[0] to it[1] }?.toTypedArray() ?: emptyArray()
-
-    open class CheckBoxFilterList(name: String, values: List<CheckBox>) : AnimeFilter.Group<AnimeFilter.CheckBox>(name, values)
-
-    open class TextFilterDual(name: String, values: List<Text>) : AnimeFilter.Group<AnimeFilter.Text>(name, values)
-
-    private class TextVal(name: String, state: String = "") : AnimeFilter.Text(name, state)
-
-    private class CheckBoxVal(name: String, state: Boolean = false) : AnimeFilter.CheckBox(name, state)
-
-    private inline fun <reified R> AnimeFilterList.getFirst(): R = this.filterIsInstance<R>().first()
-
-    private inline fun <reified R> AnimeFilterList.parseCheckbox(
-        options: Array<Pair<String, String>>,
-    ): List<String> = (this.getFirst<R>() as CheckBoxFilterList).state
-        .mapNotNull { checkbox ->
-            if (checkbox.state) {
-                options.find { it.first == checkbox.name }!!.second
-            } else {
-                null
-            }
-        }
-
-    class TypesFilter :
-        CheckBoxFilterList(
-            "Type",
-            getOptions("TYPES").map { CheckBoxVal(it.first, false) },
-        )
-
-    class LangFilter :
-        CheckBoxFilterList(
-            "Langage",
-            getOptions("LANGUAGES").map { CheckBoxVal(it.first, false) },
-        )
-
-    class StatutFilter :
-        CheckBoxFilterList(
-            "Statut",
-            getOptions("STATUT").map { CheckBoxVal(it.first, false) },
-        )
-
-    class YearFilter :
-        TextFilterDual(
-            "Année (Min - Max)",
-            listOf(
-                TextVal("Année Min", ""),
-                TextVal("Année Max", ""),
-            ),
-        )
-
-    class GenresFilter :
-        CheckBoxFilterList(
-            "Genre",
-            getOptions("GENRES").map { CheckBoxVal(it.first, false) },
-        )
-
-    val FILTER_LIST get() = AnimeFilterList(
-        TypesFilter(),
-        LangFilter(),
-        StatutFilter(),
-        YearFilter(),
-        GenresFilter(),
+    val TYPE_OPTIONS = listOf(
+        "Anime" to "Anime",
+        "Film" to "Film",
+        "Autres" to "Autres",
     )
 
-    data class SearchFilters(
-        val types: List<String> = emptyList(),
-        val language: List<String> = emptyList(),
-        val statut: List<String> = emptyList(),
-        val yearMin: String = "",
-        val yearMax: String = "",
-        val genres: List<String> = emptyList(),
+    val LANGUAGE_OPTIONS = listOf(
+        "VF" to "VF",
+        "VOSTFR" to "VOSTFR",
+        "VASTFR" to "VASTFR",
     )
 
-    fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
-        if (filters.isEmpty()) return SearchFilters()
+    val STATUT_OPTIONS = listOf(
+        "En cours" to "En cours",
+        "Terminé" to "Terminé",
+    )
 
-        val yearFilter = filters.filterIsInstance<YearFilter>().firstOrNull()
-        val yearMin: String = yearFilter?.state?.get(0)?.state ?: ""
-        val yearMax: String = yearFilter?.state?.get(1)?.state ?: ""
-
-        return SearchFilters(
-            types = filters.parseCheckbox<TypesFilter>(getOptions("TYPES")),
-            language = filters.parseCheckbox<LangFilter>(getOptions("LANGUAGES")),
-            statut = filters.parseCheckbox<StatutFilter>(getOptions("STATUT")),
-            yearMin = yearMin,
-            yearMax = yearMax,
-            genres = filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
-        )
-    }
+    val GENRE_OPTIONS = listOf(
+        "Action" to "Action",
+        "Adolescence" to "Adolescence",
+        "Aliens / Extra-terrestres" to "Aliens / Extra-terrestres",
+        "Amitié" to "Amitié",
+        "Amour" to "Amour",
+        "Apocalypse" to "Apocalypse",
+        "Art" to "Art",
+        "Arts martiaux" to "Arts martiaux",
+        "Assassinat" to "Assassinat",
+        "Autre monde" to "Autre monde",
+        "Aventure" to "Aventure",
+        "Combats" to "Combats",
+        "Comédie" to "Comédie",
+        "Crime" to "Crime",
+        "Cyberpunk" to "Cyberpunk",
+        "Danse" to "Danse",
+        "Démons" to "Démons",
+        "Détective" to "Détective",
+        "Donghua" to "Donghua",
+        "Drame" to "Drame",
+        "Ecchi" to "Ecchi",
+        "Ecole" to "Ecole",
+        "Enquête" to "Enquête",
+        "Famille" to "Famille",
+        "Fantastique" to "Fantastique",
+        "Fantasy" to "Fantasy",
+        "Fantômes" to "Fantômes",
+        "Futur" to "Futur",
+        "Ghibli" to "Ghibli",
+        "Guerre" to "Guerre",
+        "Harcèlement" to "Harcèlement",
+        "Harem" to "Harem",
+        "Harem inversé" to "Harem inversé",
+        "Histoire" to "Histoire",
+        "Historique" to "Historique",
+        "Horreur" to "Horreur",
+        "Isekai" to "Isekai",
+        "Jeunesse" to "Jeunesse",
+        "Jeux" to "Jeux",
+        "Jeux vidéo" to "Jeux vidéo",
+        "Josei" to "Josei",
+        "Journalisme" to "Journalisme",
+        "Mafia" to "Mafia",
+        "Magical girl" to "Magical girl",
+        "Magie" to "Magie",
+        "Maladie" to "Maladie",
+        "Mariage" to "Mariage",
+        "Mature" to "Mature",
+        "Mechas" to "Mechas",
+        "Médiéval" to "Médiéval",
+        "Militaire" to "Militaire",
+        "Monde virtuel" to "Monde virtuel",
+        "Monstres" to "Monstres",
+        "Musique" to "Musique",
+        "Mystère" to "Mystère",
+        "Nekketsu" to "Nekketsu",
+        "Ninjas" to "Ninjas",
+        "Nostalgie" to "Nostalgie",
+        "Paranormal" to "Paranormal",
+        "Philosophie" to "Philosophie",
+        "Pirates" to "Pirates",
+        "Police" to "Police",
+        "Politique" to "Politique",
+        "Post-apocalyptique" to "Post-apocalyptique",
+        "Pouvoirs psychiques" to "Pouvoirs psychiques",
+        "Préhistoire" to "Préhistoire",
+        "Prison" to "Prison",
+        "Psychologique" to "Psychologique",
+        "Quotidien" to "Quotidien",
+        "Religion" to "Religion",
+        "Réincarnation / Transmigration" to "Réincarnation / Transmigration",
+        "Romance" to "Romance",
+        "Samouraïs" to "Samouraïs",
+        "School Life" to "School Life",
+        "Science-Fantasy" to "Science-Fantasy",
+        "Science-fiction" to "Science-fiction",
+        "Scientifique" to "Scientifique",
+        "Seinen" to "Seinen",
+        "Shôjo" to "Shôjo",
+        "Shônen" to "Shônen",
+        "Shônen-Ai" to "Shônen-Ai",
+        "Slice of Life" to "Slice of Life",
+        "Société" to "Société",
+        "Sport" to "Sport",
+        "Super pouvoirs" to "Super pouvoirs",
+        "Super-héros" to "Super-héros",
+        "Surnaturel" to "Surnaturel",
+        "Survie" to "Survie",
+        "Survival game" to "Survival game",
+        "Technologies" to "Technologies",
+        "Thriller" to "Thriller",
+        "Tournois" to "Tournois",
+        "Travail" to "Travail",
+        "Vampires" to "Vampires",
+        "Vengeance" to "Vengeance",
+        "Voyage" to "Voyage",
+        "Voyage temporel" to "Voyage temporel",
+        "Webcomic" to "Webcomic",
+        "Yakuza" to "Yakuza",
+        "Yaoi" to "Yaoi",
+        "Yokai" to "Yokai",
+        "Yuri" to "Yuri",
+    )
 }

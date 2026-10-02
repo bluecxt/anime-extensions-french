@@ -19,6 +19,7 @@ import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.VoiceLanguage.VA
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
@@ -84,24 +85,27 @@ class AnimeSama :
     }
 
     // ============================== Search ===============================
-    override fun getFilterList() = AnimeSamaFilters.FILTER_LIST
+    override val customFilters: List<FilterSpec>
+        get() = listOf(
+            group("Type", "type[]", AnimeSamaFilters.TYPE_OPTIONS),
+            group("Langage", "langue[]", AnimeSamaFilters.LANGUAGE_OPTIONS),
+            group("Statut", "current[]", AnimeSamaFilters.STATUT_OPTIONS),
+            header("Année (Min - Max)"),
+            text("Année Min", "annee_min"),
+            text("Année Max", "annee_max"),
+            separator,
+            group("Genre", "genre[]", AnimeSamaFilters.GENRE_OPTIONS),
+        )
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder()
-        val params = AnimeSamaFilters.getSearchFilters(filters)
+        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder().apply {
+            val q = query.trim()
+            if (q.isNotBlank()) addQueryParameter("search", q)
+            addQueryParameter("page", "$page")
+            applyFilters(filters)
+        }.build()
 
-        params.types.forEach { url.addQueryParameter("type[]", it) }
-        params.language.forEach { url.addQueryParameter("langue[]", it) }
-        params.genres.forEach { url.addQueryParameter("genre[]", it) }
-        params.statut.forEach { url.addQueryParameter("current[]", it) }
-
-        url.addQueryParameter("annee_min", params.yearMin)
-        url.addQueryParameter("annee_max", params.yearMax)
-
-        url.addQueryParameter("search", query.trim())
-        url.addQueryParameter("page", "$page")
-
-        val document = client.get(url.build(), headers).useAsJsoup()
+        val document = client.get(url, headers).useAsJsoup()
         return parseCatalogue(document, page)
     }
 

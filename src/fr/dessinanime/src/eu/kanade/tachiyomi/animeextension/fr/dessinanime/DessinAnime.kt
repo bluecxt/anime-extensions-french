@@ -6,7 +6,6 @@ import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.CatalogueDto
 import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.SearchItemDto
-import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType.Episodes
@@ -22,6 +21,7 @@ import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DESSINANIME_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.safeRelativePath
@@ -49,7 +49,6 @@ class DessinAnime :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
-        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
 
     override val supportedServers = listOf("Minochinos", "Abysse", "Uqload")
     override val lang: String = "fr"
@@ -144,29 +143,9 @@ class DessinAnime :
             }
             return AnimesPage(animes, false)
         }
-        Log.d(DESSINANIME_LOG, "Filters list size: ${filters.size}")
-        filters.forEach { filter ->
-            Log.d(DESSINANIME_LOG, "Filter: name='${filter.name}', class='${filter.javaClass.simpleName}', state='${filter.state}'")
-        }
-
         val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFieldFilter -> addQueryParameter("sortField", getOptions("SORT_FIELDS")[filter.state].second)
-                    is SortOrderFilter -> addQueryParameter("sortOrder", getOptions("SORT_ORDERS")[filter.state].second)
-                    is MediaTypeFilter -> addQueryParameter("mediaType", getOptions("MEDIA_TYPES")[filter.state].second)
-                    is GenreFilter -> addQueryParameter("genreId", getOptions("GENRES")[filter.state].second)
-                    is CategoryFilter -> addQueryParameter("category", getOptions("CATEGORIES")[filter.state].second)
-                    is StatusFilter -> addQueryParameter("status", getOptions("STATUSES")[filter.state].second)
-                    is CountryFilter -> if (filter.state.isNotBlank()) addQueryParameter("country", filter.state.trim())
-                    is YearFilter -> if (filter.state.isNotBlank()) addQueryParameter("releaseYear", filter.state.trim())
-                    is MinRatingFilter -> if (filter.state.isNotBlank()) addQueryParameter("minRating", filter.state.trim())
-                    is MaxRatingFilter -> if (filter.state.isNotBlank()) addQueryParameter("maxRating", filter.state.trim())
-                    else -> {}
-                }
-            }
+            applyFilters(filters)
         }.build()
 
         Log.d(DESSINANIME_LOG, "Catalogue URL: $url")
@@ -425,33 +404,20 @@ class DessinAnime :
     }
 
     // =============================== Filters ===============================
-    override fun getFilterList() = FILTER_LIST
-
-    class SortFieldFilter : AnimeFilter.Select<String>("Tri", getOptions("SORT_FIELDS").map { it.first }.toTypedArray(), 0)
-    class SortOrderFilter : AnimeFilter.Select<String>("Ordre", getOptions("SORT_ORDERS").map { it.first }.toTypedArray(), 0)
-    class MediaTypeFilter : AnimeFilter.Select<String>("Média", getOptions("MEDIA_TYPES").map { it.first }.toTypedArray(), 0)
-    class GenreFilter : AnimeFilter.Select<String>("Genre", getOptions("GENRES").map { it.first }.toTypedArray(), 0)
-    class CategoryFilter : AnimeFilter.Select<String>("Style", getOptions("CATEGORIES").map { it.first }.toTypedArray(), 0)
-    class StatusFilter : AnimeFilter.Select<String>("Statut", getOptions("STATUSES").map { it.first }.toTypedArray(), 0)
-
-    class CountryFilter : AnimeFilter.Text("Pays (ex: FR, US)", "")
-    class YearFilter : AnimeFilter.Text("Année (ex: 2024)", "")
-    class MinRatingFilter : AnimeFilter.Text("Note min (0-10)", "")
-    class MaxRatingFilter : AnimeFilter.Text("Note max (0-10)", "")
-
-    val FILTER_LIST get() = AnimeFilterList(
-        SortFieldFilter(),
-        SortOrderFilter(),
-        MediaTypeFilter(),
-        GenreFilter(),
-        CategoryFilter(),
-        StatusFilter(),
-        AnimeFilter.Separator(),
-        CountryFilter(),
-        YearFilter(),
-        MinRatingFilter(),
-        MaxRatingFilter(),
-    )
+    override val customFilters: List<FilterSpec>
+        get() = listOf(
+            select("Tri", "sortField", SORT_FIELDS_OPTIONS),
+            select("Ordre", "sortOrder", SORT_ORDERS_OPTIONS),
+            select("Média", "mediaType", MEDIA_TYPES_OPTIONS),
+            select("Genre", "genreId", GENRES_OPTIONS),
+            select("Style", "category", CATEGORIES_OPTIONS),
+            select("Statut", "status", STATUSES_OPTIONS),
+            separator,
+            text("Pays (ex: FR, US)", "country"),
+            text("Année (ex: 2024)", "releaseYear"),
+            text("Note min (0-10)", "minRating"),
+            text("Note max (0-10)", "maxRating"),
+        )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
@@ -493,16 +459,77 @@ class DessinAnime :
         private const val PREF_USE_FALLBACK_DEFAULT = false
         private const val POSTER_PLACEHOLDER = "https://placehold.co/300x450/262626/f59e0b.png?text=DessinAnime.cc%5CnPas%20d%27affiche"
 
-        private val filterData by lazy {
-            val jsonStream = DessinAnime::class.java.getResourceAsStream("filters.json")
-            val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
-            try {
-                Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
-            } catch (_: Exception) {
-                emptyMap()
-            }
-        }
+        private val SORT_FIELDS_OPTIONS = arrayOf(
+            "Popularité" to "popularity",
+            "Note" to "rating",
+            "Date de sortie" to "releaseDate",
+            "Date d'ajout" to "createdAt",
+        )
 
-        private fun getOptions(key: String): List<Pair<String, String>> = filterData[key]?.map { it[0] to it[1] } ?: emptyList()
+        private val SORT_ORDERS_OPTIONS = arrayOf(
+            "Décroissant" to "desc",
+            "Croissant" to "asc",
+        )
+
+        private val MEDIA_TYPES_OPTIONS = arrayOf(
+            "Tous" to "",
+            "Films" to "MOVIE",
+            "Séries TV" to "TV",
+        )
+
+        private val CATEGORIES_OPTIONS = arrayOf(
+            "Tous" to "",
+            "Anime" to "ANIME",
+            "Cartoon" to "CARTOON",
+            "Non animé" to "NOT_ANIMATED",
+            "Inconnu" to "UNKNOWN",
+        )
+
+        private val STATUSES_OPTIONS = arrayOf(
+            "Tous" to "",
+            "Sorti" to "Released",
+            "Annulé" to "Canceled",
+            "Série en cours" to "Returning Series",
+            "Terminé" to "Ended",
+        )
+
+        private val GENRES_OPTIONS = arrayOf(
+            "Tous" to "",
+            "Action & Adventure (Série TV)" to "20",
+            "Science-Fiction & Fantastique (Série TV)" to "31",
+            "Kids (Série TV)" to "27",
+            "Familial (Film)" to "8",
+            "Animation (Film)" to "3",
+            "Comédie (Film)" to "4",
+            "Familial (Série TV)" to "26",
+            "Action (Film)" to "1",
+            "Animation (Série TV)" to "21",
+            "Comédie (Série TV)" to "22",
+            "Drame (Série TV)" to "25",
+            "Crime (Film)" to "5",
+            "Documentaire (Film)" to "6",
+            "Drame (Film)" to "7",
+            "Histoire (Film)" to "10",
+            "Horreur (Film)" to "11",
+            "Musique (Film)" to "12",
+            "Mystère (Film)" to "13",
+            "Romance (Film)" to "14",
+            "Science-Fiction (Film)" to "15",
+            "Téléfilm (Film)" to "16",
+            "Thriller (Film)" to "17",
+            "Guerre (Film)" to "18",
+            "Western (Film)" to "19",
+            "Documentaire (Série TV)" to "24",
+            "Mystère (Série TV)" to "28",
+            "News (Série TV)" to "29",
+            "Reality (Série TV)" to "30",
+            "Soap (Série TV)" to "32",
+            "Talk (Série TV)" to "33",
+            "War & Politics (Série TV)" to "34",
+            "Western (Série TV)" to "35",
+            "Crime (Série TV)" to "23",
+            "Aventure (Film)" to "2",
+            "Fantastique (Film)" to "9",
+        )
     }
 }

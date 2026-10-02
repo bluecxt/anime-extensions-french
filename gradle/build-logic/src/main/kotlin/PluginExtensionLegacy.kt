@@ -50,6 +50,8 @@ class PluginExtensionLegacy : Plugin<Project> {
                     java.directories.add("src")
                     kotlin.directories.clear()
                     kotlin.directories.add("src")
+                    resources.directories.clear()
+                    resources.directories.add("src")
                     res.directories.clear()
                     res.directories.add("res")
                     assets.directories.clear()
