@@ -1,6 +1,6 @@
 ext {
     extName = 'SouthTV'
     extClass = '.SouthTV'
-    extVersionCode = 20
+    extVersionCode = 21
 }
 apply plugin: "kei.plugins.extension.legacy"

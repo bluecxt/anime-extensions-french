@@ -3,7 +3,7 @@ ext {
     extClass = '.VoirDrama'
     themePkg = 'madara'
     baseUrl = 'https://voirdrama.to'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
