@@ -111,17 +111,14 @@ class DessinAnime :
         val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
         val document = response.use { it.useAsJsoup() }.apply { resolveSuspense() }
 
-        val animes = document.select(
-            "div[data-slot=carousel]:contains(NOUVEAUX EPISODES) a.group, " +
-                "div[data-slot=carousel]:contains(NOUVEAUX AJOUTS (FILMS)) a.group",
-        ).mapNotNull { element ->
+        val animes = document.select("div[data-slot=carousel] a.group").mapNotNull { element ->
             SAnime.create().apply {
                 url = element.safeRelativePath() ?: return@mapNotNull null
 
                 val rawImgSrc = element.selectFirst("img")?.attr("src")
                 thumbnail_url = rawImgSrc?.nextJsToDirectUrl() ?: POSTER_PLACEHOLDER
 
-                title = element.selectFirst("p")?.text() ?: ""
+                title = element.selectFirst("div.truncate")?.text() ?: ""
             }
         }
 
