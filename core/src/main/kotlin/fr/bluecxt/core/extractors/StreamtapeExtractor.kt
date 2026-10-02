@@ -3,8 +3,8 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 
@@ -18,7 +18,7 @@ class StreamtapeExtractor(private val client: OkHttpClient) {
             url
         }
 
-        val document = Jsoup.parse(client.newCall(GET(newUrl)).awaitSuccess().body.string())
+        val document = Jsoup.parse(client.newCall(GET(newUrl)).awaitSuccessOrUnavailable(newUrl).use { it.body.string() })
         val targetLine = "document.getElementById('robotlink')"
         val script = document.selectFirst("script:containsData($targetLine)")
             ?.data()

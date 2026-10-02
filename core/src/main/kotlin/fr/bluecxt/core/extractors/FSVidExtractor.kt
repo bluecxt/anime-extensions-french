@@ -4,11 +4,11 @@ package fr.bluecxt.core.extractors
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.bodyString
@@ -35,7 +35,7 @@ class FSVidExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val headers = getHeaders(url)
-        val html = client.newCall(GET(url, headers)).awaitSuccess().bodyString()
+        val html = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url).bodyString()
 
         val unpacked = if (html.contains("eval(function(p,a,c,k,e")) {
             autoUnpacker(html) ?: throw ExtractionException("Could not unpack script")

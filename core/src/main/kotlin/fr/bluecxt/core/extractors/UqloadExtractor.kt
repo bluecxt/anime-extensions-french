@@ -4,12 +4,12 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.UQLOAD_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.useAsJsoup
@@ -32,7 +32,7 @@ class UqloadExtractor(private val client: OkHttpClient) {
 
         val streamingHeaders = defaultHeaders(referer = "${parsedUrl.scheme}://${parsedUrl.host}")
 
-        val response = client.newCall(GET(trueUrl, headers)).await()
+        val response = client.newCall(GET(trueUrl, headers)).awaitSuccessOrUnavailable(trueUrl)
         val finalUrl = response.request.url
         val path = finalUrl.encodedPath
         if (path == "/" || path.isEmpty()) {

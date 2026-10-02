@@ -4,11 +4,10 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 
@@ -20,10 +19,9 @@ class MymailExtractor(private val client: OkHttpClient) {
         val id = url.trimEnd('/').substringAfterLast("/")
         val apiUrl = API + id
 
-        val response = client.newCall(GET(apiUrl)).await()
-        if (!response.isSuccessful) if (response.code == 404) throw ContentUnavailableException("404 not available") else throw ExtractionException("failed for a unknown reason")
+        val response = client.newCall(GET(apiUrl)).awaitSuccessOrUnavailable(apiUrl)
 
-        val responseBody = response.body.string()
+        val responseBody = response.use { it.body.string() }
 
         val json = JSONObject(responseBody)
         val videosArray = json.optJSONArray("videos") ?: throw Exception("Could not find video data in Mymail response")

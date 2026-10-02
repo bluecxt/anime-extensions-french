@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
+import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.Dispatchers
@@ -88,17 +89,26 @@ fun String.normalize(): String = this.lowercase().filter { it.isLetterOrDigit() 
  * - Throws ExtractionException on non-2xx status codes
  * Automatically closes response on failure.
  */
-suspend fun Call.awaitSuccessOrUnavailable(url: String = ""): Response {
+suspend fun Call.awaitSuccessOrUnavailable(
+    url: String = "",
+    unavailableCodes: Set<Int> = setOf(404, 410),
+    rateLimitCodes: Set<Int> = setOf(429),
+    throwNonSuccessful: Boolean = true,
+): Response {
     val response = this.await()
-    if (response.code == 404 || response.code == 410) {
+    if (response.code in unavailableCodes) {
         response.close()
-        throw ContentUnavailableException("Video unavailable (${response.code}) $url".trim())
+        throw ContentUnavailableException("Video unavailable (${response.code}) $url")
     }
-    if (!response.isSuccessful) {
+    if (response.code in rateLimitCodes) {
+        response.close()
+        throw RateLimitException("Rate limited (${response.code}) for $url")
+    }
+    if (throwNonSuccessful && !response.isSuccessful) {
         val errCode = response.code
         val errMsg = response.message
         response.close()
-        throw ExtractionException("HTTP $errCode ($errMsg) for $url".trim())
+        throw ExtractionException("HTTP $errCode ($errMsg) for $url")
     }
     return response
 }

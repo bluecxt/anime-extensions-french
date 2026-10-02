@@ -163,7 +163,6 @@ abstract class Source :
                 },
             )
             .addInterceptor(CloudflareInterceptor(network.client))
-            .addInterceptor(ErrorInterceptor(currentName, currentVersion) { isCustomDomain })
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())

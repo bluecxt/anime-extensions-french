@@ -5,11 +5,11 @@ package fr.bluecxt.core.extractors
 import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VOE_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.detectMp4Resolution
 import kotlinx.serialization.decodeFromString
@@ -32,8 +32,8 @@ class VoeExtractor(private val client: OkHttpClient) {
         Log.d(VOE_LOG, "url = $currentUrl")
         val headers = defaultHeaders(currentUrl)
 
-        var response = client.newCall(GET(url, headers)).awaitSuccess()
-        var html = response.body.string()
+        var response = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url)
+        var html = response.use { it.body.string() }
 
         // Check for redirect
         if (html.contains("const currentUrl") && html.contains("window.location.href")) {
@@ -42,8 +42,8 @@ class VoeExtractor(private val client: OkHttpClient) {
 
             if (redirectUrl != null) {
                 currentUrl = redirectUrl
-                response = client.newCall(GET(redirectUrl, headers)).awaitSuccess()
-                html = response.body.string()
+                response = client.newCall(GET(redirectUrl, headers)).awaitSuccessOrUnavailable(redirectUrl)
+                html = response.use { it.body.string() }
             }
         }
 
@@ -65,12 +65,8 @@ class VoeExtractor(private val client: OkHttpClient) {
         val scriptUrl = url.toHttpUrl().resolve(match.groupValues.get(2))?.toString() ?: return emptyList()
         Log.d(VOE_LOG, "url un newMethod = $scriptUrl")
 
-        val response = client.newCall(GET(scriptUrl, headers)).awaitSuccess()
-        if (!response.isSuccessful) {
-            response.close()
-            return emptyList()
-        }
-        val scriptContent = response.body.string()
+        val response = client.newCall(GET(scriptUrl, headers)).awaitSuccessOrUnavailable(scriptUrl)
+        val scriptContent = response.use { it.body.string() }
 
         val replMatch = Regex("""(\[(?:'\W{2}'[,\]]){1,9})""")
             .find(scriptContent)

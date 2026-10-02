@@ -4,7 +4,6 @@ package fr.bluecxt.core.extractors
 
 import android.util.Base64
 import android.util.Log
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
@@ -135,7 +134,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             .post(json.encodeToString(payload).toRequestBody(jsonMediaType))
             .build()
 
-        val response = client.newCall(request).awaitSuccess()
+        val response = client.newCall(request).awaitSuccessOrUnavailable(apiUrl)
         return response.parseAs()
     }
 
@@ -164,7 +163,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         val challengeUrl = "$base/api/videos/access/challenge"
         val challengeResponse = client.newCall(
             Request.Builder().url(challengeUrl).headers(apiHeaders).post("".toRequestBody()).build(),
-        ).awaitSuccess().parseAs<ChallengeResponse>()
+        ).awaitSuccessOrUnavailable(challengeUrl).parseAs<ChallengeResponse>()
 
         val (privateKey, jwk) = generateEcKeypair()
         val signature = signNonce(privateKey, challengeResponse.nonce)
@@ -181,7 +180,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         val attestUrl = "$base/api/videos/access/attest"
         val attestResponse = client.newCall(
             Request.Builder().url(attestUrl).headers(apiHeaders).post(json.encodeToString(attestPayload).toRequestBody(jsonMediaType)).build(),
-        ).awaitSuccess().parseAs<AttestResponse>()
+        ).awaitSuccessOrUnavailable(attestUrl).parseAs<AttestResponse>()
 
         return Fingerprint(
             token = attestResponse.token,
@@ -210,7 +209,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
 
         val captchaResponse = client.newCall(
             Request.Builder().url(captchaUrl).headers(embedHeaders).post(json.encodeToString(CaptchaPayload(fp)).toRequestBody(jsonMediaType)).build(),
-        ).awaitSuccess().parseAs<CaptchaResponse>()
+        ).awaitSuccessOrUnavailable(captchaUrl).parseAs<CaptchaResponse>()
 
         val solution = solvePow(captchaResponse.powNonce, captchaResponse.powDifficulty)
 
@@ -222,7 +221,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         )
         val verifyResponse = client.newCall(
             Request.Builder().url(verifyUrl).headers(embedHeaders).post(json.encodeToString(verifyPayload).toRequestBody(jsonMediaType)).build(),
-        ).awaitSuccess().parseAs<VerifyResponse>()
+        ).awaitSuccessOrUnavailable(verifyUrl).parseAs<VerifyResponse>()
 
         if (verifyResponse.status != "ok" || verifyResponse.token == null) {
             throw Exception("PoW verification failed: ${verifyResponse.status}")
@@ -235,7 +234,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
 
         return client.newCall(
             Request.Builder().url(playbackUrl).headers(playbackHeaders).post(json.encodeToString(CaptchaPayload(fp)).toRequestBody(jsonMediaType)).build(),
-        ).awaitSuccess().parseAs()
+        ).awaitSuccessOrUnavailable(playbackUrl).parseAs()
     }
 
     private fun decryptPlayback(playback: PlaybackData): String {

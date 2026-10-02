@@ -4,13 +4,13 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDMOLY_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.safeRelativePath
 import fr.bluecxt.core.utils.toDoc
 import keiyoushi.utils.parallelCatchingFlatMap
@@ -49,7 +49,7 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
 
         Log.d(VIDMOLY_LOG, "Fetching Vidmoly page from: $url")
 
-        val response = client.newCall(GET(url, headers)).await()
+        val response = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url)
 
         val document = response.toDoc(url)
 

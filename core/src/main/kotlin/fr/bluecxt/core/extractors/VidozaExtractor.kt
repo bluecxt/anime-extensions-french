@@ -4,7 +4,6 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.VIDOZA_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable

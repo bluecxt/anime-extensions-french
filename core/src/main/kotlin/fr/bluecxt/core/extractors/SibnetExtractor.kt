@@ -4,24 +4,26 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.SIBNET_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import keiyoushi.utils.useAsJsoup
+import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
 class SibnetExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val headers = defaultHeaders(url)
-        var document = client.newCall(GET(url, headers)).awaitSuccess().useAsJsoup()
+        var document = client.newCall(GET(url, headers)).awaitSuccess(url).useAsJsoup()
 
         var script = document.selectFirst("script:containsData(player.src)")?.data()
 
@@ -33,7 +35,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
 
             Log.d(SIBNET_LOG, "Player script not found, retrying in 1s...")
             kotlinx.coroutines.delay(1.seconds)
-            document = client.newCall(GET(url, headers)).awaitSuccess().useAsJsoup()
+            document = client.newCall(GET(url, headers)).awaitSuccess(url).useAsJsoup()
             script = document.selectFirst("script:containsData(player.src)")?.data()
 
             if (script == null) {
@@ -63,5 +65,9 @@ class SibnetExtractor(private val client: OkHttpClient) {
                 audioTracks = emptyList(),
             ),
         )
+    }
+
+    companion object {
+        suspend inline fun Call.awaitSuccess(url: String): Response = awaitSuccessOrUnavailable(url, unavailableCodes = setOf(403, 404, 410))
     }
 }

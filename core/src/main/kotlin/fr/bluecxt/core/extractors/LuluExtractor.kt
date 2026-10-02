@@ -3,9 +3,9 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.bodyString
@@ -32,7 +32,7 @@ class LuluExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val headers = getHeaders(url)
-        val html = client.newCall(GET(url, headers)).awaitSuccess().bodyString()
+        val html = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url).bodyString()
         val m3u8Url = extractM3u8Url(html)
         val fixedUrl = fixM3u8Link(m3u8Url)
 

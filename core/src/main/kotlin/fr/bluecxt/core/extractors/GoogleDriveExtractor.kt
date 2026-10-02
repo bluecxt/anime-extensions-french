@@ -4,9 +4,9 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Cookie
 import okhttp3.Headers
@@ -31,7 +31,7 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
 
         val docResp = client.newCall(
             GET(initialVideoUrl, docHeaders),
-        ).awaitSuccess()
+        ).awaitSuccessOrUnavailable(initialVideoUrl)
 
         if (!docResp.peekBody(15).string().equals("<!DOCTYPE html>", true)) {
             videoList.add(

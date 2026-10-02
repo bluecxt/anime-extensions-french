@@ -6,9 +6,9 @@ import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import keiyoushi.utils.UrlUtils
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
@@ -43,7 +43,7 @@ class AbyssExtractor(private val client: OkHttpClient) {
             add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         }.build()
 
-        val response = client.newCall(GET(targetUrl, headers)).awaitSuccess()
+        val response = client.newCall(GET(targetUrl, headers)).awaitSuccessOrUnavailable(targetUrl)
         val finalUrl = response.request.url.toString()
         val html = response.body.string()
 

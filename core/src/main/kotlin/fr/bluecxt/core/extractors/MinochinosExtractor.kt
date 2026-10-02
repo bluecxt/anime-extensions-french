@@ -5,9 +5,9 @@ package fr.bluecxt.core.extractors
 import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.UrlUtils
 import keiyoushi.utils.parallelCatchingFlatMap
@@ -27,7 +27,7 @@ class MinochinosExtractor(private val client: OkHttpClient) {
     }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val response = client.newCall(GET(url)).awaitSuccess()
+        val response = client.newCall(GET(url)).awaitSuccessOrUnavailable(url)
         val document = response.useAsJsoup()
 
         val script = document.select("script").find {

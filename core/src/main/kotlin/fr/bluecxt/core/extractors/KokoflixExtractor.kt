@@ -3,9 +3,9 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 
 class KokoflixExtractor(private val source: Source) {
@@ -16,7 +16,7 @@ class KokoflixExtractor(private val source: Source) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val headers = defaultHeaders(referer = "https://french-stream.one/")
-        val response = source.extractorClient.newCall(GET(url, headers)).awaitSuccess()
+        val response = source.extractorClient.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url)
         val finalUrl = response.request.url.toString()
 
         return when {

@@ -4,12 +4,12 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
@@ -32,15 +32,11 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val document = runCatching {
-            sendvidClient.newCall(GET(url, headers)).await()
+            sendvidClient.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url, unavailableCodes = setOf(404, 410, 502))
         }.getOrElse { e ->
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is kotlinx.coroutines.CancellationException || e is ContentUnavailableException) throw e
             throw ExtractionException("Timeout")
-        }.use { res ->
-            if (res.code == 404 || res.code == 502) throw ContentUnavailableException("Video non available (${res.code}) $url")
-            if (!res.isSuccessful) throw ExtractionException("failed for $url with ${res.code}: ${res.message}")
-            res.useAsJsoup()
-        }
+        }.useAsJsoup()
         val masterUrl = document.selectFirst("source#video_source")?.attr("src")?.takeIf { it.isNotBlank() }
             ?: throw Exception("Could not find video source in Sendvid")
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
