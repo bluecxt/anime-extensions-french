@@ -9,6 +9,7 @@ on:
       - 'core/**'
       - 'config/detekt.yml'
       - 'build.gradle.kts'
+      - '.github/scripts/merge-detekt-sarif.py'
       - '.github/workflows/detekt.yml'
   pull_request:
     branches:
@@ -18,6 +19,7 @@ on:
       - 'core/**'
       - 'config/detekt.yml'
       - 'build.gradle.kts'
+      - '.github/scripts/merge-detekt-sarif.py'
       - '.github/workflows/detekt.yml'
   workflow_dispatch:
 
