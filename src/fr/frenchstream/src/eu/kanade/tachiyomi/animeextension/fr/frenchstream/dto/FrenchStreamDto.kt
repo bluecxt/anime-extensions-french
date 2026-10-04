@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
-import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerialName
@@ -201,7 +200,7 @@ data class SeriesDataDto(
         }
     }.reversed()
 
-    fun toHosterList(mediaId: String, epNum: String, langs: List<String>): List<Hoster> = langs.map { lang ->
+    fun toHosterList(epNum: String, langs: List<String>): List<Hoster> = langs.map { lang ->
         val links: List<String> = allLanguages[lang]?.get(epNum)?.values?.toList() ?: emptyList()
         Hoster(
             hosterName = lang,
@@ -239,7 +238,7 @@ data class MovieDto(
         },
     )
 
-    fun toHosterList(mediaId: String, epNum: String, langs: List<String>): List<Hoster> = langs.map { lang ->
+    fun toHosterList(langs: List<String>): List<Hoster> = langs.map { lang ->
         val links = players.values.mapNotNull { it.getLink(lang) }
         Hoster(
             hosterName = lang,

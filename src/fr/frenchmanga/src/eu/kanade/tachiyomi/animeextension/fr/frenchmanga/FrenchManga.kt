@@ -36,6 +36,8 @@ import okhttp3.Headers
 import okhttp3.Request
 import uy.kohesive.injekt.injectLazy
 
+private const val TOO_MANY_REQUEST_CODE = 429
+
 open class FrenchManga(
     override val name: String = "French-Manga",
     protected open val prefUrlDefault: String = "https://w16.french-manga.net",
@@ -156,7 +158,7 @@ open class FrenchManga(
                 .build(),
         ).await()
 
-        if (response.code == 429) {
+        if (response.code == TOO_MANY_REQUEST_CODE) {
             response.close()
             throw RateLimitException("Trop de requêtes. Veuillez patienter quelques secondes avant de réessayer.")
         }
