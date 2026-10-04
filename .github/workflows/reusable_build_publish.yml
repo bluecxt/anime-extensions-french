@@ -58,7 +58,10 @@ jobs:
           persist-credentials: false
 
       - name: Force unique cache key based on task and channel
-        run: echo "build.task=${{ inputs.gradle_task }}-${{ inputs.channel }}" >> gradle.properties
+        env:
+          GRADLE_TASK: ${{ inputs.gradle_task }}
+          CHANNEL: ${{ inputs.channel }}
+        run: echo "build.task=${GRADLE_TASK}-${CHANNEL}" >> gradle.properties
 
       - name: Set up Java
         uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
@@ -91,8 +94,11 @@ jobs:
           TVDB_API: ${{ secrets.tvdb_api }}
           WEBHOOK_URL: ${{ secrets.webhook_url }}
           WEBHOOK_SECRET: ${{ secrets.webhook_secret }}
+        env:
+          GRADLE_TASK: ${{ inputs.gradle_task }}
+          APK_PATH: ${{ inputs.apk_path }}
         run: |
-          ./gradlew ${{ inputs.gradle_task }} && ls ${{ inputs.apk_path }}
+          ./gradlew "$GRADLE_TASK" && ls "$APK_PATH"
 
       - name: Upload APKs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -139,9 +145,11 @@ jobs:
           persist-credentials: false
 
       - name: Copy existing repo
+        env:
+          CHANNEL: ${{ inputs.channel }}
         run: |
-          if [ -d "temp_gh_pages/${{ inputs.channel }}" ]; then
-            cp -r temp_gh_pages/${{ inputs.channel }} repo
+          if [ -d "temp_gh_pages/$CHANNEL" ]; then
+            cp -r "temp_gh_pages/$CHANNEL" repo
           fi
           rm -rf temp_gh_pages
 
