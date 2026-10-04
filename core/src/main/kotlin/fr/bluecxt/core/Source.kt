@@ -21,7 +21,6 @@ import fr.bluecxt.core.filters.FilterProvider
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.network.CloudflareInterceptor
-import fr.bluecxt.core.network.ErrorInterceptor
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber

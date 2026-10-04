@@ -43,9 +43,10 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
 
             DIFF_TEXT=$(git log -p --since="7 days ago" -- lib/ | head -c 45000)
-            echo "diff<<EOF" >> $GITHUB_OUTPUT
+            DELIM="DIFF_EOF_$(date +%s)"
+            echo "diff<<$DELIM" >> $GITHUB_OUTPUT
             echo "$DIFF_TEXT" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "$DELIM" >> $GITHUB_OUTPUT
 
             echo "### ⚠️ Changements détectés dans lib/ cette semaine !" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -135,9 +136,10 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
 
             DIFF_TEXT=$(git log -p --since="7 days ago" | head -c 45000)
-            echo "diff<<EOF" >> $GITHUB_OUTPUT
+            DELIM="DIFF_EOF_$(date +%s)"
+            echo "diff<<$DELIM" >> $GITHUB_OUTPUT
             echo "$DIFF_TEXT" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "$DELIM" >> $GITHUB_OUTPUT
 
             echo "### ⚠️ Nouveaux commits cette semaine sur Docchi-players !" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY

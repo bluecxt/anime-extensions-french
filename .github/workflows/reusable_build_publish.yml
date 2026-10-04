@@ -97,7 +97,7 @@ jobs:
           GRADLE_TASK: ${{ inputs.gradle_task }}
           APK_PATH: ${{ inputs.apk_path }}
         run: |
-          ./gradlew "$GRADLE_TASK" && ls "$APK_PATH"
+          ./gradlew "$GRADLE_TASK" && ls $APK_PATH
 
       - name: Upload APKs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

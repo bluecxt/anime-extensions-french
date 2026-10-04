@@ -55,7 +55,7 @@ class AnimoFlix :
         private val epNumRegex = Regex("""(\d+(?:\.\d+)?)""")
         private val qualityNumRegex = Regex("""(\d+)p""")
         private val lecteurRegex = Regex("(?i)Lecteur\\s*\\d+\\s*-?\\s*")
-        private val cleanTitleRegex = Regex("""(?i)(?:Saison|Season)s*d+|FILM|MOVIE|OAV|OVA|(TV)|(Film)|(OAV)|(OVA)|s+d+$""")
+        private val cleanTitleRegex = Regex("""(?i)(?:Saison|Season)\s*\d+|FILM|MOVIE|OAV|OVA|\(TV\)|\(Film\)|\(OAV\)|\(OVA\)|\s+\d+$""")
 
         private val GENRE_OPTIONS = arrayOf(
             "Tous les genres" to "",

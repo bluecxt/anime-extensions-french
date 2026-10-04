@@ -65,12 +65,14 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
     return this.copy(headers = builder.build())
 }
 
+private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
+
 /**
  * Automatically infers and adds Sec-CH-UA, Sec-CH-UA-Mobile, and Sec-CH-UA-Platform Client Hints
  * derived from the given or active User-Agent string.
  */
 fun Headers.Builder.addClientHints(userAgent: String = DEFAULT_USER_AGENT): Headers.Builder {
-    val chromeMatch = Regex("""Chrome/(\d+)""").find(userAgent)
+    val chromeMatch = CHROME_VERSION_REGEX.find(userAgent)
     if (chromeMatch != null) {
         val major = chromeMatch.groupValues[1]
         val isMobile = userAgent.contains("Mobile", ignoreCase = true)
