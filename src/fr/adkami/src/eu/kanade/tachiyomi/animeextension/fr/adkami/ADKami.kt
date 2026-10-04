@@ -6,7 +6,6 @@ import android.util.Base64
 import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -22,6 +21,7 @@ import fr.bluecxt.core.ADKAMI_LOG
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.VoiceLanguage.RAW
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
@@ -99,10 +99,8 @@ class ADKami :
             return AnimesPage(listOf(anime), false)
         }
 
-        val searchFilters = ADKamiCatalogueFilters.getSearchFilters(filters)
-
         // Random mode
-        if (searchFilters.randomOnly) {
+        if (filters.getParam("random") == "1") {
             val response = client.newCall(GET("$baseUrl/hentai-streaming", headers)).awaitSuccess()
             return parseAnimesPage(response, "div.hentai-random-block:nth-child(2) > div.h-card")
         }
@@ -112,116 +110,27 @@ class ADKami :
             .addPathSegment("video")
             .addQueryParameter("t", "4")
             .addQueryParameter("search", query)
-            .addQueryParameter("order", searchFilters.order)
-            .addQueryParameter("s", searchFilters.status)
-            .addQueryParameter("p", searchFilters.pays)
-            .addQueryParameter("e", searchFilters.episode)
-            .addQueryParameter("q", searchFilters.quality)
-            .addQueryParameter("n", searchFilters.noteMin)
-            .addQueryParameter("n2", searchFilters.noteMax)
             .addQueryParameter("page", page.toString())
+            .applyFilters(filters)
+            .build()
 
-        if (searchFilters.vfOnly) {
-            url.addQueryParameter("v", "1")
-        }
-
-        searchFilters.genres.forEach { genreId ->
-            url.addQueryParameter("genres[]", genreId)
-        }
-
-        val response = client.newCall(GET(url.build(), headers)).awaitSuccess()
+        val response = client.newCall(GET(url, headers)).awaitSuccess()
         return parseAnimesPage(response)
     }
 
-    override fun getFilterList() = ADKamiCatalogueFilters.FILTER_LIST
-
-    private object ADKamiCatalogueFilters {
-        private val filterData by lazy {
-            val jsonStream = ADKami::class.java.getResourceAsStream("filters.json")
-            val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
-            try {
-                Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
-            } catch (_: Exception) {
-                emptyMap()
-            }
-        }
-
-        private fun getOptions(key: String): List<Pair<String, String>> {
-            val list = filterData[key] ?: return emptyList()
-            return list.map { it[0] to it[1] }
-        }
-
-        class OrderFilter : AnimeFilter.Select<String>("Trier par", getOptions("ORDER").map { it.first }.toTypedArray().ifEmpty { arrayOf("Popularité") }, 0)
-        class StatusFilter : AnimeFilter.Select<String>("Statut", getOptions("STATUS").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tout") }, 0)
-        class PaysFilter : AnimeFilter.Select<String>("Pays", getOptions("PAYS").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tous") }, 0)
-        class EpisodeFilter : AnimeFilter.Select<String>("Nombre d'épisodes", getOptions("EPISODES").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tous") }, 0)
-        class QualityFilter : AnimeFilter.Select<String>("Qualité", getOptions("QUALITY").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tout") }, 0)
-        class NoteMinFilter : AnimeFilter.Select<String>("Note Min", getOptions("NOTE_MIN").map { it.first }.toTypedArray().ifEmpty { arrayOf("Tous") }, 0)
-        class NoteMaxFilter : AnimeFilter.Select<String>("Note Max", getOptions("NOTE_MAX").map { it.first }.toTypedArray().ifEmpty { arrayOf("10") }, 0)
-        class GenresFilter : CheckBoxFilterList("Genres", getOptions("GENRES").map { CheckBoxVal(it.first, false) })
-        class VfFilter : AnimeFilter.CheckBox("VF uniquement", false)
-        class RandomFilter : AnimeFilter.CheckBox("Aléatoire", false)
-
-        val FILTER_LIST get() = AnimeFilterList(
-            OrderFilter(),
-            StatusFilter(),
-            PaysFilter(),
-            EpisodeFilter(),
-            QualityFilter(),
-            NoteMinFilter(),
-            NoteMaxFilter(),
-            GenresFilter(),
-            VfFilter(),
-            RandomFilter(),
+    override val customFilters: List<FilterSpec>
+        get() = listOf(
+            select("Trier par", "order", ORDER_OPTIONS),
+            select("Statut", "s", STATUS_OPTIONS),
+            select("Pays", "p", PAYS_OPTIONS),
+            select("Nombre d'épisodes", "e", EPISODES_OPTIONS),
+            select("Qualité", "q", QUALITY_OPTIONS),
+            select("Note Min", "n", NOTE_MIN_OPTIONS),
+            select("Note Max", "n2", NOTE_MAX_OPTIONS),
+            group("Genres", "genres[]", GENRES_OPTIONS),
+            checkBox("VF uniquement", "v", "1"),
+            checkBox("Aléatoire", "random", "1"),
         )
-
-        data class SearchFilters(
-            val order: String = "3",
-            val status: String = "",
-            val pays: String = "",
-            val episode: String = "",
-            val quality: String = "",
-            val noteMin: String = "",
-            val noteMax: String = "10",
-            val vfOnly: Boolean = false,
-            val randomOnly: Boolean = false,
-            val genres: List<String> = emptyList(),
-        ) {
-            fun isDefault() = order == "3" && status == "" && pays == "" && episode == "" &&
-                quality == "" && noteMin == "" && noteMax == "10" && !vfOnly && !randomOnly && genres.isEmpty()
-        }
-
-        fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
-            if (filters.isEmpty()) return SearchFilters()
-
-            return SearchFilters(
-                order = getOptions("ORDER").getOrNull(filters.filterIsInstance<OrderFilter>().firstOrNull()?.state ?: 0)?.second ?: "3",
-                status = getOptions("STATUS").getOrNull(filters.filterIsInstance<StatusFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
-                pays = getOptions("PAYS").getOrNull(filters.filterIsInstance<PaysFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
-                episode = getOptions("EPISODES").getOrNull(filters.filterIsInstance<EpisodeFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
-                quality = getOptions("QUALITY").getOrNull(filters.filterIsInstance<QualityFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
-                noteMin = getOptions("NOTE_MIN").getOrNull(filters.filterIsInstance<NoteMinFilter>().firstOrNull()?.state ?: 0)?.second ?: "",
-                noteMax = getOptions("NOTE_MAX").getOrNull(filters.filterIsInstance<NoteMaxFilter>().firstOrNull()?.state ?: 0)?.second ?: "10",
-                vfOnly = filters.filterIsInstance<VfFilter>().firstOrNull()?.state ?: false,
-                randomOnly = filters.filterIsInstance<RandomFilter>().firstOrNull()?.state ?: false,
-                genres = filters.parseCheckbox<GenresFilter>(getOptions("GENRES")),
-            )
-        }
-
-        private inline fun <reified R> AnimeFilterList.parseCheckbox(
-            options: List<Pair<String, String>>,
-        ): List<String> = (this.filterIsInstance<R>().firstOrNull() as? CheckBoxFilterList)?.state
-            ?.mapNotNull { checkbox ->
-                if (checkbox.state) {
-                    options.find { it.first == checkbox.name }!!.second
-                } else {
-                    null
-                }
-            } ?: emptyList()
-
-        open class CheckBoxFilterList(name: String, values: List<CheckBoxVal>) : AnimeFilter.Group<CheckBoxVal>(name, values)
-        class CheckBoxVal(name: String, state: Boolean = false) : AnimeFilter.CheckBox(name, state)
-    }
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
@@ -428,5 +337,91 @@ class ADKami :
 
     companion object {
         const val PREFIX_SEARCH = "id:"
+
+        private val ORDER_OPTIONS = arrayOf(
+            "Popularité" to "3",
+            "Note" to "1",
+            "Nombre de votants" to "2",
+            "Alphabétique" to "0",
+        )
+
+        private val STATUS_OPTIONS = arrayOf(
+            "Tout" to "",
+            "En cours" to "1",
+            "Terminée" to "2",
+            "Abandonnée" to "3",
+        )
+
+        private val PAYS_OPTIONS = arrayOf(
+            "Tous" to "",
+            "Inconnue" to "0",
+            "Japon" to "1",
+            "Chine" to "2",
+            "Corée" to "3",
+            "France" to "4",
+            "Etats-unis" to "5",
+            "Taïwan" to "6",
+            "Thaïlande" to "7",
+        )
+
+        private val EPISODES_OPTIONS = arrayOf(
+            "Tous" to "",
+            "Peu [1, 13]" to "1",
+            "Normal [14, 26]" to "2",
+            "Beaucoup [27, +∞[" to "3",
+        )
+
+        private val QUALITY_OPTIONS = arrayOf(
+            "Tout" to "",
+            "Non censuré (NC)" to "1",
+            "Blu-ray (BD)" to "2",
+        )
+
+        private val NOTE_MIN_OPTIONS = arrayOf(
+            "Tous" to "",
+            "10" to "10",
+            "9" to "9",
+            "8" to "8",
+            "7" to "7",
+            "6" to "6",
+            "5" to "5",
+            "4" to "4",
+            "3" to "3",
+            "2" to "2",
+            "1" to "1",
+        )
+
+        private val NOTE_MAX_OPTIONS = arrayOf(
+            "10" to "10",
+            "9" to "9",
+            "8" to "8",
+            "7" to "7",
+            "6" to "6",
+            "5" to "5",
+            "4" to "4",
+            "3" to "3",
+            "2" to "2",
+            "1" to "1",
+        )
+
+        private val GENRES_OPTIONS = listOf(
+            "Action" to "1", "Amitié" to "3", "Aventure" to "2", "Combat" to "4", "Comédie" to "5",
+            "Contes & Récits" to "6", "Cyber & Mecha" to "7", "Dark Fantasy" to "8", "Drame" to "9",
+            "Ecchi" to "10", "Educatif" to "11", "Énigme & Policier" to "12", "Épique & Héroique" to "13",
+            "Espace & Sci-Fiction" to "14", "Familial & Jeunesse" to "15", "Fantastique & Mythe" to "16",
+            "Fantasy" to "30", "Gastronomie" to "39", "Gender Bender" to "61", "Harem" to "32",
+            "Historique" to "18", "Horreur" to "19", "Idols" to "38", "Inceste" to "36",
+            "Magical Girl" to "20", "Mature" to "26", "Moe" to "25", "Monster Girl" to "71",
+            "Musical" to "21", "Mystère" to "31", "Psychologique" to "22", "Romance" to "34",
+            "School Life" to "29", "Sport" to "23", "Surnaturel" to "33", "Survival Game" to "40",
+            "Thriller" to "35", "Tokusatsu" to "41", "Tranche de vie" to "24", "Triangle Amoureux" to "37",
+            "Yaoi" to "27", "Yuri" to "28", "Hentai" to "17", "Gyaru" to "70", "Isekai" to "42",
+            "Magie" to "43", "Ahegao" to "45", "Anal" to "46", "BDSM" to "44", "Blow Job" to "63",
+            "Creampie" to "68", "Foot Job" to "47", "Futanari" to "48", "Gang Bang" to "58",
+            "Giga seins" to "59", "Gros seins" to "53", "Hand Job" to "66", "Infirmière / Nurse" to "51",
+            "Loli" to "62", "Maid" to "49", "Masturbation" to "50", "Milf" to "69", "NTR" to "55",
+            "Paizuri" to "64", "Petits seins" to "54", "Public Sex" to "67", "Rape" to "52",
+            "Shota" to "72", "Tentacle" to "60", "Uncensored" to "56", "Vanilla" to "57", "Virgin" to "65",
+        )
     }
 }

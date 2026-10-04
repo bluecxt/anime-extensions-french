@@ -3,16 +3,16 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.OkHttpClient
 
 class StreamHubExtractor(private val client: OkHttpClient) {
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> = runCatching {
-        val response = client.newCall(GET(url)).awaitSuccess()
+        val response = client.newCall(GET(url)).awaitSuccessOrUnavailable(url)
         val document = response.body.string()
         val id = REGEX_ID.find(document)?.groupValues?.get(1)
         val sub = REGEX_SUB.find(document)?.groupValues?.get(1)

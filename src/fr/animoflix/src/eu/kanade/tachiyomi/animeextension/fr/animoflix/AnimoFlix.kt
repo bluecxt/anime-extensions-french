@@ -6,7 +6,6 @@ import android.app.Application
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -18,6 +17,7 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMovieMetadata
@@ -55,9 +55,59 @@ class AnimoFlix :
         private val epNumRegex = Regex("""(\d+(?:\.\d+)?)""")
         private val qualityNumRegex = Regex("""(\d+)p""")
         private val lecteurRegex = Regex("(?i)Lecteur\\s*\\d+\\s*-?\\s*")
-        private val cleanTitleRegex = Regex("(?i)(?:Saison|Season)\\s*\\d+|FILM|MOVIE|OAV|OVA|\\(TV\\)|\\(Film\\)|\\(OAV\\)|\\(OVA\\)|\\s+\\d+$")
-    }
+        private val cleanTitleRegex = Regex("""(?i)(?:Saison|Season)\s*\d+|FILM|MOVIE|OAV|OVA|\(TV\)|\(Film\)|\(OAV\)|\(OVA\)|\s+\d+$""")
 
+        private val GENRE_OPTIONS = arrayOf(
+            "Tous les genres" to "",
+            "Action" to "Action",
+            "Aventure" to "Aventure",
+            "Comédie" to "Comédie",
+            "Drame" to "Drame",
+            "Fantastique" to "Fantastique",
+            "Fantasy" to "Fantasy",
+            "Horreur" to "Horreur",
+            "Mystère" to "Mystère",
+            "Romance" to "Romance",
+            "Science-Fiction" to "Science-Fiction",
+            "Slice of Life" to "Slice of Life",
+            "Sport" to "Sport",
+            "Thriller" to "Thriller",
+            "Isekai" to "Isekai",
+            "Ecchi" to "Ecchi",
+            "Harem" to "Harem",
+            "Mecha" to "Mecha",
+            "Magie" to "Magie",
+            "Super pouvoirs" to "Super pouvoirs",
+        )
+
+        private val STATUS_OPTIONS = arrayOf(
+            "Tous les statuts" to "",
+            "En cours" to "ongoing",
+            "Terminé" to "completed",
+        )
+
+        private val LANG_OPTIONS = arrayOf(
+            "Toutes" to "",
+            "VF" to "VF",
+            "VOSTFR" to "VOSTFR",
+        )
+
+        private val TYPE_OPTIONS = arrayOf(
+            "Tous les types" to "",
+            "Série" to "serie",
+            "Film" to "film",
+            "OAV" to "oav",
+            "Scans" to "scans",
+            "Anime + Scans" to "both",
+        )
+
+        private val SORT_OPTIONS = arrayOf(
+            "Plus récents" to "recent",
+            "A → Z" to "az",
+        )
+
+        private val LETTER_OPTIONS = (listOf("Toutes" to "") + ('A'..'Z').map { it.toString() to it.toString() }).toTypedArray()
+    }
     private fun parseSeasonNumber(title: String): Double {
         val t = title.trim()
         return when {
@@ -102,42 +152,15 @@ class AnimoFlix :
 
     // ================== Catalogue (/catalogue/) ==================
 
-    override fun getFilterList() = AnimoFlixCatalogueFilters.FILTER_LIST
-
-    private fun catalogueRequest(
-        page: Int,
-        query: String = "",
-        genre: String = "",
-        status: String = "",
-        lang: String = "",
-        type: String = "",
-        sort: String = "recent",
-        letter: String = "",
-    ): Request {
-        val q = query.trim()
-        val g = genre.trim()
-        val st = status.trim()
-        val lg = lang.trim()
-        val tp = type.trim()
-        val so = sort.trim()
-        val lt = letter.trim()
-
-        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder()
-            .addQueryParameter("ajax", "1")
-            .addQueryParameter("page", page.toString())
-            .apply {
-                if (q.isNotBlank()) addQueryParameter("search", q)
-                if (g.isNotBlank()) addQueryParameter("genre", g)
-                if (st.isNotBlank()) addQueryParameter("status", st)
-                if (lg.isNotBlank()) addQueryParameter("lang", lg)
-                if (tp.isNotBlank()) addQueryParameter("type", tp)
-                if (so.isNotBlank()) addQueryParameter("sort", so)
-                if (lt.isNotBlank()) addQueryParameter("letter", lt)
-            }
-            .build()
-
-        return GET(url.toString(), headers)
-    }
+    override val customFilters: List<FilterSpec>
+        get() = listOf(
+            select("Genre", "genre", GENRE_OPTIONS),
+            select("Statut", "status", STATUS_OPTIONS),
+            select("Langue", "lang", LANG_OPTIONS),
+            select("Type", "type", TYPE_OPTIONS),
+            select("Trier par", "sort", SORT_OPTIONS),
+            select("Lettre", "letter", LETTER_OPTIONS),
+        )
 
     private fun parseCatalogueAjaxResponse(response: Response, page: Int): AnimesPage {
         val body = response.body.string()
@@ -179,10 +202,13 @@ class AnimoFlix :
 
         return AnimesPage(items, hasNextPage)
     }
-
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         // Site behavior: when "sort" is omitted (or invalid), it behaves like a "views"/popular sort.
-        val response = client.newCall(catalogueRequest(page = page, sort = "")).awaitSuccess()
+        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder()
+            .addQueryParameter("ajax", "1")
+            .addQueryParameter("page", page.toString())
+            .build()
+        val response = client.newCall(GET(url.toString(), headers)).awaitSuccess()
         return parseCatalogueAjaxResponse(response, page)
     }
 
@@ -211,88 +237,18 @@ class AnimoFlix :
         .distinctBy { it.url }
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val f = AnimoFlixCatalogueFilters.getSearchFilters(filters)
-        val response = client.newCall(
-            catalogueRequest(
-                page = page,
-                query = query,
-                genre = f.genre,
-                status = f.status,
-                lang = f.lang,
-                type = f.type,
-                sort = f.sort,
-                letter = f.letter,
-            ),
-        ).awaitSuccess()
+        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder()
+            .addQueryParameter("ajax", "1")
+            .addQueryParameter("page", page.toString())
+            .apply {
+                val q = query.trim()
+                if (q.isNotBlank()) addQueryParameter("search", q)
+                applyFilters(filters)
+            }
+            .build()
+        val response = client.newCall(GET(url.toString(), headers)).awaitSuccess()
         return parseCatalogueAjaxResponse(response, page)
     }
-
-    private object AnimoFlixCatalogueFilters {
-        private val filterData by lazy {
-            val jsonStream = AnimoFlix::class.java.getResourceAsStream("filters.json")
-            val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
-            try {
-                Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
-            } catch (_: Exception) {
-                emptyMap()
-            }
-        }
-        private fun getOptions(key: String): List<Pair<String, String>> {
-            val list = filterData[key] ?: return emptyList()
-            return list.map { it[0] to it[1] }
-        }
-
-        private val LETTER_OPTIONS = (listOf("Toutes" to "") + ('A'..'Z').map { it.toString() to it.toString() }).toTypedArray()
-
-        class GenreFilter : AnimeFilter.Select<String>("Genre", getOptions("GENRES").map { it.first }.toTypedArray(), 0)
-        class StatusFilter : AnimeFilter.Select<String>("Statut", getOptions("STATUS").map { it.first }.toTypedArray(), 0)
-        class LangFilter : AnimeFilter.Select<String>("Langue", getOptions("LANG").map { it.first }.toTypedArray(), 0)
-        class TypeFilter : AnimeFilter.Select<String>("Type", getOptions("TYPES").map { it.first }.toTypedArray(), 0)
-        class SortFilter : AnimeFilter.Select<String>("Trier par", getOptions("SORT").map { it.first }.toTypedArray(), 0)
-        class LetterFilter : AnimeFilter.Select<String>("Lettre", LETTER_OPTIONS.map { it.first }.toTypedArray(), 0)
-
-        val FILTER_LIST get() = AnimeFilterList(
-            GenreFilter(),
-            StatusFilter(),
-            LangFilter(),
-            TypeFilter(),
-            SortFilter(),
-            LetterFilter(),
-        )
-
-        data class SearchFilters(
-            val genre: String,
-            val status: String,
-            val lang: String,
-            val type: String,
-            val sort: String,
-            val letter: String,
-        )
-
-        fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
-            if (filters.isEmpty()) {
-                return SearchFilters(genre = "", status = "", lang = "", type = "", sort = "recent", letter = "")
-            }
-
-            val genreIndex = filters.filterIsInstance<GenreFilter>().firstOrNull()?.state ?: 0
-            val statusIndex = filters.filterIsInstance<StatusFilter>().firstOrNull()?.state ?: 0
-            val langIndex = filters.filterIsInstance<LangFilter>().firstOrNull()?.state ?: 0
-            val typeIndex = filters.filterIsInstance<TypeFilter>().firstOrNull()?.state ?: 0
-            val sortIndex = filters.filterIsInstance<SortFilter>().firstOrNull()?.state ?: 0
-            val letterIndex = filters.filterIsInstance<LetterFilter>().firstOrNull()?.state ?: 0
-
-            return SearchFilters(
-                genre = getOptions("GENRES").getOrNull(genreIndex)?.second ?: "",
-                status = getOptions("STATUS").getOrNull(statusIndex)?.second ?: "",
-                lang = getOptions("LANG").getOrNull(langIndex)?.second ?: "",
-                type = getOptions("TYPES").getOrNull(typeIndex)?.second ?: "",
-                sort = getOptions("SORT").getOrNull(sortIndex)?.second ?: "",
-                letter = LETTER_OPTIONS.getOrNull(letterIndex)?.second ?: "",
-            )
-        }
-    }
-
-    // ================== Details ==================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.useAsJsoup()

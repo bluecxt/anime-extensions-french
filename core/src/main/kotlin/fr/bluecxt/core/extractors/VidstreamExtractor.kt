@@ -3,8 +3,8 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
@@ -19,8 +19,8 @@ class VidstreamExtractor(private val client: OkHttpClient) {
             .build()
 
         return try {
-            val response = client.newCall(GET(url, headers)).awaitSuccess()
-            val body = response.body.string()
+            val response = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url)
+            val body = response.use { it.body.string() }
             val videoUrl = body.substringAfter("file:\"", "").substringBefore("\"")
             if (videoUrl.isEmpty()) return emptyList()
 

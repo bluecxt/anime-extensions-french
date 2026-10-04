@@ -4,9 +4,9 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -34,7 +34,7 @@ class DoodExtractor(private val client: OkHttpClient) {
             .add("Referer", "https://$host/")
             .build()
 
-        var response = client.newCall(GET(webUrl, headers)).awaitSuccess()
+        var response = client.newCall(GET(webUrl, headers)).awaitSuccessOrUnavailable(webUrl)
         val actualUrl = response.request.url.toString()
         var html = response.body.string()
 
@@ -59,11 +59,11 @@ class DoodExtractor(private val client: OkHttpClient) {
                 throw ContentUnavailableException("Doodstream: Video not found")
             }
             val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: throw Exception("Doodstream: Could not resolve iframe URL")
-            response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccess()
+            response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccessOrUnavailable(iframeUrl)
             html = response.body.string()
         } else {
             val embedUrl = webUrl.replace("/d/", "/e/")
-            response = client.newCall(GET(embedUrl, currentHeaders)).awaitSuccess()
+            response = client.newCall(GET(embedUrl, currentHeaders)).awaitSuccessOrUnavailable(embedUrl)
             html = response.body.string()
         }
 
@@ -85,7 +85,7 @@ class DoodExtractor(private val client: OkHttpClient) {
         val token = match.groupValues[2]
         val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: throw Exception("Doodstream: Could not resolve pass URL")
 
-        val baseResponse = client.newCall(GET(passUrl, currentHeaders)).awaitSuccess()
+        val baseResponse = client.newCall(GET(passUrl, currentHeaders)).awaitSuccessOrUnavailable(passUrl)
         val baseUrl = baseResponse.body.string().trim()
 
         val finalUrl = if (baseUrl.contains("cloudflarestorage.")) {

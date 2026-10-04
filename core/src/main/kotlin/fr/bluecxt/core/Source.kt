@@ -21,11 +21,11 @@ import fr.bluecxt.core.filters.FilterProvider
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.network.CloudflareInterceptor
-import fr.bluecxt.core.network.ErrorInterceptor
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.utils.ExtensionResources
+import fr.bluecxt.core.utils.addClientHints
 import fr.bluecxt.core.utils.safeHttpCode
 import fr.bluecxt.core.utils.withDefaultHeaders
 import keiyoushi.core.BuildConfig
@@ -135,6 +135,7 @@ abstract class Source :
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
         .set("Connection", "close")
+        .addClientHints()
 
     open val currentBaseUrl: String
         get() {
@@ -163,7 +164,6 @@ abstract class Source :
                 },
             )
             .addInterceptor(CloudflareInterceptor(network.client))
-            .addInterceptor(ErrorInterceptor(currentName, currentVersion) { isCustomDomain })
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())

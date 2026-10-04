@@ -4,9 +4,9 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Cookie
 import okhttp3.Headers
@@ -31,35 +31,37 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
 
         val docResp = client.newCall(
             GET(initialVideoUrl, docHeaders),
-        ).awaitSuccess()
+        ).awaitSuccessOrUnavailable(initialVideoUrl)
 
-        if (!docResp.peekBody(15).string().equals("<!DOCTYPE html>", true)) {
-            videoList.add(
-                ExtractedSource(
-                    url = initialVideoUrl,
-                    headers = docHeaders,
-                ),
-            )
-        } else {
-            val document = docResp.useAsJsoup()
+        docResp.use { resp ->
+            if (!resp.peekBody(15).string().equals("<!DOCTYPE html>", true)) {
+                videoList.add(
+                    ExtractedSource(
+                        url = initialVideoUrl,
+                        headers = docHeaders,
+                    ),
+                )
+            } else {
+                val document = resp.useAsJsoup()
 
-            val itemSize: String = document.selectFirst("span.uc-name-size")
-                ?.let { " ${it.ownText().trim()} " }
-                ?: ""
+                val itemSize: String = document.selectFirst("span.uc-name-size")
+                    ?.let { " ${it.ownText().trim()} " }
+                    ?: ""
 
-            val finalVideoUrl = initialVideoUrl.toHttpUrl().newBuilder().apply {
-                document.select("input[type=hidden]").forEach {
-                    setQueryParameter(it.attr("name"), it.attr("value"))
-                }
-            }.build().toString()
+                val finalVideoUrl = initialVideoUrl.toHttpUrl().newBuilder().apply {
+                    document.select("input[type=hidden]").forEach {
+                        setQueryParameter(it.attr("name"), it.attr("value"))
+                    }
+                }.build().toString()
 
-            videoList.add(
-                ExtractedSource(
-                    url = finalVideoUrl,
-                    quality = itemSize.trim().removeSurrounding("(", ")"),
-                    headers = docHeaders,
-                ),
-            )
+                videoList.add(
+                    ExtractedSource(
+                        url = finalVideoUrl,
+                        quality = itemSize.trim().removeSurrounding("(", ")"),
+                        headers = docHeaders,
+                    ),
+                )
+            }
         }
 
         if (videoList.isEmpty()) throw Exception("GoogleDrive: No video sources found")

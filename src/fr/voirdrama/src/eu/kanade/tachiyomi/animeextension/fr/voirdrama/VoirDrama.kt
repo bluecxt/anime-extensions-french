@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import fr.bluecxt.core.VOIRDRAMA_LOG
+import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
@@ -29,49 +30,50 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
     override val supportedServers = listOf("Vidmoly", "Mymail", "Voe")
 
     // ============================== Filters ===============================
-    override fun getFilterList(): AnimeFilterList = super.getFilterList() + listOf(
-        select(
-            "Format",
-            "type",
-            arrayOf(
-                "Tous" to "",
-                "TV" to "TV",
-                "Movie" to "MOVIE",
-                "TV Short" to "TV SHORT",
-                "OVA" to "OVA",
-                "ONA" to "ONA",
-                "Special" to "SPECIAL",
+    override val customFilters: List<FilterSpec>
+        get() = listOf(
+            select(
+                "Format",
+                "type",
+                arrayOf(
+                    "Tous" to "",
+                    "TV" to "TV",
+                    "Movie" to "MOVIE",
+                    "TV Short" to "TV SHORT",
+                    "OVA" to "OVA",
+                    "ONA" to "ONA",
+                    "Special" to "SPECIAL",
+                ),
             ),
-        ),
-        select(
-            "Langue",
-            "lang",
-            arrayOf(
-                "Tous" to "",
-                "VF" to "vf",
-                "VOSTFR" to "vostfr",
+            select(
+                "Langue",
+                "lang",
+                arrayOf(
+                    "Tous" to "",
+                    "VF" to "vf",
+                    "VOSTFR" to "vostfr",
+                ),
             ),
-        ),
-        select(
-            "Pays",
-            "country",
-            arrayOf(
-                "Tous" to "",
-                "Chine" to "China",
-                "Hong Kong" to "Hong Kong",
-                "Indonésie" to "Indonesia",
-                "Japon" to "Japan",
-                "Philippines" to "Philippines",
-                "Singapour" to "Singapore",
-                "Corée du Sud" to "South Korea",
-                "Taïwan" to "Taiwan",
-                "Thaïlande" to "Thailand",
-                "Vietnam" to "Vietnam",
+            select(
+                "Pays",
+                "country",
+                arrayOf(
+                    "Tous" to "",
+                    "Chine" to "China",
+                    "Hong Kong" to "Hong Kong",
+                    "Indonésie" to "Indonesia",
+                    "Japon" to "Japan",
+                    "Philippines" to "Philippines",
+                    "Singapour" to "Singapore",
+                    "Corée du Sud" to "South Korea",
+                    "Taïwan" to "Taiwan",
+                    "Thaïlande" to "Thailand",
+                    "Vietnam" to "Vietnam",
+                ),
             ),
-        ),
-        separator,
-        group("Genres", "genre[]", GENRE_LIST),
-    )
+            separator,
+            group("Genres", "genre[]", GENRE_LIST),
+        )
 
     // ============================== Parsing ===============================
     override fun parseAnime(document: Document, animesSelector: String, nameSelector: String): AnimesPage {

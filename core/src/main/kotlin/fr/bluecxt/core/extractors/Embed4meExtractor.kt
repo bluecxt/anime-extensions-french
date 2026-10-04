@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.await
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -47,15 +48,8 @@ class Embed4meExtractor(private val client: OkHttpClient) {
             .add("Referer", "${parsedUrl.scheme}://${parsedUrl.host}/")
             .build()
 
-        val response = client.newCall(eu.kanade.tachiyomi.network.GET(apiUrl, headers)).await()
-        if (!response.isSuccessful) {
-            if (response.code == 429) {
-                throw RateLimitException("code ${response.code} message ${response.message}")
-            } else {
-                throw ExtractionException("code ${response.code} message ${response.message}")
-            }
-        }
-        val responseBody = response.body.string().trim()
+        val response = client.newCall(GET(apiUrl, headers)).awaitSuccessOrUnavailable(apiUrl)
+        val responseBody = response.use { it.body.string().trim() }
 
         val decryptedJsonStr = decryptAesCbc(responseBody, "kiemtienmua911ca", "1234567890oiuytr")
         val dataObj = json.parseToJsonElement(decryptedJsonStr).jsonObject

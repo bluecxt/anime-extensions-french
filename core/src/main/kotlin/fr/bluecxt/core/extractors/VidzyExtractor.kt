@@ -6,13 +6,13 @@ import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.SelectorException
 import fr.bluecxt.core.VIDZY_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.useAsJsoup
@@ -63,7 +63,7 @@ class VidzyExtractor(private val client: OkHttpClient) {
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val downloadUrl = getDownloadUrl(url) ?: throw ExtractionException("could not parse the url")
         val headers = getHeaders(url)
-        val document = client.newCall(GET(downloadUrl, headers)).awaitSuccess().useAsJsoup()
+        val document = client.newCall(GET(downloadUrl, headers)).awaitSuccessOrUnavailable(downloadUrl).useAsJsoup()
 
         val op = document.selectFirst("input[name=op]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find op")
         val id = document.selectFirst("input[name=id]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find id")
@@ -77,7 +77,7 @@ class VidzyExtractor(private val client: OkHttpClient) {
             .add("hash", hash)
             .build()
 
-        val downloadDocument = client.newCall(POST(downloadUrl, headers, formBody)).awaitSuccess().useAsJsoup()
+        val downloadDocument = client.newCall(POST(downloadUrl, headers, formBody)).awaitSuccessOrUnavailable(downloadUrl).useAsJsoup()
 
         Log.d(VIDZY_LOG, "post on $downloadUrl, headers = $url as referer and useragent classic")
         Log.d(VIDZY_LOG, "formbody: op = $op, id = $id mode = $mode hash = $hash")

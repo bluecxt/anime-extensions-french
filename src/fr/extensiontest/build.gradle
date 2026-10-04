@@ -3,7 +3,7 @@ apply plugin: 'com.android.application'
 ext {
     extName = 'Extension-Test'
     extClass = '.ExtensionTest'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = false
 }
 

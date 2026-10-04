@@ -11,7 +11,9 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ContentUnavailableException
+import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.ExtractionException
+import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.model.ExtractedSource
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.Dispatchers
@@ -63,18 +65,45 @@ fun Video.withDefaultHeaders(baseUrl: String): Video {
     return this.copy(headers = builder.build())
 }
 
+private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
+
 /**
- * Simple builder for basic headers
+ * Automatically infers and adds Sec-CH-UA, Sec-CH-UA-Mobile, and Sec-CH-UA-Platform Client Hints
+ * derived from the given or active User-Agent string.
+ */
+fun Headers.Builder.addClientHints(userAgent: String = DEFAULT_USER_AGENT): Headers.Builder {
+    val chromeMatch = CHROME_VERSION_REGEX.find(userAgent)
+    if (chromeMatch != null) {
+        val major = chromeMatch.groupValues[1]
+        val isMobile = userAgent.contains("Mobile", ignoreCase = true)
+        val platform = when {
+            userAgent.contains("Android", ignoreCase = true) -> "\"Android\""
+            userAgent.contains("Windows", ignoreCase = true) -> "\"Windows\""
+            userAgent.contains("Mac", ignoreCase = true) -> "\"macOS\""
+            userAgent.contains("Linux", ignoreCase = true) -> "\"Linux\""
+            else -> "\"Android\""
+        }
+        set("Sec-CH-UA", "\"Chromium\";v=\"$major\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"$major\"")
+        set("Sec-CH-UA-Mobile", if (isMobile) "?1" else "?0")
+        set("Sec-CH-UA-Platform", platform)
+    }
+    return this
+}
+
+/**
+ * Simple builder for basic headers with automatic Client Hints injection
  */
 fun defaultHeaders(
     referer: String = "",
     origin: String = "",
     accept: String = "",
+    addClientHints: Boolean = true,
 ): Headers = Headers.Builder()
     .apply {
         if (referer.isNotBlank()) add("Referer", referer)
         if (origin.isNotBlank()) add("Origin", origin)
         if (accept.isNotBlank()) add("Accept", accept)
+        if (addClientHints) addClientHints()
     }.build()
 
 /**
@@ -88,17 +117,26 @@ fun String.normalize(): String = this.lowercase().filter { it.isLetterOrDigit() 
  * - Throws ExtractionException on non-2xx status codes
  * Automatically closes response on failure.
  */
-suspend fun Call.awaitSuccessOrUnavailable(url: String = ""): Response {
+suspend fun Call.awaitSuccessOrUnavailable(
+    url: String = "",
+    unavailableCodes: Set<Int> = setOf(404, 410),
+    rateLimitCodes: Set<Int> = setOf(429),
+    throwNonSuccessful: Boolean = true,
+): Response {
     val response = this.await()
-    if (response.code == 404 || response.code == 410) {
+    if (response.code in unavailableCodes) {
         response.close()
-        throw ContentUnavailableException("Video unavailable (${response.code}) $url".trim())
+        throw ContentUnavailableException("Video unavailable (${response.code}) $url")
     }
-    if (!response.isSuccessful) {
+    if (response.code in rateLimitCodes) {
+        response.close()
+        throw RateLimitException("Rate limited (${response.code}) for $url")
+    }
+    if (throwNonSuccessful && !response.isSuccessful) {
         val errCode = response.code
         val errMsg = response.message
         response.close()
-        throw ExtractionException("HTTP $errCode ($errMsg) for $url".trim())
+        throw ExtractionException("HTTP $errCode ($errMsg) for $url")
     }
     return response
 }

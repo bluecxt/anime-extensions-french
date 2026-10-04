@@ -42,6 +42,12 @@ jobs:
             echo "$COMMITS" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
 
+            DIFF_TEXT=$(git log -p --since="7 days ago" -- lib/ | head -c 45000)
+            DELIM="DIFF_EOF_$(date +%s)"
+            echo "diff<<$DELIM" >> $GITHUB_OUTPUT
+            echo "$DIFF_TEXT" >> $GITHUB_OUTPUT
+            echo "$DELIM" >> $GITHUB_OUTPUT
+
             echo "### ⚠️ Changements détectés dans lib/ cette semaine !" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "$DIFF_FILES" >> $GITHUB_STEP_SUMMARY
@@ -59,13 +65,15 @@ jobs:
           MODULES: ${{ steps.detect.outputs.modules }}
           FILES: ${{ steps.detect.outputs.files }}
           COMMITS: ${{ steps.detect.outputs.commits }}
+          DIFF: ${{ steps.detect.outputs.diff }}
         run: |
           DATE=$(date +'%d/%m/%Y')
           ISSUE_TITLE="[Upstream] Changements lib/ du $DATE"
+          FORMATTED_MODULES=$(for m in $MODULES; do echo "- $m"; done)
           ISSUE_BODY="Les modules suivants dans le dossier \`lib/\` ont été modifiés sur le dépôt upstream (yuzono/anime-extensions) cette semaine :
 
           **Modules concernés :**
-          - ${MODULES// /\\n- }
+          $FORMATTED_MODULES
 
           **Commits :**
           \`\`\`
@@ -76,6 +84,14 @@ jobs:
           \`\`\`
           $FILES
           \`\`\`
+
+          <details>
+          <summary><b>Afficher le diff complet</b></summary>
+
+          \`\`\`diff
+          $DIFF
+          \`\`\`
+          </details>
 
           Veuillez vérifier l'impact sur nos extensions."
 
@@ -119,6 +135,12 @@ jobs:
             echo "$COMMITS" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
 
+            DIFF_TEXT=$(git log -p --since="7 days ago" | head -c 45000)
+            DELIM="DIFF_EOF_$(date +%s)"
+            echo "diff<<$DELIM" >> $GITHUB_OUTPUT
+            echo "$DIFF_TEXT" >> $GITHUB_OUTPUT
+            echo "$DELIM" >> $GITHUB_OUTPUT
+
             echo "### ⚠️ Nouveaux commits cette semaine sur Docchi-players !" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "$COMMITS" >> $GITHUB_STEP_SUMMARY
@@ -135,6 +157,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FILES: ${{ steps.detect-docchi.outputs.files }}
           COMMITS: ${{ steps.detect-docchi.outputs.commits }}
+          DIFF: ${{ steps.detect-docchi.outputs.diff }}
         run: |
           DATE=$(date +'%d/%m/%Y')
           ISSUE_TITLE="[Docchi] Nouveaux commits sur main (Semaine du $DATE)"
@@ -150,6 +173,14 @@ jobs:
           \`\`\`
           $FILES
           \`\`\`
+
+          <details>
+          <summary><b>Afficher le diff complet</b></summary>
+
+          \`\`\`diff
+          $DIFF
+          \`\`\`
+          </details>
           
           Évaluez si une synchronisation contractuelle ou technique est requise de notre côté."
           

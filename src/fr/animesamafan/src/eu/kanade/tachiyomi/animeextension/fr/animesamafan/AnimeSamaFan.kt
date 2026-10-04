@@ -4,7 +4,6 @@ package eu.kanade.tachiyomi.animeextension.fr.animesamafan
 
 import android.util.Log
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -17,13 +16,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
+import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.filterSmartMetadata
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.useAsJsoup
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -100,7 +99,11 @@ class AnimeSamaFan :
         return GET(url.toString(), headers)
     }
 
-    override fun getFilterList() = AnimeSamaFanCatalogueFilters.FILTER_LIST
+    override val customFilters: List<FilterSpec>
+        get() = listOf(
+            select("Type", "type", TYPE_OPTIONS),
+            select("Genre", "genre", GENRE_OPTIONS),
+        )
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val response = client.newCall(catalogueRequest(page = page)).awaitSuccess()
@@ -152,16 +155,13 @@ class AnimeSamaFan :
             return urlparseDetailsAsSearchResult(response.useAsJsoup())
         }
 
-        val searchFilters = AnimeSamaFanCatalogueFilters.getSearchFilters(filters)
-        val response = client.newCall(
-            catalogueRequest(
-                page = page,
-                query = query,
-                type = searchFilters.type,
-                genre = searchFilters.genre,
-            ),
-        ).awaitSuccess()
+        val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) addQueryParameter("search", query)
+            applyFilters(filters)
+        }.build()
 
+        val response = client.newCall(GET(url.toString(), headers)).awaitSuccess()
         return parseAnimePage(response.useAsJsoup(), page)
     }
 
@@ -176,48 +176,6 @@ class AnimeSamaFan :
             url = document.location().safeRelativePath(baseUrl) ?: ""
         }
         return AnimesPage(listOf(anime), false)
-    }
-
-    private object AnimeSamaFanCatalogueFilters {
-        private val filterData by lazy {
-            val jsonStream = AnimeSamaFan::class.java.getResourceAsStream("filters.json")
-            val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "{}"
-            try {
-                Json.decodeFromString<Map<String, List<List<String>>>>(jsonString)
-            } catch (_: Exception) {
-                emptyMap()
-            }
-        }
-
-        private fun getOptions(key: String): List<Pair<String, String>> = filterData[key]?.map { it[0] to it[1] } ?: emptyList()
-
-        class TypeFilter : AnimeFilter.Select<String>("Type", getOptions("TYPES").map { it.first }.toTypedArray(), 0)
-
-        class GenreFilter : AnimeFilter.Select<String>("Genre", getOptions("GENRES").map { it.first }.toTypedArray(), 0)
-
-        val FILTER_LIST get() = AnimeFilterList(
-            TypeFilter(),
-            GenreFilter(),
-        )
-
-        data class SearchFilters(
-            val type: String,
-            val genre: String,
-        )
-
-        fun getSearchFilters(filters: AnimeFilterList): SearchFilters {
-            if (filters.isEmpty()) {
-                return SearchFilters(type = "", genre = "")
-            }
-
-            val typeIndex = filters.filterIsInstance<TypeFilter>().firstOrNull()?.state ?: 0
-            val genreIndex = filters.filterIsInstance<GenreFilter>().firstOrNull()?.state ?: 0
-
-            return SearchFilters(
-                type = getOptions("TYPES").getOrNull(typeIndex)?.second ?: "",
-                genre = getOptions("GENRES").getOrNull(genreIndex)?.second ?: "",
-            )
-        }
     }
 
     // ================== Details ==================
@@ -544,5 +502,33 @@ class AnimeSamaFan :
 
     companion object {
         const val PREFIX_SEARCH = "id:"
+
+        private val TYPE_OPTIONS = arrayOf(
+            "Tous les types" to "",
+            "Série" to "Series",
+            "Film" to "Film",
+        )
+
+        private val GENRE_OPTIONS = arrayOf(
+            "Tous les genres" to "",
+            "Action" to "9",
+            "Animes" to "1",
+            "Aventure" to "13",
+            "Comédie" to "11",
+            "Crime" to "15",
+            "Drame" to "12",
+            "Famille" to "16",
+            "Fantastique" to "14",
+            "Films" to "2",
+            "Guerre" to "17",
+            "Horreur" to "22",
+            "Mystère" to "18",
+            "Romance" to "20",
+            "Scans" to "50",
+            "Science-Fiction" to "19",
+            "Thriller" to "21",
+            "Top Animes" to "3",
+            "Voirdrama" to "48",
+        )
     }
 }
