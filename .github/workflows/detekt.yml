@@ -4,23 +4,24 @@ on:
   push:
     branches:
       - dev
+      - main
     paths:
-      - 'src/**'
-      - 'core/**'
-      - 'config/detekt.yml'
-      - 'build.gradle.kts'
-      - '.github/scripts/merge-detekt-sarif.py'
-      - '.github/workflows/detekt.yml'
+      - "src/**"
+      - "core/**"
+      - "config/detekt.yml"
+      - "build.gradle.kts"
+      - ".github/scripts/merge-detekt-sarif.py"
+      - ".github/workflows/detekt.yml"
   pull_request:
     branches:
       - dev
     paths:
-      - 'src/**'
-      - 'core/**'
-      - 'config/detekt.yml'
-      - 'build.gradle.kts'
-      - '.github/scripts/merge-detekt-sarif.py'
-      - '.github/workflows/detekt.yml'
+      - "src/**"
+      - "core/**"
+      - "config/detekt.yml"
+      - "build.gradle.kts"
+      - ".github/scripts/merge-detekt-sarif.py"
+      - ".github/workflows/detekt.yml"
   workflow_dispatch:
 
 permissions:
