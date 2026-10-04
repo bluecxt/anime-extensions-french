@@ -52,4 +52,9 @@ jobs:
           cache-read-only: true
 
       - name: Run Detekt
+        env:
+          TMDB_API: "dummy"
+          TVDB_API: "dummy"
+          WEBHOOK_URL: "dummy"
+          WEBHOOK_SECRET: "dummy"
         run: ./gradlew detekt --continue
