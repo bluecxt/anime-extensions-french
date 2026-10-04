@@ -94,7 +94,6 @@ jobs:
           TVDB_API: ${{ secrets.tvdb_api }}
           WEBHOOK_URL: ${{ secrets.webhook_url }}
           WEBHOOK_SECRET: ${{ secrets.webhook_secret }}
-        env:
           GRADLE_TASK: ${{ inputs.gradle_task }}
           APK_PATH: ${{ inputs.apk_path }}
         run: |
