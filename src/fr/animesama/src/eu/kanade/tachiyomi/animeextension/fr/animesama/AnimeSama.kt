@@ -663,13 +663,7 @@ class AnimeSama :
                 }
             }.distinctBy { it.url }
 
-        if (medias.isEmpty() && !link.contains("404")) {
-            sendErrorWebhook(
-                url = "$baseUrl$link",
-                context = "Échec du parsing des saisons (panneauAnime) : aucun média trouvé dans le script HTML",
-                exception = IllegalStateException("panneauRegex matched 0 season panels for $link"),
-            )
-        }
+        if (medias.isEmpty()) throw Exception("Aucune saison trouvée. Elle n'est probablement pas encore sortie, sinon signalez-le au développeur.")
         return medias
     }
 
