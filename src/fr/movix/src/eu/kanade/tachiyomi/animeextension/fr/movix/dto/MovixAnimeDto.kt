@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.movix.dto
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -9,8 +10,10 @@ data class AnimeItem(
     val url: String,
     val name: String,
     val image: String? = null,
-    val alternative_names: List<String> = emptyList(),
-    val alternative_names_string: String? = null,
+    @SerialName("alternative_names")
+    val alternativeNames: List<String> = emptyList(),
+    @SerialName("alternative_names_string")
+    val alternativeNamesString: String? = null,
     val seasons: List<Season> = emptyList(),
 )
 
@@ -23,21 +26,19 @@ data class Season(
 @Serializable
 data class Episode(
     val name: String,
-    val serie_name: String? = null,
-    val season_name: String? = null,
+    @SerialName("serie_name")
+    val serieName: String? = null,
+    @SerialName("season_name")
+    val seasonName: String? = null,
     val index: Int,
-    val streaming_links: List<StreamingLink> = emptyList(),
+    @SerialName("streaming_links")
+    val streamingLinks: List<StreamingLink> = emptyList(),
 )
 
 @Serializable
 data class StreamingLink(
     val language: String,
     val players: List<String> = emptyList(),
-)
-
-@Serializable
-data class Top10Response(
-    val top10: List<Top10Item> = emptyList(),
 )
 
 @Serializable
@@ -56,5 +57,6 @@ data class TmdbDiscoverResponse(
 data class TmdbDiscoverResult(
     val name: String? = null,
     val title: String? = null,
-    val poster_path: String? = null,
+    @SerialName("poster_path")
+    val posterPath: String? = null,
 )

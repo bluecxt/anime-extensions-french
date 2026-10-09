@@ -3,18 +3,10 @@
 package eu.kanade.tachiyomi.animeextension.fr.movix
 
 import android.util.Log
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.CpasmalRes
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixDramaResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixFstreamResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixImdbResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixMovieLinksResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixPurstreamResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixTmdbResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixTvLinksResponse
-import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixWiflixResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbDetailResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbMainResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbResult
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbSeason
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbSeasonDetail
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -25,11 +17,14 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.MOVIX_LOG
 import keiyoushi.core.BuildConfig
-import okhttp3.Request
 import okhttp3.Response
 import java.net.URLEncoder
+import java.util.concurrent.CancellationException
+
+private val EPISODE_NAME_REGEX = Regex("(?i)Episode \\d+")
 
 class Movix : BaseMovix("Movix") {
 
@@ -43,20 +38,20 @@ class Movix : BaseMovix("Movix") {
     // ========================= POPULAR =========================
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        // Films populaires en salle
         val moviesUrl = "$tmdbBase/movie/now_playing?api_key=$tmdbKey&language=$tmdbLang&page=$page"
-        val moviesRes = client.newCall(GET(moviesUrl)).awaitSuccess()
-        val movies = json.decodeFromString<TmdbMainResponse>(moviesRes.body.string())
+        val movies: TmdbMainResponse = client.newCall(GET(moviesUrl)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
 
-        // Séries diffusées en ce moment
         val tvUrl = "$tmdbBase/tv/on_the_air?api_key=$tmdbKey&language=$tmdbLang&page=$page"
-        val tvRes = client.newCall(GET(tvUrl)).awaitSuccess()
-        val tvShows = json.decodeFromString<TmdbMainResponse>(tvRes.body.string())
+        val tvShows: TmdbMainResponse = client.newCall(GET(tvUrl)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
 
-        val animes = (
-            movies.results.map { it.toSAnime("movie") } +
-                tvShows.results.map { it.toSAnime("tv") }
-            ).filterNotNull()
+        val animes = buildList {
+            movies.results.forEach { it.toSAnime("movie")?.let(::add) }
+            tvShows.results.forEach { it.toSAnime("tv")?.let(::add) }
+        }
 
         return AnimesPage(animes, movies.totalPages?.let { page < it } ?: false)
     }
@@ -67,22 +62,22 @@ class Movix : BaseMovix("Movix") {
     // ========================= LATEST =========================
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        // Films récents (sortie FR)
         val moviesUrl = "$tmdbBase/discover/movie?api_key=$tmdbKey&language=$tmdbLang" +
             "&sort_by=release_date.desc&watch_region=FR&page=$page&include_adult=false"
-        val moviesRes = client.newCall(GET(moviesUrl)).awaitSuccess()
-        val movies = json.decodeFromString<TmdbMainResponse>(moviesRes.body.string())
+        val movies: TmdbMainResponse = client.newCall(GET(moviesUrl)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
 
-        // Séries récentes
         val tvUrl = "$tmdbBase/discover/tv?api_key=$tmdbKey&language=$tmdbLang" +
             "&sort_by=first_air_date.desc&watch_region=FR&page=$page"
-        val tvRes = client.newCall(GET(tvUrl)).awaitSuccess()
-        val tvShows = json.decodeFromString<TmdbMainResponse>(tvRes.body.string())
+        val tvShows: TmdbMainResponse = client.newCall(GET(tvUrl)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
 
-        val animes = (
-            movies.results.map { it.toSAnime("movie") } +
-                tvShows.results.map { it.toSAnime("tv") }
-            ).filterNotNull()
+        val animes = buildList {
+            movies.results.forEach { it.toSAnime("movie")?.let(::add) }
+            tvShows.results.forEach { it.toSAnime("tv")?.let(::add) }
+        }
 
         return AnimesPage(animes, movies.totalPages?.let { page < it } ?: false)
     }
@@ -101,16 +96,18 @@ class Movix : BaseMovix("Movix") {
             val type = if (id.startsWith("movie")) "movie" else "tv"
             val tmdbId = id.substringAfterLast("/")
             val url = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
-            val res = client.newCall(GET(url)).awaitSuccess()
-            val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
+            val detail: TmdbDetailResponse = client.newCall(GET(url)).awaitSuccess().use {
+                json.decodeFromString(it.body.string())
+            }
             val anime = detail.toSAnime(type) ?: return AnimesPage(emptyList(), false)
             return AnimesPage(listOf(anime), false)
         }
 
         val encoded = URLEncoder.encode(trimmed, "UTF-8")
         val url = "$tmdbBase/search/multi?api_key=$tmdbKey&query=$encoded&language=$tmdbLang&page=$page"
-        val res = client.newCall(GET(url)).awaitSuccess()
-        val data = json.decodeFromString<TmdbMainResponse>(res.body.string())
+        val data: TmdbMainResponse = client.newCall(GET(url)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
 
         val animes = data.results.mapNotNull { result ->
             val type = result.mediaType ?: return@mapNotNull null
@@ -136,8 +133,9 @@ class Movix : BaseMovix("Movix") {
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val (type, tmdbId) = parseAnimeUrl(anime.url)
         val url = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
-        val res = client.newCall(GET(url)).awaitSuccess()
-        val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
+        val detail: TmdbDetailResponse = client.newCall(GET(url)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
         anime.description = buildString {
             val date = (detail.releaseDate ?: detail.firstAirDate)?.split("-")?.first()
             if (!date.isNullOrBlank()) append("Date de sortie : $date\n\n")
@@ -155,9 +153,9 @@ class Movix : BaseMovix("Movix") {
         if (type == "tv") {
             val seasonsCount = detail.seasons?.count { (it.seasonNumber ?: 0) > 0 } ?: 0
             if (seasonsCount > 1) {
-                anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+                anime.fetch_type = eu.kanade.tachiyomi.animesource.model.FetchType.Seasons
             } else {
-                anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+                anime.fetch_type = eu.kanade.tachiyomi.animesource.model.FetchType.Episodes
             }
         }
 
@@ -174,8 +172,9 @@ class Movix : BaseMovix("Movix") {
         if (type != "tv") return emptyList()
 
         val url = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
-        val res = client.newCall(GET(url)).awaitSuccess()
-        val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
+        val detail: TmdbDetailResponse = client.newCall(GET(url)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
 
         val seasons = detail.seasons?.filter { (it.seasonNumber ?: 0) > 0 } ?: return emptyList()
 
@@ -195,8 +194,8 @@ class Movix : BaseMovix("Movix") {
                 status = if (index < seasons.size - 1) SAnime.COMPLETED else anime.status
 
                 coreOptimizeDisplayTitle(this.title, anime.title)
-                coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
-                coreSetSeasonNumber(-2.0)
+                fetch_type = eu.kanade.tachiyomi.animesource.model.FetchType.Episodes
+                season_number = HUB_SEASON_NUMBER
                 initialized = true
             }
         }
@@ -220,10 +219,10 @@ class Movix : BaseMovix("Movix") {
         val specificSeasonStr = anime.url.substringAfter("#s", "").substringBefore("|")
         val specificSeason = specificSeasonStr.toIntOrNull()
 
-        // Séries : fetch saisons depuis TMDB
         val tmdbUrl = "$tmdbBase/$type/$tmdbId?api_key=$tmdbKey&language=$tmdbLang"
-        val res = client.newCall(GET(tmdbUrl)).awaitSuccess()
-        val detail = json.decodeFromString<TmdbDetailResponse>(res.body.string())
+        val detail: TmdbDetailResponse = client.newCall(GET(tmdbUrl)).awaitSuccess().use {
+            json.decodeFromString(it.body.string())
+        }
 
         var seasons = detail.seasons?.filter { (it.seasonNumber ?: 0) > 0 } ?: return emptyList()
 
@@ -232,37 +231,42 @@ class Movix : BaseMovix("Movix") {
         }
 
         return seasons.flatMap { season ->
-            val sn = season.seasonNumber ?: return@flatMap emptyList()
-            val seasonUrl = "$tmdbBase/$type/$tmdbId/season/$sn?api_key=$tmdbKey&language=$tmdbLang"
-            try {
-                val seasonRes = client.newCall(GET(seasonUrl)).awaitSuccess()
-                val seasonDetail = json.decodeFromString<TmdbSeasonDetail>(seasonRes.body.string())
-                seasonDetail.episodes?.map { ep ->
-                    val en = ep.episodeNumber ?: 0
-                    SEpisode.create().apply {
-                        name = buildString {
-                            if (sn > 1) append("[S$sn] ")
-
-                            append("Épisode $en")
-
-                            val hasTitle = !ep.name.isNullOrBlank() && !ep.name.matches(Regex("(?i)Episode \\d+"))
-                            if (hasTitle) {
-                                append(" - ")
-                                append(ep.name)
-                            }
-                        }
-                        episode_number = (en).toFloat()
-                        scanlator = "Saison $sn"
-                        url = "tv/$tmdbId-$sn-$en"
-                        preview_url = ep.stillPath?.let { "$tmdbImg500$it" }
-                        summary = ep.overview
-                    }
-                } ?: emptyList()
-            } catch (e: Exception) {
-                Log.d(MOVIX_LOG, "Season fetch error S$sn: ${e.message}")
-                emptyList()
-            }
+            fetchSeasonEpisodes(type, tmdbId, season)
         }.asReversed()
+    }
+
+    private suspend fun fetchSeasonEpisodes(type: String, tmdbId: String, season: TmdbSeason): List<SEpisode> {
+        val sn = season.seasonNumber ?: return emptyList()
+        val seasonUrl = "$tmdbBase/$type/$tmdbId/season/$sn?api_key=$tmdbKey&language=$tmdbLang"
+        return try {
+            val seasonDetail: TmdbSeasonDetail = client.newCall(GET(seasonUrl)).awaitSuccess().use {
+                json.decodeFromString(it.body.string())
+            }
+            seasonDetail.episodes?.map { ep ->
+                val en = ep.episodeNumber ?: 0
+                SEpisode.create().apply {
+                    name = buildString {
+                        if (sn > 1) append("[S$sn] ")
+                        append("Épisode $en")
+                        val hasTitle = !ep.name.isNullOrBlank() && !ep.name.matches(EPISODE_NAME_REGEX)
+                        if (hasTitle) {
+                            append(" - ")
+                            append(ep.name)
+                        }
+                    }
+                    episode_number = en.toFloat()
+                    scanlator = "Saison $sn"
+                    url = "tv/$tmdbId-$sn-$en"
+                    preview_url = ep.stillPath?.let { "$tmdbImg500$it" }
+                    summary = ep.overview
+                }
+            } ?: emptyList()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d(MOVIX_LOG, "Season fetch error S$sn: ${e.message}")
+            emptyList()
+        }
     }
 
     override fun episodeListParse(response: Response) = throw UnsupportedOperationException()
@@ -274,35 +278,7 @@ class Movix : BaseMovix("Movix") {
         val parts = episode.url.split("-")
         val season = parts.getOrNull(1)
         val ep = parts.getOrNull(2)
-        val query = if (type == "tv" && season != null && ep != null) "?season=$season&episode=$ep" else ""
-
-        val endpoints = buildList {
-            add(Hoster(hosterName = "Movix", internalData = "links/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
-            add(Hoster(hosterName = "MovixTmdb", internalData = "tmdb/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
-            add(Hoster(hosterName = "IMDB", internalData = "imdb/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
-            if (type == "movie") {
-                add(Hoster(hosterName = "FStream", internalData = "fstream/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
-                add(Hoster(hosterName = "Wiflix", internalData = "wiflix/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
-                add(Hoster(hosterName = "Cpasmal", internalData = "cpasmal/$type/$tmdbId|$type|$tmdbId|$season|$ep"))
-            } else {
-                add(Hoster(hosterName = "FStream", internalData = "fstream/$type/$tmdbId/season/$season|$type|$tmdbId|$season|$ep"))
-                add(Hoster(hosterName = "Wiflix", internalData = "wiflix/$type/$tmdbId/$season|$type|$tmdbId|$season|$ep"))
-                add(Hoster(hosterName = "Cpasmal", internalData = "cpasmal/$type/$tmdbId/$season/$ep|$type|$tmdbId|$season|$ep"))
-                add(Hoster(hosterName = "Drama", internalData = "drama/$type/$tmdbId$query|$type|$tmdbId|$season|$ep"))
-            }
-            add(
-                Hoster(
-                    hosterName = "Purstream",
-                    internalData = if (type == "movie") {
-                        "purstream/movie/$tmdbId/stream|$type|$tmdbId|$season|$ep"
-                    } else {
-                        "purstream/tv/$tmdbId/stream$query|$type|$tmdbId|$season|$ep"
-                    },
-                ),
-            )
-        }
-
-        return endpoints
+        return buildMovixHosters(type, tmdbId, season, ep)
     }
 
     override fun hosterListParse(response: Response) = throw UnsupportedOperationException()
@@ -320,23 +296,7 @@ class Movix : BaseMovix("Movix") {
         Log.d(MOVIX_LOG, "[$brand] → $targetUrl")
 
         return try {
-            val res = client.newCall(
-                Request.Builder()
-                    .url(targetUrl)
-                    .headers(apiHeaders)
-                    .build(),
-            ).awaitSuccess()
-
-            var responseText = res.body.string()
-
-            if (res.code in 301..302) {
-                val location = res.header("location")
-                if (!location.isNullOrBlank()) {
-                    responseText = client.newCall(
-                        Request.Builder().url(location).headers(apiHeaders).build(),
-                    ).awaitSuccess().body.string()
-                }
-            }
+            val responseText = fetchApiResponse(targetUrl) ?: return emptyList()
 
             if (!isValidResponse(responseText)) {
                 Log.d(MOVIX_LOG, "[$brand] Réponse invalide")
@@ -349,11 +309,15 @@ class Movix : BaseMovix("Movix") {
             links.parallelMap { link ->
                 try {
                     extractVideos(link, lang = null, allowedServers = supportedServers)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.d(MOVIX_LOG, "[$brand] Erreur extraction $link: ${e.message}")
                     emptyList()
                 }
             }.flatten().distinctBy { it.videoUrl }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.d(MOVIX_LOG, "[$brand] Erreur: ${e.message}")
             emptyList()
