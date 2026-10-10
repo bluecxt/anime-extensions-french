@@ -19,7 +19,6 @@ class WaveplayerExtractor(private val client: OkHttpClient, private val headers:
         return listOf(
             ExtractedSource(
                 url = masterUrl,
-                quality = "", // DASH Auto
                 headers = extHeaders,
                 subtitleTracks = subtitleTracks,
             ),

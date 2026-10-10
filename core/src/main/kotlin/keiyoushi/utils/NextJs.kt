@@ -182,6 +182,7 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
  * meaningful predicate can be inferred. Provide an explicit predicate in that case.
  */
 @PublishedApi
+@kotlinx.serialization.ExperimentalSerializationApi
 internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Boolean {
     val kType = typeOf<T>()
     val isList = kType.classifier == List::class

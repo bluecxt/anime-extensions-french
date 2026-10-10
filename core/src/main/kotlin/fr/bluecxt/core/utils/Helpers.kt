@@ -252,6 +252,16 @@ val Throwable.safeHttpCode: Int?
         return Regex("""\b(\d{3})\b""").find(msg)?.value?.toIntOrNull()
     }
 
+@RequiresOptIn(
+    level = RequiresOptIn.Level.WARNING,
+    message = "This API is marked for refactoring. Check annotation parameter for details.",
+)
+@Retention(AnnotationRetention.BINARY)
+@Target(AnnotationTarget.FUNCTION, AnnotationTarget.CLASS, AnnotationTarget.PROPERTY)
+annotation class NeedsRefactor(
+    val reason: String = "",
+)
+
 inline val Int.megabytes: Long get() = this.toLong() * 1024 * 1024
 inline val Int.kilobytes: Long get() = this.toLong() * 1024
 inline val Int.gigabytes: Long get() = this.toLong() * 1024 * 1024 * 1024

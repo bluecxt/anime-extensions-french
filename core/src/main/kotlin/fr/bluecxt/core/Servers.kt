@@ -105,7 +105,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         extractor = { url -> MinochinosExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
-    "Abyss" -> VideoServer(
+    "Abyss", "Abysse" -> VideoServer(
         name = "Abyss",
         hosts = listOf(
             "abysscdn.com",
