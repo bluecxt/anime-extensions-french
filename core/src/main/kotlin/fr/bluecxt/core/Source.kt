@@ -338,7 +338,9 @@ abstract class Source :
         try {
             val methods = this.javaClass.methods
             val setter = methods.find { it.name == "setSeason_number" }
-                ?.run { invoke(this, season) }
+            if (setter != null) {
+                setter.invoke(this, season)
+            }
         } catch (_: Exception) {
         }
     }
