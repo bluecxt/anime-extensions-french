@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.animeextension.fr.movix.dto.AnimeItem
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.Season
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.TmdbDiscoverResponse
 import eu.kanade.tachiyomi.animeextension.fr.movix.dto.Top10Item
+import eu.kanade.tachiyomi.animeextension.fr.movix.dto.Top10Response
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -38,7 +39,7 @@ class MovixAnime : BaseMovix("Movix Anime") {
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         if (page > 1) return AnimesPage(emptyList(), false)
         val response = client.get("$apiUrl/api/top10/overview?type=anime", apiHeaders)
-        val top10Item: List<Top10Item> = response.use { it.body.string().parseAs() }
+        val top10Item: List<Top10Item> = response.use { it.body.string().parseAs<Top10Response>().top10 }
 
         val animes = top10Item.parallelMap { item ->
             try {

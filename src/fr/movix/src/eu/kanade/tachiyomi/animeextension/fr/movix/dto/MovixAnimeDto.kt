@@ -42,6 +42,11 @@ data class StreamingLink(
 )
 
 @Serializable
+data class Top10Response(
+    val top10: List<Top10Item> = emptyList(),
+)
+
+@Serializable
 data class Top10Item(
     val title: String,
     val posterPath: String? = null,
