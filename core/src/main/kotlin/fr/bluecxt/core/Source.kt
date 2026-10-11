@@ -20,11 +20,11 @@ import eu.kanade.tachiyomi.network.HttpException
 import fr.bluecxt.core.filters.FilterProvider
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.monitoring.ErrorWebhook
-import fr.bluecxt.core.network.CloudflareInterceptor
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.utils.ExtensionResources
+import fr.bluecxt.core.utils.NeedsRefactor
 import fr.bluecxt.core.utils.addClientHints
 import fr.bluecxt.core.utils.safeHttpCode
 import fr.bluecxt.core.utils.withDefaultHeaders
@@ -48,10 +48,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 val EXTRACTOR_TIMEOUT = (if (BuildConfig.DEBUG) 30 else 60).seconds
-
-val QUALITY_REGEX = Regex("""(\d+)p""")
-val FPS_REGEX = Regex("""(\d+)fps""")
-val LANG_REGEX = Regex("\\((.*?)\\)")
 
 /**
  * Global semaphore to limit the number of concurrent extractions.
@@ -163,7 +159,6 @@ abstract class Source :
                     maxRequestsPerHost = 20
                 },
             )
-            .addInterceptor(CloudflareInterceptor(network.client))
             .addInterceptor { chain ->
                 logUsage()
                 chain.proceed(chain.request())
@@ -315,6 +310,10 @@ abstract class Source :
     /**
      * Safely sets the fetch type using reflection for backward compatibility.
      */
+    @Deprecated(
+        "y'a pas de backward compatibility",
+        replaceWith = ReplaceWith("fetch_type = type"),
+    )
     protected fun SAnime.coreSetFetchType(type: FetchType) {
         try {
             val methods = this.javaClass.methods
@@ -324,12 +323,17 @@ abstract class Source :
                 val enumValue = appFetchTypeClass.enumConstants?.find { it.toString() == type.name }
                 setter.invoke(this, enumValue)
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     /**
      * Safely sets the season number using reflection for backward compatibility.
      */
+    @Deprecated(
+        "y'a pas de backward compatibility",
+        replaceWith = ReplaceWith("season_number = season"),
+    )
     protected fun SAnime.coreSetSeasonNumber(season: Double) {
         try {
             val methods = this.javaClass.methods
@@ -337,7 +341,8 @@ abstract class Source :
             if (setter != null) {
                 setter.invoke(this, season)
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -375,7 +380,12 @@ abstract class Source :
         val prefServer = preferences.getString(CommonPreferences.PREF_SERVER_KEY, "sibnet")!!
 
         return this.sortedWith(
-            compareByDescending<Hoster> { it.hosterName.contains("($prefVoice)", true) || it.hosterName.contains(prefVoice, true) }
+            compareByDescending<Hoster> {
+                it.hosterName.contains("($prefVoice)", true) || it.hosterName.contains(
+                    prefVoice,
+                    true,
+                )
+            }
                 .thenBy {
                     LANG_REGEX.find(it.hosterName)?.value ?: "(Unknown)"
                 }
@@ -393,6 +403,7 @@ abstract class Source :
      * Shortens seasons to numbers and detects special sub-titles/spin-offs.
      * Prepends full title to description if shortened to a sub-title.
      */
+    @NeedsRefactor("wtf is that with thousand of Regex everywher")
     protected fun SAnime.coreOptimizeDisplayTitle(fullTitle: String, seriesTitle: String) {
         var isSubTitleOnly = false
         val effectiveSeriesTitle = if (seriesTitle.isNotEmpty() && fullTitle.contains(seriesTitle, ignoreCase = true)) {
@@ -408,7 +419,8 @@ abstract class Source :
                 .last().trim().removePrefix(":").removePrefix("-").trim()
 
             if (suffix.isNotEmpty()) {
-                val isStandardSeason = suffix.matches(Regex("""(?i)(?:Saison|Season|Partie|Part|Film|Movie|OAV|OVA|Special|HS|Kai|\d+).*"""))
+                val isStandardSeason =
+                    suffix.matches(Regex("""(?i)(?:Saison|Season|Partie|Part|Film|Movie|OAV|OVA|Special|HS|Kai|\d+).*"""))
                 if (!isStandardSeason) {
                     this.title = suffix
                     isSubTitleOnly = true
@@ -456,8 +468,8 @@ abstract class Source :
             status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else (finalMeta?.status ?: defStatus)
 
             coreOptimizeDisplayTitle(sTitle, baseTitle)
-            coreSetFetchType(FetchType.Episodes)
-            coreSetSeasonNumber(siteSNum.toDouble())
+            fetch_type = FetchType.Episodes
+            season_number = siteSNum.toDouble()
             initialized = true
         }
     }
@@ -597,33 +609,39 @@ abstract class Source :
             val digest = md.digest(bytes)
             val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(16)
 
-            val url = "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
-                "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
-                "&uid=$hashedId" +
-                "&version=${java.net.URLEncoder.encode(currentVersion, "UTF-8")}"
+            val url =
+                "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
+                    "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
+                    "&uid=$hashedId" +
+                    "&version=${java.net.URLEncoder.encode(currentVersion, "UTF-8")}"
 
             Log.d("SourceTelemetry", "Envoi usage quotidien vers : $url")
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                )
                 .build()
 
-            network.client.newCall(request).enqueue(object : okhttp3.Callback {
-                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                    Log.e("SourceTelemetry", "Erreur réseau pour $currentName", e)
-                }
-
-                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                    val body = response.body.string()
-                    if (response.isSuccessful) {
-                        Log.d("SourceTelemetry", "Usage enregistré pour $currentName : $body")
-                    } else {
-                        Log.e("SourceTelemetry", "Erreur serveur : ${response.code} - $body")
+            network.client.newCall(request).enqueue(
+                object : okhttp3.Callback {
+                    override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                        Log.e("SourceTelemetry", "Erreur réseau pour $currentName", e)
                     }
-                    response.close()
-                }
-            })
+
+                    override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                        val body = response.body.string()
+                        if (response.isSuccessful) {
+                            Log.d("SourceTelemetry", "Usage enregistré pour $currentName : $body")
+                        } else {
+                            Log.e("SourceTelemetry", "Erreur serveur : ${response.code} - $body")
+                        }
+                        response.close()
+                    }
+                },
+            )
         } catch (e: Exception) {
             Log.e("SourceTelemetry", "Erreur critique dans logUsage", e)
         }
@@ -637,6 +655,7 @@ abstract class Source :
     override suspend fun getVideoList(episode: SEpisode): List<Video> = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException()
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = throw UnsupportedOperationException()
+
     override fun searchAnimeParse(response: Response): AnimesPage = throw UnsupportedOperationException()
     override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
     override fun seasonListParse(response: Response): List<SAnime> = throw UnsupportedOperationException()
@@ -646,6 +665,10 @@ abstract class Source :
     open suspend fun fetchRelatedAnimeList(anime: SAnime): List<SAnime> = throw UnsupportedOperationException()
 
     companion object {
+        val QUALITY_REGEX = Regex("""(\d+)p""")
+        val FPS_REGEX = Regex("""(\d+)fps""")
+        val LANG_REGEX = Regex("\\((.*?)\\)")
+
         const val PREF_VOICES_KEY = "preferred_voices"
         const val PREF_VOICES_DEFAULT = "VOSTFR"
         const val PREF_PLAYER_KEY = "preferred_server"

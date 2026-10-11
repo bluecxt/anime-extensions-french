@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DESSINANIME_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
@@ -24,6 +23,7 @@ import fr.bluecxt.core.Source
 import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
 import keiyoushi.utils.parseAs
@@ -31,16 +31,23 @@ import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup.parse
-import org.jsoup.select.QueryParser
+import org.jsoup.nodes.Document
+import org.jsoup.select.Elements
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
+
+private const val MIN_PAGE_SIZE_JSON = 36
+private const val MIN_PAGE_SIZE_HTML = 10
+
+private val posterRegex = Regex("""\\"posterPath\\":\\"(.*?)\\"""")
+private val rsRegex = Regex($$"""\$RS\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""")
+private val iframeRegex = Regex("""\\"iframe_url\\":\\"(?<url>https://[^"\\]+)\\"""")
+private val playerBlockRegex = Regex("""\{\\"type\\":\\"(?<type>[^"\\]+)\\",\\"sources\\":\[(?<sources>.*?)\],\\"host\\":\\"(?<host>[^"\\]+)\\",\\"slug\\":\\"(?<slug>[^"\\]+)\\",\\"iframe_url\\":\\"(?<iframeUrl>[^"\\]+)\\"\}""")
+private val sourceRegex = Regex("""\\"label\\":\\"(?<label>[^"\\]+)\\",\\"source\\":\\"(?<url>https://extractor\.nmlnode\.cc/proxy/[^"\\]+)\\"""")
 
 class DessinAnime :
     Source(),
@@ -91,16 +98,16 @@ class DessinAnime :
             }
         }
 
-        // Clause de sauvegarde basée sur la taille du lot (déduite du module 4819)
-        val hasNextPage = data.size == 36
+        val hasNextPage = data.size >= MIN_PAGE_SIZE_JSON
 
         if (hasNextPage) {
             val lastElementId = data.last().id
             paginationMutex.withLock {
                 paginationMapPopular[page + 1] = lastElementId.toString()
             }
-            Log.d(DESSINANIME_LOG, "page = $page lastId = $lastElementId, hasNextPage=$hasNextPage")
+            Log.d(DESSINANIME_LOG, "lastId = $lastElementId")
         }
+        Log.d(DESSINANIME_LOG, "page = $page hasNextPage=$hasNextPage")
         return AnimesPage(animes, hasNextPage)
     }
 
@@ -178,8 +185,7 @@ class DessinAnime :
         }
 
         // le mieux serait un "a:has(svg.lucide-chevron-right)" mais le site est stupide et a pleins de page vide
-        val minPageSize = 10
-        val hasNextPage = animes.size >= minPageSize
+        val hasNextPage = animes.size >= MIN_PAGE_SIZE_HTML
 
         return AnimesPage(animes, hasNextPage)
     }
@@ -189,12 +195,11 @@ class DessinAnime :
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         var document = response.body.string()
-        val soupClassic = parse(document)
         var soup = parse(document, "$baseUrl${anime.url}").apply { resolveSuspense() }
 
         val seasons = soup.select("a.bg-card")
-        val isHub = if (seasons.size > 1) true else false
-        val isSeason = if (seasons.size == 0 && !document.contains("Film")) true else false
+        val isHub = (seasons.size > 1)
+        val isSeason = if (seasons.isEmpty() && !document.contains("Film")) true else false
         Log.d(DESSINANIME_LOG, "season numbers = ${seasons.size}, isHub = $isHub, isSeason = $isSeason")
 
         if (!isSeason) {
@@ -236,7 +241,7 @@ class DessinAnime :
                 title = sTitle
                 url = sUrl
                 val poster = soup.selectFirst("a[href='$sUrl'] img")?.attr("abs:src") ?: ""
-                thumbnail_url = anime.thumbnail_url
+                thumbnail_url = anime.thumbnail_url ?: poster
                 status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else anime.status
                 coreSetFetchType(Episodes)
                 coreSetSeasonNumber(HUB_SEASON_NUMBER)
@@ -260,39 +265,40 @@ class DessinAnime :
             soup = parse(document, "$baseUrl${anime.url}/1/1").apply { resolveSuspense() }
             episodeList = soup.select("a.group.rounded-xl")
         }
-        // serie
-        val episodes = if (episodeList.isNotEmpty()) {
-            episodeList.mapNotNull { element ->
-                val epName = element.selectFirst("p.text-sm")?.text()?.substringBefore("(")?.trim()
-                val link = element.safeRelativePath() ?: return@mapNotNull null
-                val sNum = "$baseUrl$link".toHttpUrl().pathSegments.getOrNull(2)?.toIntOrNull() ?: 1
-                SEpisode.create().apply {
-                    episode_number = link.removeSuffix("/").substringAfterLast("/").toFloatOrNull() ?: 1f
-                    name = buildString {
-                        if (sNum > 1) append("[S$sNum] ")
-                        append("Episode ${episode_number.toInt()}")
-                        if (epName != null && !epName.contains("Episode")) append(" - $epName")
-                    }
-                    url = link
-                    summary = element.selectFirst("p.text-muted-foreground")?.text() ?: ""
-                    preview_url = element.selectFirst("img")?.attr("src")?.nextJsToDirectUrl() ?: ""
-                }
-            }
-        } else {
-            Log.d(DESSINANIME_LOG, "is movie")
-            val posterRegex = Regex("""\\"posterPath\\":\\"(.*?)\\"""")
-            listOf(
-                SEpisode.create().apply {
-                    episode_number = 1F
-                    name = "[Movie] ${anime.title}"
-                    preview_url = posterRegex.find(document)?.groupValues?.get(1)?.nextJsToDirectUrl()
-                    url = anime.url
-                },
-            )
+
+        val episodes = if (episodeList.isNotEmpty()) { // serie
+            parseSerieEpisodes(episodeList)
+        } else { // movie
+            buildMovie(anime, document)
         }
         return episodes.sortedWith(compareBy { it.episode_number }).asReversed()
     }
 
+    private fun parseSerieEpisodes(episodeList: Elements): List<SEpisode> = episodeList.mapNotNull { element ->
+        val epName = element.selectFirst("p.text-sm")?.text()?.substringBefore("(")?.trim()
+        val link = element.safeRelativePath() ?: return@mapNotNull null
+        val sNum = "$baseUrl$link".toHttpUrl().pathSegments.getOrNull(2)?.toIntOrNull() ?: 1
+        SEpisode.create().apply {
+            episode_number = link.removeSuffix("/").substringAfterLast("/").toFloatOrNull() ?: 1f
+            name = buildString {
+                if (sNum > 1) append("[S$sNum] ")
+                append("Episode ${episode_number.toInt()}")
+                if (epName != null && !epName.contains("Episode")) append(" - $epName")
+            }
+            url = link
+            summary = element.selectFirst("p.text-muted-foreground")?.text() ?: ""
+            preview_url = element.selectFirst("img")?.attr("src")?.nextJsToDirectUrl() ?: ""
+        }
+    }
+
+    private fun buildMovie(anime: SAnime, document: String): List<SEpisode> = listOf(
+        SEpisode.create().apply {
+            episode_number = 1F
+            name = "[Movie] ${anime.title}"
+            preview_url = posterRegex.find(document)?.groupValues?.get(1)?.nextJsToDirectUrl()
+            url = anime.url
+        },
+    )
     // ============================ Hosters =============================
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
@@ -300,9 +306,6 @@ class DessinAnime :
         val html = response.body.string()
 
         val hosterList = mutableListOf<Hoster>()
-
-        val playerBlockRegex = Regex("""\{\\"type\\":\\"(?<type>[^"\\]+)\\",\\"sources\\":\[(?<sources>.*?)\],\\"host\\":\\"(?<host>[^"\\]+)\\",\\"slug\\":\\"(?<slug>[^"\\]+)\\",\\"iframe_url\\":\\"(?<iframeUrl>[^"\\]+)\\"\}""")
-        val sourceRegex = Regex("""\\"label\\":\\"(?<label>[^"\\]+)\\",\\"source\\":\\"(?<url>https://extractor\.nmlnode\.cc/proxy/[^"\\]+)\\"""")
 
         playerBlockRegex.findAll(html).forEach { match ->
             val host = match.groups["host"]?.value ?: "unknown"
@@ -324,19 +327,13 @@ class DessinAnime :
 
         val useFallback = preferences.getBoolean(PREF_USE_FALLBACK_KEY, PREF_USE_FALLBACK_DEFAULT)
         if (useFallback) {
-            val iframeRegex = Regex("""\\"iframe_url\\":\\"(?<url>https://[^"\\]+)\\"""")
-            val iframeUrls = iframeRegex.findAll(html)
-                .map { it.groups["url"]?.value?.replace("\\/", "/") }
-                .filterNotNull()
+            hosterList += iframeRegex.findAll(html)
+                .mapNotNull { it.groups["url"]?.value?.replace("\\/", "/") }
                 .distinct()
-                .toList()
-
-            iframeUrls.forEach { iframeUrl ->
-                val serverName = getServerName(iframeUrl, supportedServers) ?: return@forEach
-                hosterList.add(
-                    Hoster(hosterUrl = iframeUrl, hosterName = serverName, internalData = "#$serverName"),
-                )
-            }
+                .mapNotNull { url ->
+                    val server = getServerName(url, supportedServers) ?: return@mapNotNull null
+                    Hoster(hosterUrl = url, hosterName = server, internalData = "#$server")
+                }
         }
 
         return hosterList.groupBy { it.hosterName }.map { (name, list) ->
@@ -366,7 +363,7 @@ class DessinAnime :
                     .build()
 
                 if (url.contains("/proxy/hls")) {
-                    runCatching {
+                    runCatchingCancellable {
                         val playlistUtils = PlaylistUtils(client, headers)
                         val extracted = playlistUtils.extractFromHls(
                             playlistUrl = url,
@@ -396,7 +393,7 @@ class DessinAnime :
                 }
             } else {
                 // It's a fallback iframe URL
-                runCatching {
+                runCatchingCancellable {
                     extractVideos(url, lang, supportedServers)
                 }.getOrElse { emptyList() }
             }
@@ -435,21 +432,17 @@ class DessinAnime :
         }.also(screen::addPreference)
     }
 
-    private fun org.jsoup.nodes.Document.resolveSuspense() {
-        val rsRegex = Regex("""\${'$'}RS\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""")
-        this.select("script").forEach { script ->
+    private fun Document.resolveSuspense() {
+        for (script in select("script")) {
             val content = script.data()
-            rsRegex.findAll(content).forEach { match ->
-                val sourceId = match.groupValues.getOrNull(1) ?: return@forEach
-                val targetId = match.groupValues.getOrNull(2) ?: return@forEach
-                val sourceEl = this.getElementById(sourceId)
-                val targetEl = this.getElementById(targetId)
-                if (sourceEl != null && targetEl != null) {
-                    val nodes = sourceEl.childNodes().toList()
-                    nodes.forEach { node ->
-                        targetEl.appendChild(node)
-                    }
-                }
+            if ($$"RS(" !in content) continue
+
+            for (match in rsRegex.findAll(content)) {
+                val (sourceId, targetId) = match.destructured
+                val sourceEl = getElementById(sourceId) ?: continue
+                val targetEl = getElementById(targetId) ?: continue
+
+                sourceEl.childNodes().toList().forEach(targetEl::appendChild)
             }
         }
     }

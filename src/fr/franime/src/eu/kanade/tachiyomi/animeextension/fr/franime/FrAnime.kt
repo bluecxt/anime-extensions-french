@@ -31,7 +31,8 @@ class FrAnime :
     override val name = "FrAnime"
 
     override val defaultBaseUrl = "https://franime.fr"
-    override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Vk", "Embed4me", "Minochinos", "Okru")
+    override val supportedServers =
+        listOf("Sibnet", "Sendvid", "Vidmoly", "Filemoon", "Lulu", "Embed4me", "Minochinos", "Okru", "Uqload")
 
     override val defaultServer = "Vidmoly"
 
@@ -77,6 +78,10 @@ class FrAnime :
 
     companion object {
         const val PREFIX_SEARCH = "id:"
+        private val kaiRegex = Regex("(?i)\\s*Kai\\s*")
+        private val alphanumericRegex = Regex("[^a-z0-9]")
+        private val emptySpaceRegex = Regex("\\s+")
+        private val titleRegex = Regex("[^A-Za-z0-9 ]")
     }
 
     private val database by lazy {
@@ -87,12 +92,8 @@ class FrAnime :
     }
 
     override suspend fun getPopularAnime(page: Int) = pagesToAnimesPage(database.sortedByDescending { it.note }, page)
-    override fun popularAnimeParse(response: Response) = throw UnsupportedOperationException()
-    override fun popularAnimeRequest(page: Int) = throw UnsupportedOperationException()
 
     override suspend fun getLatestUpdates(page: Int) = pagesToAnimesPage(database.asReversed(), page)
-    override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val trimmedQuery = query.trim()
@@ -121,8 +122,6 @@ class FrAnime :
 
         return pagesToAnimesPage(results, page)
     }
-    override fun searchAnimeParse(response: Response): AnimesPage = throw UnsupportedOperationException()
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = throw UnsupportedOperationException()
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val cleanUrl = anime.url.substringBefore("#").substringBefore("?")
@@ -131,7 +130,7 @@ class FrAnime :
             ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment }
 
         val searchTitle = animeData?.title?.takeIf { it.isNotBlank() } ?: animeData?.originalTitle ?: anime.title
-        val tmdbSearchTitle = searchTitle.replace(Regex("(?i)\\s*Kai\\s*"), " ").trim()
+        val tmdbSearchTitle = searchTitle.replace(kaiRegex, " ").trim()
 
         val sNumFromUrl = anime.url.substringAfter("#s", "").substringBefore("|").toIntOrNull()
         val searchQueries = mutableListOf(tmdbSearchTitle)
@@ -179,10 +178,10 @@ class FrAnime :
         val cleanUrl = anime.url.substringBefore("#").substringBefore("?")
         val url = (baseUrl + cleanUrl).toHttpUrl()
         val pathSegment = url.encodedPathSegments.last()
-        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.first { titleToUrl(it.originalTitle) == pathSegment }
+        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
 
         val searchTitle = animeData.title.takeIf { it.isNotBlank() } ?: animeData.originalTitle
-        val tmdbSearchTitle = searchTitle.replace(Regex("(?i)\\s*Kai\\s*"), " ").trim()
+        val tmdbSearchTitle = searchTitle.replace(kaiRegex, " ").trim()
 
         val siteSeasons = animeData.seasons.mapIndexed { index, season ->
             val seasonNum = index + 1
@@ -200,11 +199,11 @@ class FrAnime :
         val cleanUrl = anime.url.substringBefore("#").substringBefore("?")
         val url = (baseUrl + cleanUrl).toHttpUrl()
         val pathSegment = url.encodedPathSegments.last()
-        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.first { titleToUrl(it.originalTitle) == pathSegment }
+        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
 
         val searchTitle = animeData.title.takeIf { it.isNotBlank() } ?: animeData.originalTitle
         val isKai = searchTitle.contains("Kai", ignoreCase = true) || animeData.format.equals("KAI", ignoreCase = true)
-        val tmdbSearchTitle = searchTitle.replace(Regex("(?i)\\s*Kai\\s*"), " ").trim()
+        val tmdbSearchTitle = searchTitle.replace(kaiRegex, " ").trim()
 
         val sNumFromUrl = anime.url.substringAfter("#s", "").substringBefore("|").toIntOrNull()
         val seasonsToProcess = if (sNumFromUrl != null) {
@@ -270,9 +269,9 @@ class FrAnime :
                     it.summary = null
                 }
                 if (isSingleEpisode) {
-                    val prefix = when {
-                        format == "FILM" -> "[Movie] "
-                        format == "OVA" || format == "SPECIAL" -> "[Special] "
+                    val prefix = when (format) {
+                        "FILM" -> "[Movie] "
+                        "OVA", "SPECIAL" -> "[Special] "
                         else -> ""
                     }
                     it.name = "$prefix$searchTitle".trim()
@@ -289,7 +288,7 @@ class FrAnime :
         val seasonNumber = url.queryParameter("s")?.toIntOrNull() ?: 1
         val episodeNumber = url.queryParameter("ep")?.toIntOrNull() ?: 1
         val pathSegment = url.encodedPathSegments.last { it.isNotBlank() }
-        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.first { titleToUrl(it.originalTitle) == pathSegment }
+        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
         val episodeData = animeData.seasons[seasonNumber - 1].episodes[episodeNumber - 1]
 
         val hosters = mutableListOf<Hoster>()
@@ -314,7 +313,7 @@ class FrAnime :
         val episodeIdx = data[2].toInt()
         val lang = data[3]
 
-        val animeData = database.first { it.id.toString() == animeId }
+        val animeData = database.firstOrNull { it.id.toString() == animeId } ?: error("Anime introuvable")
         val episodeData = animeData.seasons[seasonIdx].episodes[episodeIdx]
         val players = if (lang == "vo") episodeData.languages.vo.players else episodeData.languages.vf.players
 
@@ -322,7 +321,7 @@ class FrAnime :
 
         return players.withIndex().filter { !it.value.equals("TELECHARGEMENT UNIQUE", true) }.flatMap { (playerIdx, _) ->
             try {
-                val responseBody = client.newCall(GET("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)).awaitSuccess().body.string()
+                val responseBody = client.newCall(GET("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)).awaitSuccess().use { it.body.string() }
 
                 var playerUrl = responseBody
                 if (responseBody.contains("watch2")) {
@@ -343,8 +342,8 @@ class FrAnime :
     }
 
     private fun normalize(s: String): String = s.lowercase()
-        .replace(Regex("[^a-z0-9]"), " ")
-        .replace(Regex("\\s+"), " ")
+        .replace(alphanumericRegex, " ")
+        .replace(emptySpaceRegex, " ")
         .trim()
 
     private fun editDistance(s1: String, s2: String): Int {
@@ -391,7 +390,6 @@ class FrAnime :
         return AnimesPage(entries, hasNextPage)
     }
 
-    private val titleRegex by lazy { Regex("[^A-Za-z0-9 ]") }
     private fun titleToUrl(title: String) = titleRegex.replace(title, "").replace(" ", "-").lowercase()
 
     private fun pageToSAnimes(page: List<Anime>): List<SAnime> = page.map { anime ->

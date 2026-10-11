@@ -12,7 +12,8 @@ on:
       - "config/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
-      - ".github/scripts/**"
+      - ".github/scripts/move-built-apks.py"
+      - ".github/scripts/create-repo.py"
       - ".github/workflows/build_push.yml"
       - ".github/workflows/reusable_build_publish.yml"
   workflow_dispatch:

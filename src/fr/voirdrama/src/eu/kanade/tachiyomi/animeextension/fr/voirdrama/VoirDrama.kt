@@ -4,7 +4,6 @@ package eu.kanade.tachiyomi.animeextension.fr.voirdrama
 
 import android.content.SharedPreferences
 import android.util.Log
-import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime

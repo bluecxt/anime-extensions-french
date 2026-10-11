@@ -95,7 +95,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidmoly" -> VideoServer(
         name = "Vidmoly",
-        hosts = listOf("vidmoly.me", "vidmoly.to", "vidmoly.biz", "vidmoly.net", "ansembed.net", "voembed.net"),
+        hosts = listOf("vidmoly.me", "vidmoly.to", "vidmoly.biz", "vidmoly.net", "vidmoly.org", "vidmoly.cc", "ansembed.net", "voembed.net"),
         extractor = { url -> VidmolyExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
     )
 
@@ -105,7 +105,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
         extractor = { url -> MinochinosExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
-    "Abyss" -> VideoServer(
+    "Abyss", "Abysse" -> VideoServer(
         name = "Abyss",
         hosts = listOf(
             "abysscdn.com",
@@ -137,7 +137,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Filemoon" -> VideoServer(
         name = "Filemoon",
-        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "boosteradx.online", "byse.sx", "bysewihe.com"),
+        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "boosteradx.online", "byse.sx", "bysewihe.com", "bysedikamoum.com"),
         extractor = { url -> FilemoonExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
