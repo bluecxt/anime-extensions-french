@@ -1,7 +1,7 @@
 ext {
     extName = 'FrAnime'
     extClass = '.FrAnime'
-    extVersionCode = 50
+    extVersionCode = 5
     isNsfw = true
 }
 apply plugin: "kei.plugins.extension.legacy"
