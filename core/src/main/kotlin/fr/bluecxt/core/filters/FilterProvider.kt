@@ -44,6 +44,11 @@ sealed interface FilterSpec {
         val excludeParam: String,
         val options: List<Pair<String, String>>,
     ) : FilterSpec
+
+    class Foldable(
+        val name: String,
+        val specs: List<FilterSpec>,
+    ) : FilterSpec
 }
 
 // ============================== Concrete AnimeFilter Classes ==============================
@@ -92,9 +97,25 @@ class DynamicTriStateGroupFilter(
     fun excluded(): List<String> = state.filter { it.isExcluded() }.map { it.value }
 }
 
+class DynamicFoldableFilter(
+    name: String,
+    filters: List<AnimeFilter<*>>,
+) : AnimeFilter.Group<AnimeFilter<*>>(name, filters)
+
 // ============================== Filter Engine ==============================
 
 object FilterEngine {
+
+    fun buildFilter(spec: FilterSpec): AnimeFilter<*> = when (spec) {
+        is FilterSpec.Separator -> AnimeFilter.Separator()
+        is FilterSpec.Header -> AnimeFilter.Header(spec.title)
+        is FilterSpec.Select -> DynamicSelectFilter(spec.name, spec.param, spec.options, spec.defaultIndex)
+        is FilterSpec.Text -> DynamicTextFilter(spec.name, spec.param, spec.defaultText)
+        is FilterSpec.CheckBox -> DynamicCheckBoxFilter(spec.name, spec.param, spec.value, spec.defaultState)
+        is FilterSpec.Group -> DynamicGroupFilter(spec.name, spec.param, spec.options.map { UriOption(it.first, it.second) })
+        is FilterSpec.TriStateGroup -> DynamicTriStateGroupFilter(spec.name, spec.includeParam, spec.excludeParam, spec.options.map { TriStateOption(it.first, it.second) })
+        is FilterSpec.Foldable -> DynamicFoldableFilter(spec.name, spec.specs.map { buildFilter(it) })
+    }
 
     fun buildFilterList(
         baseFilters: List<AnimeFilter<*>> = emptyList(),
@@ -102,25 +123,19 @@ object FilterEngine {
     ): AnimeFilterList {
         val list = mutableListOf<AnimeFilter<*>>()
         list.addAll(baseFilters)
-
         for (spec in customSpecs) {
-            when (spec) {
-                is FilterSpec.Separator -> list.add(AnimeFilter.Separator())
-                is FilterSpec.Header -> list.add(AnimeFilter.Header(spec.title))
-                is FilterSpec.Select -> list.add(DynamicSelectFilter(spec.name, spec.param, spec.options, spec.defaultIndex))
-                is FilterSpec.Text -> list.add(DynamicTextFilter(spec.name, spec.param, spec.defaultText))
-                is FilterSpec.CheckBox -> list.add(DynamicCheckBoxFilter(spec.name, spec.param, spec.value, spec.defaultState))
-                is FilterSpec.Group -> list.add(DynamicGroupFilter(spec.name, spec.param, spec.options.map { UriOption(it.first, it.second) }))
-                is FilterSpec.TriStateGroup -> list.add(DynamicTriStateGroupFilter(spec.name, spec.includeParam, spec.excludeParam, spec.options.map { TriStateOption(it.first, it.second) }))
-            }
+            list.add(buildFilter(spec))
         }
-
         return AnimeFilterList(list)
     }
 
-    fun applyFilters(builder: HttpUrl.Builder, filters: AnimeFilterList): HttpUrl.Builder {
+    fun applyFilters(builder: HttpUrl.Builder, filters: Iterable<AnimeFilter<*>>): HttpUrl.Builder {
         for (filter in filters) {
             when (filter) {
+                is DynamicFoldableFilter -> {
+                    applyFilters(builder, filter.state)
+                }
+
                 is DynamicSelectFilter -> {
                     val value = filter.toQuery()
                     if (value.isNotBlank()) builder.addQueryParameter(filter.param, value)
@@ -150,17 +165,32 @@ object FilterEngine {
                     }
                 }
 
+                is AnimeFilter.Group<*> -> {
+                    val subFilters = filter.state.filterIsInstance<AnimeFilter<*>>()
+                    if (subFilters.isNotEmpty()) {
+                        applyFilters(builder, subFilters)
+                    }
+                }
+
                 else -> {}
             }
         }
         return builder
     }
 
-    fun getQueryMap(filters: AnimeFilterList): Map<String, List<String>> {
+    fun getQueryMap(filters: Iterable<AnimeFilter<*>>): Map<String, List<String>> {
         val map = mutableMapOf<String, MutableList<String>>()
+        collectQueryMap(filters, map)
+        return map
+    }
 
+    private fun collectQueryMap(filters: Iterable<AnimeFilter<*>>, map: MutableMap<String, MutableList<String>>) {
         for (filter in filters) {
             when (filter) {
+                is DynamicFoldableFilter -> {
+                    collectQueryMap(filter.state, map)
+                }
+
                 is DynamicSelectFilter -> {
                     val value = filter.toQuery()
                     if (value.isNotBlank()) map.getOrPut(filter.param) { mutableListOf() }.add(value)
@@ -190,16 +220,72 @@ object FilterEngine {
                     }
                 }
 
+                is AnimeFilter.Group<*> -> {
+                    val subFilters = filter.state.filterIsInstance<AnimeFilter<*>>()
+                    if (subFilters.isNotEmpty()) {
+                        collectQueryMap(subFilters, map)
+                    }
+                }
+
                 else -> {}
             }
         }
-
-        return map
     }
 
-    fun getParam(filters: AnimeFilterList, param: String): String? = getQueryMap(filters)[param]?.firstOrNull()
+    fun getParam(filters: Iterable<AnimeFilter<*>>, param: String): String? = getQueryMap(filters)[param]?.firstOrNull()
 
-    fun getParamList(filters: AnimeFilterList, param: String): List<String> = getQueryMap(filters)[param] ?: emptyList()
+    fun getParamList(filters: Iterable<AnimeFilter<*>>, param: String): List<String> = getQueryMap(filters)[param] ?: emptyList()
+}
+
+// ============================== Filter DSL Builder Scope ==============================
+
+@DslMarker
+annotation class FilterDsl
+
+@FilterDsl
+class FilterScope : ArrayList<FilterSpec>() {
+    fun select(
+        name: String,
+        param: String,
+        options: Array<Pair<String, String>>,
+        defaultIndex: Int = 0,
+    ) = add(FilterSpec.Select(name, param, options, defaultIndex))
+
+    fun group(
+        name: String,
+        param: String,
+        options: List<Pair<String, String>>,
+    ) = add(FilterSpec.Group(name, param, options))
+
+    fun triStateGroup(
+        name: String,
+        includeParam: String,
+        excludeParam: String,
+        options: List<Pair<String, String>>,
+    ) = add(FilterSpec.TriStateGroup(name, includeParam, excludeParam, options))
+
+    fun text(
+        name: String,
+        param: String,
+        defaultText: String = "",
+    ) = add(FilterSpec.Text(name, param, defaultText))
+
+    fun checkBox(
+        name: String,
+        param: String,
+        value: String = "1",
+        defaultState: Boolean = false,
+    ) = add(FilterSpec.CheckBox(name, param, value, defaultState))
+
+    fun header(title: String) = add(FilterSpec.Header(title))
+
+    val separator get() = add(FilterSpec.Separator)
+
+    fun fold(name: String, block: FilterScope.() -> Unit) = add(FilterSpec.Foldable(name, FilterScope().apply(block)))
+
+    fun fold(name: String, specs: List<FilterSpec>) = add(FilterSpec.Foldable(name, specs))
+
+    fun fold(name: String, vararg specs: FilterSpec) = add(FilterSpec.Foldable(name, specs.toList()))
 }
 
 // ============================== FilterProvider Interface ==============================
@@ -240,4 +326,15 @@ interface FilterProvider {
 
     fun header(title: String) = FilterSpec.Header(title)
     val separator get() = FilterSpec.Separator
+
+    fun fold(name: String, block: FilterScope.() -> Unit): FilterSpec.Foldable = FilterSpec.Foldable(name, FilterScope().apply(block))
+
+    fun fold(name: String, specs: List<FilterSpec>): FilterSpec.Foldable = FilterSpec.Foldable(name, specs)
+
+    fun fold(name: String, vararg specs: FilterSpec): FilterSpec.Foldable = FilterSpec.Foldable(name, specs.toList())
+
+    /**
+     * Builds a list of FilterSpec using a clean lambda builder syntax
+     */
+    fun filters(block: FilterScope.() -> Unit): List<FilterSpec> = FilterScope().apply(block)
 }
