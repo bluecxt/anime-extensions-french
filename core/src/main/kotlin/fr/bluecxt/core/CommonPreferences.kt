@@ -165,7 +165,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
             default = defaultUrl,
             getSummary = { newValue ->
                 buildString {
-                    val urlToDisplay = if (!newValue.isNullOrBlank()) newValue.removeSuffix("/") else currentUrl
+                    val urlToDisplay = if (newValue.isNotBlank()) newValue.removeSuffix("/") else currentUrl
                     append(source.getString(R.string.pref_base_url_summary, urlToDisplay))
                     if (!summary.isNullOrBlank()) append("\n$summary")
                 }

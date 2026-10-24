@@ -223,6 +223,33 @@ inline fun <A, B> Iterable<A>.parallelCatchingCancellableMapNotNullBlocking(
 ): List<B> = runBlocking { parallelCatchingCancellableMapNotNull(f) }
 
 /**
+ * Parallel implementation of [Iterable.flatMap], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ *
+ * Catches and ignores failures while preserving coroutine cooperative cancellation.
+ *
+ * Note: Do NOT use [kotlinx.coroutines.withTimeout] inside [f] as it throws
+ * [kotlinx.coroutines.TimeoutCancellationException], which would cancel sibling coroutines.
+ */
+suspend inline fun <A, B> Iterable<A>.parallelCatchingCancellableFlatMap(
+    crossinline f: suspend (A) -> Iterable<B>,
+): List<B> = withContext(Dispatchers.IO) {
+    map {
+        async {
+            runCatchingCancellable { f(it) }.getOrNull()
+        }
+    }.awaitAll().filterNotNull().flatten()
+}
+
+/**
+ * Thread-blocking parallel implementation of [Iterable.flatMap], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ */
+inline fun <A, B> Iterable<A>.parallelCatchingCancellableFlatMapBlocking(
+    crossinline f: suspend (A) -> Iterable<B>,
+): List<B> = runBlocking { parallelCatchingCancellableFlatMap(f) }
+
+/**
  * Safely extracts the HTTP status code from an exception (especially [eu.kanade.tachiyomi.network.HttpException]).
  *
  * Prevents [NoSuchMethodError] on host apps (like AniZen) when R8/ProGuard shrinks or inlines
