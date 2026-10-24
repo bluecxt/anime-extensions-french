@@ -4,6 +4,14 @@ package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 object AnimeSamaFilters {
 
+    val TRI_OPTIONS = arrayOf(
+        "Titre (A → Z)" to "titre",
+        "Derniers ajouts sur le site" to "ajout",
+        "Sortie : les plus récentes" to "recent",
+        "Sortie : les plus anciennes" to "ancien",
+        "Nombre d'épisodes" to "episodes",
+    )
+
     val TYPE_OPTIONS = listOf(
         "Anime" to "Anime",
         "Film" to "Film",
@@ -11,9 +19,10 @@ object AnimeSamaFilters {
     )
 
     val LANGUAGE_OPTIONS = listOf(
-        "VF" to "VF",
         "VOSTFR" to "VOSTFR",
+        "VF" to "VF",
         "VASTFR" to "VASTFR",
+        "VCN" to "VCN",
     )
 
     val STATUT_OPTIONS = listOf(
@@ -41,15 +50,18 @@ object AnimeSamaFilters {
         "Démons" to "Démons",
         "Détective" to "Détective",
         "Donghua" to "Donghua",
+        "Dragon" to "Dragon",
         "Drame" to "Drame",
         "Ecchi" to "Ecchi",
         "Ecole" to "Ecole",
+        "Elfe" to "Elfe",
         "Enquête" to "Enquête",
         "Famille" to "Famille",
         "Fantastique" to "Fantastique",
         "Fantasy" to "Fantasy",
         "Fantômes" to "Fantômes",
         "Futur" to "Futur",
+        "Gastronomie" to "Gastronomie",
         "Ghibli" to "Ghibli",
         "Guerre" to "Guerre",
         "Harcèlement" to "Harcèlement",
@@ -57,6 +69,7 @@ object AnimeSamaFilters {
         "Harem inversé" to "Harem inversé",
         "Histoire" to "Histoire",
         "Historique" to "Historique",
+        "Homosexualité" to "Homosexualité",
         "Horreur" to "Horreur",
         "Isekai" to "Isekai",
         "Jeunesse" to "Jeunesse",
@@ -64,6 +77,8 @@ object AnimeSamaFilters {
         "Jeux vidéo" to "Jeux vidéo",
         "Josei" to "Josei",
         "Journalisme" to "Journalisme",
+        "Kaï" to "Kaï",
+        "LGBT+" to "LGBT+",
         "Mafia" to "Mafia",
         "Magical girl" to "Magical girl",
         "Magie" to "Magie",
@@ -101,6 +116,7 @@ object AnimeSamaFilters {
         "Scientifique" to "Scientifique",
         "Seinen" to "Seinen",
         "Shôjo" to "Shôjo",
+        "Shôjo-Ai" to "Shôjo-Ai",
         "Shônen" to "Shônen",
         "Shônen-Ai" to "Shônen-Ai",
         "Slice of Life" to "Slice of Life",

@@ -10,8 +10,8 @@ data class ExtractedSource(
     val url: String,
     val quality: String? = null, // ex: "720p"
     val frameRate: String? = null, // ex: "30fps"
-    val headers: Headers? = null,
-    val subtitleTracks: List<Track> = emptyList(),
-    val audioTracks: List<Track> = emptyList(),
-    val isError: Boolean = false,
+    var headers: Headers? = null,
+    var subtitleTracks: List<Track> = emptyList(),
+    var audioTracks: List<Track> = emptyList(),
+    var isError: Boolean = false,
 )

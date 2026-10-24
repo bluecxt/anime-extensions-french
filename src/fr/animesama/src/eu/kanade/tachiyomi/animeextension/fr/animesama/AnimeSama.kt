@@ -63,7 +63,7 @@ class AnimeSama :
     override val name = "Anime-Sama"
 
     override val defaultBaseUrl = "https://anime-sama.to"
-    override val supportedServers = listOf("Sibnet", "Sendvid", "Vidmoly", "Embed4me", "Minochinos")
+    override val supportedServers = listOf("Sendvid", "Vidmoly", "Embed4me", "Minochinos", "Uqload", "Voe")
     override val supportedVoices = setOf(VOSTFR, VF, VA, VQF)
     override val lang = "fr"
     override val supportsLatest = true
@@ -80,20 +80,25 @@ class AnimeSama :
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val document = client.get(baseUrl, headers).useAsJsoup()
-        return parseMainPage(document)
+        val document = client.get("$baseUrl/nouveautes/?type=episodes&page=$page", headers).useAsJsoup()
+        return parseCatalogue(document, page)
     }
 
     // ============================== Search ===============================
     override val customFilters: List<FilterSpec>
         get() = listOf(
+            select("Tri", "tri", AnimeSamaFilters.TRI_OPTIONS),
             group("Type", "type[]", AnimeSamaFilters.TYPE_OPTIONS),
             group("Langage", "langue[]", AnimeSamaFilters.LANGUAGE_OPTIONS),
             group("Statut", "current[]", AnimeSamaFilters.STATUT_OPTIONS),
-            header("Année (Min - Max)"),
-            text("Année Min", "annee_min"),
-            text("Année Max", "annee_max"),
-            separator,
+            fold("Année") {
+                text("De", "annee_min")
+                text("À", "annee_max")
+            },
+            fold("Épisodes") {
+                text("Min", "episodes_min")
+                text("Max", "episodes_max")
+            },
             group("Genre", "genre[]", AnimeSamaFilters.GENRE_OPTIONS),
         )
 
@@ -113,21 +118,27 @@ class AnimeSama :
     private fun parseCatalogue(
         document: Document,
         page: Int,
-        animesSelector: String = "div.catalog-card",
+        animesSelector: String = ".as-carte",
     ): AnimesPage {
         val animes = document.select(animesSelector).mapNotNull { anime ->
-            if (anime.select(".info-row:has(.info-label:contains(Types)) .info-value").text().trim().equals("Scans", true)) return@mapNotNull null
+            val badgesVideo = anime.select("span.as-badge-autre, span.as-badge-anime")
+            if (badgesVideo.isEmpty()) return@mapNotNull null
 
             val link = anime.selectFirstLog("a")?.safeRelativePath() ?: return@mapNotNull null
             val realLink = link.split("/").take(MAX_HUB_PATH_SEGMENTS).joinToString("/")
-            var thumbnail = anime.select("img:not(.ak-cta-flag)").attr("abs:src")
-
-            if (thumbnail.contains("thumb/") && thumbnail.contains(".webp")) {
-                thumbnail = thumbnail.replace("thumb/", "").replace(".webp", ".jpg")
+            val thumbnail = anime.selectFirst(".as-carte-image > img")?.attr("abs:src")?.let { url ->
+                if ("thumb/" in url && ".webp" in url) { // low quality thumbnail
+                    url.replace("thumb/", "").replace(".webp", ".jpg")
+                } else {
+                    url
+                }
             }
 
-            val name = anime.selectFirstLog(".card-title, h2")?.text() ?: "unknown title"
+            val name = anime.selectFirst(".as-carte-titre")?.text()
+                ?: anime.attr("data-nom").takeIf { it.isNotBlank() }
+                ?: ""
             val names: Set<String> = buildSet {
+                // only in mainpage
                 add(name)
                 add(realLink.substringAfterLast("/").replace("-", " "))
                 anime.selectFirst("p.alternate-titles")?.text()?.split(",")
@@ -141,9 +152,9 @@ class AnimeSama :
                 title = name
                 thumbnail_url = thumbnail
                 url = jsonUrl
-            }
+            }.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, name)
         }
-        val lastPage = document.select("#list_pagination a:last-child").text().toIntOrNull() ?: 0
+        val lastPage = document.selectFirst(".pagi-aller input")?.attr("max")?.toIntOrNull() ?: 0
         val hasNextPage = lastPage != 0 && page < lastPage
         return AnimesPage(animes.distinctBy { it.url }, hasNextPage)
     }
@@ -378,7 +389,8 @@ class AnimeSama :
         medias: List<UrlContent>,
         currentLink: String,
     ): Int {
-        if (epSize <= tvdbEpCount || tvdbEpCount <= 0) return 0
+        val hasEnoughTvdbEpisodes = tvdbEpCount >= epSize
+        if (tvdbEpCount <= 0 || hasEnoughTvdbEpisodes) return 0
 
         var autoS0Offset = 0
 
@@ -694,12 +706,6 @@ class AnimeSama :
         val parsedUrl = UrlContent(link, titles, null)
         return Pair(parsedUrl, false)
     }
-
-    private fun parseMainPage(document: Document): AnimesPage = parseCatalogue(
-        document,
-        0,
-        "#containerSorties > div, #containerAjoutsAnimes > div, #containerJeudi > div, #akTrack > div",
-    )
 
     private fun buildDescription(description: String, year: String?): String = buildString {
         if (!year.isNullOrBlank()) append("Date de sortie : $year\n\n")
