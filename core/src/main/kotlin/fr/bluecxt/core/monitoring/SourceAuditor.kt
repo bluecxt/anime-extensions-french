@@ -23,13 +23,13 @@ object SourceAuditor {
         getAnimeUrl: (SAnime) -> String,
         extensionName: String? = null,
         extensionVersion: String? = null,
-    ) {
+    ): SAnime {
         val resolvedPath = try {
             getAnimeUrl(this).removePrefix(baseUrl)
         } catch (_: Exception) {
             this.url
         }
-        checkAndReportIncompleteness(baseUrl, resolvedPath, extensionName, extensionVersion)
+        return checkAndReportIncompleteness(baseUrl, resolvedPath, extensionName, extensionVersion)
     }
 
     fun SAnime.checkAndReportIncompleteness(
@@ -37,7 +37,7 @@ object SourceAuditor {
         urlPath: String,
         extensionName: String? = null,
         extensionVersion: String? = null,
-    ) {
+    ): SAnime {
         val issues = mutableListOf<String>()
         if (status == SAnime.UNKNOWN) issues.add("status is UNKNOWN (0)")
         if (description.isNullOrBlank()) issues.add("description is blank")
@@ -64,6 +64,7 @@ object SourceAuditor {
                 extensionVersion = extensionVersion,
             )
         }
+        return this
     }
 
     // ============================== Seasons ==============================
