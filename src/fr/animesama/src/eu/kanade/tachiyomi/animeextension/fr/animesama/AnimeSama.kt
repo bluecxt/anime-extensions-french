@@ -152,7 +152,7 @@ class AnimeSama :
                 title = name
                 thumbnail_url = thumbnail
                 url = jsonUrl
-            }.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, name)
+            }.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, this.name)
         }
         val lastPage = document.selectFirst(".pagi-aller input")?.attr("max")?.toIntOrNull() ?: 0
         val hasNextPage = lastPage != 0 && page < lastPage
