@@ -22,6 +22,7 @@ import okhttp3.OkHttpClient
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.seconds
 
 class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
 
@@ -102,7 +103,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                     throw e
                 }
                 Log.w(PLAYLIST_LOG, "HLS fetch failed (attempt $attempts), retrying in 1s... (${e.message})")
-                kotlinx.coroutines.delay(1000)
+                kotlinx.coroutines.delay(1.seconds)
             }
         }
         // Check if there isn't multiple streams available
@@ -307,7 +308,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
      * potentially causing players to fail to render them correctly.
      */
     fun fixSubtitles(subtitleList: List<Track>): List<Track> = subtitleList.parallelMapNotNullBlocking {
-        runCatching {
+        runCatchingCancellable {
             val subData = client.newCall(GET(it.url))
                 .awaitSuccess().bodyString()
 
