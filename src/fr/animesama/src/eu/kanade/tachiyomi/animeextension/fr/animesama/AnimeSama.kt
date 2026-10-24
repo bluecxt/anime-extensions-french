@@ -124,7 +124,8 @@ class AnimeSama :
             val badgesVideo = anime.select("span.as-badge-autre, span.as-badge-anime")
             if (badgesVideo.isEmpty()) return@mapNotNull null
 
-            val link = anime.selectFirstLog("a")?.safeRelativePath() ?: return@mapNotNull null
+            val link = anime.selectFirstLog("a")?.safeRelativePath()
+                ?: throw Exception("parsing failed report it to the dev")
             val realLink = link.split("/").take(MAX_HUB_PATH_SEGMENTS).joinToString("/")
             val thumbnail = anime.selectFirst(".as-carte-image > img")?.attr("abs:src")?.let { url ->
                 if ("thumb/" in url && ".webp" in url) { // low quality thumbnail
@@ -152,7 +153,7 @@ class AnimeSama :
                 title = name
                 thumbnail_url = thumbnail
                 url = jsonUrl
-            }.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, this.name)
+            }
         }
         val lastPage = document.selectFirst(".pagi-aller input")?.attr("max")?.toIntOrNull() ?: 0
         val hasNextPage = lastPage != 0 && page < lastPage
@@ -208,8 +209,7 @@ class AnimeSama :
 
         anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub)
 
-        anime.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl)
-        anime
+        anime.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, this@AnimeSama.name)
     }
 
     private fun isSpecialSeason(seasonName: String?): Boolean {
