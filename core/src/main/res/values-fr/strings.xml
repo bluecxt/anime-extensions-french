@@ -19,6 +19,8 @@
     <string name="pref_debrid_summary">Choisissez \'Aucun\' pour le mode Torrent. Si vous sélectionnez un fournisseur Debrid, entrez votre jeton (token). Aucun jeton n\'est nécessaire si \'Aucun\' est sélectionné.</string>
     <string name="pref_token_title">Jeton (Token)</string>
     <string name="pref_providers_title">Activer/Désactiver les fournisseurs</string>
+    <string name="pref_early_fetch_type_title">Early Fetch</string>
+    <string name="pref_early_fetch_type_summary">Pour certaines apps (ex. Anikku), ça règle un problème spécifique. Plus lent : ouvre la page de chaque animé depuis le catalogue.</string>
 
     <!-- Error and UI feedback messages -->
     <string name="cloudflare_bypass_timeout">Délai de contournement Cloudflare dépassé pour %1$s. Essayez d\'ouvrir dans la WebView.</string>

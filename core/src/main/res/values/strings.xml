@@ -19,6 +19,8 @@
     <string name="pref_debrid_summary">Choose \'None\' for Torrent. If you select a Debrid provider, enter your token key. No token key is needed if \'None\' is selected.</string>
     <string name="pref_token_title">Token</string>
     <string name="pref_providers_title">Enable/Disable Providers</string>
+    <string name="pref_early_fetch_type_title">Early Fetch</string>
+    <string name="pref_early_fetch_type_summary">For some apps (e.g. Anikku) it fixes a specific issue. Slower: the extension opens each anime page from the catalogue.</string>
 
     <!-- Error and UI feedback messages -->
     <string name="cloudflare_bypass_timeout">Cloudflare challenge bypass timed out for %1$s. Try opening in WebView.</string>
