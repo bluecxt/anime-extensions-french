@@ -202,7 +202,7 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
             "voeunblock1.com", "voeunblock2.com", "voeunblock3.com", "voeunblock4.com", "voeunblock5.com",
             "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
             "jessicayeahcatch.com", "kathyinformationwhether.com", "ralphysuccessfull.org", "bryantenunder.com",
-            "sandratableother.com", "derricknationtop.com",
+            "sandratableother.com", "derricknationtop.com", "teresapoliticallearn.com",
         ),
         extractor = { url -> VoeExtractor(source.extractorClient).videosFromUrl(url) },
     )

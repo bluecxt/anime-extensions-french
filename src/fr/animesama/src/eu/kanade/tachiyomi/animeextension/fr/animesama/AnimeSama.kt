@@ -3,6 +3,7 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
 import android.util.Log
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.ContentType
 import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.EpisodePlayers
 import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.Player
@@ -36,10 +37,13 @@ import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
 import fr.bluecxt.core.utils.JsoupExtensions
 import fr.bluecxt.core.utils.normalize
+import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
+import keiyoushi.utils.addSwitchPreference
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
+import keiyoushi.utils.parallelMapNotNullBlocking
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.useAsJsoup
@@ -120,9 +124,10 @@ class AnimeSama :
         page: Int,
         animesSelector: String = ".as-carte",
     ): AnimesPage {
-        val animes = document.select(animesSelector).mapNotNull { anime ->
+        val localUseEarlyFetch = this.useEarlyFetch
+        val animes = document.select(animesSelector).parallelMapNotNullBlocking { anime ->
             val badgesVideo = anime.select("span.as-badge-autre, span.as-badge-anime")
-            if (badgesVideo.isEmpty()) return@mapNotNull null
+            if (badgesVideo.isEmpty()) return@parallelMapNotNullBlocking null
 
             val link = anime.selectFirstLog("a")?.safeRelativePath()
                 ?: throw Exception("parsing failed report it to the dev")
@@ -153,12 +158,34 @@ class AnimeSama :
                 title = name
                 thumbnail_url = thumbnail
                 url = jsonUrl
+                if (localUseEarlyFetch) {
+                    val isHub = runCatchingCancellable {
+                        isHubPage(parseMedias(realLink, getOrFetchDocument(realLink), emptySet()))
+                    }.getOrDefault(false)
+                    if (isHub) {
+                        fetch_type = FetchType.Seasons
+                    }
+                }
             }
         }
         val lastPage = document.selectFirst(".pagi-aller input")?.attr("max")?.toIntOrNull() ?: 0
         val hasNextPage = lastPage != 0 && page < lastPage
         return AnimesPage(animes.distinctBy { it.url }, hasNextPage)
     }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super.setupPreferenceScreen(screen)
+
+        screen.addSwitchPreference(
+            key = PREF_EARLY_FETCH_TYPE_KEY,
+            default = PREF_EARLY_FETCH_TYPE_DEFAULT,
+            title = getString(R.string.pref_early_fetch_type_title),
+            summary = getString(R.string.pref_early_fetch_type_summary),
+        )
+    }
+
+    private val useEarlyFetch: Boolean
+        get() = preferences.getBoolean(PREF_EARLY_FETCH_TYPE_KEY, PREF_EARLY_FETCH_TYPE_DEFAULT)
 
     // =========================== Anime Details ============================
 
@@ -186,7 +213,7 @@ class AnimeSama :
 
         val document = documentDeferred.await()
         val medias = parseMedias(link, document, titles)
-        val isHub = (season == null && medias.size > 1)
+        val isHub = isHubPage(medias, season)
 
         Log.d(ANIMESAMA_LOG, "media number = ${medias.size}")
 
@@ -327,13 +354,14 @@ class AnimeSama :
         val medias = parseMedias(initialLink, preDoc, parsedUrl.titles)
         Log.d(ANIMESAMA_LOG, "getEpisodeList: found ${medias.size} medias for link='$initialLink'")
 
-        val isHub = (initialSeason == null && medias.size > 1)
+        val isHub = isHubPage(medias, initialSeason)
         if (isHub) {
             Log.d(ANIMESAMA_LOG, "getEpisodeList: isHub=true for '$initialLink'")
             return listOf(
                 SEpisode.create().apply {
                     url = ""
-                    name = ""
+                    name = "⚠ Activez Early Fetch"
+                    summary = "Ouvrez les paramètres de cette extension, activez « Early Fetch », puis videz la base locale de cette extension."
                 },
             )
         }
@@ -625,14 +653,16 @@ class AnimeSama :
         getCachedDocument(link)?.let { return it }
 
         val mutex = documentMutexes.computeIfAbsent(link) { Mutex() }
-        return mutex.withLock {
-            getCachedDocument(link)?.let { return it }
+        try {
+            return mutex.withLock {
+                getCachedDocument(link)?.let { return@withLock it }
 
-            val targetUrl = "$baseUrl$link"
-            client.get(targetUrl, headers).useAsJsoup().also { doc ->
-                putCachedDocument(link, doc)
-                documentMutexes.remove(link)
+                client.get("$baseUrl$link", headers).useAsJsoup().also { doc ->
+                    putCachedDocument(link, doc)
+                }
             }
+        } finally {
+            documentMutexes.remove(link, mutex)
         }
     }
 
@@ -649,6 +679,8 @@ class AnimeSama :
     private fun putCachedDocument(link: String, doc: Document) {
         documentCache[link] = Pair(doc, System.currentTimeMillis())
     }
+
+    private fun isHubPage(medias: List<UrlContent>, season: String? = null): Boolean = season == null && medias.size > 1
 
     private fun parseMedias(link: String, document: Document, titles: Set<String>): List<UrlContent> {
         val pathSegments = link.removePrefix("/").split("/")
@@ -739,5 +771,8 @@ class AnimeSama :
         private val seasonRegex = Regex("""(?i)^Saison\s*\d+.*""")
         private val seasonReplaceRegex = Regex("""(?i)\s*Saison\s*""")
         private val partReplaceRegex = Regex("""(?i)Partie\s*(\d+)""")
+
+        private const val PREF_EARLY_FETCH_TYPE_KEY = "early_fetch"
+        private const val PREF_EARLY_FETCH_TYPE_DEFAULT = false
     }
 }
