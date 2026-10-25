@@ -591,15 +591,7 @@ class AnimeSama :
             urls
         }.toList()
 
-        val maxEpisodes = servers.maxOfOrNull { it.size } ?: run {
-            Log.w(ANIMESAMA_LOG, "fetchPlayers: 0 server arrays matched in $jsUrl")
-            sendErrorWebhook(
-                url = jsUrl,
-                context = "Échec du parsing de $jsUrl (0 tableau de serveurs vidéo 'eps' trouvé)",
-                exception = IllegalStateException("epsArrayRegex matched 0 server arrays in $jsUrl"),
-            )
-            return emptyList()
-        }
+        val maxEpisodes = servers.maxOfOrNull { it.size }
 
         val langTag = lang.uppercase()
 
