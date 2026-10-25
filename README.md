@@ -25,7 +25,7 @@ Pour intégrer ce repository à votre application (comme AniZen), ajoutez l'URL 
     ```text
     https://bluecxt.github.io/anime-extensions-french/stable/index.min.json
     ```
-*   **Alpha :**
+*   **Alpha (actuellement en retard) :**
     ```text
     https://bluecxt.github.io/anime-extensions-french/alpha/index.min.json
     ```
