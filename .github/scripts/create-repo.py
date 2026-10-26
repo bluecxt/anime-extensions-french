@@ -45,11 +45,17 @@ def extract_apk_fingerprint(apk_path):
         pair_id = struct.unpack("<I", block_data[offset+8:offset+12])[0]
         pair_value = block_data[offset+12:offset+8+pair_len]
         if pair_id in (0x7109871a, 0xf05368c0):
-            signer_data = pair_value[8:]
-            spos = 4 + struct.unpack("<I", signer_data[4:8])[0] + 4
-            cert1_len = struct.unpack("<I", signer_data[spos:spos+4])[0]
-            spos += 4
-            cert1_bytes = signer_data[spos:spos+cert1_len]
+            # pair_value: signers_seq_len (4)
+            # signer_1: signer_len (4), signed_data_len (4)
+            # signed_data: digests_seq_len (4), digests...
+            # certs_seq_len (4), cert_1_len (4), cert_1_bytes...
+            signed_data_len = struct.unpack("<I", pair_value[8:12])[0]
+            signed_data = pair_value[12:12+signed_data_len]
+            digests_len = struct.unpack("<I", signed_data[0:4])[0]
+            certs_pos = 4 + digests_len
+            certs_seq_len = struct.unpack("<I", signed_data[certs_pos:certs_pos+4])[0]
+            cert1_len = struct.unpack("<I", signed_data[certs_pos+4:certs_pos+8])[0]
+            cert1_bytes = signed_data[certs_pos+8:certs_pos+8+cert1_len]
             return hashlib.sha256(cert1_bytes).hexdigest()
         offset += 8 + pair_len
     return ""
