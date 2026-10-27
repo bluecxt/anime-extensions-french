@@ -5,7 +5,13 @@ package eu.kanade.tachiyomi.animeextension.fr.dessinanime
 import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.CatalogueDto
+import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.DessinAnimeMediaDto
+import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.DessinAnimePosterDto
+import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.HosterItemDto
+import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.HosterPayloadDto
+import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.PlayerEmbedDto
 import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.SearchItemDto
+import eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.SeriesDataDto
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType.Episodes
@@ -26,11 +32,21 @@ import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
+import keiyoushi.utils.addSwitchPreference
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.get
+import keiyoushi.utils.parallelCatchingFlatMap
+import keiyoushi.utils.parallelMapNotNullBlocking
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -43,11 +59,11 @@ import java.util.concurrent.ConcurrentHashMap
 private const val MIN_PAGE_SIZE_JSON = 36
 private const val MIN_PAGE_SIZE_HTML = 10
 
-private val posterRegex = Regex("""\\"posterPath\\":\\"(.*?)\\"""")
-private val rsRegex = Regex($$"""\$RS\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""")
-private val iframeRegex = Regex("""\\"iframe_url\\":\\"(?<url>https://[^"\\]+)\\"""")
-private val playerBlockRegex = Regex("""\{\\"type\\":\\"(?<type>[^"\\]+)\\",\\"sources\\":\[(?<sources>.*?)\],\\"host\\":\\"(?<host>[^"\\]+)\\",\\"slug\\":\\"(?<slug>[^"\\]+)\\",\\"iframe_url\\":\\"(?<iframeUrl>[^"\\]+)\\"\}""")
-private val sourceRegex = Regex("""\\"label\\":\\"(?<label>[^"\\]+)\\",\\"source\\":\\"(?<url>https://extractor\.nmlnode\.cc/proxy/[^"\\]+)\\"""")
+private val rsRegex = Regex("""\${'$'}RS\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""")
+private val iframeRegex = Regex("""\"iframe_url\":\"(?<url>https://[^"\\]+)\"""")
+private val playerBlockRegex = Regex("""{\"type\":\"(?<type>[^"\\]+)\",\"sources\":\[(?<sources>.*?)\],\"host\":\"(?<host>[^"\\]+)\",\"slug\":\"(?<slug>[^"\\]+)\",\"iframe_url\":\"(?<iframeUrl>[^"\\]+)\"\}""")
+private val sourceRegex = Regex("""\"label\":\"(?<label>[^"\\]+)\",\"source\":\"(?<url>https://extractor\.nmlnode\.cc/proxy/[^"\\]+)\"""")
+private val qualityRegex = Regex("""\d+p""")
 
 class DessinAnime :
     Source(),
@@ -83,19 +99,23 @@ class DessinAnime :
             }
         }
 
-        val response = client.newCall(GET(urlBuilder.build(), headers)).awaitSuccess()
+        val data: List<CatalogueDto> = client.get(urlBuilder.build(), headers).parseAs(json)
 
-        val jsonString = response.body.string()
-        val data: List<CatalogueDto> = jsonString.parseAs(json)
-
-        val animes = data.map { element ->
-            val animeUrl = "/${element.mediaType.lowercase()}/${element.slug}"
-            Log.d(DESSINANIME_LOG, "url = $animeUrl")
-            SAnime.create().apply {
-                title = element.title
-                url = animeUrl
-                thumbnail_url = element.posterPath
+        val localUseEarlyFetch = this.useEarlyFetch
+        val animes = data.map { item ->
+            val anime = item.toSAnime()
+            if (localUseEarlyFetch && !anime.url.contains("/movie/")) {
+                val isHub = runCatchingCancellable {
+                    val doc = client.get("$baseUrl${anime.url}", headers).useAsJsoup().apply { resolveSuspense() }
+                    val seriesData = doc.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
+                    val count = seriesData?.seasons?.size ?: doc.select("a.bg-card").size
+                    count > 1
+                }.getOrDefault(false)
+                if (isHub) {
+                    anime.coreSetFetchType(Seasons)
+                }
             }
+            anime
         }
 
         val hasNextPage = data.size >= MIN_PAGE_SIZE_JSON
@@ -114,19 +134,26 @@ class DessinAnime :
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET(baseUrl, headers)).awaitSuccess()
-        val document = response.use { it.useAsJsoup() }.apply { resolveSuspense() }
+        val document = client.newCall(GET(baseUrl, headers)).awaitSuccess().use { it.useAsJsoup() }.apply { resolveSuspense() }
 
-        val animes = document.select("div[data-slot=carousel] a.group").mapNotNull { element ->
-            SAnime.create().apply {
-                url = element.safeRelativePath() ?: return@mapNotNull null
+        val animes = document.select("div[data-slot=carousel] a.group")
+            .asSequence()
+            .mapNotNull { element ->
+                val rawPath = element.safeRelativePath() ?: return@mapNotNull null
+                val pathSegments = rawPath.removePrefix("/").split("/").filter { it.isNotEmpty() }
+                val canonicalUrl = if (pathSegments.size >= 2) "/${pathSegments[0]}/${pathSegments[1]}" else rawPath
 
-                val rawImgSrc = element.selectFirst("img")?.attr("src")
-                thumbnail_url = rawImgSrc?.nextJsToDirectUrl() ?: POSTER_PLACEHOLDER
+                SAnime.create().apply {
+                    url = canonicalUrl
 
-                title = element.selectFirst("div.truncate")?.text() ?: ""
+                    val rawImgSrc = element.selectFirst("img")?.attr("src")
+                    thumbnail_url = rawImgSrc?.nextJsToDirectUrl() ?: POSTER_PLACEHOLDER
+
+                    title = element.selectFirst("div.truncate")?.text() ?: ""
+                }
             }
-        }
+            .distinctBy { it.url }
+            .toList()
 
         return AnimesPage(animes, false)
     }
@@ -138,16 +165,8 @@ class DessinAnime :
         if (query.isNotBlank()) {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val searchUrl = "$baseUrl/api/search?q=$encodedQuery"
-            val response = client.newCall(GET(searchUrl, headers)).awaitSuccess()
-            val jsonString = response.body.string()
-            val searchItems = json.decodeFromString<List<SearchItemDto>>(jsonString)
-            val animes = searchItems.map { dto ->
-                SAnime.create().apply {
-                    title = dto.title
-                    thumbnail_url = if (!dto.posterPath.isNullOrEmpty() && dto.posterPath != "null") dto.posterPath else POSTER_PLACEHOLDER
-                    this.url = "/${dto.mediaType.lowercase()}/${dto.slug}"
-                }
-            }
+            val searchItems: List<SearchItemDto> = client.get(searchUrl, headers).parseAs(json)
+            val animes = searchItems.map { it.toSAnime() }
             return AnimesPage(animes, false)
         }
         val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
@@ -172,19 +191,22 @@ class DessinAnime :
     }
 
     private suspend fun parseAnimePage(pageUrl: HttpUrl): AnimesPage {
-        val response = client.newCall(GET(pageUrl, headers)).awaitSuccess()
-        val document = response.useAsJsoup().apply { resolveSuspense() }
+        val document = client.newCall(GET(pageUrl, headers)).awaitSuccess().use { it.useAsJsoup() }.apply { resolveSuspense() }
 
-        val animes = document.select("div.group").mapNotNull { element ->
-            val thumbnail = element.selectFirst("img")?.attr("abs:src") ?: POSTER_PLACEHOLDER
-            SAnime.create().apply {
-                title = element.selectFirst("a")?.text() ?: ""
-                thumbnail_url = thumbnail
-                url = element.selectFirst("a")?.safeRelativePath()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        val animes = document.select("div.group")
+            .asSequence()
+            .mapNotNull { element ->
+                val thumbnail = element.selectFirst("img")?.attr("abs:src")
+                    ?: element.selectFirst("img")?.attr("src")?.nextJsToDirectUrl()
+                    ?: POSTER_PLACEHOLDER
+                SAnime.create().apply {
+                    title = element.selectFirst("a")?.text() ?: ""
+                    thumbnail_url = thumbnail
+                    url = element.selectFirst("a")?.safeRelativePath()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                }
             }
-        }
+            .toList()
 
-        // le mieux serait un "a:has(svg.lucide-chevron-right)" mais le site est stupide et a pleins de page vide
         val hasNextPage = animes.size >= MIN_PAGE_SIZE_HTML
 
         return AnimesPage(animes, hasNextPage)
@@ -193,42 +215,91 @@ class DessinAnime :
     // ============================ Details =============================
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        var document = response.body.string()
-        var soup = parse(document, "$baseUrl${anime.url}").apply { resolveSuspense() }
+        val pathSegments = anime.url.removePrefix("/").split("/").filter { it.isNotEmpty() }
+        val targetSeasonNum = pathSegments.getOrNull(2)?.toIntOrNull()
+        val isSeasonPage = targetSeasonNum != null
 
-        val seasons = soup.select("a.bg-card")
-        val isHub = (seasons.size > 1)
-        val isSeason = if (seasons.isEmpty() && !document.contains("Film")) true else false
-        Log.d(DESSINANIME_LOG, "season numbers = ${seasons.size}, isHub = $isHub, isSeason = $isSeason")
+        val url = "$baseUrl${anime.url}"
+        val document = client.newCall(GET(url, headers)).awaitSuccess().use { it.body.string() }
+        val soup = parse(document, url).apply { resolveSuspense() }
 
-        if (!isSeason) {
-            val images = soup.select("img[alt]")
-            val thumbnail: String = images.firstOrNull { img ->
-                val alt = img.attr("alt")
-                alt == anime.title || alt == "Season poster"
-            }?.attr("abs:src") ?: POSTER_PLACEHOLDER
-            anime.apply {
-                description = soup.selectFirst("meta[name=description]")?.attr("content") ?: ""
-                thumbnail_url = thumbnail
-                genre = soup.select("span.text-foreground.rounded-full:not(:has(svg))").map { it.text() }.joinToString()
-                initialized = true
-            }
+        val posterDto = soup.extractNextJs<DessinAnimePosterDto> {
+            it is JsonObject && it.jsonObject["variant"]?.jsonPrimitive?.contentOrNull == "poster"
+        }
+        val mediaDto = soup.extractNextJs<DessinAnimeMediaDto>()
+        val seriesData = soup.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
+
+        val isMovie = anime.url.contains("/movie/") || mediaDto?.mediaType.equals("MOVIE", true)
+        val seasonCount = seriesData?.seasons?.size ?: soup.select("a.bg-card").size
+        val isHub = !isSeasonPage && seasonCount > 1
+
+        val seasonSpecificPoster = if (targetSeasonNum != null && seriesData != null) {
+            seriesData.seasons.firstOrNull { it.seasonNumber == targetSeasonNum }?.posterPath
+        } else {
+            null
+        }
+
+        anime.apply {
+            title = mediaDto?.title?.takeIf { it.isNotBlank() } ?: title
+            thumbnail_url = seasonSpecificPoster ?: anime.thumbnail_url?.takeIf { it.isNotBlank() && it != POSTER_PLACEHOLDER } ?: resolveThumbnail(soup, posterDto)
+            description = soup.selectFirst("meta[name=description]")?.attr("content") ?: ""
+            genre = extractGenres(soup)
+            initialized = true
         }
 
         if (isHub) {
             anime.coreSetFetchType(Seasons)
-        } else if (soup.selectFirst("a.group.rounded-xl") == null) {
+        } else if (isMovie || soup.selectFirst("a.group.rounded-xl") == null) {
             anime.status = SAnime.COMPLETED
         }
         return anime
     }
 
+    private fun resolveThumbnail(soup: Document, posterDto: DessinAnimePosterDto?): String = posterDto?.src
+        ?: soup.selectFirst("link[rel=preload][as=image][href*='image.tmdb.org/t/p/w500']")?.attr("abs:href")
+        ?: soup.selectFirst("meta[property='og:image']")?.attr("content")
+        ?: POSTER_PLACEHOLDER
+
+    private fun extractGenres(soup: Document): String = soup.select("span.text-sand:not(:has(svg)), span.text-foreground.rounded-full:not(:has(svg))")
+        .asSequence()
+        .map { it.text().trim() }
+        .filter { it.isNotBlank() && !it.contains("·") && !it.contains("Série") && !it.contains("Film") }
+        .distinct()
+        .joinToString(", ")
+
     // ============================ Seasons =============================
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
-        val soup = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess().useAsJsoup().apply { resolveSuspense() }
+        val soup = client.get("$baseUrl${anime.url}", headers).useAsJsoup().apply { resolveSuspense() }
+        val seriesData = soup.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
 
+        if (seriesData != null && seriesData.seasons.size > 1) {
+            return seriesData.seasons.mapIndexed { index, season ->
+                buildSeasonAnime(anime, season, index, seriesData.seasons.size)
+            }
+        }
+
+        return parseHtmlSeasons(soup, anime)
+    }
+
+    private fun buildSeasonAnime(anime: SAnime, season: eu.kanade.tachiyomi.animeextension.fr.dessinanime.dto.SeasonItemDto, index: Int, totalSeasons: Int): SAnime {
+        val sNum = season.seasonNumber
+        val sTitle = season.customTitle?.takeIf { it.isNotBlank() }
+            ?: season.title?.takeIf { it.isNotBlank() }
+            ?: if (sNum == 1) anime.title else "${anime.title} Saison $sNum"
+
+        return SAnime.create().apply {
+            title = sTitle
+            url = "${anime.url}/$sNum/1"
+            thumbnail_url = season.posterPath ?: anime.thumbnail_url
+            status = if (index < totalSeasons - 1) SAnime.COMPLETED else anime.status
+            coreSetFetchType(Episodes)
+            coreSetSeasonNumber(HUB_SEASON_NUMBER)
+            initialized = true
+        }
+    }
+
+    private fun parseHtmlSeasons(soup: Document, anime: SAnime): List<SAnime> {
         val siteSeasons = soup.select("a.bg-card").mapNotNull { element ->
             val saisonNum = element.selectFirst("p.line-clamp-1")?.text()?.filter { it.isDigit() }?.toIntOrNull() ?: 1
             val path = element.safeRelativePath() ?: return@mapNotNull null
@@ -236,7 +307,7 @@ class DessinAnime :
             Triple(seasonTitle, path, saisonNum)
         }.sortedBy { it.third }
 
-        return siteSeasons.mapIndexed { index, (sTitle, sUrl, siteSNum) ->
+        return siteSeasons.mapIndexed { index, (sTitle, sUrl, _) ->
             SAnime.create().apply {
                 title = sTitle
                 url = sUrl
@@ -253,25 +324,55 @@ class DessinAnime :
     // ============================ Episodes =============================
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
-        var document = response.body.string()
-        var soup = parse(document, "$baseUrl${anime.url}").apply { resolveSuspense() }
+        val document = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess().use { it.body.string() }
+        val soup = parse(document, "$baseUrl${anime.url}").apply { resolveSuspense() }
 
+        if (anime.url.contains("/movie/") || document.contains("\"mediaType\":\"MOVIE\"")) {
+            return buildMovie(anime)
+        }
+
+        val seriesData = soup.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
+        val pathSegments = anime.url.removePrefix("/").split("/").filter { it.isNotEmpty() }
+        val isTargetingSpecificSeason = pathSegments.size >= 3
+
+        val seasonCount = seriesData?.seasons?.size ?: soup.select("a.bg-card").size
+        val isHub = !isTargetingSpecificSeason && seasonCount > 1
+        if (isHub) {
+            Log.d(DESSINANIME_LOG, "getEpisodeList: isHub=true for '${anime.url}'")
+            return listOf(
+                SEpisode.create().apply {
+                    url = ""
+                    name = "⚠ Activez Early Fetch"
+                    summary = "Ouvrez les paramètres de cette extension, activez « Early Fetch », puis videz la base locale de cette extension."
+                },
+            )
+        }
+
+        if (seriesData != null && seriesData.seasons.isNotEmpty()) {
+            val baseAnimeUrl = if (pathSegments.size >= 2) "/${pathSegments[0]}/${pathSegments[1]}" else anime.url
+            val sNum = pathSegments.getOrNull(2)?.toIntOrNull()
+            val episodes = seriesData.toEpisodeList(baseAnimeUrl, targetSeason = sNum)
+            if (episodes.isNotEmpty()) {
+                return episodes
+            }
+        }
+
+        return parseHtmlEpisodes(soup, anime)
+    }
+
+    private suspend fun parseHtmlEpisodes(soup: Document, anime: SAnime): List<SEpisode> {
         var episodeList = soup.select("a.group.rounded-xl")
-
-        // only one season
-        if (soup.selectFirst("a.bg-card") != null) {
-            document = client.newCall(GET("$baseUrl${anime.url}/1/1", headers)).awaitSuccess().body.string()
-            soup = parse(document, "$baseUrl${anime.url}/1/1").apply { resolveSuspense() }
-            episodeList = soup.select("a.group.rounded-xl")
+        if (episodeList.isEmpty() && soup.selectFirst("a.bg-card") != null) {
+            val doc1 = client.newCall(GET("$baseUrl${anime.url}/1/1", headers)).awaitSuccess().use { it.body.string() }
+            val soup1 = parse(doc1, "$baseUrl${anime.url}/1/1").apply { resolveSuspense() }
+            episodeList = soup1.select("a.group.rounded-xl")
         }
 
-        val episodes = if (episodeList.isNotEmpty()) { // serie
-            parseSerieEpisodes(episodeList)
-        } else { // movie
-            buildMovie(anime, document)
+        return if (episodeList.isNotEmpty()) {
+            parseSerieEpisodes(episodeList).sortedWith(compareBy { it.episode_number }).asReversed()
+        } else {
+            buildMovie(anime)
         }
-        return episodes.sortedWith(compareBy { it.episode_number }).asReversed()
     }
 
     private fun parseSerieEpisodes(episodeList: Elements): List<SEpisode> = episodeList.mapNotNull { element ->
@@ -291,112 +392,137 @@ class DessinAnime :
         }
     }
 
-    private fun buildMovie(anime: SAnime, document: String): List<SEpisode> = listOf(
+    private fun buildMovie(anime: SAnime): List<SEpisode> = listOf(
         SEpisode.create().apply {
             episode_number = 1F
             name = "[Movie] ${anime.title}"
-            preview_url = posterRegex.find(document)?.groupValues?.get(1)?.nextJsToDirectUrl()
+            preview_url = anime.thumbnail_url
             url = anime.url
         },
     )
+
     // ============================ Hosters =============================
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val response = client.newCall(GET("$baseUrl${episode.url}", headers)).awaitSuccess()
-        val html = response.body.string()
+        val html = client.newCall(GET("$baseUrl${episode.url}", headers)).awaitSuccess().use { it.body.string() }
+        val soup = parse(html, "$baseUrl${episode.url}").apply { resolveSuspense() }
 
-        val hosterList = mutableListOf<Hoster>()
+        val playerEmbed = soup.extractNextJs<PlayerEmbedDto> { it is JsonObject && "players" in it.jsonObject }
+        val nextJsHosters = playerEmbed?.toHosterList().orEmpty()
+        if (nextJsHosters.isNotEmpty()) {
+            return nextJsHosters
+        }
 
+        val collectedItems = mutableListOf<HosterItemDto>()
+
+        val relayUrl = soup.selectFirst("video.art-video")?.attr("src")?.takeIf { it.isNotBlank() }
+        if (relayUrl != null) {
+            collectedItems.add(HosterItemDto(serverName = "Direct", url = relayUrl, language = "VF"))
+        }
+
+        collectedItems += extractLegacyHosters(html)
+
+        val useFallback = preferences.getBoolean(PREF_USE_FALLBACK_KEY, PREF_USE_FALLBACK_DEFAULT)
+        if (useFallback) {
+            collectedItems += extractIframeFallback(html)
+        }
+
+        return collectedItems.groupBy { "${it.serverName} (${it.language})" }.map { (displayName, items) ->
+            Hoster(
+                hosterName = displayName,
+                hosterUrl = items.first().url,
+                internalData = HosterPayloadDto(items).toJsonString(),
+            )
+        }
+    }
+
+    private fun extractLegacyHosters(html: String): List<HosterItemDto> {
+        val items = mutableListOf<HosterItemDto>()
         playerBlockRegex.findAll(html).forEach { match ->
             val host = match.groups["host"]?.value ?: "unknown"
             val sources = match.groups["sources"]?.value ?: ""
             sourceRegex.findAll(sources).forEach { srcMatch ->
                 val label = srcMatch.groups["label"]?.value ?: "MULTI"
                 val url = srcMatch.groups["url"]?.value?.replace("\\/", "/") ?: return@forEach
-                val isQuality = label.contains(Regex("""\d+p"""))
-                val hostName = if (isQuality) "VF" else label
-                hosterList.add(
-                    Hoster(
-                        hosterUrl = url,
-                        hosterName = hostName,
-                        internalData = "$label#$host",
-                    ),
-                )
+                val isQuality = label.contains(qualityRegex)
+                val lang = if (isQuality) "VF" else label
+                items.add(HosterItemDto(serverName = host, url = url, language = lang))
             }
         }
-
-        val useFallback = preferences.getBoolean(PREF_USE_FALLBACK_KEY, PREF_USE_FALLBACK_DEFAULT)
-        if (useFallback) {
-            hosterList += iframeRegex.findAll(html)
-                .mapNotNull { it.groups["url"]?.value?.replace("\\/", "/") }
-                .distinct()
-                .mapNotNull { url ->
-                    val server = getServerName(url, supportedServers) ?: return@mapNotNull null
-                    Hoster(hosterUrl = url, hosterName = server, internalData = "#$server")
-                }
-        }
-
-        return hosterList.groupBy { it.hosterName }.map { (name, list) ->
-            Hoster(
-                hosterName = name,
-                hosterUrl = list.joinToString("|") { it.hosterUrl },
-                internalData = list.joinToString("|") { it.internalData },
-            )
-        }
+        return items
     }
+
+    private fun extractIframeFallback(html: String): List<HosterItemDto> = iframeRegex.findAll(html)
+        .mapNotNull { it.groups["url"]?.value?.replace("\\/", "/") }
+        .distinct()
+        .mapNotNull { url ->
+            val server = getServerName(url, supportedServers) ?: return@mapNotNull null
+            HosterItemDto(serverName = server, url = url, language = "VF")
+        }
+        .toList()
 
     // =============================== Video list ===============================
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val urls = hoster.hosterUrl.split("|")
-        val metadata = hoster.internalData.split("|")
-
-        return urls.zip(metadata).flatMap { (url, meta) ->
-            val metaParts = meta.split("#")
-            val qualityLabel = metaParts.getOrNull(0) ?: ""
-            val originalHost = metaParts.getOrNull(1) ?: ""
-            val capitalizedHost = originalHost.replaceFirstChar { it.uppercase() }
-
-            if (url.contains("extractor.nmlnode.cc")) {
-                val proxyHeaders = headers.newBuilder()
-                    .set("Referer", "$baseUrl/")
-                    .build()
-
-                if (url.contains("/proxy/hls")) {
-                    runCatchingCancellable {
-                        val playlistUtils = PlaylistUtils(client, headers)
-                        val extracted = playlistUtils.extractFromHls(
-                            playlistUrl = url,
-                            referer = "$baseUrl/",
-                            masterHeaders = proxyHeaders,
-                            videoHeaders = proxyHeaders,
-                        )
-                        extracted.map {
-                            val quality = if (it.quality.isNullOrBlank()) {
-                                qualityLabel.takeIf { q -> q.isNotEmpty() && q != "MULTI" && q != "Default" }
-                            } else {
-                                it.quality
-                            }
-                            val video = it.copy(quality = quality).buildFromSource(lang = null, name = capitalizedHost)
-                            video.copy(videoTitle = "${video.videoTitle} (Proxy)")
-                        }
-                    }.getOrElse { emptyList() }
-                } else {
-                    val quality = qualityLabel.takeIf { q -> q.isNotEmpty() && q != "MULTI" && q != "Default" }
-                    val extSource = ExtractedSource(
-                        url = url,
-                        quality = quality,
-                        headers = proxyHeaders,
-                    )
-                    val video = extSource.buildFromSource(lang = null, name = capitalizedHost)
-                    listOf(video.copy(videoTitle = "${video.videoTitle} (Proxy)"))
+        val items = runCatching {
+            hoster.internalData.parseAs<HosterPayloadDto>().items
+        }.getOrElse {
+            if (hoster.internalData.contains("#")) {
+                hoster.internalData.split("|").map { part ->
+                    val p = part.split("#")
+                    HosterItemDto(serverName = p.getOrNull(0) ?: "Server", language = p.getOrNull(1) ?: "VF", url = p.getOrNull(2) ?: hoster.hosterUrl)
                 }
             } else {
-                // It's a fallback iframe URL
-                runCatchingCancellable {
-                    extractVideos(url, lang, supportedServers)
-                }.getOrElse { emptyList() }
+                listOf(HosterItemDto(serverName = hoster.hosterName, url = hoster.hosterUrl, language = "VF"))
             }
+        }
+
+        return items.parallelCatchingFlatMap { item ->
+            extractServerVideos(item.url.trim(), item.serverName, item.language)
+        }
+    }
+
+    private suspend fun extractServerVideos(cleanUrl: String, serverName: String, lang: String): List<Video> = when {
+        cleanUrl.contains("relay.dessinanime.cc") || serverName.equals("Direct", true) -> {
+            listOf(Video(videoUrl = cleanUrl, videoTitle = "Direct ($lang)", headers = headers))
+        }
+
+        cleanUrl.contains("extractor.nmlnode.cc") -> {
+            extractProxyVideo(cleanUrl, serverName)
+        }
+
+        else -> {
+            extractVideos(cleanUrl, lang, supportedServers)
+        }
+    }
+
+    private suspend fun extractProxyVideo(url: String, serverName: String): List<Video> {
+        val proxyHeaders = headers.newBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+
+        return if (url.contains("/proxy/hls")) {
+            runCatchingCancellable {
+                val playlistUtils = PlaylistUtils(client, headers)
+                val extracted = playlistUtils.extractFromHls(
+                    playlistUrl = url,
+                    referer = "$baseUrl/",
+                    masterHeaders = proxyHeaders,
+                    videoHeaders = proxyHeaders,
+                )
+                extracted.map {
+                    val video = it.buildFromSource(lang = null, name = serverName)
+                    video.copy(videoTitle = "${video.videoTitle} (Proxy)")
+                }
+            }.getOrElse { emptyList() }
+        } else {
+            val extSource = ExtractedSource(
+                url = url,
+                quality = null,
+                headers = proxyHeaders,
+            )
+            val video = extSource.buildFromSource(lang = null, name = serverName)
+            listOf(video.copy(videoTitle = "${video.videoTitle} (Proxy)"))
         }
     }
 
@@ -419,6 +545,13 @@ class DessinAnime :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
 
+        screen.addSwitchPreference(
+            key = PREF_EARLY_FETCH_TYPE_KEY,
+            default = PREF_EARLY_FETCH_TYPE_DEFAULT,
+            title = getString(R.string.pref_early_fetch_type_title),
+            summary = getString(R.string.pref_early_fetch_type_summary),
+        )
+
         val context = screen.context
         androidx.preference.SwitchPreferenceCompat(context).apply {
             key = PREF_USE_FALLBACK_KEY
@@ -431,6 +564,9 @@ class DessinAnime :
             }
         }.also(screen::addPreference)
     }
+
+    private val useEarlyFetch: Boolean
+        get() = preferences.getBoolean(PREF_EARLY_FETCH_TYPE_KEY, PREF_EARLY_FETCH_TYPE_DEFAULT)
 
     private fun Document.resolveSuspense() {
         for (script in select("script")) {
@@ -448,6 +584,8 @@ class DessinAnime :
     }
 
     companion object {
+        private const val PREF_EARLY_FETCH_TYPE_KEY = "early_fetch"
+        private const val PREF_EARLY_FETCH_TYPE_DEFAULT = false
         private const val PREF_USE_FALLBACK_KEY = "use_fallback_servers"
         private const val PREF_USE_FALLBACK_DEFAULT = false
         private const val POSTER_PLACEHOLDER = "https://placehold.co/300x450/262626/f59e0b.png?text=DessinAnime.cc%5CnPas%20d%27affiche"
