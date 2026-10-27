@@ -113,14 +113,26 @@ internal data class TvdbExtendedResponse(
 )
 
 @Serializable
+internal data class TvdbSeasonTypeDto(
+    val id: Int = 0,
+    val name: String? = null,
+    val altName: String? = null,
+    val type: String? = null,
+)
+
+@Serializable
 internal data class TvdbSeasonDto(
     val id: Long = 0,
     val number: Int = 0,
     val image: String? = null,
+    val type: TvdbSeasonTypeDto? = null,
 )
 
 @Serializable
 internal data class TvdbExtendedData(
+    val name: String? = null,
+    val image: String? = null,
+    val firstAired: String? = null,
     val artworks: List<TvdbArtworkDto> = emptyList(),
     val seasons: List<TvdbSeasonDto> = emptyList(),
     val genres: List<TvdbGenreDto> = emptyList(),

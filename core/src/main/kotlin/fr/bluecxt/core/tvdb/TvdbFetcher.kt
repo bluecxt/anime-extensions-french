@@ -147,9 +147,11 @@ suspend fun Source.fetchTvdbMetadata(
     apiKey: String = DEFAULT_TVDB_API_KEY,
     isMovie: Boolean = false,
     preference: MediaPreference = MediaPreference.ANIME,
+    seasonOrderType: String = "official",
+    targetTvdbId: Long? = null,
 ): TvdbMetadata? {
     val sanitizedTitle = sanitizeTitle(title)
-    val cacheKey = "$sanitizedTitle:$season:$lang:$isMovie:${preference.name}"
+    val cacheKey = "${targetTvdbId ?: sanitizedTitle}:$season:$lang:$isMovie:${preference.name}:$seasonOrderType"
 
     // 1. Check in-memory cache
     val cached = tvdbMetadataCache[cacheKey]
@@ -166,56 +168,68 @@ suspend fun Source.fetchTvdbMetadata(
             return@withLock cachedInside.first
         }
 
-        val searchUrl = "$TVDB_BASE_URL/search?q=${URLEncoder.encode(sanitizedTitle, "UTF-8")}"
-        Log.d(TVDB_LOG, "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title', isMovie=$isMovie, pref=$preference)")
-
-        val searchData = try {
-            val response = executeTvdbRequest(searchUrl, apiKey) ?: return@withLock null
-            val searchDto = tvdbJson.decodeFromString<TvdbSearchResponse>(response)
-
-            val targetType = if (isMovie) "movie" else "series"
-            val typeFiltered = searchDto.data.filter { it.type == targetType }
-            val candidatePool = if (typeFiltered.isNotEmpty()) typeFiltered else searchDto.data.filter { it.type == "series" || it.type == "movie" }.ifEmpty { searchDto.data }
-
-            val jpnResult = candidatePool.maxByOrNull { scoreTvdbResult(it, sanitizedTitle, preference) }
-                ?: candidatePool.firstOrNull()
-                ?: run {
-                    Log.w(TVDB_LOG, "TVDB Search returned 0 results for '$sanitizedTitle'")
-                    return@withLock null
-                }
-            val bestScore = scoreTvdbResult(jpnResult, sanitizedTitle, preference)
-            val id = jpnResult.tvdbId.ifBlank { jpnResult.objectId.substringAfter("-") }
-            val poster = jpnResult.imageUrl?.takeIf { it.isNotBlank() }?.let {
-                if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
-            }
-            val officialTitle = jpnResult.translations["fra"] ?: jpnResult.name
-            val movieType = jpnResult.type == "movie" || jpnResult.objectId.startsWith("movie-")
-            val overview = jpnResult.overviews[lang] ?: jpnResult.overview
-            val releaseDate = jpnResult.firstAirTime?.takeIf { it.isNotBlank() } ?: jpnResult.year?.takeIf { it.isNotBlank() }
+        val searchData = if (targetTvdbId != null && targetTvdbId > 0) {
             TvdbSearchResultData(
-                id = id,
-                title = officialTitle,
-                posterUrl = poster,
-                isMovie = movieType,
-                overview = overview,
-                releaseDate = releaseDate,
-                score = bestScore,
-                status = jpnResult.status,
+                id = targetTvdbId.toString(),
+                title = title,
+                posterUrl = null,
+                isMovie = isMovie,
+                overview = null,
+                releaseDate = null,
+                score = 100,
+                status = null,
             )
-        } catch (e: Exception) {
-            Log.e(TVDB_LOG, "TVDB Search failed for '$sanitizedTitle': ${e.message}")
-            return@withLock null
+        } else {
+            val searchUrl = "$TVDB_BASE_URL/search?q=${URLEncoder.encode(sanitizedTitle, "UTF-8")}"
+            Log.d(TVDB_LOG, "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title', isMovie=$isMovie, pref=$preference)")
+
+            try {
+                val response = executeTvdbRequest(searchUrl, apiKey) ?: return@withLock null
+                val searchDto = tvdbJson.decodeFromString<TvdbSearchResponse>(response)
+
+                val targetType = if (isMovie) "movie" else "series"
+                val candidatePool = searchDto.data.filter { it.type == targetType }
+
+                val jpnResult = candidatePool.maxByOrNull { scoreTvdbResult(it, sanitizedTitle, preference) }
+                    ?: candidatePool.firstOrNull()
+                    ?: run {
+                        Log.w(TVDB_LOG, "TVDB Search returned 0 results for '$sanitizedTitle'")
+                        return@withLock null
+                    }
+                val bestScore = scoreTvdbResult(jpnResult, sanitizedTitle, preference)
+                val id = jpnResult.tvdbId.ifBlank { jpnResult.objectId.substringAfter("-") }
+                val poster = jpnResult.imageUrl?.takeIf { it.isNotBlank() }?.let {
+                    if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
+                }
+                val officialTitle = jpnResult.translations["fra"] ?: jpnResult.name
+                val movieType = jpnResult.type == "movie" || jpnResult.objectId.startsWith("movie-")
+                val overview = jpnResult.overviews[lang] ?: jpnResult.overview
+                val releaseDate = jpnResult.firstAirTime?.takeIf { it.isNotBlank() } ?: jpnResult.year?.takeIf { it.isNotBlank() }
+                TvdbSearchResultData(
+                    id = id,
+                    title = officialTitle,
+                    posterUrl = poster,
+                    isMovie = movieType,
+                    overview = overview,
+                    releaseDate = releaseDate,
+                    score = bestScore,
+                    status = jpnResult.status,
+                )
+            } catch (e: Exception) {
+                Log.e(TVDB_LOG, "TVDB Search failed for '$sanitizedTitle': ${e.message}")
+                return@withLock null
+            }
         }
 
         val tvdbId = searchData.id
-        val tvdbTitle = searchData.title
-        val posterUrl = searchData.posterUrl
+        var tvdbTitle = searchData.title
+        var posterUrl = searchData.posterUrl
         val isMovieResolved = searchData.isMovie
-        val frenchOverview = searchData.overview
-        val tvdbReleaseDate = searchData.releaseDate
+        var frenchOverview = searchData.overview
+        var tvdbReleaseDate = searchData.releaseDate
         val tvdbMatchScore = searchData.score
 
-        Log.d(TVDB_LOG, "TVDB Search found tvdbId='$tvdbId', title='$tvdbTitle', isMovie=$isMovieResolved, posterUrl='$posterUrl'")
+        Log.d(TVDB_LOG, "TVDB resolved tvdbId='$tvdbId', title='$tvdbTitle', isMovie=$isMovieResolved, posterUrl='$posterUrl'")
 
         val mediaType = if (isMovieResolved) "movies" else "series"
 
@@ -233,12 +247,43 @@ suspend fun Source.fetchTvdbMetadata(
             val response = executeTvdbRequest(extendedUrl, apiKey)
             if (response != null) {
                 val extDto = tvdbJson.decodeFromString<TvdbExtendedResponse>(response)
+                if (posterUrl.isNullOrBlank()) {
+                    extDto.data?.image?.takeIf { it.isNotBlank() }?.let {
+                        posterUrl = if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
+                    }
+                }
+                if (tvdbTitle.isNullOrBlank() || tvdbTitle == title) {
+                    extDto.data?.name?.takeIf { it.isNotBlank() }?.let { tvdbTitle = it }
+                }
+                if (tvdbReleaseDate.isNullOrBlank()) {
+                    tvdbReleaseDate = extDto.data?.firstAired
+                }
+
+                // If French overview or translated title is missing, fetch from translations endpoint
+                if (frenchOverview.isNullOrBlank()) {
+                    try {
+                        val transUrl = "$TVDB_BASE_URL/$mediaType/$tvdbId/translations/$lang"
+                        val transResp = executeTvdbRequest(transUrl, apiKey)
+                        if (transResp != null) {
+                            val transDto = tvdbJson.decodeFromString<TvdbTranslationResponse>(transResp)
+                            transDto.data?.overview?.takeIf { it.isNotBlank() }?.let { frenchOverview = it }
+                            transDto.data?.name?.takeIf { it.isNotBlank() }?.let { tvdbTitle = it }
+                        }
+                    } catch (_: Exception) {}
+                }
+
                 // Backdrop: Type 15 (Movie) or 3 (Series Background)
                 backdropUrl = extDto.data?.artworks?.find { if (isMovieResolved) it.type == 15 || it.type == 3 else it.type == 3 || it.type == 15 }?.image?.takeIf { it.isNotBlank() }?.let {
                     if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                 }
                 tvdbStatusName = extDto.data?.status?.name ?: extDto.data?.status?.recordType
-                val targetSeasonObj = extDto.data?.seasons?.find { it.number == season }
+                // Filter seasons by the requested order type (altName), then fall back to any matching number
+                val filteredSeasons = extDto.data?.seasons?.filter { s ->
+                    s.type?.altName?.equals(seasonOrderType, ignoreCase = true) == true ||
+                        s.type?.type?.equals(seasonOrderType, ignoreCase = true) == true
+                } ?: emptyList()
+                val targetSeasonObj = filteredSeasons.find { it.number == season }
+                    ?: extDto.data?.seasons?.find { it.number == season }
                 targetSeasonId = targetSeasonObj?.id
                 var rawSeasonPoster: String? = null
                 var rawSeasonBackdrop: String? = null
@@ -302,46 +347,13 @@ suspend fun Source.fetchTvdbMetadata(
             }
         } catch (_: Exception) {}
 
-        // Fetch Episodes (up to 3 pages) for series
-        val epMap = mutableMapOf<Int, TvdbEpisode>()
-        val seasonCounts = mutableMapOf<Int, Int>()
-        var seasonReleaseDate: String? = null
-
-        if (!isMovieResolved) {
-            for (page in 0..2) {
-                val episodesUrl = "$TVDB_BASE_URL/series/$tvdbId/episodes/default/$lang?page=$page"
-                try {
-                    val response = executeTvdbRequest(episodesUrl, apiKey) ?: break
-                    val epDto = tvdbJson.decodeFromString<TvdbEpisodesResponse>(response)
-                    val episodes = epDto.data?.episodes.orEmpty()
-                    if (episodes.isEmpty()) break
-
-                    for (ep in episodes) {
-                        val sNum = ep.seasonNumber
-                        if (ep.number > 0) {
-                            seasonCounts[sNum] = maxOf(seasonCounts[sNum] ?: 0, ep.number)
-                        }
-                    }
-
-                    val seasonEps = episodes.filter { it.seasonNumber == season }
-                    if (seasonReleaseDate == null) {
-                        seasonReleaseDate = seasonEps.firstOrNull { !it.aired.isNullOrBlank() }?.aired
-                    }
-
-                    for (ep in seasonEps) {
-                        val epNum = ep.number
-                        if (epNum > 0 && !epMap.containsKey(epNum)) {
-                            val fullImgUrl = ep.episodeImage?.let {
-                                if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
-                            }
-                            epMap[epNum] = TvdbEpisode(ep.name, fullImgUrl, ep.overview)
-                        }
-                    }
-                } catch (_: Exception) {
-                    break
-                }
-            }
+        // Fetch Episodes (up to 5 pages) for series
+        val (epMap, countsAndDate) = if (!isMovieResolved) {
+            fetchSeriesEpisodes(tvdbId, season, lang, apiKey, seasonOrderType)
+        } else {
+            Pair(emptyMap(), Pair(emptyMap(), null))
         }
+        val (seasonCounts, seasonReleaseDate) = countsAndDate
 
         val finalStatus = parseTvdbStatus(tvdbStatusName ?: searchData.status)
 
@@ -364,6 +376,7 @@ suspend fun Source.fetchTvdbMetadata(
             episodeOffset = 0,
             matchScore = tvdbMatchScore,
             seasonEpisodeCounts = seasonCounts,
+            seriesId = tvdbId.toLongOrNull(),
         )
 
         tvdbMetadataCache[cacheKey] = Pair(metadata, System.currentTimeMillis())
@@ -475,4 +488,53 @@ private fun scoreTvdbResult(
     }
 
     return maxOf(0, maxScore)
+}
+
+private suspend fun Source.fetchSeriesEpisodes(
+    tvdbId: String,
+    season: Int,
+    lang: String,
+    apiKey: String,
+    seasonOrderType: String,
+): Pair<Map<Int, TvdbEpisode>, Pair<Map<Int, Int>, String?>> {
+    val epMap = mutableMapOf<Int, TvdbEpisode>()
+    val seasonCounts = mutableMapOf<Int, Int>()
+    var seasonReleaseDate: String? = null
+
+    val order = if (seasonOrderType.isNotBlank() && seasonOrderType != "official") seasonOrderType else "default"
+    for (page in 0..4) {
+        val episodesUrl = "$TVDB_BASE_URL/series/$tvdbId/episodes/$order/$lang?page=$page"
+        try {
+            val response = executeTvdbRequest(episodesUrl, apiKey) ?: break
+            val epDto = tvdbJson.decodeFromString<TvdbEpisodesResponse>(response)
+            val episodes = epDto.data?.episodes.orEmpty()
+            if (episodes.isEmpty()) break
+
+            for (ep in episodes) {
+                val sNum = ep.seasonNumber
+                if (ep.number > 0) {
+                    seasonCounts[sNum] = maxOf(seasonCounts[sNum] ?: 0, ep.number)
+                }
+            }
+
+            val seasonEps = episodes.filter { it.seasonNumber == season }
+            if (seasonReleaseDate == null) {
+                seasonReleaseDate = seasonEps.firstOrNull { !it.aired.isNullOrBlank() }?.aired
+            }
+
+            for (ep in seasonEps) {
+                val epNum = ep.number
+                if (epNum > 0 && !epMap.containsKey(epNum)) {
+                    val fullImgUrl = ep.episodeImage?.let {
+                        if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
+                    }
+                    epMap[epNum] = TvdbEpisode(ep.name, fullImgUrl, ep.overview)
+                }
+            }
+        } catch (_: Exception) {
+            break
+        }
+    }
+
+    return Pair(epMap, Pair(seasonCounts, seasonReleaseDate))
 }

@@ -209,7 +209,8 @@ class AnimeSama :
 
         val documentDeferred = async { getOrFetchDocument(link) }
         val tvdbMetadataDeferred = async {
-            fetchTvdbForPanel(anime.title, season, anime.title, titles)
+            val fullTitle = formatSeasonTitle(anime.title, season.orEmpty(), titles)
+            fetchTvdbForPanel(anime.title, season, fullTitle, titles)
         }
 
         val document = documentDeferred.await()
@@ -237,7 +238,8 @@ class AnimeSama :
         val hasNewTitles = allTitles.size > titles.size
         val needsRefetch = isMovie || isSpecial || (effectiveSeason != season)
         if (needsRefetch || hasNewTitles) {
-            tvdbMetadata = fetchTvdbForPanel(anime.title, effectiveSeason, anime.title, allTitles, isMovie = isMovie, isSpecial = isSpecial)
+            val fullTitle = formatSeasonTitle(anime.title, effectiveSeason ?: season.orEmpty(), allTitles)
+            tvdbMetadata = fetchTvdbForPanel(anime.title, effectiveSeason, fullTitle, allTitles, isMovie = isMovie, isSpecial = isSpecial)
         }
 
         anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub)
@@ -263,7 +265,9 @@ class AnimeSama :
         (medias.size == 1 && medias[0].url.contains("film", ignoreCase = true))
 
     private fun SAnime.populateFromDocument(document: Document) {
-        val studio = document.selectFirst(".oe-meta")?.text()?.split("·")?.getOrNull(1)?.trim()
+        val metaParts = document.selectFirst(".oe-meta")?.text()?.split("·")?.map { it.trim() }
+        val studio = (if (metaParts != null && metaParts.size >= 4) metaParts[2] else metaParts?.getOrNull(1))
+            ?: document.selectFirst("dl.oe-infos dt:contains(Studio) + dd")?.text()
             ?: document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text()
         if (author.isNullOrEmpty()) author = studio.orEmpty()
         val genres = document.select(".oe-genres a, .genre-pill, div.genres-wrap > span").map { it.text() }.filter { it.isNotBlank() }
@@ -281,7 +285,9 @@ class AnimeSama :
             .toSet()
     }
 
-    private fun extractSpfTitles(document: Document): List<String> = newSpfRegex.findAll(document.html()).map { it.groupValues[1].trim() }.filter { it.isNotBlank() }.toList()
+    private fun extractSpfTitles(document: Document): List<String> = newSpfRegex.findAll(document.html()).map { match ->
+        (match.groupValues[1].ifEmpty { match.groupValues[2] }).trim()
+    }.filter { it.isNotBlank() }.toList()
 
     private fun resolveCoverAndBackdrop(document: Document, metadata: TvdbMetadata?, monoSeason: Boolean): Pair<String?, String?> {
         val pageCover = document.selectFirst(".oe-affiche img")?.attr("abs:src")
@@ -340,6 +346,16 @@ class AnimeSama :
             ?: document.selectFirst(".oe-fond img")?.attr("abs:src")
             ?: document.getElementById("coverOeuvre")?.attr("abs:src")
 
+        val metaParts = document.selectFirst(".oe-meta")?.text()?.split("·")?.map { it.trim() }
+        val docStudio = (if (metaParts != null && metaParts.size >= 4) metaParts[2] else metaParts?.getOrNull(1))
+            ?: document.selectFirst("dl.oe-infos dt:contains(Studio) + dd")?.text()
+            ?: document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text()
+        val docGenres = document.select(".oe-genres a, .genre-pill, div.genres-wrap > span").map { it.text() }.filter { it.isNotBlank() }
+        val docGenre = docGenres.takeIf { it.isNotEmpty() }?.joinToString(", ")
+        val statusText = document.selectFirst(".oe-meta")?.text()
+            ?: document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text().orEmpty()
+        val docStatus = statusText.parseStatus()
+
         return medias.parallelMap { media ->
             val rawSeason = media.season.orEmpty()
             val fullTitle = formatSeasonTitle(anime.title, rawSeason, media.titles)
@@ -361,10 +377,10 @@ class AnimeSama :
                 tvdbMetadata?.releaseDate?.let { date ->
                     description = buildDescription(description.orEmpty(), date)
                 }
-                author = tvdbMetadata?.author
-                artist = tvdbMetadata?.artist
-                genre = tvdbMetadata?.genre
-                status = tvdbMetadata?.status ?: SAnime.UNKNOWN
+                author = tvdbMetadata?.author ?: docStudio
+                artist = tvdbMetadata?.artist ?: docStudio
+                genre = tvdbMetadata?.genre ?: docGenre
+                status = tvdbMetadata?.status ?: docStatus
                 initialized = true
                 fetch_type = FetchType.Episodes
                 season_number = HUB_SEASON_NUMBER
@@ -408,7 +424,28 @@ class AnimeSama :
             preDoc
         }
 
-        val spfTitles = extractSpfTitles(seasonDoc)
+        var spfTitles = extractSpfTitles(seasonDoc)
+        if (spfTitles.isEmpty()) {
+            for (lang in listOf("vostfr", "vf")) {
+                val cleanLink = link.removeSuffix("/")
+                val langDoc = try {
+                    getOrFetchDocument("$cleanLink/$lang/")
+                } catch (_: Exception) {
+                    try {
+                        getOrFetchDocument("$cleanLink/$lang")
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                if (langDoc != null) {
+                    val titles = extractSpfTitles(langDoc)
+                    if (titles.isNotEmpty()) {
+                        spfTitles = titles
+                        break
+                    }
+                }
+            }
+        }
         val episodes = fetchAggregatedEpisodes(link)
 
         val fullTitle = formatSeasonTitle(anime.title, rawSeason.orEmpty(), allTitles)
@@ -421,7 +458,7 @@ class AnimeSama :
         val autoS0Offset = calculateAutoS0Offset(tvdbMetadata, tvdbEpCount, episodes.size, medias, link)
 
         val s0Metadata = if (episodes.size > tvdbEpCount && tvdbEpCount > 0) {
-            fetchTvdbMetadata(anime.title, season = 0)
+            fetchTvdbMetadata(anime.title, season = 0, targetTvdbId = tvdbMetadata?.seriesId)
         } else {
             null
         }
@@ -524,7 +561,7 @@ class AnimeSama :
     }
 
     // ============================== Utils ===============================
-    private fun List<EpisodePlayers>.episodesPlayersToSEpisodes(
+    private suspend fun List<EpisodePlayers>.episodesPlayersToSEpisodes(
         tvdbMetadata: TvdbMetadata?,
         season: String?,
         animeTitle: String = "",
@@ -533,10 +570,10 @@ class AnimeSama :
         spfTitles: List<String> = emptyList(),
     ): List<SEpisode> {
         val contentType = ContentType.from(animeTitle, season ?: "")
-        val seasonNum = season?.filter { it.isDigit() }?.toIntOrNull() ?: 1
+        val seasonNum = season?.let { extractSeasonNumber(it) } ?: 1
         val defaultPrefix = contentType.getPrefix(seasonNum)
 
-        return this.map { episode ->
+        return this.parallelMap { episode ->
             val epNum = episode.episodeNumber
             val spfName = if (contentType == ContentType.MOVIE) spfTitles.getOrNull(epNum - 1) else null
             val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType, defaultPrefix, autoS0Offset)
@@ -544,7 +581,21 @@ class AnimeSama :
             val effectivePrefix = if (contentType == ContentType.MOVIE && !spfName.isNullOrBlank()) "[Film] " else prefix
             val finalName = "$effectivePrefix$baseName".trim()
 
-            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='${epMeta?.thumbnail}', hasSummary=${epMeta?.summary != null}")
+            val movieThumbnail = if (contentType == ContentType.MOVIE && !spfName.isNullOrBlank()) {
+                val cleanSpf = spfName.replace(Regex("""(?i)^Film\s*\d*\s*[:-]?\s*"""), "").trim()
+                val movieQuery = if (cleanSpf.isNotBlank()) "$animeTitle $cleanSpf" else "$animeTitle $spfName"
+                try {
+                    fetchTvdbMetadata(movieQuery, isMovie = true)?.let { it.seasonPosterUrl ?: it.mainPosterUrl }
+                } catch (_: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
+
+            val finalPreview = movieThumbnail ?: epMeta?.thumbnail ?: tvdbMetadata?.backdropUrl ?: tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl
+
+            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='$finalPreview', hasSummary=${epMeta?.summary != null}")
 
             SEpisode.create().apply {
                 name = finalName
@@ -552,7 +603,7 @@ class AnimeSama :
                 scanlator = episode.getScanlatorString()
                 url = episode.players.toJsonString(json)
                 summary = epMeta?.summary ?: tvdbMetadata?.summary
-                preview_url = epMeta?.thumbnail ?: tvdbMetadata?.backdropUrl ?: tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl
+                preview_url = finalPreview
             }
         }
     }
@@ -679,12 +730,7 @@ class AnimeSama :
             return "$seriesTitle $shortSeason"
         }
 
-        val fullCombined = "$seriesTitle $cleanSeason"
-        return if (fullCombined.length > MAX_COMBINED_TITLE_LENGTH && !cleanSeason.startsWith("Film") && !cleanSeason.contains("OAV", ignoreCase = true)) {
-            cleanSeason
-        } else {
-            fullCombined
-        }
+        return "$seriesTitle $cleanSeason"
     }
 
     private val documentMutexes = ConcurrentHashMap<String, Mutex>()
@@ -795,7 +841,6 @@ class AnimeSama :
     companion object {
         const val PREFIX_SEARCH = "id:"
         private const val MAX_HUB_PATH_SEGMENTS = 3
-        private const val MAX_COMBINED_TITLE_LENGTH = 35
         private val commentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
         private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
         private val epsArrayRegex = Regex("""var\s+eps([a-zA-Z0-9_]+)\s*=\s*\[(.*?)\];""", RegexOption.DOT_MATCHES_ALL)
@@ -811,7 +856,7 @@ class AnimeSama :
         private val seasonRegex = Regex("""(?i)^Saison\s*\d+.*""")
         private val seasonReplaceRegex = Regex("""(?i)\s*Saison\s*""")
         private val partReplaceRegex = Regex("""(?i)Partie\s*(\d+)""")
-        private val newSpfRegex = Regex("""newSPF\(\s*["']([^"']+)["']\s*\)""")
+        private val newSpfRegex = Regex("""newSPF\(\s*(?:"([^"]*)"|'([^']*)')\s*\)""")
         private val alterTitlesSplitRegex = Regex("""(?:\s*,\s*|\s*;\s*|\s*/\s*)""")
 
         private const val MIN_TITLE_LENGTH = 4
