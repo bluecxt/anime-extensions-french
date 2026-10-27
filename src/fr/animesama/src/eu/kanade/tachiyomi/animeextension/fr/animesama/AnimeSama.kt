@@ -37,6 +37,7 @@ import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
 import fr.bluecxt.core.utils.JsoupExtensions
 import fr.bluecxt.core.utils.normalize
+import fr.bluecxt.core.utils.parseStatus
 import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
@@ -269,11 +270,7 @@ class AnimeSama :
         if (genre.isNullOrEmpty() && genres.isNotEmpty()) genre = genres.joinToString(", ")
         val statusText = document.selectFirst(".oe-meta")?.text()
             ?: document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text().orEmpty()
-        status = when {
-            statusText.contains("Terminé", ignoreCase = true) || statusText.contains("Sorti", ignoreCase = true) -> SAnime.COMPLETED
-            statusText.contains("En cours", ignoreCase = true) -> SAnime.ONGOING
-            else -> SAnime.UNKNOWN
-        }
+        status = statusText.parseStatus()
     }
 
     private fun extractAlternateTitles(document: Document): Set<String> {

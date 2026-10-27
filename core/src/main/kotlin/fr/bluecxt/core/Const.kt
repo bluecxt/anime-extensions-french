@@ -2,19 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core
 
+import fr.bluecxt.core.utils.runCatchingCancellable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-@Deprecated(
-    message = "AniZen supprime automatiquement le user agent et le remplace par celui local donc il n'est pas necessaire de le rajouter",
-    replaceWith = ReplaceWith(""),
-)
-val DEFAULT_USER_AGENT: String by lazy {
-    try {
+val DEFAULT_USER_AGENT: String? by lazy {
+    runCatchingCancellable {
         Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider()
-    } catch (_: Throwable) {
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
-    }
+    }.getOrNull()
 }
 
 const val HUB_SEASON_NUMBER = -2.0
@@ -53,7 +48,6 @@ const val EXTENSIONTEST_LOG: String = "ExtensionTest"
 const val VOIRANIME_LOG: String = "VoiranimeLog"
 const val DESSINANIME_LOG: String = "DessinanimeLog"
 const val ANIMEULTIME_LOG: String = "AnimeultimeLog"
-const val ANIMESULTRA_LOG: String = "AnimesultraLog"
 const val VOIRDRAMA_LOG: String = "VoirdramaLog"
 const val PAPADUSTREAM_LOG: String = "PapadustreamLog"
 const val FRENCHSTREAM_LOG: String = "FrenchstreamLog"

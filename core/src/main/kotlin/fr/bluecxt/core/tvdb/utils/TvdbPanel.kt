@@ -5,11 +5,11 @@ package fr.bluecxt.core.tvdb.utils
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
+import fr.bluecxt.core.tvdb.MediaPreference
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.normalize
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 @Serializable
 data class TvdbOverrideEntry(
@@ -22,20 +22,28 @@ data class TvdbSeriesOverride(
     val seasons: Map<String, TvdbOverrideEntry> = emptyMap(),
 )
 
-private val tvdbOverrideJson = Json {
-    ignoreUnknownKeys = true
-    coerceInputValues = true
-}
-
-private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> by lazy {
-    try {
-        val stream = Source::class.java.getResourceAsStream("/tvdb_overrides.json")
-        val content = stream?.bufferedReader()?.use { it.readText() } ?: "{}"
-        tvdbOverrideJson.decodeFromString<Map<String, TvdbSeriesOverride>>(content)
-    } catch (_: Exception) {
-        emptyMap()
-    }
-}
+private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
+    "demon slayer" to TvdbSeriesOverride(
+        seasons = mapOf(
+            "saison 4" to TvdbOverrideEntry(tvdbSeason = 5),
+        ),
+    ),
+    "one piece" to TvdbSeriesOverride(
+        seasons = mapOf(
+            "saga 1" to TvdbOverrideEntry(tvdbSeason = 1),
+            "saga 2" to TvdbOverrideEntry(tvdbSeason = 4),
+            "saga 3" to TvdbOverrideEntry(tvdbSeason = 6),
+            "saga 4" to TvdbOverrideEntry(tvdbSeason = 8),
+            "saga 5" to TvdbOverrideEntry(tvdbSeason = 10),
+            "saga 6" to TvdbOverrideEntry(tvdbSeason = 13),
+            "saga 7" to TvdbOverrideEntry(tvdbSeason = 15),
+            "saga 8" to TvdbOverrideEntry(tvdbSeason = 17),
+            "saga 9" to TvdbOverrideEntry(tvdbSeason = 19),
+            "saga 10" to TvdbOverrideEntry(tvdbSeason = 21),
+            "saga 11" to TvdbOverrideEntry(tvdbSeason = 22),
+        ),
+    ),
+)
 
 /**
  * High-level helper function for extensions to fetch TVDB metadata for any panel/tab.
@@ -47,6 +55,7 @@ suspend fun Source.fetchTvdbForPanel(
     titles: Set<String> = emptySet(),
     isMovie: Boolean = false,
     isSpecial: Boolean = false,
+    preference: MediaPreference = MediaPreference.ANIME,
 ): TvdbMetadata? {
     val normTitle = seriesTitle.normalize()
     val normSeason = rawSeasonName.orEmpty().normalize()
@@ -64,7 +73,7 @@ suspend fun Source.fetchTvdbForPanel(
         .distinct()
 
     val primaryResults = primaryTitles.mapNotNull { title ->
-        fetchTvdbMetadata(title, seasonNumber, isMovie = isMovie)
+        fetchTvdbMetadata(title, seasonNumber, isMovie = isMovie, preference = preference)
     }
 
     val bestPrimary = primaryResults.maxByOrNull { it.matchScore }
@@ -79,7 +88,7 @@ suspend fun Source.fetchTvdbForPanel(
         .distinct()
 
     val secondaryResults = secondaryTitles.take(5).mapNotNull { title ->
-        fetchTvdbMetadata(title, seasonNumber, isMovie = isMovie)
+        fetchTvdbMetadata(title, seasonNumber, isMovie = isMovie, preference = preference)
     }
 
     val allCandidates = primaryResults + secondaryResults

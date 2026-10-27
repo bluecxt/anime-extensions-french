@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VOE_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.network.DdosGuardInterceptor
 import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
@@ -25,14 +26,19 @@ import okhttp3.OkHttpClient
 class VoeExtractor(private val client: OkHttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val playlistUtils by lazy { PlaylistUtils(client) }
+
+    // DDoS-Guard challenges are handled by a dedicated client so the original one stays untouched.
+    private val clientDdos by lazy {
+        client.newBuilder().addInterceptor(DdosGuardInterceptor(client)).build()
+    }
+    private val playlistUtils by lazy { PlaylistUtils(clientDdos) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         var currentUrl = url
         Log.d(VOE_LOG, "url = $currentUrl")
         val headers = defaultHeaders(currentUrl)
 
-        var response = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url)
+        var response = clientDdos.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url)
         var html = response.use { it.body.string() }
 
         // Check for redirect
@@ -42,7 +48,7 @@ class VoeExtractor(private val client: OkHttpClient) {
 
             if (redirectUrl != null) {
                 currentUrl = redirectUrl
-                response = client.newCall(GET(redirectUrl, headers)).awaitSuccessOrUnavailable(redirectUrl)
+                response = clientDdos.newCall(GET(redirectUrl, headers)).awaitSuccessOrUnavailable(redirectUrl)
                 html = response.use { it.body.string() }
             }
         }
@@ -65,7 +71,7 @@ class VoeExtractor(private val client: OkHttpClient) {
         val scriptUrl = url.toHttpUrl().resolve(match.groupValues.get(2))?.toString() ?: return emptyList()
         Log.d(VOE_LOG, "url un newMethod = $scriptUrl")
 
-        val response = client.newCall(GET(scriptUrl, headers)).awaitSuccessOrUnavailable(scriptUrl)
+        val response = clientDdos.newCall(GET(scriptUrl, headers)).awaitSuccessOrUnavailable(scriptUrl)
         val scriptContent = response.use { it.body.string() }
 
         val replMatch = Regex("""(\[(?:'\W{2}'[,\]]){1,9})""")
@@ -84,7 +90,7 @@ class VoeExtractor(private val client: OkHttpClient) {
                 videoHeaders = headers,
             )
         } else {
-            val mp4Res = client.detectMp4Resolution(streamUrl, headers)
+            val mp4Res = clientDdos.detectMp4Resolution(streamUrl, headers)
             val quality = if (mp4Res != null) "${mp4Res}p" else null
             listOf(
                 ExtractedSource(
@@ -119,7 +125,7 @@ class VoeExtractor(private val client: OkHttpClient) {
                 val quality = if (label != null) {
                     "${label}p"
                 } else {
-                    val mp4Res = client.detectMp4Resolution(streamUrl, headers)
+                    val mp4Res = clientDdos.detectMp4Resolution(streamUrl, headers)
                     if (mp4Res != null) "${mp4Res}p" else null
                 }
                 listOf(

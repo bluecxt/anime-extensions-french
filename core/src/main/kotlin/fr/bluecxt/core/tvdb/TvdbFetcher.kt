@@ -31,9 +31,18 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
+enum class MediaPreference {
+    ANIME,
+    DRAMA,
+    ANY,
+}
+
 private const val TVDB_BASE_URL = "https://api4.thetvdb.com/v4"
 private const val TVDB_ARTWORK_BASE_URL = "https://artworks.thetvdb.com"
 private const val DEFAULT_TVDB_API_KEY = BuildConfig.TVDB_API
+
+private val liveActionSlugRegex = Regex("""(?i)(?:^|-)(?:dorama|drama|live-action|j-drama|k-drama)(?:$|-|\d)""")
+private val animeSlugRegex = Regex("""(?i)(?:^|-)(?:anime)(?:$|-|\d)""")
 
 private val tvdbJson = Json {
     ignoreUnknownKeys = true
@@ -137,9 +146,10 @@ suspend fun Source.fetchTvdbMetadata(
     lang: String = "fra",
     apiKey: String = DEFAULT_TVDB_API_KEY,
     isMovie: Boolean = false,
+    preference: MediaPreference = MediaPreference.ANIME,
 ): TvdbMetadata? {
     val sanitizedTitle = sanitizeTitle(title)
-    val cacheKey = "$sanitizedTitle:$season:$lang:$isMovie"
+    val cacheKey = "$sanitizedTitle:$season:$lang:$isMovie:${preference.name}"
 
     // 1. Check in-memory cache
     val cached = tvdbMetadataCache[cacheKey]
@@ -157,7 +167,7 @@ suspend fun Source.fetchTvdbMetadata(
         }
 
         val searchUrl = "$TVDB_BASE_URL/search?q=${URLEncoder.encode(sanitizedTitle, "UTF-8")}"
-        Log.d(TVDB_LOG, "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title', isMovie=$isMovie)")
+        Log.d(TVDB_LOG, "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title', isMovie=$isMovie, pref=$preference)")
 
         val searchData = try {
             val response = executeTvdbRequest(searchUrl, apiKey) ?: return@withLock null
@@ -167,13 +177,13 @@ suspend fun Source.fetchTvdbMetadata(
             val typeFiltered = searchDto.data.filter { it.type == targetType }
             val candidatePool = if (typeFiltered.isNotEmpty()) typeFiltered else searchDto.data.filter { it.type == "series" || it.type == "movie" }.ifEmpty { searchDto.data }
 
-            val jpnResult = candidatePool.maxByOrNull { scoreTvdbResult(it, sanitizedTitle) }
+            val jpnResult = candidatePool.maxByOrNull { scoreTvdbResult(it, sanitizedTitle, preference) }
                 ?: candidatePool.firstOrNull()
                 ?: run {
                     Log.w(TVDB_LOG, "TVDB Search returned 0 results for '$sanitizedTitle'")
                     return@withLock null
                 }
-            val bestScore = scoreTvdbResult(jpnResult, sanitizedTitle)
+            val bestScore = scoreTvdbResult(jpnResult, sanitizedTitle, preference)
             val id = jpnResult.tvdbId.ifBlank { jpnResult.objectId.substringAfter("-") }
             val poster = jpnResult.imageUrl?.takeIf { it.isNotBlank() }?.let {
                 if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
@@ -223,13 +233,16 @@ suspend fun Source.fetchTvdbMetadata(
             val response = executeTvdbRequest(extendedUrl, apiKey)
             if (response != null) {
                 val extDto = tvdbJson.decodeFromString<TvdbExtendedResponse>(response)
-                backdropUrl = extDto.data?.artworks?.find { it.type == 15 || it.type == 14 || it.type == 3 }?.image?.takeIf { it.isNotBlank() }?.let {
+                // Backdrop: Type 15 (Movie) or 3 (Series Background)
+                backdropUrl = extDto.data?.artworks?.find { if (isMovieResolved) it.type == 15 || it.type == 3 else it.type == 3 || it.type == 15 }?.image?.takeIf { it.isNotBlank() }?.let {
                     if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                 }
                 tvdbStatusName = extDto.data?.status?.name ?: extDto.data?.status?.recordType
                 val targetSeasonObj = extDto.data?.seasons?.find { it.number == season }
                 targetSeasonId = targetSeasonObj?.id
                 var rawSeasonPoster: String? = null
+                var rawSeasonBackdrop: String? = null
+
                 if (targetSeasonId != null && targetSeasonId > 0) {
                     try {
                         val seasonUrl = "$TVDB_BASE_URL/seasons/$targetSeasonId/extended"
@@ -237,9 +250,20 @@ suspend fun Source.fetchTvdbMetadata(
                         if (sResp != null) {
                             val sDto = tvdbJson.decodeFromString<TvdbSeasonExtendedResponse>(sResp)
                             val artworks = sDto.data?.artwork.orEmpty()
-                            val langPoster = artworks.find { it.language?.equals(lang, ignoreCase = true) == true }?.image
-                            val bestArt = langPoster ?: artworks.firstOrNull()?.image
-                            rawSeasonPoster = bestArt ?: sDto.data?.image
+                            // Season Poster strictly type == 7 (680x1000)
+                            val seasonPosters = artworks.filter { it.type == 7 }
+                            val langPoster = seasonPosters.find { it.language?.equals(lang, ignoreCase = true) == true }?.image
+                            val jpnPoster = seasonPosters.find { it.language?.equals("jpn", ignoreCase = true) == true }?.image
+                            val engPoster = seasonPosters.find { it.language?.equals("eng", ignoreCase = true) == true }?.image
+                            rawSeasonPoster = langPoster ?: jpnPoster ?: engPoster ?: seasonPosters.firstOrNull()?.image ?: sDto.data?.image
+
+                            // Season Backdrop strictly type == 8 (1920x1080)
+                            val seasonBackdrops = artworks.filter { it.type == 8 }
+                            val bestBackdrop = seasonBackdrops.find { it.language?.equals(lang, ignoreCase = true) == true }?.image
+                                ?: seasonBackdrops.firstOrNull()?.image
+                            if (!bestBackdrop.isNullOrBlank()) {
+                                rawSeasonBackdrop = if (bestBackdrop.startsWith("http")) bestBackdrop else "$TVDB_ARTWORK_BASE_URL$bestBackdrop"
+                            }
                         }
                     } catch (_: Exception) {}
                     try {
@@ -251,12 +275,28 @@ suspend fun Source.fetchTvdbMetadata(
                         }
                     } catch (_: Exception) {}
                 }
+
+                if (rawSeasonBackdrop != null) {
+                    backdropUrl = rawSeasonBackdrop
+                }
+
                 if (rawSeasonPoster == null) {
                     rawSeasonPoster = targetSeasonObj?.image
                 }
                 seasonPosterUrl = rawSeasonPoster?.takeIf { it.isNotBlank() }?.let {
                     if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
                 }
+
+                // If movie, resolve poster from type 14 (Movie Poster) or 2
+                if (isMovieResolved) {
+                    val moviePosters = extDto.data?.artworks?.filter { it.type == 14 || it.type == 2 }.orEmpty()
+                    val bestMoviePoster = moviePosters.find { it.language?.equals(lang, ignoreCase = true) == true }?.image
+                        ?: moviePosters.firstOrNull()?.image
+                    if (!bestMoviePoster.isNullOrBlank()) {
+                        seasonPosterUrl = if (bestMoviePoster.startsWith("http")) bestMoviePoster else "$TVDB_ARTWORK_BASE_URL$bestMoviePoster"
+                    }
+                }
+
                 tvdbGenres = extDto.data?.genres?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.joinToString(", ")?.takeIf { it.isNotBlank() }
                 tvdbCompanies = extDto.data?.companies?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.distinct()?.joinToString(", ")?.takeIf { it.isNotBlank() }
             }
@@ -351,7 +391,11 @@ private fun parseTvdbStatus(statusStr: String?): Int {
     }
 }
 
-private fun scoreTvdbResult(result: TvdbSearchResult, query: String): Int {
+private fun scoreTvdbResult(
+    result: TvdbSearchResult,
+    query: String,
+    preference: MediaPreference = MediaPreference.ANIME,
+): Int {
     val normQuery = query.normalize()
     val candidateTitles = buildList {
         result.name?.let { add(it) }
@@ -383,9 +427,52 @@ private fun scoreTvdbResult(result: TvdbSearchResult, query: String): Int {
         }
     }
 
-    if (result.primaryLanguage == "jpn" || result.country == "jpn") {
-        maxScore += 15
+    if (maxScore == 0) return 0
+
+    val isAnimation = result.genres.any {
+        it.equals("Anime", ignoreCase = true) || it.equals("Animation", ignoreCase = true)
     }
 
-    return maxScore
+    val slug = result.slug.orEmpty()
+    val isLiveActionSlug = liveActionSlugRegex.containsMatchIn(slug)
+    val isAnimeSlug = animeSlugRegex.containsMatchIn(slug)
+
+    when (preference) {
+        MediaPreference.ANIME -> {
+            if (isAnimation) {
+                maxScore += 45
+            } else if (result.genres.isNotEmpty()) {
+                maxScore -= 60
+            }
+
+            if (isAnimeSlug) maxScore += 30
+            if (isLiveActionSlug) maxScore -= 40
+
+            if (result.primaryLanguage == "jpn" || result.country == "jpn") {
+                maxScore += 15
+            }
+            if ((result.country == "usa" || result.country == "gbr") && !isAnimation) {
+                maxScore -= 25
+            }
+        }
+
+        MediaPreference.DRAMA -> {
+            if (isAnimation) {
+                maxScore -= 60
+            }
+            if (isLiveActionSlug) maxScore += 40
+            if (isAnimeSlug) maxScore -= 40
+            if (result.primaryLanguage == "jpn" || result.country == "jpn" || result.country == "kor") {
+                maxScore += 15
+            }
+        }
+
+        MediaPreference.ANY -> {
+            if (result.primaryLanguage == "jpn" || result.country == "jpn") {
+                maxScore += 15
+            }
+        }
+    }
+
+    return maxOf(0, maxScore)
 }

@@ -41,6 +41,7 @@ internal data class TvdbSearchResult(
     val overviews: Map<String, String> = emptyMap(),
     val translations: Map<String, String> = emptyMap(),
     val aliases: List<String> = emptyList(),
+    val genres: List<String> = emptyList(),
     val status: String? = null,
     @SerialName("first_air_time") val firstAirTime: String? = null,
     val year: String? = null,
