@@ -21,6 +21,7 @@ import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMovieMetadata
+import fr.bluecxt.core.utils.parseStatus
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -46,7 +47,7 @@ class AnimoFlix :
 
     override val supportsLatest = true
 
-    override val supportedServers = listOf("Sibnet", "Sendvid", "Mymail")
+    override val supportedServers = listOf("Sibnet", "Sendvid", "Mymail", "Vidmoly", "Embed4me")
 
     override val defaultBaseUrl = "https://animoflix.to"
 
@@ -166,11 +167,11 @@ class AnimoFlix :
         val body = response.body.string()
         val jsonObj = JSONObject(body)
 
-        val cardsHtml = jsonObj.optString("animeCards")
+        val cardsHtml = jsonObj.optString("cards").ifBlank { jsonObj.optString("animeCards") }
         val paginationHtml = jsonObj.optString("pagination")
 
         val cardsDoc = Jsoup.parseBodyFragment(cardsHtml, baseUrl)
-        val items = cardsDoc.select(".anime-card-pro a[href]")
+        val items = cardsDoc.select(".cat-card a[href], .anime-card-pro a[href]")
             .mapNotNull { a ->
                 val href = a.attr("href").trim()
                 if (href.isBlank()) return@mapNotNull null
@@ -182,10 +183,10 @@ class AnimoFlix :
                     href
                 }
 
-                val title = a.selectFirst(".card-title-pro")?.text()?.trim().orEmpty()
-                val thumb = a.selectFirst("img.card-image-pro")?.attr("abs:src")
+                val title = a.selectFirst(".cat-title, .card-title-pro")?.text()?.trim().orEmpty()
+                val thumb = a.selectFirst("img.cat-img, img.card-image-pro")?.attr("abs:src")
                     ?.takeIf { it.isNotBlank() }
-                    ?: a.selectFirst("img.card-image-pro")?.attr("src")
+                    ?: a.selectFirst("img.cat-img, img.card-image-pro")?.attr("src")
 
                 SAnime.create().apply {
                     this.url = path
@@ -196,7 +197,7 @@ class AnimoFlix :
             .distinctBy { it.url }
 
         val paginationDoc = Jsoup.parseBodyFragment(paginationHtml, baseUrl)
-        val pages = paginationDoc.select(".pagination-pro a[data-page]")
+        val pages = paginationDoc.select(".cat-pager a[data-page], .pagination-pro a[data-page]")
             .mapNotNull { it.attr("data-page").toIntOrNull() }
         val hasNextPage = pages.any { it > page }
 
@@ -253,22 +254,19 @@ class AnimoFlix :
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.useAsJsoup()
 
-        val fullTitle = document.selectFirst("h1.anime-title-pro, h1")?.text() ?: anime.title
+        val fullTitle = document.selectFirst("h1.hero-title, h1.anime-title-pro, h1")?.text() ?: anime.title
         val sSegment = anime.url.trim('/').split("/").lastOrNull() ?: ""
         val sName = if (sSegment.contains("saison", true) || sSegment.contains("season", true)) sSegment else fullTitle
 
         anime.title = fullTitle
         anime.season_number = parseSeasonNumber(sName)
 
-        anime.description = document.selectFirst(".synopsis-text")?.text()
-        anime.genre = document.select(".genre-tag").joinToString { it.text() }
-        val statusText = document.selectFirst(".status-ongoing")?.text() ?: document.selectFirst(".status-completed")?.text()
-        anime.status = when {
-            statusText?.contains("En Cours", true) == true -> SAnime.ONGOING
-            statusText?.contains("Terminé", true) == true -> SAnime.COMPLETED
-            else -> SAnime.UNKNOWN
-        }
-        anime.thumbnail_url = document.selectFirst("img.poster-image")?.attr("abs:src") ?: document.selectFirst("meta[property=og:image]")?.attr("content")
+        anime.description = document.selectFirst(".hero-synopsis-text, .synopsis-text")?.text()
+        anime.genre = document.select(".hero-badges span, .genre-tag").joinToString { it.text() }
+        val statusText = document.selectFirst(".cat-status-badge, .status-ongoing, .status-completed")?.text()
+        anime.status = statusText.orEmpty().parseStatus()
+        anime.thumbnail_url = document.selectFirst("img.cat-img, img.poster-image")?.attr("abs:src")
+            ?: document.selectFirst("meta[property=og:image]")?.attr("content")
 
         // TMDB Metadata with type precision
         val tmdbType = if (anime.season_number == -2.0) "movie" else "tv"
@@ -296,7 +294,7 @@ class AnimoFlix :
         return if (seasonCards.isNotEmpty()) {
             seasonCards.map { card ->
                 SAnime.create().apply {
-                    val sTitle = card.selectFirst(".season-title")?.text() ?: ""
+                    val sTitle = card.selectFirst(".season-card-title, .season-title")?.text() ?: ""
                     title = sTitle
                     url = card.attr("href").let { if (it.startsWith("http")) it.toHttpUrl().encodedPath else it }
                     thumbnail_url = anime.thumbnail_url
@@ -313,7 +311,7 @@ class AnimoFlix :
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.useAsJsoup()
-        val episodeCards = document.select("a.episode-card")
+        val episodeCards = document.select("a.sw-ep-card, a.episode-card")
         val seasonCards = document.select(".seasons-grid a.season-card")
 
         return if (episodeCards.isEmpty() && seasonCards.isNotEmpty()) {
@@ -321,7 +319,7 @@ class AnimoFlix :
             coroutineScope {
                 seasonCards.map { card ->
                     async(Dispatchers.IO) {
-                        val seasonName = card.selectFirst(".season-title")?.text() ?: ""
+                        val seasonName = card.selectFirst(".season-card-title, .season-title")?.text() ?: ""
                         val seasonNum = parseSeasonNumber(seasonName)
                         val seasonUrl = card.attr("href").let { if (it.startsWith("http")) it else baseUrl + it }
                         val seasonResponse = client.newCall(GET(seasonUrl, headers)).awaitSuccess()
@@ -334,27 +332,33 @@ class AnimoFlix :
             // SEASON MODE
             val sSegment = anime.url.trim('/').split("/").lastOrNull() ?: ""
             val totalSeasons = document.select(".seasons-grid a.season-card").size.let { if (it == 0) 1 else it }
-            val baseTitle = document.selectFirst("h1.anime-title-pro, h1")?.text() ?: anime.title
+            val baseTitle = document.selectFirst("h1.hero-title, h1.anime-title-pro, h1")?.text() ?: anime.title
             parseEpisodesFromSeasonPage(document, sSegment, totalSeasons, baseTitle, anime.url).asReversed()
         }
     }
 
     private suspend fun parseEpisodesFromSeasonPage(document: Document, seasonName: String, totalSeasons: Int, animeTitle: String, animeUrl: String): List<SEpisode> {
-        val allEpisodeCards = document.select("a.episode-card")
+        val allEpisodeCards = document.select("a.sw-ep-card, a.episode-card")
         val episodesMap = mutableMapOf<Float, MutableMap<String, String>>()
         val titlesMap = mutableMapOf<Float, String>()
 
         allEpisodeCards.forEach { card ->
             val url = card.attr("href").let { if (it.startsWith("http")) it else baseUrl + it }
-            val epTitle = card.selectFirst("h3.episode-title")?.text() ?: "Episode"
-            val epNumRaw = card.selectFirst(".episode-number")?.text() ?: epTitle
+            val epTitle = card.selectFirst(".sw-ep-title, h3.episode-title")?.text() ?: "Episode"
+            val epNumRaw = card.selectFirst(".episode-number, .sw-ep-title")?.text() ?: epTitle
             val epNum = epNumRegex.find(epNumRaw)?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
 
             if (!episodesMap.containsKey(epNum)) {
                 episodesMap[epNum] = mutableMapOf()
                 titlesMap[epNum] = epTitle.replace("Épisode", "Episode", true)
             }
-            val lang = if (url.contains("/vf/")) "VF" else "VOSTFR"
+            val epLabel = card.selectFirst(".sw-ep-label")?.text()?.trim()
+            val lang = when {
+                epLabel?.contains("VF", true) == true -> "VF"
+                epLabel?.contains("VOSTFR", true) == true -> "VOSTFR"
+                url.contains("/vf/") -> "VF"
+                else -> "VOSTFR"
+            }
             episodesMap[epNum]!![lang] = url
         }
 
@@ -422,19 +426,28 @@ class AnimoFlix :
 
     // ================== Video ==================
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val videoList = mutableListOf<Video>()
         val lang = hoster.hosterName
         val url = hoster.hosterUrl
 
         val response = client.newCall(GET(url, headers)).awaitSuccess()
         val document = response.useAsJsoup()
 
-        return document.select("select#lecteurSelect option").flatMap { option ->
-            extractVideos(
-                playerUrl = option.attr("value"),
-                lang,
-                supportedServers,
-            )
-        }
+        return document.select("select#epLecteurSelect option, select#lecteurSelect option, select.ep-select option")
+            .mapNotNull { option ->
+                val playerUrl = option.attr("value").trim()
+                if (playerUrl.isBlank() || playerUrl.startsWith("#") || playerUrl.equals("about:blank", true)) {
+                    null
+                } else {
+                    playerUrl
+                }
+            }
+            .distinct()
+            .flatMap { playerUrl ->
+                extractVideos(
+                    playerUrl = playerUrl,
+                    lang = lang,
+                    allowedServers = supportedServers,
+                )
+            }
     }
 }

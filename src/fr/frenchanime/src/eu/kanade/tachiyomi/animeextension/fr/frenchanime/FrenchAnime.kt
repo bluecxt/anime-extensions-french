@@ -71,20 +71,35 @@ class FrenchAnime :
 
     // =============================== Search ===============================
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/index.php?do=search&subaction=search&story=$query&search_start=$page", headers)).awaitSuccess()
+        val form = okhttp3.FormBody.Builder()
+            .add("do", "search")
+            .add("subaction", "search")
+            .add("story", query)
+            .apply {
+                if (page > 1) {
+                    add("search_start", page.toString())
+                }
+            }
+            .build()
+        val searchHeaders = headers.newBuilder()
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .build()
+        val response = client.newCall(eu.kanade.tachiyomi.network.POST("$baseUrl/", searchHeaders, form)).awaitSuccess()
         val document = response.useAsJsoup()
-        val animes = document.select("div#dle-content > div.mov").mapNotNull { element ->
+        val animes = document.select("div.mov").mapNotNull { element ->
+            val link = element.selectFirst("a.mov-t") ?: element.selectFirst("a[href]") ?: return@mapNotNull null
+            val path = link.safeRelativePath() ?: return@mapNotNull null
+
+            val details = element.selectFirst("span.block-sai")?.text()?.trim() ?: ""
+            val season = details.filter { it.isDigit() }.toIntOrNull()
+            val langMatch = Regex("(?i)vostfr|vf|french").find(details)?.value?.uppercase()
+            val lang = if (langMatch == "FRENCH") "VF" else langMatch
+
             SAnime.create().apply {
-                val link = element.selectFirst("a[href]") ?: throw SelectorException("link not found")
-                url = link.safeRelativePath() ?: return@mapNotNull null
-
+                url = path
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
-
-                val details = element.selectFirst("span.block-sai")?.text()?.trim() ?: ""
-                val season = details.filter { it.isDigit() }.toIntOrNull()
-                val langMatch = Regex("(?i)vostfr|vf|french").find(details)?.value?.uppercase()
-                val lang = if (langMatch == "FRENCH") "VF" else langMatch
-
                 title = buildString {
                     append(link.text())
                     if (season != null) append(" $season")

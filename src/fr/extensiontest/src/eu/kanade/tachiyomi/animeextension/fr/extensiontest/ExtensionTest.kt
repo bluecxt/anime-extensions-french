@@ -323,6 +323,12 @@ class ExtensionTest :
         return "Rafale terminée (${results.size} types d'erreurs déclenchés)"
     }
 
+    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        val all = getPopularAnime(page).animes
+        val filtered = if (query.isBlank()) all else all.filter { it.title.contains(query, ignoreCase = true) }
+        return AnimesPage(filtered.ifEmpty { all }, false)
+    }
+
     // Dummy implementations for unused methods
     override fun latestUpdatesParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
     override fun latestUpdatesRequest(page: Int): Request = Request.Builder().url(defaultBaseUrl).build()
