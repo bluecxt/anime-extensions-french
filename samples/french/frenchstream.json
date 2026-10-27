@@ -1,0 +1,106 @@
+{
+  "name": "French Stream Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.frenchstream.FrenchStream",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "French Stream Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "urlPattern": "^[0-9]+$",
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Stream Search 'Piece' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Piece"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "urlPattern": "^[0-9]+$",
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Stream Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "One Piece Film - Red (2022)",
+          "url": "15113686"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "French Stream Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece Film - Red (2022)",
+          "url": "15113686"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Stream Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "Film",
+          "url": "{\"mediaId\":\"15113686\",\"epNum\":\"-1\",\"langs\":[\"VF\"]}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Stream Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VF",
+          "hosterUrl": "[\"https://uqload.vc/embed-e09wsu2ao7sh.html\"]"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

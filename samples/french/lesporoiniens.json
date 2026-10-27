@@ -1,0 +1,109 @@
+{
+  "name": "Les Poroïniens Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.lesporoiniens.LesPoroiniens",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "Les Poroïniens Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "urlPattern": "^.+\\.json$",
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Les Poroïniens Search 'Healer' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Healer"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "urlPattern": "^.+\\.json$",
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Les Poroïniens Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Redo of Healer",
+          "url": "Kaifuku_Jutsushi_no_Yarinaoshi.json",
+          "description": "Date de sortie : 13-01-2021\nKeare est un jeune paysan propulsé héros guérisseur.",
+          "thumbnailUrl": "https://file.garden/aKS5jUD-slfn6iFT/Cover%20Anime%20Redo%20of%20Healer.webp"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "Les Poroïniens Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Redo of Healer",
+          "url": "Kaifuku_Jutsushi_no_Yarinaoshi.json"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Les Poroïniens Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "Épisode 1 - Le guérisseur recommence !",
+          "url": "{\"id\":\"1VmCqIO3M_dqoKJd57DbsHwQUiJuDxz1F\",\"type\":\"gdrive\"}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Les Poroïniens Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "Gdrive",
+          "hosterUrl": "1VmCqIO3M_dqoKJd57DbsHwQUiJuDxz1F",
+          "internalData": "gdrive"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

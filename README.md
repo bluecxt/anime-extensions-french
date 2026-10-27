@@ -64,12 +64,11 @@ Le repository regroupe les sources francophones les plus fiables et maintenues. 
 | **French Anime** | ✅ | Source de secours (backup). | VOSTFR, VF | Non |
 | **French Stream** | ✅ | Films et séries multi-hébergeurs avec filtres avancés. | VF, VOSTFR | Non |
 | **VoirDrama** | ✅ | Dramas coréens, japonais et chinois. | VOSTFR, VF | Non |
-| **PapaDuStream** | ✅ | Séries TV et streaming (domaine .online). | VOSTFR, VF | Non |
+| **PapaDuStream** | ⚠️ | Séries TV et streaming (partiellement fonctionnel / instable). | VOSTFR, VF | Non |
 | **Les Poroïniens** | ✅ | Scrapers très précis et contenu haute qualité. | VOSTFR | **Oui** |
 | **VoirAnime** | ✅ | Uniquement VOSTFR avec une haute qualité d'image. | VOSTFR | Non |
 | **SouthTV** | ✅ | L'intégrale de South Park : épisodes VF et tous les films. | VF | Non |
 | **WaveAnime** | ✅ | Flux moderne optimisé au format DASH (Haute résolution). | VOSTFR, VF | Non |
-| **AnimesUltra** | ✅ | Alternative de secours de haute qualité. | VOSTFR | Non |
 | **Dessin Anime** | ✅ | Dessins animés et séries jeunesse. | VF | Non |
 | **Movix** | ✅ | Films et séries via l'API TMDB. | VOSTFR, VF | Non |
 | **Movix Anime** | ✅ | Animes via l'API TMDB. | VOSTFR, VF | Non |

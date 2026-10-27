@@ -13,7 +13,6 @@ Ce document récapitule l'ensemble des modules d'extensions du dépôt **anime-e
 | **ADKami** | `hentai.adkami.com` | Hentai / Adulte | **Scraping HTML Jsoup** | Site | **Self** | Non | Catalogue adulte +18 exhaustif, navigation DOM |
 | **AnimoFlix** | `animoflix.to` | Animes & Cartoons | **API AJAX JSON** (`/catalogue/?ajax=1`) | Site | **TMDB** | TMDB | Support des cartoons et séries d'animation, JSON pour le catalogue |
 | **Anime-Ultime** | `v5.anime-ultime.net` | Animes (Fansub) | **API AJAX JSON (POST)** + HTML Détails | Site | **Self** | TMDB | `/SeriesResults.html` et `/VideoPlayer.html` en JSON sérialisé (`decodeFromStringFixed`), attribution fansub |
-| **AnimesUltra** | `ww.animesultra.org` | Animes | **Scraping HTML Jsoup** | Site | **Self** | TMDB | Alternative de secours, extraction multi-versions (VF/VOSTFR) |
 | **Dessin Anime** | `dessinanime.cc` | Dessins animés | **API REST JSON** (`/api/catalogue`, `/api/search`) | Site | **Self** | Non | API JSON Next.js pour le catalogue/recherche, HTML pour les pages médias |
 | **FrAnime** | `franime.fr` | Animes & Films | **API REST JSON Pure** (`api.franime.fr/api/anime`) | Site | **TMDB** | TMDB | API REST structurée, zéro parsing HTML, haute fidélité |
 | **French Anime** | `french-anime.com` | Animes | **Scraping HTML Jsoup** | Site | **TMDB** | TMDB | Parsing HTML DLE Engine standard |

@@ -1,0 +1,108 @@
+{
+  "name": "VoirAnime Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.voiranime.VoirAnime",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "VoirAnime Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "VoirAnime Search 'Cyberpunk' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Cyberpunk"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "containsTitles": [
+          "Cyberpunk"
+        ],
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "VoirAnime Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Cyberpunk: Edgerunners",
+          "url": "/cyberpunk-edgerunners/"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "title",
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "VoirAnime Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Cyberpunk: Edgerunners",
+          "url": "/cyberpunk-edgerunners/"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "VoirAnime Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "[S1] Episode 1",
+          "url": "/cyberpunk-edgerunners/saison-1/episode-1/vostfr/"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "VoirAnime Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "(VOSTFR) Vidmoly",
+          "hosterUrl": "https://ansembed.net/embed-ny7pyfpth68i.html",
+          "internalData": "vostfr|https://ansembed.net/embed-ny7pyfpth68i.html"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

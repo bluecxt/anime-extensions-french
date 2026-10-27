@@ -1,0 +1,103 @@
+{
+  "name": "Anime-Ultime Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.animeultime.AnimeUltime",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "Anime-Ultime Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Anime-Ultime Search 'Naruto' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Naruto"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Anime-Ultime Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Naruto (OAV)",
+          "url": "{\"id\":2991,\"url\":\"/Naruto-OAV-streaming.html\",\"searchType\":\"Anime\"}"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "author"
+        ]
+      }
+    },
+    {
+      "name": "Anime-Ultime Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Naruto (OAV)",
+          "url": "{\"id\":2991,\"url\":\"/Naruto-OAV-streaming.html\",\"searchType\":\"Anime\"}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Anime-Ultime Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "OAV 01",
+          "url": "video#30200:480p:2991"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "hosterName"
+        ]
+      }
+    },
+    {
+      "name": "Anime-Ultime Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "Anime-Heart",
+          "internalData": "{\"480p\":{\"mp4\":{\"url\":\"https://strhq-fr.anime-ultime.net/5MdyqTx0RJiDGgt41yJ_aQ/1792991676%2Ff0b714150ac3024cdf28c44f61827614faf776f44375a75041f62d6fb7638f00\",\"mime\":\"video/mp4\",\"codecs\":\"avc1.4D401E, mp4a.40.2\"}},\"title\":\"OAV 01\",\"prev\":null,\"next\":null,\"quality\":\"480p\",\"idfile\":30200,\"formats\":[\"480p\"],\"idfansub\":475,\"fansub_link\":\"<a target=\\\"_blank\\\" href=\\\"http://www.anime-heart.fr/\\\">Anime-Heart</a>\",\"idserie\":2991,\"playlist\":[{\"id\":30200,\"title\":\"OAV 01\",\"duration\":\"26:05\",\"fansub\":475,\"quality\":\"480p\",\"image\":\"https://img04.anime-ultime.net/naruto-oav-oav-1_poster.png\"}],\"fansub\":[{\"id\":475,\"fansub\":\"Anime-Heart\"}],\"fscollide\":0}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

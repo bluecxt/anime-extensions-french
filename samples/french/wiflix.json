@@ -1,0 +1,88 @@
+{
+  "name": "Wiflix Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.wiflix.Wiflix",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "Wiflix Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Wiflix Search 'Dragon' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Dragon"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Wiflix Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Dark Matter",
+          "url": "/serie-en-streaming/36848-dark-matter-saison-1.html"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "title",
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "Wiflix Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Dark Matter",
+          "url": "/serie-en-streaming/36848-dark-matter-saison-1.html"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Wiflix Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "Épisode 1",
+          "url": "/serie-en-streaming/36848-dark-matter-saison-1.html#group-1"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name"
+        ]
+      }
+    }
+  ]
+}

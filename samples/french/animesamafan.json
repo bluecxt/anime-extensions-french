@@ -1,0 +1,117 @@
+{
+  "name": "AnimeSamaFan Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.animesamafan.AnimeSamaFan",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "AnimeSamaFan Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSamaFan Search 'Piece' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Piece"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSamaFan Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Death Note",
+          "url": "/anime/991-death-note-1.html"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSamaFan Season List Check",
+      "target": "GET_SEASON_LIST",
+      "input": {
+        "anime": {
+          "title": "Death Note",
+          "url": "/anime/991-death-note-1.html"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSamaFan Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "A Certain Magical Index: Le Film",
+          "url": "/anime/1967-a-certain-magical-index-le-film-le-miracle-dendymion.html"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSamaFan Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "[Movie] Film",
+          "url": "/anime/1967-a-certain-magical-index-le-film-le-miracle-dendymion.html",
+          "scanlator": "VOSTFR, VF"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSamaFan Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VOSTFR",
+          "internalData": "/anime/1967-a-certain-magical-index-le-film-le-miracle-dendymion.html|VOSTFR"
+        }
+      },
+      "contract": {
+        "minCount": 0
+      }
+    }
+  ]
+}

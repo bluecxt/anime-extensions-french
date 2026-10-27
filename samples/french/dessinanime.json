@@ -1,0 +1,1041 @@
+{
+    "name": "Dessin Anime Suite",
+    "extension": "eu.kanade.tachiyomi.animeextension.fr.dessinanime.DessinAnime",
+    "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0",
+        "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7"
+    },
+    "cookies": {
+        "cf_clearance": "bt4rPjsr.YEuWycjSagK7enjnao4lGQXRjPtPy5vIJo-1792985415-1.2.1.1-ryWEBMl02r_DswJb.Xaqn1dfNwyNjZtIxpyeMDJJANADjd4WQCBatCYg0ZaOqBb06nAAUu6CJ8uYpEP1iJYKwJEi9bkHQwOgmCam.kuImOEszWWN6gXTNVfIQk1bKQvqN1GFjt1oOFpG8DQxN3_3XCdtumB643FHzFW52uQ_zRiQt7DMc4BCUDlSSNhcXveuDLArynvV1bSaazD3sKp3Qnv_DH6LDJQG20y5cAvJS7wJd7.n9U2wM5VhGN9oA9Fen5.vqWTI0nG_DZUi4I4pT.bd7Az8sS3ig0cIZBGGUq7VA3fJWLW8jPxpoYsvTG.o2WpUr_9dVGVsyWjvUoMbxb0EKErP.PZlliMAO6zbc2nR.pmDN8rHzoulIM5_5ZtchGw_ARfTGrH6bTiMxLMLAyJiWTO0VthTd3pMsi2_yn0Q7xcs_84Vji2DUDCtMaQqdlx3MYkFyecTjjlBcGBTwQ"
+    },
+    "tests": [
+        {
+            "name": "Dessin Anime Popular Catalog Check",
+            "target": "GET_POPULAR",
+            "contract": {
+                "minCount": 1,
+                "allThumbnailsNonNull": true,
+                "requireNonBlankFields": [
+                    "title",
+                    "url"
+                ]
+            },
+            "expected": {
+                "animes": [
+                    {
+                        "url": "/movie/1315772-des-minions-et-des-monstres",
+                        "title": "‎Des Minions et des Monstres",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/vuxZITXEqsBHBUhc1TKEU8mxvc.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/1204680-coyote-vs-acme",
+                        "title": "Coyote vs. Acme",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/dFwseuSlDUNiwMuElDb3OAOQ8En.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/60625-rick-et-morty",
+                        "title": "Rick et Morty",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/tOpp4yPODFeaEr1KLz5fQ9jkJFx.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/456-les-simpson",
+                        "title": "Les Simpson",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/py1CAYqgpKKtLBdtctLIXfDYDjW.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/1084244-toy-story-5",
+                        "title": "Toy Story 5",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/2aO88YVCxKjFB9PirmbnlUSI42j.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/65334-miraculous-les-aventures-de-ladybug-et-chat-noir",
+                        "title": "Miraculous, les aventures de Ladybug et Chat Noir",
+                        "thumbnailUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSxQWGZ1dvRqQQnpnNkcWOcZi1FZLVMJoG-2iGdH8zal6lEx4c7ruUBHFc&s=10",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/312359-dragon-ball-super-beerus",
+                        "title": "Dragon Ball Super : Beerus",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/sGuCmIy8kEmx3FWZyMj654rF6g8.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/31132-regular-show",
+                        "title": "Regular Show",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/mS5SLxMYcKfUxA0utBSR5MOAWWr.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/65942-re-zero-starting-life-in-another-world",
+                        "title": "Re:ZERO -Starting Life in Another World-",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/ccG0ZfXOQ0834bIus4SwZrXtkyM.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/284833-avatar-les-sept-refuges",
+                        "title": "Avatar : Les Sept Refuges",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/yfUFI7fIDcdA01Ej5Rwfv2OEH8O.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/57532-la-pat-patrouille",
+                        "title": "La Pat' Patrouille",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/nw2jRlCbBapEsRAMtsLONBbqXxp.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/95479-jujutsu-kaisen",
+                        "title": "Jujutsu Kaisen",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/w2Shg7bI5WB7LINt1KxB7eihO8s.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/45140-teen-titans-go",
+                        "title": "Teen Titans Go!",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/kPKAigYUlWRpnfo4Ptiwlz4FWXU.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/980431-la-legende-de-aang-le-dernier-maitre-de-lair",
+                        "title": "‎Avatar Aang, le dernier maître de l'air",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/sJDjdYGDFdx9uftetPPjH7Jwing.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/68073-bienvenue-chez-les-loud",
+                        "title": "Bienvenue chez les Loud",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/rCMCfA1wxgsnBXyHxPEPRFdWMkX.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/1434-les-griffin",
+                        "title": "Les Griffin",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/7nHl3OHUSTHgslQxJUzNSy9vxqo.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/60572-pokemon",
+                        "title": "Pokémon",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/HPoy0TYWdHLQ0TNXlKAdlSB6q.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee",
+                        "title": "Batman : La Série animée",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/bzeuZHxk0lSPafsgNiwENmI26zt.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/71026-super-wings-pare-au-decollage",
+                        "title": "Super Wings, Paré au décollage",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/original/lu2DNsIQgn1Jb6djHvrqJSUQXXl.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/1327819-jumpers",
+                        "title": "Jumpers",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/gme8X6Y0b1wutuW6kB039i9NwCr.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/12225-peppa-pig",
+                        "title": "Peppa Pig",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/iwKVo3HlsyVNXCzFEkd0xHz3kGi.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/38693-lego-ninjago-les-maitres-du-spinjitzu",
+                        "title": "LEGO Ninjago : Les maîtres du Spinjitzu",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/tnmTco4vpsrMaeQ8dANKxkIp6Mm.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/61852-henry-danger",
+                        "title": "Henry Danger",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/f3TEP5SROTpL6e520ohhSNbUv1E.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/82728-bluey",
+                        "title": "Bluey",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/b9mY0X5T20ZM073hoa5n0dgmbfN.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/1877-phineas-et-ferb",
+                        "title": "Phinéas et Ferb",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/wgEDwsPxEeYk3hLWKsTgs1KJhS6.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/5687-les-schtroumpfs",
+                        "title": "Les Schtroumpfs",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/lJNHoPkjjAnmGwoctPDM5wG2W7l.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/92649-molly-mc-gee-et-le-fantome",
+                        "title": "Molly McGee et le Fantôme",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/u86g1KKPwsysQx6gA9LJt93xrtA.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/1226863-super-mario-galaxy-le-film",
+                        "title": "Super Mario Galaxy, le film",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/aSQktALDmbunDbwkuZbZFMEWVFr.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/897-billy-et-mandy-aventuriers-de-lau-dela",
+                        "title": "Billy et Mandy, aventuriers de l'au-delà",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/kbFIKt6NGppNr7OOn288A8gBObs.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/61374-tokyo-ghoul",
+                        "title": "Tokyo Ghoul",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/eKxblpRtHiMHLW5sjq7ZLGsGBOh.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/212989-lego-ninjago-le-soulevement-des-dragons",
+                        "title": "LEGO Ninjago : Le soulèvement des dragons",
+                        "thumbnailUrl": "https://media.themoviedb.org/t/p/w440_and_h660_face/vwtq8u39xo27SaPOg6b8LfjwJru.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/34109-bakugan-battle-brawlers",
+                        "title": "Bakugan Battle Brawlers",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/eEx20DZuY23BqrZP1x5Ckfw8ORz.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/81665-la-colo-magique",
+                        "title": "La Colo Magique",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/zG1ofonFA7swHTScvCE5SOyFdod.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/75450-titans",
+                        "title": "Titans",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/8e6QiSexmYKaiHGPvbhaFMmQEhc.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/1506560-le-choc-des-thunderman",
+                        "title": "Le Choc des Thunderman",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/ko3VYnCg7P8wHVKIThB5GQi3IEn.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/2777-oggy-et-les-cafards",
+                        "title": "Oggy et les Cafards",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/fCsdxyQLVTy8KkGUZ4yKt71YdVJ.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    }
+                ],
+                "hasNextPage": true
+            }
+        },
+        {
+            "name": "Dessin Anime Search 'Batman' Check",
+            "target": "GET_SEARCH",
+            "input": {
+                "query": "Batman"
+            },
+            "contract": {
+                "minCount": 1,
+                "allThumbnailsNonNull": true,
+                "requireNonBlankFields": [
+                    "title",
+                    "url"
+                ],
+                "containsTitles": [
+                    "Batman"
+                ]
+            },
+            "expected": {
+                "animes": [
+                    {
+                        "url": "/tv/2022-batman",
+                        "title": "Batman",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/3w7koeOR2x71XYMJDGpygxYtScI.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/2287-batman",
+                        "title": "Batman",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/sXQjd5YxjqJmSvR250d1G9C2Igf.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/2661-batman-le-film",
+                        "title": "Batman : Le film",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/dCtrHX3oYRwYMFXICMauNfReO9w.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee",
+                        "title": "Batman : La Série animée",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/bzeuZHxk0lSPafsgNiwENmI26zt.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/513-batman-la-releve",
+                        "title": "Batman - La relève",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/iqGcqPWFoYiBwUCEeWpe9UMj2nF.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/142061-batman-the-dark-knight-returns-part-2",
+                        "title": "Batman : The Dark Knight Returns, Part 2",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/9co1jy62YHRlCBvUZ8WB0rDxWul.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/40662-batman-et-red-hood-sous-le-masque-rouge",
+                        "title": "Batman et Red Hood : Sous le masque rouge",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/mHVThGa7w6KPmiWNdgkpWxzbM9Y.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/123025-batman-the-dark-knight-returns-part-1",
+                        "title": "Batman : The Dark Knight Returns, Part 1",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/aB7VxihR8vq331PtyDx5jP2y589.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/886396-batman-and-superman-battle-of-the-super-sons",
+                        "title": "Batman and Superman: Battle of the Super Sons",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/iWlvRo2dHdd2Xf6gqVbMW4C05AP.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/15804-batman-l-alliance-des-heros",
+                        "title": "Batman - L'Alliance des heros",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/aPC69XR5AMyqqvSX2ceoFPhOQkV.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/14919-batman-contre-le-fantome-masque",
+                        "title": "Batman contre le Fantôme masqué",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/4A4dYMcMzhMWSmEoOXi7crZEhkI.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/736073-batman-the-long-halloween-1-ere-partie",
+                        "title": "Batman : The Long Halloween 1ère Partie",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/9s1dSNntwQtG9Sx1SdM3qPjORzf.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/736074-batman-the-long-halloween-2-eme-partie",
+                        "title": "Batman : The Long Halloween 2ème Partie",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/4exPKcKsZXSZNd9YFcjhze6h9sE.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/16234-batman-la-releve-le-retour-du-joker",
+                        "title": "Batman, la relève : Le Retour du Joker",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/izgh8AAlwEwQ4Jd2caoq5BTq3sM.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/242643-batman-assaut-sur-arkham",
+                        "title": "Batman, Assaut sur Arkham",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/vshq07iXH7l2WnFWvELFrIki9Sc.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/69735-batman-les-origines",
+                        "title": "Batman : Les Origines",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/mLZRhulJcDsxZWTdfx0trtk6y07.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/321528-batman-vs-robin",
+                        "title": "Batman vs. Robin",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/aGp9XDXmVM5lCKHWtgBC15S7XLr.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/581997-batman-et-les-tortues-ninja",
+                        "title": "Batman et les Tortues Ninja",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/vhmHZbssPYN0HwjKybsNioEYyKp.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/tv/125909-batman-le-justicier-masque",
+                        "title": "Batman : Le Justicier Masqué",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/yiSI9EJDRhYJEJdJpmDTOQ6DrIG.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/537056-batman-silence",
+                        "title": "Batman : Silence",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/xIMNHtmddRsZJW2YgVHbkrn7Qhw.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/618353-batman-un-deuil-dans-la-famille",
+                        "title": "Batman : Un deuil dans la famille",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/a7aP7O5JZdaXbgGzbPMwRXq0Hoo.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/366924-batman-mauvais-sang",
+                        "title": "Batman: Mauvais Sang",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/nehC7zJQsK2SKWWHgYRR851UkNi.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/13851-batman-contes-de-gotham",
+                        "title": "Batman : Contes de Gotham",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/3i1o0sHBP0VUpuSVmkdCRKYoDBC.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    },
+                    {
+                        "url": "/movie/21683-batman-la-mysterieuse-batwoman",
+                        "title": "Batman: La Mystérieuse Batwoman",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/21ZnPKuNinEgRcdR09WjLUyRSzy.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -1.0,
+                        "initialized": false
+                    }
+                ],
+                "hasNextPage": false
+            }
+        },
+        {
+            "name": "Dessin Anime Details Check",
+            "target": "GET_DETAILS",
+            "input": {
+                "anime": {
+                    "url": "/tv/2098-batman-la-serie-animee",
+                    "title": "Batman : La Série animée"
+                }
+            },
+            "contract": {
+                "requireNonBlankFields": [
+                    "description",
+                    "thumbnail_url"
+                ]
+            },
+            "expected": {
+                "anime": {
+                    "url": "/tv/2098-batman-la-serie-animee",
+                    "title": "Batman : La Série animée",
+                    "description": "Homme d'affaires le jour, Bruce Wayne devient Batman la nuit pour protéger Gotham City avec sa Batmobile. Avec l'aide de Robin et Batgirl il affronte de nombreux criminels légendaires.",
+                    "genre": "Drame, Action & Adventure, Animation, Mystère",
+                    "thumbnailUrl": "https://image.tmdb.org/t/p/w500/bzeuZHxk0lSPafsgNiwENmI26zt.jpg",
+                    "fetchType": "Seasons",
+                    "seasonNumber": -1.0,
+                    "initialized": true
+                }
+            }
+        },
+        {
+            "name": "Dessin Anime Season List Check",
+            "target": "GET_SEASON_LIST",
+            "input": {
+                "anime": {
+                    "url": "/tv/2098-batman-la-serie-animee",
+                    "title": "Batman : La Série animée"
+                }
+            },
+            "contract": {
+                "minCount": 1,
+                "requireNonBlankFields": [
+                    "title",
+                    "url"
+                ]
+            },
+            "expected": {
+                "animes": [
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/1",
+                        "title": "Saison 1",
+                        "status": 2,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/Af7YEXBYnYu6QD2bxf0SzgXmaJM.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -2.0,
+                        "initialized": true
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/2/1",
+                        "title": "Saison 2",
+                        "status": 2,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/fmOWEs00iLe0p5XPAdNKlkDcghj.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -2.0,
+                        "initialized": true
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/3/1",
+                        "title": "Saison 3",
+                        "status": 2,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/aHLuEHR0CjmxQnXCqAGlFTcPIV6.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -2.0,
+                        "initialized": true
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/4/1",
+                        "title": "Saison 4",
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w500/aZeXR8wssEyYqyAUYzvyijh2jTa.jpg",
+                        "fetchType": "Episodes",
+                        "seasonNumber": -2.0,
+                        "initialized": true
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Dessin Anime Episode List Check",
+            "target": "GET_EPISODE_LIST",
+            "input": {
+                "anime": {
+                    "url": "/tv/2098-batman-la-serie-animee/1/1",
+                    "title": "Batman : La Série animée"
+                }
+            },
+            "contract": {
+                "minCount": 1,
+                "requireNonBlankFields": [
+                    "name",
+                    "url"
+                ]
+            },
+            "expected": {
+                "episodes": [
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/60",
+                        "name": "Épisode 60 - Les Foudres de l'Olympe",
+                        "episodeNumber": 60.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/5wgCV2fdI9p2khMpmzhtOaIHeWN.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/59",
+                        "name": "Épisode 59 - Le Ventriloque",
+                        "episodeNumber": 59.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/poulTBQgRUyEP7496NumyaMIRL0.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/58",
+                        "name": "Épisode 58 - La Quête du démon (2)",
+                        "episodeNumber": 58.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/qvDWhDlJzTWzhPcoX4qIkDIl7VQ.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/57",
+                        "name": "Épisode 57 - La Quête du démon (1)",
+                        "episodeNumber": 57.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/9L8HRcwNfJOKTcgg1wG9eBHksoz.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/56",
+                        "name": "Épisode 56 - L’Homme invisible",
+                        "episodeNumber": 56.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/3IATFjK9RdSCVQ1sG0MCp7tG55Y.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/55",
+                        "name": "Épisode 55 - Le Jour du samouraï",
+                        "episodeNumber": 55.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/c81BszrEqJYJInz8YThJLJXws3B.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/54",
+                        "name": "Épisode 54 - Ombres et Ténèbres",
+                        "episodeNumber": 54.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/aAHjJgwfsvNyF20q8RkrpOXUt8n.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/53",
+                        "name": "Épisode 53 - Robin se rebiffe (2)",
+                        "episodeNumber": 53.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/cqMqkHKv6yV7EK1wmtMl40fcSRi.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/52",
+                        "name": "Épisode 52 - Monsieur Pingouin",
+                        "episodeNumber": 52.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/20Y2jXrJXHuCZHbf2i5drostrg8.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/51",
+                        "name": "Épisode 51 - Robin se rebiffe (1)",
+                        "episodeNumber": 51.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/jJuakkPkZWZRkJXbEpLYECEqYjM.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/50",
+                        "name": "Épisode 50 - Zatanna",
+                        "episodeNumber": 50.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/2Xgw0u3imnOEsEMg7Sp4nRXYI0G.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/49",
+                        "name": "Épisode 49 - L’Homme qui tua Batman",
+                        "episodeNumber": 49.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/hKsXCfFNGxySX0tlZ0A25ESdsp6.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/48",
+                        "name": "Épisode 48 - Le Super Mécanicien",
+                        "episodeNumber": 48.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/9Et3GgK1geKRcWR7CcaJ34fPYug.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/47",
+                        "name": "Épisode 47 - Harley & Ivy",
+                        "episodeNumber": 47.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/gO5z91b06szpKxwRC9sJAYgdmQA.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/46",
+                        "name": "Épisode 46 - Heureux comme un poisson dans l’eau",
+                        "episodeNumber": 46.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/4LldVmh6PJnTKDg91DclNwPnqn0.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/45",
+                        "name": "Épisode 45 - Réalité virtuelle",
+                        "episodeNumber": 45.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/AoWQojeXZUW4oRaiRfLyJN0VcsG.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/44",
+                        "name": "Épisode 44 - L’Effet Vertigo",
+                        "episodeNumber": 44.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/1S7P8FdIme3y4pHSsYUak2fctGs.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/43",
+                        "name": "Épisode 43 - Une âme de silicone",
+                        "episodeNumber": 43.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/vukHsg4TMc7MrjAB1W5fzaJu1Ft.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/42",
+                        "name": "Épisode 42 - Le Joker fou",
+                        "episodeNumber": 42.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/wfqlBkb3EYZaCMcs6OMOvfE0sbw.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/41",
+                        "name": "Épisode 41 - L’Énigme du Minotaure",
+                        "episodeNumber": 41.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/wWz42R8bZQUrpoH7kmlKhDfETqQ.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/40",
+                        "name": "Épisode 40 - Cœur d’acier (2)",
+                        "episodeNumber": 40.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/kbfH9vudPySrDSACILqdAks3eRV.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/39",
+                        "name": "Épisode 39 - Cœur d’acier (1)",
+                        "episodeNumber": 39.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/ooSz0x7DBBNE3YR0Uqjt8RwYIxC.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/38",
+                        "name": "Épisode 38 - Joyeux Noël, Batman",
+                        "episodeNumber": 38.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/zfCqrFGxk2vv47KP6gbGO2THnbj.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/37",
+                        "name": "Épisode 37 - Terreur dans le ciel",
+                        "episodeNumber": 37.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/rdi5q5ADBwTNhFrY4eZ8qrCYl9i.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/36",
+                        "name": "Épisode 36 - Le Loup-garou",
+                        "episodeNumber": 36.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/xx3NWDPjwZjyjQnQeuj0tiD4R3p.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/35",
+                        "name": "Épisode 35 - Il s'en est fallu de peu",
+                        "episodeNumber": 35.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/qm7f2euQNFrdgvw1GZ5VLT9a46c.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/34",
+                        "name": "Épisode 34 - Remords",
+                        "episodeNumber": 34.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/vH2M0c8FPB0z6Yu6N53nazOPCCi.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/33",
+                        "name": "Épisode 33 - La Fièvre des chats",
+                        "episodeNumber": 33.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/3EhvhkJA5Byy24DGp8kWE4QrPUp.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/32",
+                        "name": "Épisode 32 - Le Plastiqueur fou",
+                        "episodeNumber": 32.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/nSlGbTrDDP0bJORpC8KHXbbkTZG.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/31",
+                        "name": "Épisode 31 - Sombres Hallucinations",
+                        "episodeNumber": 31.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/vtMTbHOkw3k2nMOoN1WVEmjz07A.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/30",
+                        "name": "Épisode 30 - Le Tigre de la nuit",
+                        "episodeNumber": 30.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/qp6SQzOK8I0LsGRbX7aDMDxwE7o.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/29",
+                        "name": "Épisode 29 - L’Étrange Machine du Docteur Strange",
+                        "episodeNumber": 29.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/415F8q7mATKI9HdMz1Dim9cpx7F.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/28",
+                        "name": "Épisode 28 - La Nuit du ninja",
+                        "episodeNumber": 28.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/eKWni6z9aiWyHAurSBOUB8iZxSM.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/27",
+                        "name": "Épisode 27 - Les Enfants de la nuit",
+                        "episodeNumber": 27.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/tRn0HVWp9twkBktbuoV1XoqTPzF.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/26",
+                        "name": "Épisode 26 - Rêve ou Réalité ?",
+                        "episodeNumber": 26.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/8s4BK31LckEIbiVkAumsorQ5yKF.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/25",
+                        "name": "Épisode 25 - Conspiration",
+                        "episodeNumber": 25.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/g8O47CqVP4HjqvUjET3PeVA4mXo.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/24",
+                        "name": "Épisode 24 - Le Pays des merveilles",
+                        "episodeNumber": 24.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/mlih4cXUmpWvpfLkPsX6hI4o1UG.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/23",
+                        "name": "Épisode 23 - Les Oubliés du Nouveau Monde",
+                        "episodeNumber": 23.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/oZ6gdMHfBTAXYbaKYMeuvomEue8.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/22",
+                        "name": "Épisode 22 - La Prophétie du dôme",
+                        "episodeNumber": 22.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/jiZjlFVxw5aK6G1hzw8m1XStkcs.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/21",
+                        "name": "Épisode 21 - Vendetta",
+                        "episodeNumber": 21.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/dmNy79DXWl8eDyQg3cJ6snrIy1M.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/20",
+                        "name": "Épisode 20 - L’Œuf du Pingouin",
+                        "episodeNumber": 20.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/i3Wkp8PCLQxdFG4bk1QQ7At7jwo.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/19",
+                        "name": "Épisode 19 - Le Maître de l'épouvante",
+                        "episodeNumber": 19.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/ry0XVegXzFX0oVILRXdqfeDe1M8.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/18",
+                        "name": "Épisode 18 - Double Jeu (2)",
+                        "episodeNumber": 18.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/mnTUBXCE37mwBHGv0guHVMj8wAf.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/17",
+                        "name": "Épisode 17 - Double Jeu (1)",
+                        "episodeNumber": 17.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/to1wCUQzENjS7UashGyXi30B7JV.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/16",
+                        "name": "Épisode 16 - Éternelle Jeunesse",
+                        "episodeNumber": 16.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/ujtu2EZ66TupXZbXNV6ozmIWnoJ.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/15",
+                        "name": "Épisode 15 - Morts de rire",
+                        "episodeNumber": 15.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/xUtaG3E4p1dX7ZaeqqLmMqfewO8.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/14",
+                        "name": "Épisode 14 - Le Roi du temps",
+                        "episodeNumber": 14.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/8XhauqaXku5CY5czFcyM1MoXbkl.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/13",
+                        "name": "Épisode 13 - Version originale",
+                        "episodeNumber": 13.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/yznDzUOs9fhwnmgxemCYeC6cOv9.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/12",
+                        "name": "Épisode 12 - Rendez-vous dans la rue du crime",
+                        "episodeNumber": 12.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/a6GXhBw73sOcOjaX0xFCGr26lez.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/11",
+                        "name": "Épisode 11 - Fugue en sol Joker",
+                        "episodeNumber": 11.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/kojigDu7kOWkgMoJUaIdT1SUZX6.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/10",
+                        "name": "Épisode 10 - Épouvantable Épouvantail",
+                        "episodeNumber": 10.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/byJ7zr8vhxIW3MYYGDbCM7ngIXV.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/9",
+                        "name": "Épisode 9 - Poison d’amour",
+                        "episodeNumber": 9.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/7uXIRDZM4ztKmflaiLJxRm6I3u7.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/8",
+                        "name": "Épisode 8 - Le Chat et la Souris (2)",
+                        "episodeNumber": 8.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/jwtdZ6X4LikyPgbB5s0Srsf5HmM.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/7",
+                        "name": "Épisode 7 - Chantage à crédit",
+                        "episodeNumber": 7.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/62Nu7Dvns8CDZ4dzzBTo3vnnz6P.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/6",
+                        "name": "Épisode 6 - Il n’est jamais trop tard",
+                        "episodeNumber": 6.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/aWdYhXYHf6AN1JeIFSlO3Z2Pnhj.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/5",
+                        "name": "Épisode 5 - Bas les masques (2)",
+                        "episodeNumber": 5.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/m809dZy3qGZNpsGbHbixqJHvDLV.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/4",
+                        "name": "Épisode 4 - Bas les masques (1)",
+                        "episodeNumber": 4.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/bT33mFGhJ4WzxKQMLAAENTsFacI.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/3",
+                        "name": "Épisode 3 - Amour on ice",
+                        "episodeNumber": 3.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/wJwLJLEy4QfvY4B7O18a15i7lRg.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/2",
+                        "name": "Épisode 2 - Le Duel",
+                        "episodeNumber": 2.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/3BHWR7mney46vFhG4lQrsso3p1m.jpg"
+                    },
+                    {
+                        "url": "/tv/2098-batman-la-serie-animee/1/1",
+                        "name": "Épisode 1 - Le Chat et la Souris (1)",
+                        "episodeNumber": 1.0,
+                        "thumbnailUrl": "https://image.tmdb.org/t/p/w780/82LWVduKTzMo1NZ2j5UjlIrIKhe.jpg"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Dessin Anime Hoster List Check",
+            "target": "GET_HOSTER_LIST",
+            "input": {
+                "episode": {
+                    "url": "/tv/2098-batman-la-serie-animee/1/1",
+                    "name": "Épisode 1"
+                }
+            },
+            "contract": {
+                "minCount": 1,
+                "requireNonBlankFields": [
+                    "name",
+                    "url"
+                ]
+            },
+            "expected": {
+                "hosters": [
+                    {
+                        "hosterName": "Panda (VF)",
+                        "internalData": "{\n    \"items\": [\n        {\n            \"serverName\": \"Panda\",\n            \"url\": \"https://abysscdn.com/?v=fT6y9iyI8\"\n        }\n    ]\n}",
+                        "hosterUrl": "https://abysscdn.com/?v=fT6y9iyI8"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Dessin Anime Video List Check",
+            "target": "GET_VIDEO_LIST",
+            "input": {
+                "hoster": {
+                    "hosterName": "Direct (VF)",
+                    "hosterUrl": "https://relay.dessinanime.cc/stream/batman-s01e01.mp4",
+                    "internalData": "{\n    \"items\": [\n        {\n            \"serverName\": \"Direct\",\n            \"url\": \"https://relay.dessinanime.cc/stream/batman-s01e01.mp4\",\n            \"language\": \"VF\"\n        }\n    ]\n}"
+                }
+            },
+            "contract": {
+                "minCount": 1,
+                "requireNonBlankFields": [
+                    "url"
+                ]
+            }
+        }
+    ]
+}

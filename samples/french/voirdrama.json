@@ -1,0 +1,112 @@
+{
+  "name": "VoirDrama Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.voirdrama.VoirDrama",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "VoirDrama Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "VoirDrama Search 'Glory' with Filters Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Glory",
+        "filters": {
+          "Langue": "VOSTFR"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "containsTitles": [
+          "Glory"
+        ],
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "VoirDrama Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "The Glory",
+          "url": "/drama/the-glory/"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "title",
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "VoirDrama Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "The Glory",
+          "url": "/drama/the-glory/"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "VoirDrama Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "Épisode 01",
+          "url": "/drama/the-glory/the-glory-01-vostfr/",
+          "scanlator": "VOSTFR"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "VoirDrama Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VOSTFR",
+          "hosterUrl": "/drama/the-glory/the-glory-01-vostfr/"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

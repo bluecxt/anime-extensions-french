@@ -1,0 +1,111 @@
+{
+  "name": "French Anime Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.frenchanime.FrenchAnime",
+  "lang": "fr",
+  "headers": {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7"
+  },
+  "tests": [
+    {
+      "name": "French Anime Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Anime Search 'Piece' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Piece"
+      },
+      "contract": {
+        "minCount": 1,
+        "containsTitles": [
+          "Piece"
+        ],
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Anime Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "url": "/exclue/2172-dragon-ball-super-beerus.html",
+          "title": "Dragon Ball Super: Beerus"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "title",
+          "url",
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "French Anime Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "url": "/exclue/2172-dragon-ball-super-beerus.html",
+          "title": "Dragon Ball Super: Beerus"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Anime Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "url": "VOSTFR|https://vidmoly.org/embed-vxi250mvokem.html,https://jeremyparticipantanything.com/e/tswaucfgb9ms,https://vidara.to/e/213BfHqJXIFEj,https://luluvido.com/e/r3332emkto7u",
+          "name": "Episode 1"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French Anime Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VOSTFR",
+          "hosterUrl": "https://vidmoly.org/embed-vxi250mvokem.html,https://jeremyparticipantanything.com/e/tswaucfgb9ms,https://vidara.to/e/213BfHqJXIFEj,https://luluvido.com/e/r3332emkto7u"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}
