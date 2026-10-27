@@ -2,26 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.franime
 
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.franime.dto.Anime
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.get
 import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.CommonPreferences.Companion.PREF_VOICES_KEY
-import fr.bluecxt.core.DEFAULT_USER_AGENT
+import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.utils.parallelCatchingCancellableFlatMap
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 class FrAnime :
@@ -78,6 +77,14 @@ class FrAnime :
 
     companion object {
         const val PREFIX_SEARCH = "id:"
+
+        /**
+         * Libellés renvoyés par l'API dans `lecteurs` qui ne désignent pas un hébergeur
+         * jouable (téléchargement direct ou lecteur retiré du site).
+         */
+        private const val TELECHARGEMENT_PREFIX = "TELECHARGEMENT"
+        private const val INDISPONIBLE = "INDISPONIBLE"
+
         private val kaiRegex = Regex("(?i)\\s*Kai\\s*")
         private val alphanumericRegex = Regex("[^a-z0-9]")
         private val emptySpaceRegex = Regex("\\s+")
@@ -85,10 +92,11 @@ class FrAnime :
     }
 
     private val database by lazy {
-        client.newCall(GET("$baseApiUrl/animes/", headers)).execute()
-            .body.string()
-            .let { json.decodeFromString<List<Anime>>(it) }
-            .distinctBy { it.sourceUrl.ifEmpty { it.id.toString() } }
+        runBlocking {
+            client.get("$baseApiUrl/animes/", headers)
+                .parseAs<List<Anime>>(json)
+                .distinctBy { it.sourceUrl.ifEmpty { it.id.toString() } }
+        }
     }
 
     override suspend fun getPopularAnime(page: Int) = pagesToAnimesPage(database.sortedByDescending { it.note }, page)
@@ -163,22 +171,22 @@ class FrAnime :
         tmdbMetadata?.artist?.let { anime.artist = it }
 
         if (sNumFromUrl == null && animeData != null && animeData.seasons.size > 1) {
-            anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+            anime.fetch_type = FetchType.Seasons
         } else {
-            anime.coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
-            if (sNumFromUrl != null) anime.coreSetSeasonNumber(-2.0)
+            anime.fetch_type = FetchType.Episodes
+            if (sNumFromUrl != null) anime.season_number = HUB_SEASON_NUMBER
         }
 
         anime.initialized = true
         return anime
     }
-    override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         val cleanUrl = anime.url.substringBefore("#").substringBefore("?")
         val url = (baseUrl + cleanUrl).toHttpUrl()
         val pathSegment = url.encodedPathSegments.last()
-        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
+        val animeData = database.firstOrNull { it.id.toString() == pathSegment }
+            ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
 
         val searchTitle = animeData.title.takeIf { it.isNotBlank() } ?: animeData.originalTitle
         val tmdbSearchTitle = searchTitle.replace(kaiRegex, " ").trim()
@@ -186,20 +194,33 @@ class FrAnime :
         val siteSeasons = animeData.seasons.mapIndexed { index, season ->
             val seasonNum = index + 1
             val tmdbSNum = season.title.replace("Saison ", "").toDoubleOrNull()?.toInt() ?: seasonNum
-            val sTitle = if (season.title.contains(searchTitle, ignoreCase = true)) season.title else "$searchTitle ${season.title}"
+            val sTitle = if (season.title.contains(
+                    searchTitle,
+                    ignoreCase = true,
+                )
+            ) {
+                season.title
+            } else {
+                "$searchTitle ${season.title}"
+            }
             val sUrl = "$cleanUrl#s$seasonNum"
             Triple(sTitle, sUrl, tmdbSNum)
         }
 
-        return coreBuildSeasonList(tmdbSearchTitle, siteSeasons, parseStatus(animeData.status, animeData.seasons.size, animeData.seasons.size))
-            .onEach { it.coreSetSeasonNumber(-2.0) }
+        return coreBuildSeasonList(
+            tmdbSearchTitle,
+            siteSeasons,
+            parseStatus(animeData.status, animeData.seasons.size, animeData.seasons.size),
+        )
+            .onEach { it.season_number = HUB_SEASON_NUMBER }
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val cleanUrl = anime.url.substringBefore("#").substringBefore("?")
         val url = (baseUrl + cleanUrl).toHttpUrl()
         val pathSegment = url.encodedPathSegments.last()
-        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
+        val animeData = database.firstOrNull { it.id.toString() == pathSegment }
+            ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
 
         val searchTitle = animeData.title.takeIf { it.isNotBlank() } ?: animeData.originalTitle
         val isKai = searchTitle.contains("Kai", ignoreCase = true) || animeData.format.equals("KAI", ignoreCase = true)
@@ -288,22 +309,28 @@ class FrAnime :
         val seasonNumber = url.queryParameter("s")?.toIntOrNull() ?: 1
         val episodeNumber = url.queryParameter("ep")?.toIntOrNull() ?: 1
         val pathSegment = url.encodedPathSegments.last { it.isNotBlank() }
-        val animeData = database.firstOrNull { it.id.toString() == pathSegment } ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
+        val animeData = database.firstOrNull { it.id.toString() == pathSegment }
+            ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
         val episodeData = animeData.seasons[seasonNumber - 1].episodes[episodeNumber - 1]
 
         val hosters = mutableListOf<Hoster>()
         if (episodeData.languages.vo.players.isNotEmpty()) {
-            hosters.add(Hoster(hosterName = "VOSTFR", internalData = "${animeData.id}|${seasonNumber - 1}|${episodeNumber - 1}|vo"))
+            hosters.add(
+                Hoster(
+                    hosterName = "VOSTFR",
+                    internalData = "${animeData.id}|${seasonNumber - 1}|${episodeNumber - 1}|vo",
+                ),
+            )
         }
         if (episodeData.languages.vf.players.isNotEmpty()) {
-            hosters.add(Hoster(hosterName = "VF", internalData = "${animeData.id}|${seasonNumber - 1}|${episodeNumber - 1}|vf"))
+            hosters.add(
+                Hoster(
+                    hosterName = "VF",
+                    internalData = "${animeData.id}|${seasonNumber - 1}|${episodeNumber - 1}|vf",
+                ),
+            )
         }
         return hosters
-    }
-
-    override fun List<Hoster>.sortHosters(): List<Hoster> {
-        val voices = preferences.getString(PREF_VOICES_KEY, "VOSTFR")!!
-        return this.sortedByDescending { it.hosterName.contains(voices, true) }
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
@@ -319,26 +346,27 @@ class FrAnime :
 
         val langLabel = if (lang == "vo") "VOSTFR" else "VF"
 
-        return players.withIndex().filter { !it.value.equals("TELECHARGEMENT UNIQUE", true) }.flatMap { (playerIdx, _) ->
-            try {
-                val responseBody = client.newCall(GET("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)).awaitSuccess().use { it.body.string() }
-
-                var playerUrl = responseBody
-                if (responseBody.contains("watch2")) {
-                    val uri = responseBody.toHttpUrl()
-                    playerUrl = decryptFrAnime(uri.queryParameter("a") ?: "")
-                        ?: decryptFrAnime(uri.queryParameter("b") ?: "")
-                        ?: decryptFrAnime(uri.queryParameter("c") ?: "") ?: responseBody
-                } else if (!responseBody.startsWith("http")) {
-                    playerUrl = decryptFrAnime(responseBody) ?: responseBody
-                }
-
-                // Utilise le core pour extraire les vidéos
-                extractVideos(playerUrl, langLabel, supportedServers)
-            } catch (e: Exception) {
-                emptyList()
+        return players.withIndex()
+            .filter { (_, player) ->
+                !player.startsWith(TELECHARGEMENT_PREFIX, true) && !player.equals(INDISPONIBLE, true)
             }
-        }
+            .parallelCatchingCancellableFlatMap { (playerIdx, _) ->
+                val responseBody = client.get("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)
+                    .use { it.body.string() }
+
+                var playerUrl = if (responseBody.contains("watch2")) {
+                    val uri = responseBody.toHttpUrl()
+                    decryptFrAnime(uri.queryParameter("a") ?: "")
+                        ?: decryptFrAnime(uri.queryParameter("b") ?: "")
+                        ?: decryptFrAnime(uri.queryParameter("c") ?: "")
+                        ?: responseBody
+                } else if (!responseBody.startsWith("http")) {
+                    decryptFrAnime(responseBody) ?: responseBody
+                } else {
+                    responseBody
+                }
+                extractVideos(playerUrl, langLabel, supportedServers)
+            }
     }
 
     private fun normalize(s: String): String = s.lowercase()
@@ -405,10 +433,10 @@ class FrAnime :
                 append(anime.description)
             }
             setUrlWithoutDomain("/anime/${anime.id}")
-            if (anime.seasons.size > 1) {
-                coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+            fetch_type = if (anime.seasons.size > 1) {
+                FetchType.Seasons
             } else {
-                coreSetFetchType(eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+                FetchType.Episodes
             }
         }
     }
