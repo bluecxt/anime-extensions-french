@@ -97,19 +97,58 @@ data class DetailsItemDto(
         author = author.orIfBlank { this@DetailsItemDto.producer }
 
         description = description.orIfBlank {
-            if (!this@DetailsItemDto.description.isNullOrBlank() && !releaseDate.isNullOrBlank()) {
-                "$datePrefix$releaseDate\n${this@DetailsItemDto.description}"
-            } else {
-                null
+            when {
+                !this@DetailsItemDto.description.isNullOrBlank() && !releaseDate.isNullOrBlank() ->
+                    "$datePrefix$releaseDate\n${this@DetailsItemDto.description}"
+
+                !this@DetailsItemDto.description.isNullOrBlank() ->
+                    this@DetailsItemDto.description
+
+                else -> null
             }
         }
 
-        if (status == SAnime.UNKNOWN && this@DetailsItemDto.status != SAnime.UNKNOWN) {
+        if (this@DetailsItemDto.status != SAnime.UNKNOWN) {
             status = this@DetailsItemDto.status
         }
     }
 
     companion object {
+        private fun Document.parseDescription(): String? {
+            val descEl = (selectFirst("#s-desc, .fdesc") ?: selectFirst(".desc-text"))?.clone()
+            descEl?.select(".desc-text")?.remove()
+            return descEl?.text()?.trim()?.ifBlank { null }
+        }
+
+        private fun Document.parseGenres(selectJoined: (String) -> String?): String? {
+            val genresEl = selectFirst(".facts .genres") ?: return selectJoined("#dle-content a[href*='xfsearch/genre'], li:contains(Genre:) a")
+            val links = genresEl.select("a").map { it.text().trim() }.filter { it.isNotBlank() }
+            val joined = if (links.isNotEmpty()) {
+                links.distinct().joinToString(", ")
+            } else {
+                genresEl.text().split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct().joinToString(", ")
+            }
+            return joined.ifBlank { null }
+        }
+
+        private fun Document.parseStatus(): Int {
+            val isMovie = selectFirst("link[href*='fullfilm.css'], script[src*='film-']") != null ||
+                (
+                    selectFirst(".facts .runtime")?.text()?.contains("h", ignoreCase = true) == true &&
+                        selectFirst("link[href*='serie.style.css']") == null
+                    )
+            if (isMovie) return SAnime.COMPLETED
+
+            val listNbrEp = selectFirst(".short-meta:contains(Ep), .episode-row")?.text()
+                ?.split(" ")?.mapNotNull { it.toIntOrNull() }.orEmpty()
+
+            return when {
+                listNbrEp.size >= 2 && listNbrEp.first() == listNbrEp.last() -> SAnime.COMPLETED
+                listNbrEp.isNotEmpty() -> SAnime.ONGOING
+                else -> SAnime.UNKNOWN
+            }
+        }
+
         fun from(document: Document): DetailsItemDto = with(document) {
             fun selectJoined(query: String) = select(query)
                 .map { it.text().trim() }
@@ -118,23 +157,19 @@ data class DetailsItemDto(
                 .joinToString(", ")
                 .ifBlank { null }
 
-            val listNbrEp = selectFirst(".short-meta:contains(Ep), .episode-row")?.text()
-                ?.split(" ")?.mapNotNull { it.toIntOrNull() }.orEmpty()
+            val parsedReleaseDate = selectFirst(".facts .release, .tag.release_date")?.text()?.replace("-", "")?.trim()?.ifBlank { null }
+                ?: selectFirst("li:contains(Date de sortie:) a, a[href*='annee-'], a[href*='xfsearch/year']")?.text()?.trim()
 
             DetailsItemDto(
                 title = selectFirst("h1")?.text()?.trim(),
                 poster = selectFirst("img.dvd-thumbnail")?.attr("abs:src")?.ifBlank { null }
                     ?: selectFirst("img.dvd-thumbnail")?.attr("src")?.ifBlank { null },
-                releaseDate = selectFirst("li:contains(Date de sortie:) a, a[href*='annee-'], a[href*='xfsearch/year']")?.text()?.trim(),
-                genres = selectJoined("li:contains(Genre:) a, a[href*='xfsearch/genre']"),
-                producer = selectJoined("li:contains(Réalisateur:) a, a[href*='xfsearch/realisateur']"),
-                actor = selectJoined("li:contains(Acteurs:) a, :containsOwn(Avec :) a, a[href*='xfsearch/acteur']"),
-                description = selectFirst(".fdesc")?.apply { select(".desc-text").remove() }?.text()?.trim()?.ifBlank { null },
-                status = when {
-                    listNbrEp.size >= 2 && listNbrEp.first() == listNbrEp.last() -> SAnime.COMPLETED
-                    listNbrEp.isNotEmpty() -> SAnime.ONGOING
-                    else -> SAnime.UNKNOWN
-                },
+                releaseDate = parsedReleaseDate,
+                genres = parseGenres(::selectJoined),
+                producer = selectJoined("li:contains(Réalisateur:) a, a[href*='xfsearch/realisateur'], a[href*='xfsearch&xfname=director']"),
+                actor = selectJoined("li:contains(Acteurs:) a, :containsOwn(Avec :) a, a[href*='xfsearch/acteur'], a[href*='xfsearch&xfname=actors']"),
+                description = parseDescription(),
+                status = parseStatus(),
             )
         }
     }

@@ -42,7 +42,7 @@ class FrenchStream :
     JsoupExtensions {
 
     override val name = "French Stream"
-    override val defaultBaseUrl = "https://french-stream.one"
+    override val defaultBaseUrl = "https://french-stream.net"
 
     override val supportedServers = listOf(
         "Vidzy",

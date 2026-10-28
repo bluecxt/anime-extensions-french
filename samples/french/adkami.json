@@ -1,0 +1,104 @@
+{
+  "name": "ADKami Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.adkami.ADKami",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "ADKami Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "ADKami Search 'Overflow' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Overflow"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ],
+        "urlPattern": "^/hentai/\\d+"
+      }
+    },
+    {
+      "name": "ADKami Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Overflow",
+          "url": "/hentai/3680"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "ADKami Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Overflow",
+          "url": "/hentai/3680"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "ADKami Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "Episode 1",
+          "url": "/hentai/3680/1/1/2/1/?lang=VOSTFR"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "ADKami Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VOSTFR",
+          "hosterUrl": "https://hentai.adkami.com/hentai/3680/1/1/2/1/?lang=VOSTFR"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

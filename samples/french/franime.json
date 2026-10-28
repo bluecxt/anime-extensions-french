@@ -1,0 +1,127 @@
+{
+  "name": "FrAnime Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.franime.FrAnime",
+  "lang": "fr",
+  "headers": {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*"
+  },
+  "tests": [
+    {
+      "name": "FrAnime Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ],
+        "allThumbnailsNonNull": true
+      }
+    },
+    {
+      "name": "FrAnime Search 'Naruto: Shippuuden' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Naruto: Shippuuden"
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ],
+        "allThumbnailsNonNull": true,
+        "containsTitles": [
+          "Naruto: Shippuuden"
+        ]
+      }
+    },
+    {
+      "name": "FrAnime Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Shaman King (2021)",
+          "url": "/anime/43222"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "FrAnime Season List Check",
+      "target": "GET_SEASON_LIST",
+      "input": {
+        "anime": {
+          "title": "Shaman King (2021)",
+          "url": "/anime/43222"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "FrAnime Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Shaman King (2021) Saison 1",
+          "url": "/anime/43222#s1"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "FrAnime Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "Episode 1",
+          "url": "/anime/43222?s=1&ep=1"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "FrAnime Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VOSTFR",
+          "internalData": "43222|0|0|vo"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

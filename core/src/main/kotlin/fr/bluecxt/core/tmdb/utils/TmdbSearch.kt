@@ -5,23 +5,36 @@ package fr.bluecxt.core.tmdb.utils
 import fr.bluecxt.core.Source
 import java.text.Normalizer
 
-private val seasonNumberRegex by lazy { Regex("""Saison\s*(\d+)""", RegexOption.IGNORE_CASE) }
+private val explicitSeasonRegex = Regex("""(?i)\b(?:Saison|Season)\s*(\d+)""")
+private val sagaNumberRegex = Regex("""(?i)\bSaga\s*(\d+)""")
+
+private val mediaTagsRegex = Regex("""(?i)\((?:TV|Films?|OAVs?|ONAs?|Specials?)\)|VF|VOSTFR""")
+private val seasonPartRegex = Regex("""(?i)\s*(?:Saison|Season|Part(?:ie)?)\s*\d+.*""")
+private val dashSuffixRegex = Regex("""\s+-\s+.*$""")
+private val trailingDigitsRegex = Regex("""\s+\d+$""")
+private val multiWhitespaceRegex = Regex("""\s+""")
 
 /**
  * Extracts a season number from a season title string (e.g. "Saison 2" -> 2).
  */
-fun extractSeasonNumber(text: String): Int? = seasonNumberRegex.find(text)?.groupValues?.get(1)?.toIntOrNull()
+fun extractSeasonNumber(text: String, allowSagaFallback: Boolean = true): Int? {
+    explicitSeasonRegex.find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+    if (allowSagaFallback) {
+        sagaNumberRegex.find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+    }
+    return null
+}
 
 /**
  * Sanitizes a title for better TMDB search results.
  */
 fun Source.sanitizeTitle(title: String): String = title
-    .replace(Regex("(?i)\\(TV\\)|\\(Films?s?\\)|\\(OAVs?\\)|\\(ONAs?\\)|\\(Specials?\\)|VF|VOSTFR"), "")
-    .replace(Regex("(?i)\\s*(?:Saison|Season|Part(?:ie)?)\\s*\\d+.*"), "") // Remove season/part info
-    .replace(Regex("\\s+-\\s+.*$"), "") // Remove content after dash
-    .replace(Regex("\\s+\\d+$"), "") // Remove trailing numbers
+    .replace(mediaTagsRegex, "")
+    .replace(seasonPartRegex, "") // Remove season/part info
+    .replace(dashSuffixRegex, "") // Remove content after dash
+    .replace(trailingDigitsRegex, "") // Remove trailing numbers
     .trim()
-    .replace(Regex("\\s+"), " ")
+    .replace(multiWhitespaceRegex, " ")
 
 /**
  * Calculates a score from 0 to 100 based on title similarity.

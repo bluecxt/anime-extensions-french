@@ -1,0 +1,122 @@
+{
+  "name": "Movix Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.movix.MovixFactory",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "Movix Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "urlPattern": "^(movie|tv)/[0-9]+$",
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Movix Search 'Piece' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Piece"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "urlPattern": "^(movie|tv)/[0-9]+$",
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Movix Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "tv/37854"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "Movix Season List Check",
+      "target": "GET_SEASON_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "tv/37854"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Movix Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "tv/37854#s1"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "Movix Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "[Movie] Les Trolls 3",
+          "url": "movie/901362"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "Movix Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "FStream",
+          "internalData": "fstream/movie/901362|movie|901362||"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

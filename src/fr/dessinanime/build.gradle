@@ -2,7 +2,7 @@
 ext {
     extName = 'Dessin Anime'
     extClass = '.DessinAnime'
-    extVersionCode = 6
+    extVersionCode = 7
     isNsfw = false
 }
 

@@ -98,15 +98,7 @@ class AbyssExtractor(private val client: OkHttpClient) {
             return null
         }
 
-        // Try to parse raw bytes as UTF-8 JSON
-        val utf8Str = rawBytes.toString(Charsets.UTF_8)
-        try {
-            if (utf8Str.trim().startsWith("{")) {
-                return JSONObject(utf8Str)
-            }
-        } catch (_: Exception) {}
-
-        // Fallback parsing (Latin-1 decoding + custom checks)
+        // Decode as Latin-1 to preserve arbitrary encrypted byte values without UTF-8 corruption
         val decodedStr = rawBytes.toString(Charsets.ISO_8859_1)
         val payload = JSONObject()
 
@@ -200,27 +192,12 @@ class AbyssExtractor(private val client: OkHttpClient) {
     }
 
     private fun deriveKey(seed: String): ByteArray {
-        var cleaned = seed
-        val firstDot = cleaned.indexOf('.')
-        if (firstDot != -1) {
-            cleaned = cleaned.substring(0, firstDot) + cleaned.substring(firstDot + 1)
-        }
-        cleaned = cleaned.replace(":", "").replace("-", "")
-        val isAllDigits = cleaned.isNotEmpty() && cleaned.all { it.isDigit() }
-
+        val isAllDigits = seed.isNotEmpty() && seed.all { it.isDigit() }
         val digestSource = if (isAllDigits) {
-            ByteArray(seed.length) { i ->
-                val ch = seed[i]
-                if (ch.isDigit()) {
-                    ch.toString().toInt().toByte()
-                } else {
-                    (ch.code and 0xFF).toByte()
-                }
-            }
+            ByteArray(seed.length) { seed[it].digitToInt().toByte() }
         } else {
             seed.toByteArray(Charsets.UTF_8)
         }
-
         val md5 = MessageDigest.getInstance("MD5")
         val hash = md5.digest(digestSource)
         val hexString = hash.joinToString("") { String.format("%02x", it) }
@@ -242,7 +219,7 @@ class AbyssExtractor(private val client: OkHttpClient) {
     private fun buildSoraToken(pathValue: String, sizeValue: String): String? {
         val transformed = aesCtrTransform(pathValue.toByteArray(Charsets.UTF_8), sizeValue) ?: return null
         val first = Base64.encodeToString(transformed, Base64.NO_WRAP).replace("=", "")
-        val second = Base64.encodeToString(first.toByteArray(Charsets.UTF_8), Base64.NO_WRAP).replace("=", "")
+        val second = Base64.encodeToString(first.toByteArray(Charsets.ISO_8859_1), Base64.NO_WRAP).replace("=", "")
         return second
     }
 
@@ -254,6 +231,11 @@ class AbyssExtractor(private val client: OkHttpClient) {
         referer: String,
     ): List<ExtractedSource> {
         val videoList = mutableListOf<ExtractedSource>()
+
+        val streamHeaders = Headers.Builder()
+            .add("Referer", referer)
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
 
         // 1. Try MP4 sources
         val mp4 = mediaPayload.optJSONObject("mp4")
@@ -267,9 +249,10 @@ class AbyssExtractor(private val client: OkHttpClient) {
 
                 for (src in sourceList) {
                     val label = src.optString("label", "Video")
-                    val size = src.optString("size", "")
-                    val resId = src.optString("res_id", "")
+                    val size = src.opt("size")?.toString() ?: ""
+                    val resId = src.opt("res_id")?.toString() ?: ""
                     val sub = src.optString("sub", "")
+                    val codec = src.optString("codec", "").takeIf { it.isNotBlank() }
 
                     // Direct file
                     val direct = src.optString("file", "")
@@ -278,7 +261,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
                             ExtractedSource(
                                 url = direct.replace("\\/", "/"),
                                 quality = label,
-                                headers = Headers.Builder().add("Referer", referer).build(),
+                                frameRate = codec,
+                                headers = streamHeaders,
                             ),
                         )
                         continue
@@ -294,7 +278,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
                                 ExtractedSource(
                                     url = combined,
                                     quality = label,
-                                    headers = Headers.Builder().add("Referer", referer).build(),
+                                    frameRate = codec,
+                                    headers = streamHeaders,
                                 ),
                             )
                             continue
@@ -317,7 +302,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
                                     ExtractedSource(
                                         url = finalUrl,
                                         quality = label,
-                                        headers = Headers.Builder().add("Referer", referer).build(),
+                                        frameRate = codec,
+                                        headers = streamHeaders,
                                     ),
                                 )
                             }
@@ -436,7 +422,7 @@ class AbyssExtractor(private val client: OkHttpClient) {
 
     companion object {
         private const val CHARSET = "RB0fpH8ZEyVLkv7c2i6MAJ5u3IKFDxlS1NTsnGaqmXYdUrtzjwObCgQP94hoeW+/="
-        private val datasRegex = Regex("""(?:const|var)\s+datas\s*=\s*"([^"]+)"""")
+        private val datasRegex = Regex("""(?:const|var)\s+datas\s*=\s*['"]([^'"]+)['"]""")
         private val legacyRegex = Regex("""[\w\$]+='([A-Za-z0-9+/=RB0fpH8ZEyVLkv7c2i6MAJ5u3IKFDxlS1NTsnGaqmXYdUrtzjwObCgQP94hoeW]{30,})_'""")
         private val domainRegex = Regex("""['"]domain['"]\s*:\s*['"]([^'"]+)['"]""")
         private val idRegex = Regex("""['"]id['"]\s*:\s*['"]([^'"]+)['"]""")

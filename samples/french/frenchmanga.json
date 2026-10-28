@@ -1,0 +1,107 @@
+{
+  "name": "French-Manga Suite",
+  "extension": "eu.kanade.tachiyomi.animeextension.fr.frenchmanga.FrenchManga",
+  "lang": "fr",
+  "tests": [
+    {
+      "name": "French-Manga Popular Catalog Check",
+      "target": "GET_POPULAR",
+      "input": {
+        "page": 1
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ],
+        "allThumbnailsNonNull": true
+      }
+    },
+    {
+      "name": "French-Manga Search 'Naruto' Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "Naruto"
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ],
+        "allThumbnailsNonNull": true,
+        "containsTitles": [
+          "Naruto"
+        ]
+      }
+    },
+    {
+      "name": "French-Manga Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "Naruto - Intégrale (2002)",
+          "url": "{\"ids\":[\"17890\"]}"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "French-Manga Episode List Check",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Naruto - Intégrale (2002)",
+          "url": "{\"ids\":[\"17890\"]}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French-Manga Hoster List Check",
+      "target": "GET_HOSTER_LIST",
+      "input": {
+        "episode": {
+          "name": "Episode 1",
+          "url": "{\"epNum\":\"1\",\"langs\":{\"vostfr\":{\"vidzy\":\"https://vidzy.org/embed-ov2vm43bsdf4.html\"},\"vf\":{\"vidzy\":\"https://vidzy.org/embed-ou5jw2axq54i.html\"}}}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "French-Manga Video List Check",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VOSTFR",
+          "hosterUrl": "[\"https://vidzy.org/embed-ov2vm43bsdf4.html\"]"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    }
+  ]
+}

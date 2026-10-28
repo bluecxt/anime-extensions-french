@@ -71,16 +71,17 @@ private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
  * Automatically infers and adds Sec-CH-UA, Sec-CH-UA-Mobile, and Sec-CH-UA-Platform Client Hints
  * derived from the given or active User-Agent string.
  */
-fun Headers.Builder.addClientHints(userAgent: String = DEFAULT_USER_AGENT): Headers.Builder {
-    val chromeMatch = CHROME_VERSION_REGEX.find(userAgent)
+fun Headers.Builder.addClientHints(userAgent: String? = null): Headers.Builder {
+    val actualUserAgent = userAgent ?: DEFAULT_USER_AGENT ?: throw IllegalStateException()
+    val chromeMatch = CHROME_VERSION_REGEX.find(actualUserAgent)
     if (chromeMatch != null) {
         val major = chromeMatch.groupValues[1]
-        val isMobile = userAgent.contains("Mobile", ignoreCase = true)
+        val isMobile = actualUserAgent.contains("Mobile", ignoreCase = true)
         val platform = when {
-            userAgent.contains("Android", ignoreCase = true) -> "\"Android\""
-            userAgent.contains("Windows", ignoreCase = true) -> "\"Windows\""
-            userAgent.contains("Mac", ignoreCase = true) -> "\"macOS\""
-            userAgent.contains("Linux", ignoreCase = true) -> "\"Linux\""
+            actualUserAgent.contains("Android", ignoreCase = true) -> "\"Android\""
+            actualUserAgent.contains("Windows", ignoreCase = true) -> "\"Windows\""
+            actualUserAgent.contains("Mac", ignoreCase = true) -> "\"macOS\""
+            actualUserAgent.contains("Linux", ignoreCase = true) -> "\"Linux\""
             else -> "\"Android\""
         }
         set("Sec-CH-UA", "\"Chromium\";v=\"$major\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"$major\"")
@@ -94,6 +95,7 @@ fun Headers.Builder.addClientHints(userAgent: String = DEFAULT_USER_AGENT): Head
  * Simple builder for basic headers with automatic Client Hints injection
  */
 fun defaultHeaders(
+    userAgent: String? = null,
     referer: String = "",
     origin: String = "",
     accept: String = "",
@@ -103,7 +105,7 @@ fun defaultHeaders(
         if (referer.isNotBlank()) add("Referer", referer)
         if (origin.isNotBlank()) add("Origin", origin)
         if (accept.isNotBlank()) add("Accept", accept)
-        if (addClientHints) addClientHints()
+        if (addClientHints) addClientHints(userAgent)
     }.build()
 
 /**
@@ -171,8 +173,8 @@ fun Response.bodyStringOrUnavailable(url: String = ""): String = this.use { res 
  * Parses a status string into SAnime status integer constants.
  */
 fun String.parseStatus(): Int = when (this.trim().lowercase()) {
-    "en cours", "ongoing", "en-cours", "releasing", "airing", "en diffusion", "en cours de diffusion", "broadcasting" -> SAnime.ONGOING
-    "terminé", "termine", "completed", "end", "finished", "fini", "complete", "complété" -> SAnime.COMPLETED
+    "en cours", "ongoing", "en-cours", "releasing", "airing", "en diffusion", "en cours de diffusion", "broadcasting", "continuing" -> SAnime.ONGOING
+    "terminé", "termine", "completed", "end", "ended", "finished", "fini", "complete", "complété", "sorti" -> SAnime.COMPLETED
     "licencié", "licencie", "licensed" -> SAnime.LICENSED
     "publishing finished" -> SAnime.PUBLISHING_FINISHED
     "annulé", "annule", "canceled", "cancelled", "abandonné", "abandonne" -> SAnime.CANCELLED

@@ -1,7 +1,0 @@
-ext {
-    extName = 'AnimesUltra'
-    extClass = '.AnimesUltra'
-    extVersionCode = 17
-}
-
-apply plugin: "kei.plugins.extension.legacy"

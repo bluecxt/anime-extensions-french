@@ -1,0 +1,98 @@
+name: Weekly Extension Integration Tests
+
+on:
+  schedule:
+    # Run every Sunday at 03:00 UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      concurrency:
+        description: 'Number of parallel extension suites to execute'
+        required: false
+        default: '4'
+      specs_path:
+        description: 'Path or pattern to test specs'
+        required: false
+        default: 'samples/french'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-test:
+    name: Run Anime Extension Tests
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check for recent commits (Schedule filter)
+        id: commit-check
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            COMMITS=$(git log --since="7 days ago" --oneline)
+            if [ -z "$COMMITS" ]; then
+              echo "No commits found in the last 7 days. Skipping scheduled test run."
+              echo "skip_tests=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Commits detected in last 7 days:"
+            echo "$COMMITS"
+          fi
+          echo "skip_tests=false" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 21
+        if: steps.commit-check.outputs.skip_tests != 'true'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build extensions bytecode & debug APKs
+        if: steps.commit-check.outputs.skip_tests != 'true'
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon -x test
+
+      - name: Checkout anime-extension-tester
+        if: steps.commit-check.outputs.skip_tests != 'true'
+        run: |
+          if [ -d "../anime-extension-tester" ]; then
+            cd ../anime-extension-tester
+            git fetch origin main
+            git reset --hard origin/main
+          else
+            git clone --depth 1 https://github.com/bluecxt/anime-extension-tester.git ../anime-extension-tester
+          fi
+
+      - name: Start Smart Cloudflare Solver Proxy
+        if: steps.commit-check.outputs.skip_tests != 'true'
+        run: |
+          chmod +x ./scripts/flaresolverr_smart_proxy.py
+          python3 ./scripts/flaresolverr_smart_proxy.py 8080 http://127.0.0.1:8191/v1 &
+          PROXY_PID=$!
+          echo "PROXY_PID=$PROXY_PID" >> "$GITHUB_ENV"
+          sleep 1
+
+      - name: Execute Extension Test Suites
+        if: steps.commit-check.outputs.skip_tests != 'true'
+        env:
+          INPUT_SPECS: ${{ github.event.inputs.specs_path }}
+          INPUT_CONCURRENCY: ${{ github.event.inputs.concurrency }}
+        run: |
+          cd ../anime-extension-tester
+          chmod +x ./gradlew
+          SPECS="${INPUT_SPECS:-$GITHUB_WORKSPACE/samples/french}"
+          CONCURRENCY="${INPUT_CONCURRENCY:-4}"
+          ./gradlew run --args="--specs=$SPECS --extension-dir=$GITHUB_WORKSPACE/src/fr --concurrency=$CONCURRENCY --proxy=http://127.0.0.1:8080"
+
+      - name: Stop Smart Proxy
+        if: always() && env.PROXY_PID != ''
+        run: |
+          kill "$PROXY_PID" 2>/dev/null || true

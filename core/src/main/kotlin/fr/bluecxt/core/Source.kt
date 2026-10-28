@@ -47,7 +47,7 @@ import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-val EXTRACTOR_TIMEOUT = (if (BuildConfig.DEBUG) 30 else 60).seconds
+val EXTRACTOR_TIMEOUT = 30.seconds
 
 /**
  * Global semaphore to limit the number of concurrent extractions.

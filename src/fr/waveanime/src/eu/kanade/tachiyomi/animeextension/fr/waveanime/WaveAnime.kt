@@ -9,20 +9,14 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.WaveplayerExtractor
-import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable
-import keiyoushi.utils.useAsJsoup
+import keiyoushi.utils.get
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Response
-import org.jsoup.nodes.Element
 
 class WaveAnime :
     Source(),
@@ -41,86 +35,124 @@ class WaveAnime :
     override val supportsLatest = true
 
     @Serializable
-    data class TracksResponse(
-        val audios: Map<String, Int?>,
-        val subtitles: Map<String, Int?>,
+    data class WaveSerieSummary(
+        val id: String,
+        val title: String,
+        val format: String? = null,
+        val release_year: Int? = null,
     )
 
-    // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl/catalog")).awaitSuccess()
-        return parseAnimePage(response)
-    }
+    @Serializable
+    data class WaveGenre(val id: Int, val name: String)
 
-    private fun Element.safeUrl(): String {
-        val url = this.attr("abs:href").toHttpUrlOrNull() ?: return ""
-        val query = url.encodedQuery
-        return if (query == null) url.encodedPath else "${url.encodedPath}?$query"
-    }
+    @Serializable
+    data class WaveSerieInfo(
+        val id: String,
+        val title_jpn: String? = null,
+        val title_eng: String? = null,
+        val title_fra: String? = null,
+        val format: String? = null,
+    )
 
-    private fun parseAnimePage(response: Response): AnimesPage {
-        val document = response.useAsJsoup()
-        val items = document.select("div.component.serie-card").mapNotNull { element ->
-            val link = element.selectFirst("a") ?: return@mapNotNull null
-            SAnime.create().apply {
-                url = link.safeUrl()
-                title = element.attr("title").ifBlank { "Titre inconnu" }
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-            }
-        }.distinctBy { it.url }
+    @Serializable
+    data class WaveEpisode(
+        val id: String,
+        val title: String? = null,
+        val number: Int,
+        val season_number: Int = 1,
+        val has_thumbnail: Int = 0,
+    )
 
-        return AnimesPage(items, false)
-    }
+    @Serializable
+    data class WaveSeason(
+        val id: String,
+        val number: Int,
+        val title: String? = null,
+        val synopsis: String? = null,
+        val episodes: List<WaveEpisode> = emptyList(),
+    )
 
-    // ============================== Popular ===============================
+    @Serializable
+    data class WaveSerieDetails(
+        val serie: WaveSerieInfo,
+        val genres: List<WaveGenre> = emptyList(),
+        val themes: List<WaveGenre> = emptyList(),
+        val seasons: List<WaveSeason> = emptyList(),
+        val episodes: List<WaveEpisode> = emptyList(),
+    )
 
+    @Serializable
+    data class WaveEpisodeTrack(
+        val episode_id: String,
+        val type: String,
+        val language: String,
+        val flags: Int = 0,
+    )
+
+    @Serializable
+    data class WaveEpisodeResponse(
+        val episode: WaveEpisode,
+        val tracks: List<WaveEpisodeTrack> = emptyList(),
+    )
+
+    // =============================== Popular & Latest ===============================
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val response = client.newCall(GET("$baseUrl")).awaitSuccess()
-        return parseAnimePage(response)
+        if (page > 1) return AnimesPage(emptyList(), false)
+        val series = client.get("$baseUrl/api/series", headers).parseAs<List<WaveSerieSummary>>(json)
+        val animes = series.map { s ->
+            SAnime.create().apply {
+                url = "/series/${s.id}"
+                title = s.title
+                thumbnail_url = "$baseUrl/media/covers/${s.id}-small.jpeg"
+            }
+        }
+        return AnimesPage(animes, false)
     }
+
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = getPopularAnime(page)
 
     // =============================== Search ===============================
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val url = "$baseUrl/catalog".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .build()
-        val response = client.newCall(GET(url, headers)).awaitSuccess()
-        return parseAnimePage(response)
+        val series = client.get("$baseUrl/api/series", headers).parseAs<List<WaveSerieSummary>>(json)
+        val trimmed = query.trim()
+        val filtered = if (trimmed.isNotBlank()) {
+            series.filter { it.title.contains(trimmed, ignoreCase = true) }
+        } else {
+            series
+        }
+        val animes = filtered.map { s ->
+            SAnime.create().apply {
+                url = "/series/${s.id}"
+                title = s.title
+                thumbnail_url = "$baseUrl/media/covers/${s.id}-small.jpeg"
+            }
+        }
+        return AnimesPage(animes, false)
     }
 
     // =========================== Anime Details ============================
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.useAsJsoup()
+        val id = anime.url.trim('/').substringAfterLast("/")
+        val details = client.get("$baseUrl/api/series/$id", headers).parseAs<WaveSerieDetails>(json)
 
-        val info = document.selectFirst("div.serie-info")
-        val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
-        val mainTitle = info?.selectFirst("h1")?.text() ?: anime.title
-        val releaseDate = document.selectFirst("div.row:contains(Date de sortie)>span.value")?.text()
+        val mainTitle = details.serie.title_fra
+            ?: details.serie.title_jpn
+            ?: details.serie.title_eng
+            ?: anime.title
 
         anime.title = mainTitle
-        anime.description = buildString {
-            if (releaseDate != null) append("Date de sortie : $releaseDate\n\n")
-            if (format != null) append("format $format\n")
-            append(document.selectFirst(".serie-details > p")?.text() ?: "")
-        }
-        anime.genre = document.select(".genres span").joinToString { it.text() }
+        anime.description = details.seasons.firstOrNull()?.synopsis ?: ""
+        anime.genre = (details.genres + details.themes).joinToString { it.name }
         anime.status = SAnime.COMPLETED
-        anime.author = document.select("div.metadata .item:contains(Studio) .value").text()
-        anime.thumbnail_url = document.selectFirst(".poster img")?.attr("abs:src")
+        anime.thumbnail_url = "$baseUrl/media/covers/$id-small.jpeg"
 
-        // Map site format to TMDB types
-        val tmdbType = tmdbTypeFromFormat(format)
-
-        // TMDB Metadata with type precision
+        // TMDB Enrichment
+        val tmdbType = tmdbTypeFromFormat(details.serie.format)
         val tmdbMetadata = fetchTmdbMetadata(mainTitle, type = tmdbType)
         tmdbMetadata?.summary?.let { anime.description = it }
-
-        // Prepend release date to description
         tmdbMetadata?.releaseDate?.let { date ->
             anime.description = "Date de sortie : $date\n\n${anime.description ?: ""}"
         }
-
         tmdbMetadata?.mainPosterUrl?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
@@ -131,66 +163,32 @@ class WaveAnime :
 
     private fun tmdbTypeFromFormat(format: String?): String? = when (format?.uppercase()) {
         "FILM" -> "movie"
-        "TV", "ONA", "OAV", "SPECIAL" -> "tv"
+        "SERIE", "TV", "ONA", "OAV", "SPECIAL" -> "tv"
         else -> null
     }
 
-    private suspend fun fetchTmdbMetadataWithType(
-        title: String,
-        season: Int = 1,
-        format: String?,
-    ): TmdbMetadata? = fetchTmdbMetadata(title, season, type = tmdbTypeFromFormat(format))
-
     // ============================== Episodes ==============================
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val response = client.newCall(GET(baseUrl + anime.url, headers)).awaitSuccess()
-        val document = response.useAsJsoup()
-        val format = document.selectFirst("div.row:contains(Format)>span.value")?.text()
+        val id = anime.url.trim('/').substringAfterLast("/")
+        val details = client.get("$baseUrl/api/series/$id", headers).parseAs<WaveSerieDetails>(json)
+
         val episodes = mutableListOf<SEpisode>()
-        val seasonGrids = document.select("div.component.episode-card-grid")
+        val multipleSeasons = details.seasons.size > 1
 
-        seasonGrids.forEach { seasonGrid ->
-            val seasonNumStr = seasonGrid.attr("data-season")
-            val seasonNum = seasonNumStr.toIntOrNull() ?: 1
-            val tmdbMetadata = fetchTmdbMetadataWithType(anime.title, seasonNum, format)
-
-            seasonGrid.select("div.component.episode-card").forEach { element ->
-                val fullTitle = element.attr("title").ifBlank { return@forEach }
-                // Exemple: "S1 E2 - Sans nom n°2" ou "E3 - Titre"
-                val epMatch = Regex("""E(\d+(?:\.\d+)?)""").find(fullTitle)
-                val epActualNumStr = epMatch?.groupValues?.get(1) ?: "0"
-                val epActualNum = epActualNumStr.toIntOrNull() ?: 0
-                val epName = fullTitle.substringAfter("-").trim()
-
-                episodes.add(
-                    SEpisode.create().apply {
-                        val link = element.selectFirst("a") ?: return@forEach
-                        url = link.safeUrl()
-
-                        // Metadata from TMDB
-                        val epMeta = tmdbMetadata?.episodeSummaries?.get(epActualNum)
-                        val tmdbName = epMeta?.first
-
-                        // GEMINI.md Rules: [S1] Episode Y - [Titre]
-                        val sPrefix = if (seasonGrids.size > 1) "[S$seasonNum] " else ""
-                        val baseName = "Episode $epActualNumStr" + if (epName.contains("Sans nom", true) || epName.isBlank()) {
-                            if (tmdbName != null) " - $tmdbName" else ""
-                        } else {
-                            " - $epName"
-                        }
-                        name = "$sPrefix$baseName"
-
-                        episode_number = epActualNumStr.toFloatOrNull() ?: 0f
-                        scanlator = "Season $seasonNumStr"
-
-                        preview_url = epMeta?.second
-                        summary = epMeta?.third
-                    },
-                )
-            }
+        details.episodes.forEach { ep ->
+            val sPrefix = if (multipleSeasons) "[S${ep.season_number}] " else ""
+            val titlePart = if (!ep.title.isNullOrBlank()) " - ${ep.title}" else ""
+            episodes.add(
+                SEpisode.create().apply {
+                    url = ep.id
+                    name = "${sPrefix}Épisode ${ep.number}$titlePart"
+                    episode_number = ep.number.toFloat()
+                    scanlator = "Saison ${ep.season_number}"
+                },
+            )
         }
 
-        if (episodes.size == 1) {
+        if (episodes.size == 1 && details.serie.format.equals("film", ignoreCase = true)) {
             episodes[0].name = "Film"
         }
 
@@ -203,50 +201,25 @@ class WaveAnime :
     private val waveplayerExtractor by lazy { WaveplayerExtractor(client, headers) }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val episodeUrl = hoster.internalData
-        val response = client.newCall(GET(baseUrl + episodeUrl, headers)).awaitSuccess()
-        val document = response.useAsJsoup()
-        val html = document.toString()
+        val episodeId = hoster.internalData.trim('/').substringAfterLast("/").substringBefore(".mpd")
+        val masterUrl = "$baseUrl/playback/$episodeId/manifest.mpd"
 
-        val episodeId = episodeUrl.substringAfter("?v=").substringBefore("&")
-            .takeIf { it != episodeUrl } ?: episodeUrl.substringAfterLast("/")
-
-        val playbackPath = Regex("""/playback/([^/]+)/master\.mpd""").find(html)?.value
-            ?: return emptyList()
-
-        val masterUrl = baseUrl + playbackPath
-
-        // Fetch tracks (subtitles) via API WaveAnime
-        val tracks = fetchSub(episodeId)
-
-        // Utilise l'extracteur du Core (maintenant simplifié)
-        val rawSources = waveplayerExtractor.videosFromUrl(masterUrl, baseUrl + episodeUrl, tracks)
+        val tracks = fetchSubtitles(episodeId)
+        val rawSources = waveplayerExtractor.videosFromUrl(masterUrl, "$baseUrl/watch/$episodeId", tracks)
 
         return rawSources.map { source ->
             source.buildFromSource(lang = null, name = "(DASH) WavePlayer")
         }
     }
 
-    // ============================== Utils ===============================
+    private suspend fun fetchSubtitles(episodeId: String): List<Track> = runCatchingCancellable {
+        val data = client.get("$baseUrl/api/episodes/$episodeId", headers).parseAs<WaveEpisodeResponse>(json)
 
-    private suspend fun fetchSub(episodeId: String): List<Track> = runCatchingCancellable {
-        val response = client.newCall(GET("$baseUrl/api/episodes/tracks?episodeId=$episodeId", headers)).awaitSuccess()
-        val data = response.use { json.decodeFromString<TracksResponse>(it.body.string()) }
-
-        val tracks = mutableListOf<Track>()
-
-        data.subtitles.forEach { (key, value) ->
-            if (value != 1) return@forEach
-
-            val label = when (key) {
-                "fr_full" -> "Français (Complets)"
-                "fr_forced" -> "Français (Forcés)"
-                else -> key
-            }
-            val suffix = key.replace("_", "-")
-            tracks.add(Track("$baseUrl/assets/subtitles/$episodeId-$suffix.ass", label))
+        data.tracks.filter { it.type == "subtitle" }.map { track ->
+            val flagSuffix = if (track.flags == 1) "forced" else "full"
+            val trackUrl = "$baseUrl/playback/subtitles/${track.episode_id}-${track.language}-$flagSuffix.ass"
+            val label = if (track.language == "fra") "Français (${if (track.flags == 1) "Forcés" else "Complets"})" else track.language
+            Track(trackUrl, label)
         }
-
-        tracks
     }.getOrDefault(emptyList())
 }

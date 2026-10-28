@@ -33,10 +33,10 @@ enum class ContentType {
     ;
 
     fun getPrefix(seasonNum: Int = 1): String = when (this) {
-        MOVIE -> "[Movie] "
+        MOVIE -> "[Film] "
         SPECIAL -> "[Special] "
         OAV -> "[OAV] "
-        SEASON -> if (seasonNum > 1) "[S$seasonNum] " else ""
+        SEASON -> ""
     }
 
     companion object {
