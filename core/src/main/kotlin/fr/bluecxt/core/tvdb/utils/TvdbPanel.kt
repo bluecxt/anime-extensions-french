@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.tvdb.utils
 
-import fr.bluecxt.core.Source
+import android.util.Log
+import fr.bluecxt.core.TVDB_LOG
+import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
+import fr.bluecxt.core.tvdb.ExternalSourceId
 import fr.bluecxt.core.tvdb.MediaPreference
+import fr.bluecxt.core.tvdb.TvdbFetcher
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.normalize
@@ -42,6 +46,15 @@ data class TvdbSeriesOverride(
     val seasons: Map<String, TvdbOverrideEntry> = emptyMap(),
 )
 
+private val tensuraOverride = TvdbSeriesOverride(
+    seriesId = 352408L,
+    seasons = mapOf(
+        "the slime diaries" to TvdbOverrideEntry(seriesId = 385374L, tvdbSeason = 1),
+        "slime diaries" to TvdbOverrideEntry(seriesId = 385374L, tvdbSeason = 1),
+        "tensura nikki" to TvdbOverrideEntry(seriesId = 385374L, tvdbSeason = 1),
+    ),
+)
+
 private val demonSlayerOverride = TvdbSeriesOverride(
     seriesId = 348545L,
     seasons = mapOf(
@@ -59,12 +72,18 @@ private val demonSlayerOverride = TvdbSeriesOverride(
     ),
 )
 
-private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
-    "hanaori" to TvdbSeriesOverride(
-        seasons = mapOf(
-            "" to TvdbOverrideEntry(skipTvdb = true),
-        ),
+private val dbzOverride = TvdbSeriesOverride(
+    seriesId = 81472L,
+    seasons = mapOf(
+        "saison 1" to TvdbOverrideEntry(tvdbSeason = 1, seasonOrderType = "absolute"),
+        "saison" to TvdbOverrideEntry(tvdbSeason = 1, seasonOrderType = "absolute"),
+        "" to TvdbOverrideEntry(tvdbSeason = 1, seasonOrderType = "absolute"),
     ),
+)
+
+private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
+    "dragon ball z" to dbzOverride,
+    "dbz" to dbzOverride,
     "assassination classroom" to TvdbSeriesOverride(
         seriesId = 283947L,
         seasons = mapOf(
@@ -72,6 +91,10 @@ private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
             "film" to TvdbOverrideEntry(skipTvdb = true),
         ),
     ),
+    "tensei shitara slime datta ken" to tensuraOverride,
+    "that time i got reincarnated as a slime" to tensuraOverride,
+    "moi, quand je me réincarne en slime" to tensuraOverride,
+    "tensura" to tensuraOverride,
     "demon slayer" to demonSlayerOverride,
     "kimetsu no yaiba" to demonSlayerOverride,
     "one piece" to TvdbSeriesOverride(
@@ -116,6 +139,8 @@ private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
     ),
 )
 
+private val genericMovieTitleRegex = Regex("""(?i)^(?:Film|Movie)\s*\d*(\s*[-:]\s*\d+)?$""")
+
 /**
  * High-level helper function for extensions to fetch TVDB metadata for any panel/tab.
  */
@@ -127,12 +152,15 @@ suspend fun Source.fetchTvdbForPanel(
     isMovie: Boolean = false,
     isSpecial: Boolean = false,
     preference: MediaPreference = MediaPreference.ANIME,
+    externalTmdbId: Long? = null,
 ): TvdbMetadata? {
     val allLookupTitles = (listOf(seriesTitle, fullTitle) + titles).map { it.normalize() }
     val seriesOverride = tvdbOverridesMap.entries.find { entry ->
         val normKey = entry.key.normalize()
-        allLookupTitles.any { it.contains(normKey) }
+        allLookupTitles.any { it.contains(normKey) || it.contains(entry.key) }
     }?.value
+
+    Log.d(TVDB_LOG, "override found = $seriesOverride")
 
     val allSeasonLookups = listOfNotNull(rawSeasonName, fullTitle, seriesTitle).map { it.normalize() }
     // Match override keys longest-first and ensure digit-boundary check to avoid "saga 1" matching "saga 10/11/12"
@@ -161,10 +189,31 @@ suspend fun Source.fetchTvdbForPanel(
     val targetTvdbId = overrideEntry?.seriesId ?: seriesOverride?.seriesId
     val isMovieResolved = overrideEntry?.isMovie ?: isMovie
 
-    // 1. Try Primary Titles first (seriesTitle & fullTitle)
-    val primaryTitles = listOf(sanitizeTitle(seriesTitle), sanitizeTitle(fullTitle))
-        .filter { it.isNotBlank() }
-        .distinct()
+    // Try External TMDB ID first when available (only if the panel doesn't explicitly redirect to another seriesId)
+    if (externalTmdbId != null && externalTmdbId > 0 && overrideEntry?.seriesId == null) {
+        val externalExpectedNames = (listOf(seriesTitle, fullTitle) + titles)
+            .filter { it.isNotBlank() }
+            .toSet()
+        val externalMeta = TvdbFetcher(this).fetchTvdbMetadataFromExternal(
+            remoteId = externalTmdbId,
+            source = ExternalSourceId.TMDB,
+            season = seasonNumber,
+            expectedNames = externalExpectedNames,
+            movieWanted = isMovieResolved,
+            seasonOrderType = seasonOrderType,
+        )
+        if (externalMeta != null) {
+            return externalMeta.copy(episodeOffset = episodeOffset)
+        }
+    }
+
+    // 1. Try Primary Titles first
+    val isGenericMovie = isMovieResolved && (rawSeasonName.isNullOrBlank() || rawSeasonName.matches(genericMovieTitleRegex))
+    val primaryTitles = if (isMovieResolved && !isGenericMovie) {
+        listOfNotNull(rawSeasonName?.let { sanitizeTitle(it) }, sanitizeTitle(fullTitle))
+    } else {
+        listOf(sanitizeTitle(seriesTitle), sanitizeTitle(fullTitle))
+    }.filter { it.isNotBlank() }.distinct()
 
     val primaryResults = primaryTitles.mapNotNull { title ->
         fetchTvdbMetadata(
