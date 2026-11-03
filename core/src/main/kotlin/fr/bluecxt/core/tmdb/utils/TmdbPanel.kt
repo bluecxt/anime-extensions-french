@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.tmdb.utils
 
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbEpisodeGroupMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata

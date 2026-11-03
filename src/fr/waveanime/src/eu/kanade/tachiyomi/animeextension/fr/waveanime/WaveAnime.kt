@@ -9,18 +9,16 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.WaveplayerExtractor
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 
-class WaveAnime :
-    Source(),
-    CommonPreferences {
+class WaveAnime : ConfigurableSource() {
 
     override val name = "WaveAnime"
 

@@ -2,12 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.lesporoiniens
 
-import android.util.LruCache
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animeextension.fr.lesporoiniens.dto.Episode
 import eu.kanade.tachiyomi.animeextension.fr.lesporoiniens.dto.EpisodeData
 import eu.kanade.tachiyomi.animeextension.fr.lesporoiniens.dto.Media
-import eu.kanade.tachiyomi.animeextension.fr.lesporoiniens.dto.MediaList
 import eu.kanade.tachiyomi.animeextension.fr.lesporoiniens.dto.MediaListDto
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -15,48 +11,23 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.GoogleDriveExtractor
-import fr.bluecxt.core.tmdb.fetchTmdbMetadata
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.megabytes
-import fr.bluecxt.core.utils.runCatchingCancellable
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.useAsJsoup
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Cache
 import okhttp3.Headers
-import okhttp3.Request
-import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.io.File
-import java.net.URLEncoder
 import java.text.Normalizer
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
 private val MAX_CACHE_SIZE = 10.megabytes
 private val MAX_CACHE_TIME = 30.minutes
 
-class LesPoroiniens :
-    Source(),
-    CommonPreferences {
+class LesPoroiniens : ConfigurableSource() {
 
     override val name = "Les Poroïniens"
 

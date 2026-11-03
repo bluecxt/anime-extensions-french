@@ -5,15 +5,13 @@ package fr.bluecxt.core.extractors
 import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.VOE_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.network.DdosGuardInterceptor
-import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
-import fr.bluecxt.core.utils.detectMp4Resolution
-import kotlinx.serialization.decodeFromString
+import fr.bluecxt.core.utils.video.PlaylistUtils
+import fr.bluecxt.core.utils.video.detectMp4Resolution
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive

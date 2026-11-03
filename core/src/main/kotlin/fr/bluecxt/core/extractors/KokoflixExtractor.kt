@@ -3,8 +3,8 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 

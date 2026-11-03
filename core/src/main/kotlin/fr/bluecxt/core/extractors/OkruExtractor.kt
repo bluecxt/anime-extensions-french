@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.extractors
 
-import android.util.Log
-import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
+import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.utils.useAsJsoup
 import okhttp3.OkHttpClient
 

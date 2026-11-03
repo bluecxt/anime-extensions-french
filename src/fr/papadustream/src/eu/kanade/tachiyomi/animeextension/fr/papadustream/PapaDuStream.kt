@@ -18,12 +18,12 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.PAPADUSTREAM_LOG
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.filters.FilterSpec
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
@@ -65,8 +65,7 @@ private const val WEBVIEW_DESTROY_TIMEOUT_SECONDS = 2L
 private val REGEX_GETXFIELD = Regex("""getxfield\s*\(\s*this\s*,\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]""")
 
 class PapaDuStream :
-    Source(),
-    CommonPreferences,
+    ConfigurableSource(),
     JsoupExtensions {
 
     override val name = "PapaDuStream"

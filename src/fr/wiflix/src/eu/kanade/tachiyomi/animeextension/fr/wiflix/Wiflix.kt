@@ -9,9 +9,9 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.WIFLIX_LOG
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get
 import keiyoushi.utils.post
@@ -25,9 +25,7 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class Wiflix :
-    Source(),
-    CommonPreferences {
+class Wiflix : ConfigurableSource() {
 
     override val name = "Wiflix"
 
@@ -47,7 +45,7 @@ class Wiflix :
             .build()
     }
 
-    override val currentBaseUrl: String
+    override val baseUrl: String
         get() {
             val prefUrl = preferences.getString(CommonPreferences.PREF_URL_KEY, defaultBaseUrl) ?: defaultBaseUrl
             if (prefUrl.contains("flemmix.city") || prefUrl.contains("flemmix.cloud") || prefUrl.contains("flemmix.eu")) {

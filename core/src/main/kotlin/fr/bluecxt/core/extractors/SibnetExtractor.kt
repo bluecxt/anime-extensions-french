@@ -4,17 +4,14 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
-import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.SIBNET_LOG
+import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Call
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
@@ -41,7 +38,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
             if (script == null) {
                 val retryHtml = document.html()
                 if (retryHtml.contains("Видео недоступно") || retryHtml.contains("Video not available")) {
-                    throw fr.bluecxt.core.ContentUnavailableException("Sibnet: Video explicitly marked as unavailable")
+                    throw ContentUnavailableException("Sibnet: Video explicitly marked as unavailable")
                 }
                 throw Exception("Could not find player script in Sibnet (Title: ${document.title()})")
             }

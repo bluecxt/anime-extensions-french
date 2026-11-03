@@ -6,15 +6,12 @@ import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.util.asJsoup
-import fr.bluecxt.core.ExtractionException
-import fr.bluecxt.core.SelectorException
 import fr.bluecxt.core.VIDZY_LOG
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.model.ExtractionException
+import fr.bluecxt.core.model.SelectorException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
-import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import keiyoushi.utils.useAsJsoup
 import okhttp3.FormBody
 import okhttp3.Headers

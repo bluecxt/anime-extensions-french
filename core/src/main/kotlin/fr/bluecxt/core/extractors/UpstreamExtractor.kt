@@ -3,11 +3,10 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
+import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.utils.useAsJsoup
 import okhttp3.OkHttpClient
 

@@ -19,11 +19,9 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
-import fr.bluecxt.core.Source
-import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import keiyoushi.core.R
-import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody

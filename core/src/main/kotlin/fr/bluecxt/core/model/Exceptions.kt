@@ -1,6 +1,6 @@
 // Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core
+package fr.bluecxt.core.model
 
 /**
  * Specific exception for content that is explicitly unavailable on the server (deleted, geoblocked, etc.)

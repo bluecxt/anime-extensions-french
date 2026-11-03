@@ -14,12 +14,12 @@ import eu.kanade.tachiyomi.animeextension.fr.movix.dto.MovixWiflixResponse
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.VoiceLanguage.VA
 import fr.bluecxt.core.model.VoiceLanguage.VCN
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.addClientHints
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,9 +28,7 @@ import uy.kohesive.injekt.injectLazy
 
 private val MOVIX_REDIRECT_REGEX = Regex("""La seule adresse active de Movix est <a href="(https://[^"]+)"""")
 
-abstract class BaseMovix(override val name: String) :
-    Source(),
-    CommonPreferences {
+abstract class BaseMovix(override val name: String) : ConfigurableSource() {
     override val defaultBaseUrl = "https://movix.fun"
     override val lang = "fr"
     override val supportsLatest = true
@@ -49,7 +47,7 @@ abstract class BaseMovix(override val name: String) :
 
     override val baseUrl: String
         get() {
-            val prefUrl = currentBaseUrl
+            val prefUrl = preferences.getString(CommonPreferences.PREF_URL_KEY, null)?.ifEmpty { null } ?: ""
             if (prefUrl.isNotEmpty() && prefUrl != "https://movix.online") {
                 dynamicBaseUrl = prefUrl
                 return prefUrl
