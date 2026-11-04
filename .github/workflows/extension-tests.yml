@@ -56,6 +56,11 @@ jobs:
 
       - name: Build extensions bytecode & debug APKs
         if: steps.commit-check.outputs.skip_tests != 'true'
+        env:
+          TMDB_API: ${{ secrets.TMDB_API }}
+          TVDB_API: ${{ secrets.TVDB_API }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon -x test
