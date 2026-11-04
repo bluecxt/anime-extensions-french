@@ -20,10 +20,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-and-test:
-    name: Run Anime Extension Tests
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 60
+  # =========================================================================
+  # JOB 1 : Compilation rapide sur l'infrastructure cloud GitHub (x86_64)
+  # Aucun appel reseau vers les hebergeurs d'anime n'est fait durant le build
+  # =========================================================================
+  build-classes:
+    name: Build Extension Classes
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -54,7 +58,11 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Build extensions bytecode & debug APKs
+      - name: Set up Gradle
+        if: steps.commit-check.outputs.skip_tests != 'true'
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+
+      - name: Build extensions bytecode & debug classes
         if: steps.commit-check.outputs.skip_tests != 'true'
         env:
           TMDB_API: ${{ secrets.TMDB_API }}
@@ -65,8 +73,46 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon -x test
 
-      - name: Checkout anime-extension-tester
+      - name: Upload compiled classes & specs artifact
         if: steps.commit-check.outputs.skip_tests != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: extension-binaries
+          path: |
+            src/**/build/
+            core/build/
+            lib-multisrc/**/build/
+            samples/
+            scripts/
+          retention-days: 1
+
+    outputs:
+      skip_tests: ${{ steps.commit-check.outputs.skip_tests }}
+
+  # =========================================================================
+  # JOB 2 : Execution des tests reseau sur le runner auto-heberge (IP residentielle)
+  # Aucune compilation Android / aapt2 n'est requise sur le serveur ARM64
+  # =========================================================================
+  test-extensions:
+    name: Run Anime Extension Tests (Residential IP)
+    needs: build-classes
+    if: needs.build-classes.outputs.skip_tests != 'true'
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository structure
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download compiled classes & specs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: extension-binaries
+          path: ${{ github.workspace }}
+
+      - name: Checkout anime-extension-tester
         run: |
           if [ -d "../anime-extension-tester" ]; then
             cd ../anime-extension-tester
@@ -77,7 +123,6 @@ jobs:
           fi
 
       - name: Start Smart Cloudflare Solver Proxy
-        if: steps.commit-check.outputs.skip_tests != 'true'
         run: |
           chmod +x ./scripts/flaresolverr_smart_proxy.py
           python3 ./scripts/flaresolverr_smart_proxy.py 8080 http://127.0.0.1:8191/v1 &
@@ -86,7 +131,6 @@ jobs:
           sleep 1
 
       - name: Execute Extension Test Suites
-        if: steps.commit-check.outputs.skip_tests != 'true'
         env:
           INPUT_SPECS: ${{ github.event.inputs.specs_path }}
           INPUT_CONCURRENCY: ${{ github.event.inputs.concurrency }}
