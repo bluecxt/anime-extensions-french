@@ -127,10 +127,15 @@ jobs:
           INPUT_SPECS: ${{ github.event.inputs.specs_path }}
           INPUT_CONCURRENCY: ${{ github.event.inputs.concurrency }}
         run: |
+          RAW_SPECS="${INPUT_SPECS:-samples/french}"
+          if [[ "$RAW_SPECS" = /* ]]; then
+            SPECS="$RAW_SPECS"
+          else
+            SPECS="$GITHUB_WORKSPACE/$RAW_SPECS"
+          fi
+          CONCURRENCY="${INPUT_CONCURRENCY:-4}"
           cd ../anime-extension-tester
           chmod +x ./gradlew
-          SPECS="${INPUT_SPECS:-$GITHUB_WORKSPACE/samples/french}"
-          CONCURRENCY="${INPUT_CONCURRENCY:-4}"
           ./gradlew run --args="--specs=$SPECS --extension-dir=$GITHUB_WORKSPACE/src/fr --concurrency=$CONCURRENCY --proxy=http://127.0.0.1:8080"
 
       - name: Stop Smart Proxy
