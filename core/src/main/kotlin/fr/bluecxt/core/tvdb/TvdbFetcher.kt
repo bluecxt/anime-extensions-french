@@ -350,11 +350,14 @@ class TvdbFetcher(
         if (sDto == null && trDto == null) return@coroutineScope null
 
         val artworks = sDto?.artwork.orEmpty()
-        val rawSeasonPoster = artworks.firstOrNull { it.type == 7 && it.language?.equals(lang, ignoreCase = true) == true }?.image
-            ?: artworks.firstOrNull { it.type == 7 && it.language?.equals("jpn", ignoreCase = true) == true }?.image
-            ?: artworks.firstOrNull { it.type == 7 && it.language?.equals("eng", ignoreCase = true) == true }?.image
-            ?: artworks.firstOrNull { it.type == 7 }?.image
-            ?: sDto?.image
+        val rawSeasonPoster = artworks
+            .filter { it.type == 7 && !it.image.isNullOrBlank() }
+            .let { list ->
+                list.filter { it.language?.equals(lang, ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                    ?: list.filter { it.language?.equals("jpn", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                    ?: list.filter { it.language?.equals("eng", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                    ?: list.maxByOrNull { it.score }?.image
+            } ?: sDto?.image
 
         val fullSeasonPoster = rawSeasonPoster?.takeIf { it.isNotBlank() }?.let {
             if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"

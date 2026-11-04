@@ -164,6 +164,7 @@ internal data class TvdbArtworkDto(
     val type: Int = 0,
     val image: String? = null,
     val language: String? = null,
+    val score: Long = 0,
 )
 
 /**
@@ -271,11 +272,20 @@ internal data class TvdbSeriesExtendedData(
         }
 
     /**
-     * Full poster image URL, prefixed with TVDB artwork base URL when relative.
+     * Full poster image URL, prioritized by highest score artwork (Type 2 = Series Poster)
+     * with fallback to root image, prefixed with TVDB artwork base URL when relative.
      */
     val fullPosterUrl: String?
-        get() = image?.takeIf { it.isNotBlank() }?.let {
-            if (it.startsWith("http")) it else "https://artworks.thetvdb.com$it"
+        get() {
+            val bestPoster = artworks
+                .filter { it.type == 2 && !it.image.isNullOrBlank() }
+                .maxByOrNull { it.score }
+                ?.image
+                ?: image?.takeIf { it.isNotBlank() }
+
+            return bestPoster?.let {
+                if (it.startsWith("http")) it else "https://artworks.thetvdb.com$it"
+            }
         }
 
     /**
@@ -336,7 +346,13 @@ internal data class TvdbMovieExtendedData(
         }
 
     fun toTvdbMetadata(): TvdbMetadata {
-        val fullPosterUrl = image?.takeIf { it.isNotBlank() }?.let {
+        val bestPoster = artworks
+            .filter { (it.type == 2 || it.type == 14) && !it.image.isNullOrBlank() }
+            .maxByOrNull { it.score }
+            ?.image
+            ?: image?.takeIf { it.isNotBlank() }
+
+        val fullPosterUrl = bestPoster?.let {
             if (it.startsWith("http")) it else "https://artworks.thetvdb.com$it"
         }
         return TvdbMetadata(
