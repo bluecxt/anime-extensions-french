@@ -10,17 +10,15 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.SelectorException
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.SelectorException
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.json.Json
 import uy.kohesive.injekt.injectLazy
 
-class FrenchAnime :
-    Source(),
-    CommonPreferences {
+class FrenchAnime : ConfigurableSource() {
 
     override val name = "French Anime"
     override val defaultBaseUrl = "https://french-anime.com"

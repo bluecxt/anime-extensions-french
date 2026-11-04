@@ -1,6 +1,6 @@
 // Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core.utils
+package fr.bluecxt.core.utils.video
 
 import eu.kanade.tachiyomi.animesource.model.Track
 import fr.bluecxt.core.model.ExtractedSource
@@ -8,7 +8,6 @@ import org.jsoup.Jsoup.parse
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import org.jsoup.select.Elements
-import java.util.Dictionary
 
 data class HlsAudioStream(
     val id: String,
@@ -125,6 +124,7 @@ class DashToExtractedSource {
         return videoTracks.map { it.toExtractedSource(audioTracks) }
     }
 
+    // TODO
     private fun HlsVideoStream.toExtractedSource(audioTracks: List<Track>): ExtractedSource {
         val url = ""
 
@@ -136,6 +136,7 @@ class DashToExtractedSource {
         )
     }
 
+    // TODO
     private fun HlsAudioStream.toTrack(): Track {
         val url = ""
         val lang = ""

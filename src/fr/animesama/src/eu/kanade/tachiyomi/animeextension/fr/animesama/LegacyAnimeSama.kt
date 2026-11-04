@@ -18,6 +18,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 // a retirer en juillet 2027
@@ -239,12 +242,16 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
     return playerUrls.mapIndexedNotNull { i, playerUrl ->
         if (playerUrl.isEmpty()) return@mapIndexedNotNull null
         val lang = LegacyAnimeSama.LANG_VALUES.getOrElse(i) { "vostfr" }.uppercase()
-        Hoster(hosterName = lang, internalData = json.encodeToString(playerUrl) + "|" + lang)
+        Hoster(
+            hosterName = lang,
+            internalData = json.encodeToString(playerUrl) + "|" + lang,
+        )
     }
 }
 
 suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
-    val data = hoster.internalData.split("|")
+    val raw = hoster.internalData.takeIf { it.isNotBlank() } ?: return emptyList()
+    val data = raw.split("|")
     if (data.size < 2) return emptyList()
     val urls = try {
         json.decodeFromString<List<String>>(data[0])

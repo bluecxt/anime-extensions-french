@@ -8,8 +8,8 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.JsoupExtensions
 import fr.bluecxt.core.utils.parseStatus
 import fr.bluecxt.core.utils.safeRelativePath
@@ -23,8 +23,7 @@ abstract class Madara(
     override val name: String,
     override val defaultBaseUrl: String,
     override val lang: String,
-) : Source(),
-    CommonPreferences,
+) : ConfigurableSource(),
     JsoupExtensions {
 
     override val supportsLatest = true

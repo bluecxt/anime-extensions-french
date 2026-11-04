@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.get
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.parallelCatchingCancellableFlatMap
@@ -23,9 +23,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import uy.kohesive.injekt.injectLazy
 
-class FrAnime :
-    Source(),
-    CommonPreferences {
+class FrAnime : ConfigurableSource() {
 
     override val name = "FrAnime"
 

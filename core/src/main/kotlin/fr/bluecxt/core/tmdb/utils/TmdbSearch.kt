@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.tmdb.utils
 
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.source.Source
 import java.text.Normalizer
 
 private val explicitSeasonRegex = Regex("""(?i)\b(?:Saison|Season)\s*(\d+)""")
@@ -10,7 +10,6 @@ private val sagaNumberRegex = Regex("""(?i)\bSaga\s*(\d+)""")
 
 private val mediaTagsRegex = Regex("""(?i)\((?:TV|Films?|OAVs?|ONAs?|Specials?)\)|VF|VOSTFR""")
 private val seasonPartRegex = Regex("""(?i)\s*(?:Saison|Season|Part(?:ie)?)\s*\d+.*""")
-private val dashSuffixRegex = Regex("""\s+-\s+.*$""")
 private val trailingDigitsRegex = Regex("""\s+\d+$""")
 private val multiWhitespaceRegex = Regex("""\s+""")
 
@@ -31,7 +30,6 @@ fun extractSeasonNumber(text: String, allowSagaFallback: Boolean = true): Int? {
 fun Source.sanitizeTitle(title: String): String = title
     .replace(mediaTagsRegex, "")
     .replace(seasonPartRegex, "") // Remove season/part info
-    .replace(dashSuffixRegex, "") // Remove content after dash
     .replace(trailingDigitsRegex, "") // Remove trailing numbers
     .trim()
     .replace(multiWhitespaceRegex, " ")

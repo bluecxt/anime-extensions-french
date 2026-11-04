@@ -1,13 +1,14 @@
-// Copyright bluecxt
-// SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core
+package fr.bluecxt.core.preference
 
 import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
+import fr.bluecxt.core.extractors.router.DEFAULT_SERVER
 import fr.bluecxt.core.model.VoiceLanguage
+import fr.bluecxt.core.source.Source
 import keiyoushi.core.R
 import keiyoushi.utils.addEditTextPreference
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -18,6 +19,11 @@ interface CommonPreferences : ConfigurableAnimeSource {
      * URL de base par défaut de l'extension (valeur d'usine).
      */
     val defaultBaseUrl: String
+
+    /**
+     * Instance des SharedPreferences de la source.
+     */
+    val preferences: SharedPreferences
 
     /**
      * Liste des serveurs supportés par l'extension.
@@ -54,7 +60,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
     /**
      * Qualités supportées par l'extension.
      */
-    val supportedQualities: Array<String> get() = arrayOf("Highest", "1080", "720", "480")
+    val supportedQualities: Array<String> get() = DEFAULT_QUALITIES
 
     /**
      * Qualité par défaut.
@@ -66,11 +72,6 @@ interface CommonPreferences : ConfigurableAnimeSource {
      * null (défaut) : Affiche si supportedQualities.size > 1
      */
     val forceShowQualityPreference: Boolean? get() = null
-
-    /**
-     * Récupère l'URL de base actuelle (soit celle modifiée par l'utilisateur, soit celle par défaut).
-     */
-    val currentBaseUrl: String
 
     /**
      * le text affiché en dessous de base_url_pref
@@ -101,13 +102,17 @@ interface CommonPreferences : ConfigurableAnimeSource {
         }
 
         // Gestion de la Qualité
-        val showQuality = forceShowQualityPreference ?: (supportedQualities.size > 1)
+        val qualities = supportedQualities
+        val showQuality = forceShowQualityPreference ?: (qualities.size > 1)
         if (showQuality) {
             ListPreference(context).apply {
                 key = PREF_QUALITY_KEY
                 title = source.getString(R.string.pref_quality_title)
-                entries = supportedQualities.map { q -> if (q.all { it.isDigit() }) "${q}p" else q }.toTypedArray()
-                entryValues = supportedQualities
+                entries = Array(qualities.size) { i ->
+                    val q = qualities[i]
+                    if (q.all { it.isDigit() }) "${q}p" else q
+                }
+                entryValues = qualities
                 setDefaultValue(defaultQuality)
                 summary = "%s"
                 setOnPreferenceChangeListener { _, _ -> true }
@@ -115,20 +120,21 @@ interface CommonPreferences : ConfigurableAnimeSource {
         }
 
         // Gestion du Serveur
-        val showServerPref = forceShowServerPreference ?: (supportedServers.size > 1)
+        val servers = supportedServers.toTypedArray()
+        val showServerPref = forceShowServerPreference ?: (servers.size > 1)
         if (showServerPref) {
             ListPreference(context).apply {
                 key = PREF_SERVER_KEY
                 title = source.getString(R.string.pref_server_title)
-                entries = supportedServers.toTypedArray()
-                entryValues = supportedServers.toTypedArray()
+                entries = servers
+                entryValues = servers
                 setDefaultValue(defaultServer ?: "")
                 summary = "%s"
                 setOnPreferenceChangeListener { _, _ -> true }
             }.also(screen::addPreference)
         }
 
-        if (supportedServers.any { it.equals("Filemoon", ignoreCase = true) }) {
+        if (servers.any { it.equals("Filemoon", ignoreCase = true) }) {
             SwitchPreferenceCompat(context).apply {
                 key = PREF_DISABLE_FILEMOON_KEY
                 title = source.getString(R.string.pref_disable_filemoon_title)
@@ -149,54 +155,60 @@ interface CommonPreferences : ConfigurableAnimeSource {
         preferences: SharedPreferences,
         defaultUrl: String,
         title: String = source.getString(R.string.pref_base_url_title),
-        key: String = "base_url_pref",
+        key: String = PREF_URL_KEY,
         summary: String? = null,
         onComplete: (String) -> Unit = {},
     ) {
-        val currentUrl = preferences.getString(key, defaultUrl) ?: defaultUrl
+        val currentUrl = preferences.getString(key, null)?.ifBlank { null } ?: defaultUrl
+        val hasExtraSummary = !summary.isNullOrBlank()
+
+        fun formatSummary(url: String): String {
+            val baseSummary = source.getString(R.string.pref_base_url_summary, url)
+            return if (hasExtraSummary) {
+                buildString(baseSummary.length + 1 + summary.length) {
+                    append(baseSummary).append('\n').append(summary)
+                }
+            } else {
+                baseSummary
+            }
+        }
 
         addEditTextPreference(
             key = key,
             title = title,
-            summary = buildString {
-                append(source.getString(R.string.pref_base_url_summary, currentUrl))
-                if (!summary.isNullOrBlank()) append("\n$summary")
-            },
+            summary = formatSummary(currentUrl),
             default = defaultUrl,
+            sanitize = { it.trim() },
             getSummary = { newValue ->
-                buildString {
-                    val urlToDisplay = if (newValue.isNotBlank()) newValue.removeSuffix("/") else currentUrl
-                    append(source.getString(R.string.pref_base_url_summary, urlToDisplay))
-                    if (!summary.isNullOrBlank()) append("\n$summary")
-                }
+                formatSummary(newValue.ifEmpty { defaultUrl })
             },
             validate = { url ->
-                url.isBlank() || url.toHttpUrlOrNull() != null
+                !url.endsWith('/') && url.toHttpUrlOrNull() != null
             },
-            validationMessage = {
-                source.getString(R.string.pref_base_url_invalid)
-            },
-            onChange = { _, newValue ->
-                val cleanUrl = newValue.trim().removeSuffix("/")
-
-                if (newValue.isBlank()) {
-                    // Reset à la valeur par défaut
-                    preferences.edit().remove(key).apply()
-                    onComplete(defaultUrl)
-                    true
-                } else if (cleanUrl.isNotEmpty()) {
-                    // Enregistrement de la nouvelle URL nettoyée
-                    preferences.edit().putString(key, cleanUrl).apply()
-                    onComplete(cleanUrl)
-                    true
-                } else {
-                    false
+            validationMessage = { url ->
+                when {
+                    url.endsWith('/') -> source.getString(R.string.pref_base_url_invalid_end_with_slash)
+                    else -> source.getString(R.string.pref_base_url_invalid)
                 }
             },
+            onChange = { pref, newValue ->
+                if (newValue.isEmpty()) {
+                    (pref as? EditTextPreference)?.text = defaultUrl
+                    preferences.edit().remove(key).apply()
+                    pref.summary = formatSummary(defaultUrl)
+                    onComplete(defaultUrl)
+                    false
+                } else {
+                    true
+                }
+            },
+            onComplete = onComplete,
         )
     }
 
     companion object {
+        private val DEFAULT_QUALITIES = arrayOf("Highest", "1080", "720", "480")
+
         const val PREF_URL_KEY = "preferred_baseUrl"
         const val PREF_VOICES_KEY = "preferred_voices"
         const val PREF_QUALITY_KEY = "preferred_quality"

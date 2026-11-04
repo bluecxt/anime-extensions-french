@@ -2,19 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.utils
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.annotation.StringRes
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.util.asJsoup
-import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.DEFAULT_USER_AGENT
-import fr.bluecxt.core.ExtractionException
-import fr.bluecxt.core.RateLimitException
-import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ContentUnavailableException
+import fr.bluecxt.core.model.ExtractionException
+import fr.bluecxt.core.model.RateLimitException
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -27,8 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 /**
  * Safely extracts the relative path from an element's href attribute.
@@ -111,7 +103,7 @@ fun defaultHeaders(
 /**
  * Normalize a String by putting everything in lowercase and keep only letter and digit
  */
-fun String.normalize(): String = this.lowercase().filter { it.isLetterOrDigit() }.trim()
+fun String.normalize(): String = lowercase().filter { it.isLetterOrDigit() }.trim()
 
 /**
  * Awaits response and verifies status:
@@ -290,6 +282,13 @@ val Throwable.safeHttpCode: Int?
 annotation class NeedsRefactor(
     val reason: String = "",
 )
+
+fun CharSequence.containsAny(keywords: Array<String>): Boolean {
+    for (i in keywords.indices) {
+        if (this.contains(keywords[i], ignoreCase = true)) return true
+    }
+    return false
+}
 
 inline val Int.megabytes: Long get() = this.toLong() * 1024 * 1024
 inline val Int.kilobytes: Long get() = this.toLong() * 1024

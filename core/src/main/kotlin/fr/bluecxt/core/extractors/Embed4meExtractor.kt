@@ -3,16 +3,9 @@
 package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import fr.bluecxt.core.ExtractionException
-import fr.bluecxt.core.RateLimitException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers

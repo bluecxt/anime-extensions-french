@@ -12,8 +12,8 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.parallelCatchingFlatMap
@@ -23,9 +23,7 @@ import keiyoushi.utils.useAsJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 
-class VoirAnime :
-    Source(),
-    CommonPreferences {
+class VoirAnime : ConfigurableSource() {
 
     override val name = "VoirAnime"
     override val defaultBaseUrl = "https://voiranime.rip"

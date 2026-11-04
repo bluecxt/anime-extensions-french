@@ -4,8 +4,6 @@ package eu.kanade.tachiyomi.animeextension.fr.adkami
 
 import android.util.Base64
 import android.util.Log
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -13,37 +11,26 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.ADKAMI_LOG
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.VoiceLanguage.RAW
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.safeRelativePath
-import fr.bluecxt.core.utils.withDefaultHeaders
-import keiyoushi.utils.parallelMapNotNull
 import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class ADKami :
-    Source(),
-    CommonPreferences {
+class ADKami : ConfigurableSource() {
 
     override val name = "ADKami"
     override val lang = "fr"

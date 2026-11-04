@@ -3,7 +3,6 @@
 package eu.kanade.tachiyomi.animeextension.fr.animesamafan
 
 import android.util.Log
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -12,12 +11,10 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parallelMap
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.filters.FilterSpec
-import fr.bluecxt.core.tmdb.TmdbMetadata
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.tmdb.filterSmartMetadata
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
@@ -26,25 +23,22 @@ import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
 
-class AnimeSamaFan :
-    Source(),
-    CommonPreferences {
+class AnimeSamaFan : ConfigurableSource() {
     override val name = "AnimeSamaFan"
     override val id: Long = 5887546926527754620L
 
     override val defaultBaseUrl = "https://animesama.co"
     override val supportedServers = listOf("Sibnet", "Sendvid")
 
-    override val baseUrl by lazy {
-        val url = currentBaseUrl.removeSuffix("/")
-        val finalUrl = if (url.startsWith("http")) url else "https://$url"
-        Log.d("AnimeSamaFan", "Base URL: $finalUrl")
-        finalUrl
-    }
+    override val baseUrl: String
+        get() {
+            val url = super.baseUrl.removeSuffix("/")
+            val finalUrl = if (url.startsWith("http")) url else "https://$url"
+            Log.d("AnimeSamaFan", "Base URL: $finalUrl")
+            return finalUrl
+        }
 
     override val lang = "fr"
 

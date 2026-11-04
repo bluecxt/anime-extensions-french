@@ -4,8 +4,8 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
+import fr.bluecxt.core.utils.video.PlaylistUtils
 import okhttp3.OkHttpClient
 
 class StreamHubExtractor(private val client: OkHttpClient) {

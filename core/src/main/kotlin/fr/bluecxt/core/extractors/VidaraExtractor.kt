@@ -4,15 +4,13 @@ package fr.bluecxt.core.extractors
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.POST
-import fr.bluecxt.core.ContentUnavailableException
-import fr.bluecxt.core.ExtractionException
 import fr.bluecxt.core.VIDARA_LOG
+import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
+import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull

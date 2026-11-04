@@ -14,13 +14,13 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.FRENCHSTREAM_LOG
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VO
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
 import fr.bluecxt.core.model.VoiceLanguage.VQF
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import fr.bluecxt.core.utils.JsoupExtensions
@@ -37,8 +37,7 @@ import okhttp3.FormBody
 const val MOVIE_EP_NUMBER = -1
 
 class FrenchStream :
-    Source(),
-    CommonPreferences,
+    ConfigurableSource(),
     JsoupExtensions {
 
     override val name = "French Stream"

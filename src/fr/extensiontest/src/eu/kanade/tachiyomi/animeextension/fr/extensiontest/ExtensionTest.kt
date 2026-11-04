@@ -12,9 +12,10 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.EXTENSIONTEST_LOG
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.extractors.UqloadExtractor
 import fr.bluecxt.core.monitoring.SourceAuditor
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.JsoupExtensions
 import keiyoushi.utils.parallelCatchingFlatMap
 import okhttp3.Request
@@ -23,8 +24,7 @@ import org.jsoup.Jsoup
 import java.util.concurrent.TimeUnit
 
 class ExtensionTest :
-    Source(),
-    CommonPreferences,
+    ConfigurableSource(),
     JsoupExtensions {
     override val name = "Extension-Test"
     override val defaultBaseUrl = "https://example.com"

@@ -1,7 +1,7 @@
 ext {
     extName = 'Anime-Sama'
     extClass = '.AnimeSama'
-    extVersionCode = 62
+    extVersionCode = 64
 }
 
 apply plugin: "kei.plugins.extension.legacy"

@@ -1,21 +1,22 @@
 // Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core.utils
+package fr.bluecxt.core.utils.video
 
 import android.net.Uri
 import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.Track
-import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.ContentUnavailableException
 import fr.bluecxt.core.PLAYLIST_LOG
+import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.utils.runCatchingCancellable
+import fr.bluecxt.core.utils.safeHttpCode
 import keiyoushi.utils.UrlUtils
 import keiyoushi.utils.bodyString
 import keiyoushi.utils.parallelMapNotNullBlocking
 import keiyoushi.utils.useAsJsoup
+import kotlinx.coroutines.delay
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -103,7 +104,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                     throw e
                 }
                 Log.w(PLAYLIST_LOG, "HLS fetch failed (attempt $attempts), retrying in 1s... (${e.message})")
-                kotlinx.coroutines.delay(1.seconds)
+                delay(1.seconds)
             }
         }
         // Check if there isn't multiple streams available

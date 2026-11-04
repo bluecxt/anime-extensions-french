@@ -3,14 +3,10 @@
 package fr.bluecxt.core.extractors
 
 import android.util.Base64
-import android.util.Log
-import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
-import keiyoushi.utils.UrlUtils
-import keiyoushi.utils.useAsJsoup
+import fr.bluecxt.core.utils.video.PlaylistUtils
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient

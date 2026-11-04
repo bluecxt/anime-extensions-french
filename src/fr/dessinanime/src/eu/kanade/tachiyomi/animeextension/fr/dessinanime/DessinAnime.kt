@@ -22,27 +22,25 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.DESSINANIME_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.ExtractedSource
-import fr.bluecxt.core.utils.PlaylistUtils
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath
+import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.core.R
 import keiyoushi.utils.addSwitchPreference
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelCatchingFlatMap
-import keiyoushi.utils.parallelMapNotNullBlocking
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -65,9 +63,7 @@ private val playerBlockRegex = Regex("""{\"type\":\"(?<type>[^"\\]+)\",\"sources
 private val sourceRegex = Regex("""\"label\":\"(?<label>[^"\\]+)\",\"source\":\"(?<url>https://extractor\.nmlnode\.cc/proxy/[^"\\]+)\"""")
 private val qualityRegex = Regex("""\d+p""")
 
-class DessinAnime :
-    Source(),
-    CommonPreferences {
+class DessinAnime : ConfigurableSource() {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")

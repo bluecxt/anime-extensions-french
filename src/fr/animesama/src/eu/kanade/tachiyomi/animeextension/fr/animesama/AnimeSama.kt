@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.ContentType
 import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.EpisodePlayers
 import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.Player
 import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.UrlContent
+import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
@@ -17,9 +18,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.HttpException
 import fr.bluecxt.core.ANIMESAMA_LOG
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.VoiceLanguage.VA
 import fr.bluecxt.core.model.VoiceLanguage.VF
@@ -30,6 +29,9 @@ import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportHosterIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportIncompleteness
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportSeasonIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportVideoIssues
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
+import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tvdb.TvdbEpisode
 import fr.bluecxt.core.tvdb.TvdbMetadata
@@ -54,6 +56,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.io.IOException
@@ -61,8 +67,7 @@ import java.util.Collections.synchronizedMap
 import java.util.concurrent.ConcurrentHashMap
 
 class AnimeSama :
-    Source(),
-    CommonPreferences,
+    ConfigurableSource(),
     JsoupExtensions {
 
     override val name = "Anime-Sama"
@@ -207,13 +212,7 @@ class AnimeSama :
 
         if (!newUrl) return@coroutineScope getLegacyAnimeDetails(anime)
 
-        val documentDeferred = async { getOrFetchDocument(link) }
-        val tvdbMetadataDeferred = async {
-            val fullTitle = formatSeasonTitle(anime.title, season.orEmpty(), titles)
-            fetchTvdbForPanel(anime.title, season, fullTitle, titles)
-        }
-
-        val document = documentDeferred.await()
+        val document = getOrFetchDocument(link)
         val pageAlters = extractAlternateTitles(document)
         val allTitles = (titles + pageAlters).toSet()
 
@@ -230,19 +229,23 @@ class AnimeSama :
         anime.populateFromDocument(document)
 
         val (effectiveLink, effectiveSeason) = resolveEffectiveTarget(medias, link, season)
-        val contentType = ContentType.from(anime.title, effectiveSeason ?: effectiveLink)
+        val contentType = ContentType.from(effectiveSeason ?: anime.title, effectiveLink)
         val isMovie = isMovieContent(effectiveSeason, effectiveLink, contentType, medias)
         val isSpecial = isSpecialSeason(effectiveSeason)
+        val tmdbId = extractTmdbId(document, isMovie)
 
-        var tvdbMetadata = tvdbMetadataDeferred.await()
-        val hasNewTitles = allTitles.size > titles.size
-        val needsRefetch = isMovie || isSpecial || (effectiveSeason != season)
-        if (needsRefetch || hasNewTitles) {
-            val fullTitle = formatSeasonTitle(anime.title, effectiveSeason ?: season.orEmpty(), allTitles)
-            tvdbMetadata = fetchTvdbForPanel(anime.title, effectiveSeason, fullTitle, allTitles, isMovie = isMovie, isSpecial = isSpecial)
-        }
+        val fullTitle = formatSeasonTitle(anime.title, effectiveSeason ?: season.orEmpty(), allTitles)
+        val tvdbMetadata = fetchTvdbForPanel(
+            seriesTitle = anime.title,
+            rawSeasonName = effectiveSeason ?: season,
+            fullTitle = fullTitle,
+            titles = allTitles,
+            isMovie = isMovie,
+            isSpecial = isSpecial,
+            externalTmdbId = tmdbId,
+        )
 
-        anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub)
+        anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub, tmdbId)
 
         anime.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, this@AnimeSama.name)
     }
@@ -299,7 +302,13 @@ class AnimeSama :
         return Pair(poster, backdrop)
     }
 
-    private fun SAnime.enrichWithTvdb(tvdbMetadata: TvdbMetadata?, document: Document, season: String?, isHub: Boolean) {
+    private fun SAnime.enrichWithTvdb(
+        tvdbMetadata: TvdbMetadata?,
+        document: Document,
+        season: String?,
+        isHub: Boolean,
+        tmdbId: Long? = null,
+    ) {
         val rawYear = document.selectFirst(".oe-meta")?.text()?.split("·")?.firstOrNull()?.trim()
             ?: document.selectFirst("div.info-grid > span:contains(Année) + .info-val")?.text()
         val descriptionText = document.selectFirst("p#synopsisText")?.text().orEmpty()
@@ -362,7 +371,16 @@ class AnimeSama :
             val contentType = ContentType.from(fullTitle, media.url)
             val isMovie = isMovieContent(rawSeason, media.url, contentType, medias)
             val isSpecial = isSpecialSeason(rawSeason)
-            val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, media.titles, isMovie = isMovie, isSpecial = isSpecial)
+            val tmdbId = extractTmdbId(document, isMovie)
+            val tvdbMetadata = fetchTvdbForPanel(
+                seriesTitle = anime.title,
+                rawSeasonName = rawSeason,
+                fullTitle = fullTitle,
+                titles = media.titles,
+                isMovie = isMovie,
+                isSpecial = isSpecial,
+                externalTmdbId = tmdbId,
+            )
 
             SAnime.create().apply {
                 title = fullTitle
@@ -449,10 +467,19 @@ class AnimeSama :
         val episodes = fetchAggregatedEpisodes(link)
 
         val fullTitle = formatSeasonTitle(anime.title, rawSeason.orEmpty(), allTitles)
-        val contentType = ContentType.from(anime.title, rawSeason ?: link)
+        val contentType = ContentType.from(rawSeason ?: anime.title, link)
         val isMovie = isMovieContent(rawSeason, link, contentType, medias)
         val isSpecial = isSpecialSeason(rawSeason)
-        val tvdbMetadata = fetchTvdbForPanel(anime.title, rawSeason, fullTitle, allTitles, isMovie = isMovie, isSpecial = isSpecial)
+        val tmdbId = extractTmdbId(preDoc, isMovie)
+        val tvdbMetadata = fetchTvdbForPanel(
+            seriesTitle = anime.title,
+            rawSeasonName = rawSeason,
+            fullTitle = fullTitle,
+            titles = allTitles,
+            isMovie = isMovie,
+            isSpecial = isSpecial,
+            externalTmdbId = tmdbId,
+        )
 
         val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
         val autoS0Offset = calculateAutoS0Offset(tvdbMetadata, tvdbEpCount, episodes.size, medias, link)
@@ -470,6 +497,7 @@ class AnimeSama :
             s0Metadata = s0Metadata,
             autoS0Offset = autoS0Offset,
             spfTitles = spfTitles,
+            link = link,
         ).reversed().checkAndReportEpisodeIssues(baseUrl, link, anime.title)
     }
 
@@ -542,7 +570,9 @@ class AnimeSama :
     // ============================== Videos ==============================
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         val players: List<Player> = try {
-            json.decodeFromString(hoster.internalData)
+            val playersJson = hoster.internalData.takeIf { it.isNotBlank() }
+                ?: return getLegacyVideoList(hoster)
+            json.decodeFromString(playersJson)
         } catch (_: Exception) {
             return getLegacyVideoList(hoster)
         }
@@ -568,21 +598,31 @@ class AnimeSama :
         s0Metadata: TvdbMetadata? = null,
         autoS0Offset: Int = 0,
         spfTitles: List<String> = emptyList(),
+        link: String = "",
     ): List<SEpisode> {
-        val contentType = ContentType.from(animeTitle, season ?: "")
+        val contentType = ContentType.from(season ?: animeTitle, link)
         val seasonNum = season?.let { extractSeasonNumber(it) } ?: 1
-        val defaultPrefix = contentType.getPrefix(seasonNum)
+        val isMultiMovie = contentType == ContentType.MOVIE && this.size > 1
+        val defaultPrefix = if (contentType == ContentType.MOVIE) {
+            if (isMultiMovie) "[Film] " else ""
+        } else {
+            contentType.getPrefix(seasonNum)
+        }
 
         return this.parallelMap { episode ->
             val epNum = episode.episodeNumber
             val spfName = if (contentType == ContentType.MOVIE) spfTitles.getOrNull(epNum - 1) else null
             val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType, defaultPrefix, autoS0Offset)
             val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, season, epMeta?.title, tvdbMetadata?.title, this.size, spfName)
-            val effectivePrefix = if (contentType == ContentType.MOVIE && !spfName.isNullOrBlank()) "[Film] " else prefix
+            val effectivePrefix = if (contentType == ContentType.MOVIE) {
+                if (isMultiMovie) "[Film] " else ""
+            } else {
+                prefix
+            }
             val finalName = "$effectivePrefix$baseName".trim()
 
             val movieThumbnail = if (contentType == ContentType.MOVIE && !spfName.isNullOrBlank()) {
-                val cleanSpf = spfName.replace(Regex("""(?i)^Film\s*\d*\s*[:-]?\s*"""), "").trim()
+                val cleanSpf = spfName.replace(movieCleanPrefixRegex, "").trim()
                 val movieQuery = if (cleanSpf.isNotBlank()) "$animeTitle $cleanSpf" else "$animeTitle $spfName"
                 try {
                     fetchTvdbMetadata(movieQuery, isMovie = true)?.let { it.seasonPosterUrl ?: it.mainPosterUrl }
@@ -639,15 +679,19 @@ class AnimeSama :
         spfMovieName: String? = null,
     ): String {
         if (contentType == ContentType.MOVIE) {
-            if (!spfMovieName.isNullOrBlank()) {
-                return spfMovieName
+            val rawMovieName = if (!spfMovieName.isNullOrBlank()) {
+                spfMovieName
+            } else {
+                val cleanSeasonSub = season?.substringAfter("Film -", "")?.trim()?.takeIf { it.isNotBlank() }
+                val movieTitle = tvdbTitle?.takeIf { it.isNotBlank() }
+                    ?: cleanSeasonSub
+                    ?: season?.takeIf { it.isNotBlank() && !it.equals("Film", ignoreCase = true) }
+                    ?: animeTitle
+                if (totalEpisodes == 1) movieTitle else "$movieTitle $epNum"
             }
-            val cleanSeasonSub = season?.substringAfter("Film -", "")?.trim()?.takeIf { it.isNotBlank() }
-            val movieTitle = tvdbTitle?.takeIf { it.isNotBlank() }
-                ?: cleanSeasonSub
-                ?: season?.takeIf { it.isNotBlank() && !it.equals("Film", ignoreCase = true) }
-                ?: animeTitle
-            return if (totalEpisodes == 1) movieTitle else "$movieTitle $epNum"
+            return rawMovieName.replace(movieCleanPrefixRegex, "").trim().ifBlank {
+                if (totalEpisodes == 1) "Film" else "Film $epNum"
+            }
         }
 
         val cleanTvdbName = tvdbName?.trim()
@@ -838,12 +882,25 @@ class AnimeSama :
         s0Metadata: TvdbMetadata?,
     ): Boolean = epMeta == null && contentType == ContentType.SEASON && epNum > tvdbEpCount && s0Metadata != null
 
+    private fun extractTmdb(document: Document): Pair<Long, Boolean>? {
+        val href = document.selectFirst("a[href*='themoviedb.org/']")?.attr("href") ?: return null
+        val match = tmdbIdRegex.find(href) ?: return null
+        val type = match.groupValues[1]
+        val id = match.groupValues[2].toLongOrNull() ?: return null
+        return Pair(id, type == "movie")
+    }
+
+    private fun extractTmdbId(document: Document, isMovie: Boolean): Long? {
+        val (id, isTmdbMovie) = extractTmdb(document) ?: return null
+        return if (isMovie == isTmdbMovie) id else null
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
         private const val MAX_HUB_PATH_SEGMENTS = 3
         private val commentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
         private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
-        private val epsArrayRegex = Regex("""var\s+eps([a-zA-Z0-9_]+)\s*=\s*\[(.*?)\];""", RegexOption.DOT_MATCHES_ALL)
+        private val epsArrayRegex = Regex("""var\s+eps([a-zA-Z0-9_]+)\s*=\s*\[(.*?)];""", RegexOption.DOT_MATCHES_ALL)
         private val urlInArrayRegex = Regex("""['"]([^'"]+)['"]""")
         private val documentCache = synchronizedMap(
             mutableMapOf<String, Pair<Document, Long>>(),
@@ -857,7 +914,10 @@ class AnimeSama :
         private val seasonReplaceRegex = Regex("""(?i)\s*Saison\s*""")
         private val partReplaceRegex = Regex("""(?i)Partie\s*(\d+)""")
         private val newSpfRegex = Regex("""newSPF\(\s*(?:"([^"]*)"|'([^']*)')\s*\)""")
-        private val alterTitlesSplitRegex = Regex("""(?:\s*,\s*|\s*;\s*|\s*/\s*)""")
+        private val alterTitlesSplitRegex = Regex("""\s*,\s*|\s*;\s*|\s*/\s*""")
+
+        private val movieCleanPrefixRegex = Regex("""(?i)^(?:\[Film\]\s*|Film\s*\d*\s*[:-]?\s*)""")
+        private val tmdbIdRegex = Regex("""themoviedb\.org/(tv|movie)/(\d+)""")
 
         private const val MIN_TITLE_LENGTH = 4
         private const val PREF_EARLY_FETCH_TYPE_KEY = "early_fetch"

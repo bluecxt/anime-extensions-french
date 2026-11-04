@@ -12,9 +12,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.RateLimitException
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.model.RateLimitException
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable
 import keiyoushi.utils.get
@@ -22,7 +22,6 @@ import keiyoushi.utils.parallelMapNotNull
 import keiyoushi.utils.useAsJsoup
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -41,8 +40,7 @@ private const val TOO_MANY_REQUEST_CODE = 429
 open class FrenchManga(
     override val name: String = "French-Manga",
     protected open val prefUrlDefault: String = "https://w16.french-manga.net",
-) : Source(),
-    CommonPreferences {
+) : ConfigurableSource() {
 
     override val defaultBaseUrl = prefUrlDefault
 

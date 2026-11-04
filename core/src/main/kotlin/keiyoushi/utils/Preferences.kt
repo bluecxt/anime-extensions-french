@@ -76,64 +76,74 @@ class LazyMutable<T>(
 }
 
 /**
- * Delegate to write and read from preferences.
+ * A [ReadWriteProperty] backed by [SharedPreferences].
  *
- * @param preferences Shared preferences
- * @param key Key for preference
- * @param default Default value for preference, can be `null` for `String?` or `Set<String>?`.
- * Should be explicitly casted such as `null as String?`.
+ * Encapsulates dedicated read/write closures captured at initialization to bypass
+ * runtime type inspection on property access.
  */
 class PreferenceDelegate<T>(
-    val preferences: SharedPreferences,
-    val key: String,
-    val default: T,
+    private val getter: () -> T,
+    private val setter: (T) -> Unit,
 ) : ReadWriteProperty<Any?, T> {
-    @Suppress("UNCHECKED_CAST")
-    override fun getValue(thisRef: Any?, property: KProperty<*>): T = try {
-        when (default) {
-            is String -> preferences.getString(key, default) as T
-            is Int -> preferences.getInt(key, default) as T
-            is Long -> preferences.getLong(key, default) as T
-            is Float -> preferences.getFloat(key, default) as T
-            is Boolean -> preferences.getBoolean(key, default) as T
-            is Set<*> -> preferences.getStringSet(key, default as Set<String>) as T
-            null -> preferences.all[key] as T
-            else -> throw IllegalArgumentException("Unsupported type: ${default.javaClass}")
-        }
-    } catch (_: ClassCastException) {
-        default
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
-        synchronized(this) {
-            val editor = preferences.edit()
-            when (value) {
-                null -> editor.remove(key)
-                is String -> editor.putString(key, value)
-                is Int -> editor.putInt(key, value)
-                is Long -> editor.putLong(key, value)
-                is Float -> editor.putFloat(key, value)
-                is Boolean -> editor.putBoolean(key, value)
-                is Set<*> -> editor.putStringSet(key, value as Set<String>)
-                else -> throw IllegalArgumentException("Unsupported type: ${value.javaClass}")
-            }
-            editor.apply()
-        }
-    }
+    override fun getValue(thisRef: Any?, property: KProperty<*>): T = getter()
+    override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) = setter(value)
 }
 
 /**
- * Create [Preference] delegate.
+ * Creates a type-safe [SharedPreferences] property delegate.
  *
- * **WARNING**: Do not use this on a lib-multisrc module, as it will be initialized before the source is created,
- * which will cause the preferences to be created with the wrong source id.
+ * Uses reified type parameters to inline type checks at compile time, eliminating
+ * runtime overhead and resolving Type Erasure ambiguities for nullable defaults.
+ * Assigning `null` removes the key from preferences.
  *
- * @param key Key for preference
- * @param default Default value for preference, can be `null` for `String?` or `Set<String>?`.
- * Should be explicitly casted such as `null as String?`.
+ * Supported types: [String], [Int], [Long], [Float], [Boolean], [Set]<[String]>, and their nullable variants.
+ *
+ * ```kotlin
+ * var serverUrl: String by preferences.delegate("server_url", "[https://example.com](https://example.com)")
+ * var customToken: String? by preferences.delegate("auth_token", null as String?)
+ * ```
+ *
+ * @param key Preference key identifier.
+ * @param default Fallback value returned if the key is not set.
+ * @throws IllegalArgumentException If [T] is not supported by [SharedPreferences].
  */
-fun <T> SharedPreferences.delegate(key: String, default: T) = PreferenceDelegate(this, key, default)
+@Suppress("UNCHECKED_CAST")
+inline fun <reified T> SharedPreferences.delegate(
+    key: String,
+    default: T,
+): ReadWriteProperty<Any?, T> = when (T::class) {
+    String::class -> PreferenceDelegate(
+        getter = { getString(key, default as String?) as T },
+        setter = { value -> edit().apply { if (value == null) remove(key) else putString(key, value as String) }.apply() },
+    )
+
+    Int::class -> PreferenceDelegate(
+        getter = { getInt(key, default as Int) as T },
+        setter = { value -> edit().putInt(key, value as Int).apply() },
+    )
+
+    Long::class -> PreferenceDelegate(
+        getter = { getLong(key, default as Long) as T },
+        setter = { value -> edit().putLong(key, value as Long).apply() },
+    )
+
+    Float::class -> PreferenceDelegate(
+        getter = { getFloat(key, default as Float) as T },
+        setter = { value -> edit().putFloat(key, value as Float).apply() },
+    )
+
+    Boolean::class -> PreferenceDelegate(
+        getter = { getBoolean(key, default as Boolean) as T },
+        setter = { value -> edit().putBoolean(key, value as Boolean).apply() },
+    )
+
+    Set::class -> PreferenceDelegate(
+        getter = { getStringSet(key, default as Set<String>?) as T },
+        setter = { value -> edit().apply { if (value == null) remove(key) else putStringSet(key, value as Set<String>) }.apply() },
+    )
+
+    else -> throw IllegalArgumentException("Unsupported type: ${T::class.java.name}")
+}
 
 /**
  * Get an [EditTextPreference] preference
@@ -162,6 +172,7 @@ fun PreferenceScreen.getEditTextPreference(
     inputType: Int? = null,
     validate: ((String) -> Boolean)? = null,
     validationMessage: ((String) -> String)? = null,
+    sanitize: ((String) -> String)? = null,
     restartRequired: Boolean = false,
     enabled: Boolean = true,
     onChange: (Preference, String) -> Boolean = { _, _ -> true },
@@ -180,44 +191,53 @@ fun PreferenceScreen.getEditTextPreference(
             editText.inputType = inputType
         }
 
+        (editText.tag as? TextWatcher)?.let(editText::removeTextChangedListener)
+
         if (validate != null) {
-            editText.addTextChangedListener(
-                object : TextWatcher {
-                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
-                        // not used
-                    }
+            val watcher = object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
 
-                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                        // not used
-                    }
+                override fun afterTextChanged(editable: Editable?) {
+                    if (editable == null) return
 
-                    override fun afterTextChanged(editable: Editable?) {
-                        requireNotNull(editable)
+                    val rawText = editable.toString()
 
-                        val text = editable.toString()
-                        val isValid = text.isBlank() || validate(text)
+                    val textToValidate = sanitize?.invoke(rawText) ?: rawText
+                    val isValid = textToValidate.isEmpty() || validate(textToValidate)
 
-                        editText.error = if (!isValid) validationMessage?.invoke(text) else null
-                        editText.rootView.findViewById<Button>(android.R.id.button1)
-                            ?.isEnabled = editText.error == null
-                    }
-                },
-            )
+                    editText.error = if (!isValid) validationMessage?.invoke(textToValidate) else null
+                    editText.rootView.findViewById<Button>(android.R.id.button1)
+                        ?.isEnabled = editText.error == null
+                }
+            }
+            editText.addTextChangedListener(watcher)
+            editText.tag = watcher
+        } else {
+            editText.tag = null
         }
     }
 
     setOnPreferenceChangeListener { pref, newValue ->
-        val value = newValue as String
-        val isValid = onChange(pref, value)
-        if (isValid) {
-            if (restartRequired) {
-                Toast.makeText(context, context.getString(R.string.pref_restart_message), Toast.LENGTH_LONG).show()
-            }
+        val rawValue = newValue as String
+        val cleanValue = sanitize?.invoke(rawValue) ?: rawValue
 
-            this.summary = getSummary(value)
-            onComplete(value)
+        val isValid = onChange(pref, cleanValue)
+        if (!isValid) return@setOnPreferenceChangeListener false
+
+        if (restartRequired) {
+            Toast.makeText(context, context.getString(R.string.pref_restart_message), Toast.LENGTH_LONG).show()
         }
-        isValid
+
+        this.summary = getSummary(cleanValue)
+        onComplete(cleanValue)
+
+        if (cleanValue != rawValue) {
+            this.text = cleanValue
+            false
+        } else {
+            true
+        }
     }
 }
 
@@ -234,6 +254,7 @@ fun PreferenceScreen.addEditTextPreference(
     inputType: Int? = null,
     validate: ((String) -> Boolean)? = null,
     validationMessage: ((String) -> String)? = null,
+    sanitize: ((String) -> String)? = null,
     restartRequired: Boolean = false,
     enabled: Boolean = true,
     onChange: (Preference, String) -> Boolean = { _, _ -> true },
@@ -249,6 +270,7 @@ fun PreferenceScreen.addEditTextPreference(
         inputType = inputType,
         validate = validate,
         validationMessage = validationMessage,
+        sanitize = sanitize,
         restartRequired = restartRequired,
         enabled = enabled,
         onChange = onChange,
@@ -264,8 +286,8 @@ fun PreferenceScreen.getListPreference(
     default: String,
     title: String,
     summary: String,
-    entries: List<String>,
-    entryValues: List<String>,
+    entries: Array<String>,
+    entryValues: Array<String>,
     restartRequired: Boolean = false,
     enabled: Boolean = true,
     onChange: (Preference, String) -> Boolean = { _, _ -> true },
@@ -274,8 +296,8 @@ fun PreferenceScreen.getListPreference(
     this.key = key
     this.title = title
     this.summary = summary
-    this.entries = entries.toTypedArray()
-    this.entryValues = entryValues.toTypedArray()
+    this.entries = entries
+    this.entryValues = entryValues
 
     setDefaultValue(default)
     setEnabled(enabled)
@@ -300,8 +322,8 @@ fun PreferenceScreen.addListPreference(
     default: String,
     title: String,
     summary: String,
-    entries: List<String>,
-    entryValues: List<String>,
+    entries: Array<String>,
+    entryValues: Array<String>,
     restartRequired: Boolean = false,
     enabled: Boolean = true,
     onChange: (Preference, String) -> Boolean = { _, _ -> true },

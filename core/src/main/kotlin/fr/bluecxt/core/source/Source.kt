@@ -1,11 +1,15 @@
 // Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core
+package fr.bluecxt.core.source
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.util.Log
-import androidx.preference.PreferenceScreen
+import androidx.annotation.StringRes
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -15,14 +19,16 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.HttpException
+import fr.bluecxt.core.SERVER_LOG
+import fr.bluecxt.core.extractors.router.getVideoServer
 import fr.bluecxt.core.filters.FilterProvider
+import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.RateLimitException
 import fr.bluecxt.core.monitoring.ErrorWebhook
+import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
-import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.utils.ExtensionResources
 import fr.bluecxt.core.utils.NeedsRefactor
 import fr.bluecxt.core.utils.addClientHints
@@ -36,12 +42,26 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Dispatcher
 import okhttp3.Headers
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
+import java.net.URLEncoder
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
@@ -68,7 +88,7 @@ abstract class Source :
 
     override fun getFilterList(): AnimeFilterList = buildFilterList()
 
-    fun getString(@androidx.annotation.StringRes resId: Int, vararg formatArgs: Any): String {
+    fun getString(@StringRes resId: Int, vararg formatArgs: Any): String {
         val app = Injekt.get<Application>()
         return try {
             val res = ExtensionResources.getResources(app, this.javaClass) ?: app.resources
@@ -119,7 +139,7 @@ abstract class Source :
     val isCustomDomain: Boolean
         get() {
             val defaultUrl = (this as? CommonPreferences)?.defaultBaseUrl
-            return !defaultUrl.isNullOrBlank() && currentBaseUrl != defaultUrl
+            return !defaultUrl.isNullOrBlank() && baseUrl != defaultUrl
         }
 
     open val json: Json = Json {
@@ -133,28 +153,10 @@ abstract class Source :
         .set("Connection", "close")
         .addClientHints()
 
-    open val currentBaseUrl: String
-        get() {
-            val defaultUrl = (this as? CommonPreferences)?.defaultBaseUrl ?: ""
-            return preferences.getString(CommonPreferences.PREF_URL_KEY, defaultUrl)
-                ?.removeSuffix("/")
-                ?: defaultUrl
-        }
-
-    override val baseUrl: String
-        get() = (this as? CommonPreferences)?.currentBaseUrl
-            ?: throw IllegalStateException("baseUrl must be overridden or CommonPreferences must be implemented")
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        if (this is CommonPreferences) {
-            this.setupCommonPreferences(screen)
-        }
-    }
-
-    override val client: okhttp3.OkHttpClient by lazy {
+    override val client: OkHttpClient by lazy {
         network.client.newBuilder()
             .dispatcher(
-                okhttp3.Dispatcher().apply {
+                Dispatcher().apply {
                     maxRequests = 64
                     maxRequestsPerHost = 20
                 },
@@ -165,7 +167,7 @@ abstract class Source :
             }.build()
     }
 
-    val extractorClient: okhttp3.OkHttpClient by lazy {
+    val extractorClient: OkHttpClient by lazy {
         client.newBuilder().apply {
             interceptors().removeAll { it.javaClass.simpleName.contains("Cloudflare") }
         }.build()
@@ -245,7 +247,7 @@ abstract class Source :
                 }
             }
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) {
+            if (e is CancellationException) {
                 Log.d(SERVER_LOG, "Job was cancelled by the app for ${server.name}")
                 throw e
             }
@@ -259,7 +261,7 @@ abstract class Source :
                 emptyList()
             } else if (e is RateLimitException) {
                 Log.w(SERVER_LOG, "Rate limited on ${server.name}: ${e.message}")
-                if (keiyoushi.core.BuildConfig.DEBUG) {
+                if (BuildConfig.DEBUG) {
                     listOf(
                         ExtractedSource(
                             url = playerUrl,
@@ -272,7 +274,7 @@ abstract class Source :
                 }
             } else {
                 Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message ?: e.javaClass.simpleName}", e)
-                if (keiyoushi.core.BuildConfig.DEBUG) {
+                if (BuildConfig.DEBUG) {
                     listOf(
                         ExtractedSource(
                             url = playerUrl,
@@ -286,7 +288,7 @@ abstract class Source :
             }
         } ?: run {
             Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT): ${server.name}")
-            if (keiyoushi.core.BuildConfig.DEBUG) {
+            if (BuildConfig.DEBUG) {
                 listOf(
                     ExtractedSource(
                         url = playerUrl,
@@ -355,7 +357,7 @@ abstract class Source :
         val prefQualInt = prefQualStr.toIntOrNull()
 
         return this.sortedWith(
-            compareByDescending<Video> { it.internalData != """{"isError": true}""" }
+            compareByDescending<Video> { !it.internalData.contains(""""isError":true""") && !it.internalData.contains(""""isError": true""") }
                 .thenByDescending { it.videoTitle.contains(voices, true) }
                 .thenByDescending { it.videoTitle.contains(player, true) }
                 .thenByDescending { video ->
@@ -584,36 +586,36 @@ abstract class Source :
     // ============================== Telemetry engine ==============================
 
     protected val context: Application by injectLazy()
-    protected val handler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+    protected val handler by lazy { Handler(Looper.getMainLooper()) }
 
-    @android.annotation.SuppressLint("HardwareIds")
+    @SuppressLint("HardwareIds")
     private fun logUsage() {
         if (BuildConfig.DEBUG) return
         try {
             // Daily check: only ping once per day per extension
-            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             val lastPingDate = preferences.getString("last_usage_ping", "")
 
             if (lastPingDate == today) return
 
             // Save today's date
             preferences.edit().putString("last_usage_ping", today).apply()
-            val androidId = android.provider.Settings.Secure.getString(
+            val androidId = Settings.Secure.getString(
                 context.contentResolver,
-                android.provider.Settings.Secure.ANDROID_ID,
+                Settings.Secure.ANDROID_ID,
             ) ?: "unknown"
 
             // Hash simple pour l'anonymat (SHA-256)
             val bytes = androidId.toByteArray()
-            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(bytes)
             val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(16)
 
             val url =
                 "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
-                    "?name=${java.net.URLEncoder.encode(currentName, "UTF-8")}" +
+                    "?name=${URLEncoder.encode(currentName, "UTF-8")}" +
                     "&uid=$hashedId" +
-                    "&version=${java.net.URLEncoder.encode(currentVersion, "UTF-8")}"
+                    "&version=${URLEncoder.encode(currentVersion, "UTF-8")}"
 
             Log.d("SourceTelemetry", "Envoi usage quotidien vers : $url")
 
@@ -626,12 +628,12 @@ abstract class Source :
                 .build()
 
             network.client.newCall(request).enqueue(
-                object : okhttp3.Callback {
-                    override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
                         Log.e("SourceTelemetry", "Erreur réseau pour $currentName", e)
                     }
 
-                    override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    override fun onResponse(call: Call, response: Response) {
                         val body = response.body.string()
                         if (response.isSuccessful) {
                             Log.d("SourceTelemetry", "Usage enregistré pour $currentName : $body")
@@ -652,7 +654,7 @@ abstract class Source :
     override fun popularAnimeRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun popularAnimeParse(response: Response): AnimesPage = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override suspend fun getVideoList(episode: SEpisode): List<Video> = throw UnsupportedOperationException()
+    override suspend fun getVideoList(hoster: Hoster): List<Video> = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException()
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = throw UnsupportedOperationException()
 

@@ -1,6 +1,6 @@
 package fr.bluecxt.core.utils
 
-import fr.bluecxt.core.Source
+import fr.bluecxt.core.source.Source
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 
@@ -9,7 +9,7 @@ const val JSOUP_EXTENSIONS_VERSION = "1.0"
 /**
  * Interface providing JSoup logging helper extensions.
  *
- * Must be implemented by a subclass of [fr.bluecxt.core.Source].
+ * Must be implemented by a subclass of [Source].
  */
 interface JsoupExtensions {
 

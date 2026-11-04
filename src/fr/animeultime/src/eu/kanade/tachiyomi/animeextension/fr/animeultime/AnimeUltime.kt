@@ -3,8 +3,6 @@
 package eu.kanade.tachiyomi.animeextension.fr.animeultime
 
 import android.util.Log
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.AlbumResponse
 import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.Categories
 import eu.kanade.tachiyomi.animeextension.fr.animeultime.dto.PlayList
@@ -20,14 +18,11 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
 import fr.bluecxt.core.ANIMEULTIME_LOG
-import fr.bluecxt.core.CommonPreferences
-import fr.bluecxt.core.DEFAULT_USER_AGENT
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.model.VoiceLanguage
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelFlatMap
@@ -35,25 +30,15 @@ import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parallelMapNotNull
 import keiyoushi.utils.post
 import keiyoushi.utils.useAsJsoup
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.Jsoup.parse
-import uy.kohesive.injekt.injectLazy
 
 private const val ITEMS_PER_PAGE = 100
 private const val CACHE_EXPIRATION = 24 * 60 * 60 * 1000L
 
-class AnimeUltime :
-    Source(),
-    CommonPreferences {
+class AnimeUltime : ConfigurableSource() {
 
     override val name = "Anime-Ultime"
     override val defaultBaseUrl: String = "https://v5.anime-ultime.net"

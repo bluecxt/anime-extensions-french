@@ -1,13 +1,12 @@
 // Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core.utils
+package fr.bluecxt.core.utils.video
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import java.io.IOException
 
 /**
  * Attempts to detect the resolution (height) of an MP4 video by reading its header atoms.

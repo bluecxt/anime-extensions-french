@@ -1,6 +1,6 @@
 // Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core
+package fr.bluecxt.core.extractors.router
 
 import fr.bluecxt.core.extractors.AbyssExtractor
 import fr.bluecxt.core.extractors.DoodExtractor
@@ -33,6 +33,7 @@ import fr.bluecxt.core.extractors.VidzyExtractor
 import fr.bluecxt.core.extractors.VoeExtractor
 import fr.bluecxt.core.extractors.VudeoExtractor
 import fr.bluecxt.core.model.VideoServer
+import fr.bluecxt.core.source.Source
 
 val DEFAULT_SERVER = listOf(
     "Sibnet",
@@ -62,6 +63,9 @@ val DEFAULT_SERVER = listOf(
     "StreamHub",
     "StreamDav",
     "Vidzy",
+    "FSVid",
+    "Kakaflix",
+    "Kokoflix",
 )
 
 /**

@@ -33,21 +33,22 @@
 # ===========================================================================
 
 # --- Classe de base Source (héritée par chaque extension) ---
--keep class fr.bluecxt.core.Source { *; }
+-keep class fr.bluecxt.core.source.Source { *; }
+-keep class fr.bluecxt.core.source.ConfigurableSource { *; }
 
 # --- Interface CommonPreferences (implémentée par les extensions) ---
--keep class fr.bluecxt.core.CommonPreferences { *; }
--keep class fr.bluecxt.core.CommonPreferences$Companion { *; }
+-keep class fr.bluecxt.core.preference.CommonPreferences { *; }
+-keep class fr.bluecxt.core.preference.CommonPreferences$Companion { *; }
 
 # --- Modèles du core ---
 -keep class fr.bluecxt.core.model.ExtractedSource { *; }
 -keep class fr.bluecxt.core.model.VideoServer { *; }
 
 # --- Exceptions custom (nommées par classe dans les catch/throw) ---
--keep class fr.bluecxt.core.ContentUnavailableException { *; }
--keep class fr.bluecxt.core.RateLimitException { *; }
--keep class fr.bluecxt.core.ExtractionException { *; }
--keep class fr.bluecxt.core.SelectorException { *; }
+-keep class fr.bluecxt.core.model.ContentUnavailableException { *; }
+-keep class fr.bluecxt.core.model.RateLimitException { *; }
+-keep class fr.bluecxt.core.model.ExtractionException { *; }
+-keep class fr.bluecxt.core.model.SelectorException { *; }
 
 # --- TMDB (utilisé directement par les extensions via import) ---
 -keep class fr.bluecxt.core.TmdbMetadata { *; }
@@ -104,7 +105,7 @@
 #    Gardés car potentiellement utilisés par les extracteurs actifs.
 # ===========================================================================
 
--keep class fr.bluecxt.core.utils.PlaylistUtils { *; }
+-keep class fr.bluecxt.core.utils.video.PlaylistUtils { *; }
 -keep class fr.bluecxt.core.utils.VideoUtils { *; }
 -keep class fr.bluecxt.core.utils.unpacker.** { *; }
 

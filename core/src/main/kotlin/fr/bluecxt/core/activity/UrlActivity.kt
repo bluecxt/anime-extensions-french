@@ -1,6 +1,4 @@
-// Copyright bluecxt
-// SPDX-License-Identifier: Apache-2.0
-package fr.bluecxt.core
+package fr.bluecxt.core.activity
 
 import android.app.Activity
 import android.content.ActivityNotFoundException

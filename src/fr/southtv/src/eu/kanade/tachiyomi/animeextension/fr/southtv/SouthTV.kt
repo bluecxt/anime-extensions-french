@@ -10,10 +10,10 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.awaitSuccess
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.VoiceLanguage.VF
+import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import fr.bluecxt.core.utils.withDefaultHeaders
@@ -48,9 +48,7 @@ private val mediaList = listOf(
     MediaInfo("South Park le Film", "films/Filmsouthpark.mp4", TMDB_ID_SOUTHPARKMOVIE, isMovie = true),
 )
 
-class SouthTV :
-    Source(),
-    CommonPreferences {
+class SouthTV : ConfigurableSource() {
 
     override val name = "SouthTV"
     override val defaultBaseUrl = "https://southtv.fr"
