@@ -101,6 +101,383 @@
       }
     },
     {
+      "name": "AnimeSama One Piece Search Check",
+      "target": "GET_SEARCH",
+      "input": {
+        "page": 1,
+        "query": "One Piece"
+      },
+      "contract": {
+        "minCount": 1,
+        "allThumbnailsNonNull": true,
+        "containsTitles": [
+          "One Piece"
+        ],
+        "requireNonBlankFields": [
+          "title",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece Details Check",
+      "target": "GET_DETAILS",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece\",\"titles\":[\"One Piece\"]}"
+        }
+      },
+      "contract": {
+        "requireNonBlankFields": [
+          "description",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece Season List Check",
+      "target": "GET_SEASON_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece\",\"titles\":[\"One Piece\"]}"
+        }
+      },
+      "contract": {
+        "minCount": 10,
+        "requireNonBlankFields": [
+          "title",
+          "url",
+          "thumbnail_url"
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 1 Episode List (miniatures TVDB absolues)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga1\",\"titles\":[\"One Piece\"],\"season\":\"Saga 1\"}"
+        }
+      },
+      "contract": {
+        "minCount": 61,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Je suis Luffy ! Celui qui deviendra Roi des pirates !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/v4/episode/361887/screencap/604df7d3ecf3a.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 2 Episode List (preview_url TVDB ordre absolu ep 62-130)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga2\",\"titles\":[\"One Piece\"],\"season\":\"Saga 2\"}"
+        }
+      },
+      "contract": {
+        "minCount": 69,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Le premier obstacle ? Laboon la baleine géante apparaît",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/361955.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 3 Episode List (preview_url TVDB ordre absolu ep 131-206)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga3\",\"titles\":[\"One Piece\"],\"season\":\"Saga 3\"}"
+        }
+      },
+      "contract": {
+        "minCount": 76,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - La toute première patiente ! Révélations sur la Rumble Ball.",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/362049.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 4 Episode List (preview_url TVDB ordre absolu ep 207-325)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga4\",\"titles\":[\"One Piece\"],\"season\":\"Saga 4\"}"
+        }
+      },
+      "contract": {
+        "minCount": 119,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Grande aventure à Long Ring Long Land !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/362125.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 5 Episode List (preview_url TVDB ordre absolu ep 326-385)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga5\",\"titles\":[\"One Piece\"],\"season\":\"Saga 5\"}"
+        }
+      },
+      "contract": {
+        "minCount": 60,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Un mystérieux équipage ! Sunny et le piège dangereux.",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/362244.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 6 Episode List (preview_url TVDB ordre absolu ep 386-516)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga6\",\"titles\":[\"One Piece\"],\"season\":\"Saga 6\"}"
+        }
+      },
+      "contract": {
+        "minCount": 130,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - La haine envers l'équipage du Chapeau de Paille ! Apparition de Duval au Masque de Fer",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/422288.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 7 Episode List (preview_url TVDB ordre absolu ep 517-574)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga7\",\"titles\":[\"One Piece\"],\"season\":\"Saga 7\"}"
+        }
+      },
+      "contract": {
+        "minCount": 58,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Un nouveau Chapitre commence - L'équipage du Chapeau de Paille de nouveau Ensemble !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/4172808.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 8 Episode List (preview_url TVDB ordre absolu ep 575-746)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga8\",\"titles\":[\"One Piece\"],\"season\":\"Saga 8\"}"
+        }
+      },
+      "contract": {
+        "minCount": 172,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - L'ambition de Z : Lily la petite géante !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/4439036.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 9 Episode List (preview_url TVDB ordre absolu ep 747-779)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga9\",\"titles\":[\"One Piece\"],\"season\":\"Saga 9\"}"
+        }
+      },
+      "contract": {
+        "minCount": 33,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - La forteresse argentée ! La grande aventure de Luffy et Bart !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/5651145.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 10 Episode List (preview_url TVDB ordre absolu ep 780-891)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga10\",\"titles\":[\"One Piece\"],\"season\":\"Saga 10\"}"
+        }
+      },
+      "contract": {
+        "minCount": 112,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Une bataille affamée ! Luffy et les rookies de la Marine !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/5991071.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 11 Episode List (preview_url TVDB ordre absolu ep 892-1085)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga11\",\"titles\":[\"One Piece\"],\"season\":\"Saga 11\"}"
+        }
+      },
+      "contract": {
+        "minCount": 194,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Le pays de Wa. Samouraïs et fleurs de cerisier !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/7228129.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AnimeSama One Piece - Saga 12 Episode List (preview_url TVDB ordre absolu ep 1086+)",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "One Piece",
+          "url": "{\"url\":\"/catalogue/one-piece/saga12\",\"titles\":[\"One Piece\"],\"season\":\"Saga 12\"}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "preview_url"
+        ]
+      },
+      "expected": {
+        "episodes": [
+          {
+            "name": "Épisode 1 - Le nouvel Empereur. Baggy le Clown aux mille pièces !",
+            "episodeNumber": 1.0,
+            "thumbnailUrl": "https://artworks.thetvdb.com/banners/v4/episode/10150940/screencap/65639171879b8.jpg"
+          }
+        ]
+      }
+    },
+    {
       "name": "AnimeSama Hoster List Check",
       "target": "GET_HOSTER_LIST",
       "input": {

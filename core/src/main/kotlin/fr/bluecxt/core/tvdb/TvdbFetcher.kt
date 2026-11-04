@@ -209,9 +209,11 @@ class TvdbFetcher(
         expectedNames: Set<String> = emptySet(),
         movieWanted: Boolean? = null,
         seasonOrderType: String = "official",
+        episodeOrderType: String? = null,
+        preferJapanesePoster: Boolean = false,
     ): TvdbMetadata? {
         val sortedNamesKey = expectedNames.sorted().joinToString(";")
-        val cacheKey = "$remoteId:$source:$season:$sortedNamesKey:$movieWanted:$seasonOrderType"
+        val cacheKey = "$remoteId:$source:$season:$sortedNamesKey:$movieWanted:$seasonOrderType:$episodeOrderType:$preferJapanesePoster"
         tvdbMetadataCache.getCache(cacheKey)?.let {
             return it
         }
@@ -255,6 +257,8 @@ class TvdbFetcher(
                 extendedMetadata = extendedMetadata,
                 season = season,
                 seasonOrderType = seasonOrderType,
+                episodeOrderType = episodeOrderType,
+                preferJapanesePoster = preferJapanesePoster,
                 matchScore = 100,
             )
         }?.also { result ->
@@ -269,6 +273,8 @@ class TvdbFetcher(
         expectedName: String,
         movieWanted: Boolean? = null,
         seasonOrderType: String = "official",
+        episodeOrderType: String? = null,
+        preferJapanesePoster: Boolean = false,
     ): TvdbMetadata? = fetchTvdbMetadataFromExternal(
         remoteId = remoteId,
         source = source,
@@ -276,24 +282,31 @@ class TvdbFetcher(
         expectedNames = if (expectedName.isNotBlank()) setOf(expectedName) else emptySet(),
         movieWanted = movieWanted,
         seasonOrderType = seasonOrderType,
+        episodeOrderType = episodeOrderType,
+        preferJapanesePoster = preferJapanesePoster,
     )
 
     private suspend fun populateSeriesMetadata(
         extendedMetadata: TvdbSeriesExtendedData,
         season: Int,
         seasonOrderType: String = "official",
+        episodeOrderType: String? = null,
+        preferJapanesePoster: Boolean = false,
         matchScore: Int = 100,
     ): TvdbMetadata {
         val targetSeasonId = extendedMetadata.seasons
             .firstOrNull { it.number == season && (it.type?.type == seasonOrderType || it.type?.altName == seasonOrderType) }?.id
             ?: extendedMetadata.seasons.firstOrNull { it.number == season }?.id
 
+        val effectiveEpisodeOrder = episodeOrderType ?: seasonOrderType
+        val effectiveEpisodeSeasonNumber = if (effectiveEpisodeOrder == "absolute") 1 else season
+
         return coroutineScope {
             val seasonArtworkAndOverviewDeferred: Deferred<TvdbSeasonDetails?> = async {
-                targetSeasonId?.takeIf { it > 0 }?.let { fetchSeasonArtworkAndOverview(it) }
+                targetSeasonId?.takeIf { it > 0 }?.let { fetchSeasonArtworkAndOverview(it, preferJapanesePoster) }
             }
             val seasonSeriesEpisodesDeferred: Deferred<TvdbSeriesEpisode> = async {
-                fetchSeriesEpisodes(extendedMetadata.id, season, seasonOrderType)
+                fetchSeriesEpisodes(extendedMetadata.id, effectiveEpisodeSeasonNumber, effectiveEpisodeOrder)
             }
 
             val seasonArtworkAndOverview = seasonArtworkAndOverviewDeferred.await()
@@ -332,7 +345,10 @@ class TvdbFetcher(
         fetchTvdb<TvdbSeriesExtendedResponse>("$TVDB_BASE_URL/series/$seriesId/extended?meta=translations")?.data
     }.getOrNull()
 
-    private suspend fun fetchSeasonArtworkAndOverview(seasonId: Long): TvdbSeasonDetails? = coroutineScope {
+    private suspend fun fetchSeasonArtworkAndOverview(
+        seasonId: Long,
+        preferJapanesePoster: Boolean = false,
+    ): TvdbSeasonDetails? = coroutineScope {
         val sDtoDeferred = async {
             runCatchingCancellable {
                 fetchTvdb<TvdbSeasonExtendedResponse>("$TVDB_BASE_URL/seasons/$seasonId/extended")?.data
@@ -353,10 +369,17 @@ class TvdbFetcher(
         val rawSeasonPoster = artworks
             .filter { it.type == 7 && !it.image.isNullOrBlank() }
             .let { list ->
-                list.filter { it.language?.equals(lang, ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                    ?: list.filter { it.language?.equals("jpn", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                    ?: list.filter { it.language?.equals("eng", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                    ?: list.maxByOrNull { it.score }?.image
+                if (preferJapanesePoster) {
+                    list.filter { it.language?.equals("jpn", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                        ?: list.filter { it.language?.equals(lang, ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                        ?: list.filter { it.language?.equals("eng", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                        ?: list.maxByOrNull { it.score }?.image
+                } else {
+                    list.filter { it.language?.equals(lang, ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                        ?: list.filter { it.language?.equals("jpn", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                        ?: list.filter { it.language?.equals("eng", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+                        ?: list.maxByOrNull { it.score }?.image
+                }
             } ?: sDto?.image
 
         val fullSeasonPoster = rawSeasonPoster?.takeIf { it.isNotBlank() }?.let {
@@ -532,9 +555,11 @@ class TvdbFetcher(
         preference: MediaPreference = MediaPreference.ANIME,
         seasonOrderType: String = "official",
         targetTvdbId: Long? = null,
+        preferJapanesePoster: Boolean = false,
+        episodeOrderType: String? = null,
     ): TvdbMetadata? {
         val sanitizedTitle = source.sanitizeTitle(title)
-        val cacheKey = "${targetTvdbId ?: sanitizedTitle}:$season:$lang:$isMovie:${preference.name}:$seasonOrderType"
+        val cacheKey = "${targetTvdbId ?: sanitizedTitle}:$season:$lang:$isMovie:${preference.name}:$seasonOrderType:$episodeOrderType:$preferJapanesePoster"
 
         tvdbMetadataCache.getCache(cacheKey)?.let {
             return it
@@ -618,6 +643,8 @@ class TvdbFetcher(
                     extendedMetadata = extended,
                     season = season,
                     seasonOrderType = seasonOrderType,
+                    episodeOrderType = episodeOrderType,
+                    preferJapanesePoster = preferJapanesePoster,
                     matchScore = searchData.score,
                 )
             }
@@ -734,6 +761,8 @@ suspend fun Source.fetchTvdbMetadata(
     preference: MediaPreference = MediaPreference.ANIME,
     seasonOrderType: String = "official",
     targetTvdbId: Long? = null,
+    preferJapanesePoster: Boolean = false,
+    episodeOrderType: String? = null,
 ): TvdbMetadata? = TvdbFetcher(this).fetchTvdbMetadata(
     title = title,
     season = season,
@@ -741,6 +770,8 @@ suspend fun Source.fetchTvdbMetadata(
     preference = preference,
     seasonOrderType = seasonOrderType,
     targetTvdbId = targetTvdbId,
+    preferJapanesePoster = preferJapanesePoster,
+    episodeOrderType = episodeOrderType,
 )
 
 suspend fun Source.fetchTvdbMetadataFromExternal(
