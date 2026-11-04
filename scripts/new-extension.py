@@ -187,8 +187,8 @@ def write_url_activity_file(
         "// Copyright bluecxt",
         "// SPDX-License-Identifier: Apache-2.0",
         f"package eu.kanade.tachiyomi.animeextension.{ext_dir_lang}.{ext_dir_name}\n",
-        "import fr.bluecxt.core.UrlActivity\n",
-        f"class {ext_class}UrlActivity : UrlActivity()\n"
+        "import android.app.Activity\n",
+        f"class {ext_class}UrlActivity : Activity()\n"
     ]
     activity_file_path.write_text("\n".join(activity_file))
     print(f"Created url activity file: {activity_file_path}")
