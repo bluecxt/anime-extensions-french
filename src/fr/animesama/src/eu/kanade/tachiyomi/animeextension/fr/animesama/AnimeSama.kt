@@ -918,8 +918,8 @@ class AnimeSama :
         private val newSpfRegex = Regex("""newSPF\(\s*(?:"([^"]*)"|'([^']*)')\s*\)""")
         private val alterTitlesSplitRegex = Regex("""\s*,\s*|\s*;\s*|\s*/\s*""")
 
-        private val movieCleanPrefixRegex = Regex("""(?i)^(?:\[Film\]\s*|Film\s*\d*\s*[:-]?\s*)""")
-        private val movieCleanTrailingRegex = Regex("""(?i)\s+Film$""")
+        private val movieCleanPrefixRegex = Regex("""(?i)^(?:\[Films?\]\s*|Films?\s*\d*\s*[:-]?\s*)""")
+        private val movieCleanTrailingRegex = Regex("""(?i)\s+Films?$""")
         private val tmdbIdRegex = Regex("""themoviedb\.org/(tv|movie)/(\d+)""")
 
         private const val MIN_TITLE_LENGTH = 4

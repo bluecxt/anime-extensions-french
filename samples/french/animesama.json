@@ -173,6 +173,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Je suis Luffy ! Celui qui deviendra Roi des pirates !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/v4/episode/361887/screencap/604df7d3ecf3a.jpg"
@@ -200,6 +201,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Le premier obstacle ? Laboon la baleine géante apparaît",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/361955.jpg"
@@ -227,6 +229,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - La toute première patiente ! Révélations sur la Rumble Ball.",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/362049.jpg"
@@ -254,6 +257,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Grande aventure à Long Ring Long Land !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/362125.jpg"
@@ -281,6 +285,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Un mystérieux équipage ! Sunny et le piège dangereux.",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/362244.jpg"
@@ -308,6 +313,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - La haine envers l'équipage du Chapeau de Paille ! Apparition de Duval au Masque de Fer",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/422288.jpg"
@@ -335,6 +341,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Un nouveau Chapitre commence - L'équipage du Chapeau de Paille de nouveau Ensemble !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/4172808.jpg"
@@ -362,6 +369,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - L'ambition de Z : Lily la petite géante !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/4439036.jpg"
@@ -389,6 +397,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - La forteresse argentée ! La grande aventure de Luffy et Bart !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/5651145.jpg"
@@ -416,6 +425,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Une bataille affamée ! Luffy et les rookies de la Marine !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/5991071.jpg"
@@ -443,6 +453,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Le pays de Wa. Samouraïs et fleurs de cerisier !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/episodes/81797/7228129.jpg"
@@ -470,6 +481,7 @@
       "expected": {
         "episodes": [
           {
+            "url": "",
             "name": "Épisode 1 - Le nouvel Empereur. Baggy le Clown aux mille pièces !",
             "episodeNumber": 1.0,
             "thumbnailUrl": "https://artworks.thetvdb.com/banners/v4/episode/10150940/screencap/65639171879b8.jpg"
