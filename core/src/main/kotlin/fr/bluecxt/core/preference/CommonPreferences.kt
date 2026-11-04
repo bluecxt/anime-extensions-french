@@ -21,13 +21,7 @@ interface CommonPreferences : ConfigurableAnimeSource {
     val defaultBaseUrl: String
 
     /**
-     * TODO: commenter
-     */
-    val baseUrl: String
-        get() = preferences.getString(PREF_URL_KEY, null)?.ifEmpty { null } ?: defaultBaseUrl
-
-    /**
-     * TODO: commenter
+     * Instance des SharedPreferences de la source.
      */
     val preferences: SharedPreferences
 

@@ -34,6 +34,7 @@
 
 # --- Classe de base Source (héritée par chaque extension) ---
 -keep class fr.bluecxt.core.source.Source { *; }
+-keep class fr.bluecxt.core.source.ConfigurableSource { *; }
 
 # --- Interface CommonPreferences (implémentée par les extensions) ---
 -keep class fr.bluecxt.core.preference.CommonPreferences { *; }
