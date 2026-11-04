@@ -104,15 +104,15 @@ jobs:
           name: extension-binaries
           path: ${{ github.workspace }}
 
-      - name: Checkout anime-extension-tester
+      - name: Setup anime-extension-tester CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -d "../anime-extension-tester" ]; then
-            cd ../anime-extension-tester
-            git fetch origin main
-            git reset --hard origin/main
-          else
-            git clone --depth 1 https://github.com/bluecxt/anime-extension-tester.git ../anime-extension-tester
-          fi
+          mkdir -p /tmp/anime-extension-tester
+          gh release download --repo bluecxt/anime-extension-tester --pattern "*.tar" --dir /tmp/anime-extension-tester --clobber
+          TAR_FILE=$(find /tmp/anime-extension-tester -name "*.tar" | head -n 1)
+          tar -xf "$TAR_FILE" -C /tmp/anime-extension-tester --strip-components=1
+          chmod +x /tmp/anime-extension-tester/bin/anime-extension-tester
 
       - name: Start Smart Cloudflare Solver Proxy
         run: |
@@ -134,9 +134,7 @@ jobs:
             SPECS="$GITHUB_WORKSPACE/$RAW_SPECS"
           fi
           CONCURRENCY="${INPUT_CONCURRENCY:-4}"
-          cd ../anime-extension-tester
-          chmod +x ./gradlew
-          ./gradlew run --args="--specs=$SPECS --extension-dir=$GITHUB_WORKSPACE/src/fr --concurrency=$CONCURRENCY --proxy=http://127.0.0.1:8080"
+          /tmp/anime-extension-tester/bin/anime-extension-tester --specs="$SPECS" --extension-dir="$GITHUB_WORKSPACE/src/fr" --concurrency="$CONCURRENCY" --proxy=http://127.0.0.1:8080
 
       - name: Stop Smart Proxy
         if: always() && env.PROXY_PID != ''
