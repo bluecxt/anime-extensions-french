@@ -149,7 +149,7 @@ private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
     ),
 )
 
-private val genericMovieTitleRegex = Regex("""(?i)^(?:Film|Movie)\s*\d*(\s*[-:]\s*\d+)?$""")
+private val genericMovieTitleRegex = Regex("""(?i)^(?:Film|Films|Movie)\s*\d*(\s*[-:]\s*\d+)?$""")
 
 /**
  * High-level helper function for extensions to fetch TVDB metadata for any panel/tab.
@@ -223,9 +223,9 @@ suspend fun Source.fetchTvdbForPanel(
     }
 
     // 1. Try Primary Titles first
-    val isGenericMovie = isMovieResolved && (rawSeasonName.isNullOrBlank() || rawSeasonName.matches(genericMovieTitleRegex))
-    val primaryTitles = if (isMovieResolved && !isGenericMovie) {
-        listOfNotNull(rawSeasonName?.let { sanitizeTitle(it) }, sanitizeTitle(fullTitle))
+    val primaryTitles = if (isMovieResolved && !rawSeasonName.isNullOrBlank() && !rawSeasonName.matches(genericMovieTitleRegex)) {
+        Log.e(TVDB_LOG, "ici et $rawSeasonName + $fullTitle")
+        listOfNotNull(sanitizeTitle(rawSeasonName), sanitizeTitle(fullTitle))
     } else {
         listOf(sanitizeTitle(seriesTitle), sanitizeTitle(fullTitle))
     }.filter { it.isNotBlank() }.distinct()

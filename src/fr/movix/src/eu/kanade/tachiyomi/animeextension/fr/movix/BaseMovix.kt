@@ -29,7 +29,7 @@ import uy.kohesive.injekt.injectLazy
 private val MOVIX_REDIRECT_REGEX = Regex("""La seule adresse active de Movix est <a href="(https://[^"]+)"""")
 
 abstract class BaseMovix(override val name: String) : ConfigurableSource() {
-    override val defaultBaseUrl = "https://movix.fun"
+    override val defaultBaseUrl = "https://movix.dog"
     override val lang = "fr"
     override val supportsLatest = true
     override val json: Json by injectLazy()

@@ -213,9 +213,7 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import keiyoushi.utils.useAsJsoup
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.HUB_SEASON_NUMBER
-import fr.bluecxt.core.Source
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
@@ -226,8 +224,7 @@ import keiyoushi.utils.parallelMap
 import keiyoushi.utils.post
 """)
     source_file.append(f"class {ext_class} :")
-    source_file.append("\tSource(),")
-    source_file.append("\tCommonPreferences,")
+    source_file.append("\tConfigurableSource(),")
     source_file.append("\tJsoupExtensions {\n")
     source_file.append(f"\toverride val name = \"{args.extname}\"")
     source_file.append(f"\toverride val defaultBaseUrl = \"{args.baseurl}\"\n")
