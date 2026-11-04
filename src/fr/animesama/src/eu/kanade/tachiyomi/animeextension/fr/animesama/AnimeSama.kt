@@ -621,11 +621,12 @@ class AnimeSama :
             }
             val finalName = "$effectivePrefix$baseName".trim()
 
-            val movieThumbnail = if (contentType == ContentType.MOVIE && !spfName.isNullOrBlank()) {
+            val movieMetadata = if (contentType == ContentType.MOVIE && !spfName.isNullOrBlank()) {
                 val cleanSpf = spfName.replace(movieCleanPrefixRegex, "").trim()
-                val movieQuery = if (cleanSpf.isNotBlank()) "$animeTitle $cleanSpf" else "$animeTitle $spfName"
+                val cleanAnimeTitle = animeTitle.replace(movieCleanPrefixRegex, "").replace(movieCleanTrailingRegex, "").trim()
+                val movieQuery = if (cleanSpf.isNotBlank()) "$cleanAnimeTitle $cleanSpf" else "$cleanAnimeTitle $spfName"
                 try {
-                    fetchTvdbMetadata(movieQuery, isMovie = true)?.let { it.seasonPosterUrl ?: it.mainPosterUrl }
+                    fetchTvdbMetadata(movieQuery, isMovie = true)
                 } catch (_: Exception) {
                     null
                 }
@@ -633,16 +634,17 @@ class AnimeSama :
                 null
             }
 
+            val movieThumbnail = movieMetadata?.seasonPosterUrl ?: movieMetadata?.mainPosterUrl
             val finalPreview = movieThumbnail ?: epMeta?.thumbnail ?: tvdbMetadata?.backdropUrl ?: tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl
 
-            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='$finalPreview', hasSummary=${epMeta?.summary != null}")
+            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='$finalPreview', hasSummary=${epMeta?.summary != null || movieMetadata?.summary != null}")
 
             SEpisode.create().apply {
                 name = finalName
                 episode_number = epNum.toFloat()
                 scanlator = episode.getScanlatorString()
                 url = episode.players.toJsonString(json)
-                summary = epMeta?.summary ?: tvdbMetadata?.summary
+                summary = movieMetadata?.summary ?: epMeta?.summary ?: tvdbMetadata?.summary
                 preview_url = finalPreview
             }
         }
@@ -917,6 +919,7 @@ class AnimeSama :
         private val alterTitlesSplitRegex = Regex("""\s*,\s*|\s*;\s*|\s*/\s*""")
 
         private val movieCleanPrefixRegex = Regex("""(?i)^(?:\[Film\]\s*|Film\s*\d*\s*[:-]?\s*)""")
+        private val movieCleanTrailingRegex = Regex("""(?i)\s+Film$""")
         private val tmdbIdRegex = Regex("""themoviedb\.org/(tv|movie)/(\d+)""")
 
         private const val MIN_TITLE_LENGTH = 4

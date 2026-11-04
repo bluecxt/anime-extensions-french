@@ -26,6 +26,12 @@ data class TvdbOverrideEntry(
      */
     val seasonOrderType: String = "official",
     /**
+     * TVDB episode order type for episode list lookup.
+     * When null, defaults to [seasonOrderType].
+     * Can be set to "absolute" while [seasonOrderType] remains "dvd".
+     */
+    val episodeOrderType: String? = null,
+    /**
      * When true, TVDB fetch is entirely skipped for this panel.
      * The source's own metadata (thumbnail, description) is used as-is.
      */
@@ -38,6 +44,10 @@ data class TvdbOverrideEntry(
      * Explicit movie flag override.
      */
     val isMovie: Boolean? = null,
+    /**
+     * When true, preferentially select Japanese artworks for season posters.
+     */
+    val preferJapanesePoster: Boolean = false,
 )
 
 @Serializable
@@ -100,32 +110,32 @@ private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
     "one piece" to TvdbSeriesOverride(
         seriesId = 81797L,
         seasons = mapOf(
-            // === Sagas 1-12 — Ordre DVD officiel TVDB (avec artwork dédié pour chaque saga) ===
-            "saga 1" to TvdbOverrideEntry(tvdbSeason = 1, seasonOrderType = "dvd"),
-            "saga 2" to TvdbOverrideEntry(tvdbSeason = 2, seasonOrderType = "dvd"),
-            "saga 3" to TvdbOverrideEntry(tvdbSeason = 3, seasonOrderType = "dvd"),
-            "saga 4" to TvdbOverrideEntry(tvdbSeason = 4, seasonOrderType = "dvd"),
-            "saga 5" to TvdbOverrideEntry(tvdbSeason = 5, seasonOrderType = "dvd"),
-            "saga 6" to TvdbOverrideEntry(tvdbSeason = 6, seasonOrderType = "dvd"),
-            "saga 7" to TvdbOverrideEntry(tvdbSeason = 7, seasonOrderType = "dvd"),
-            "saga 8" to TvdbOverrideEntry(tvdbSeason = 8, seasonOrderType = "dvd"),
-            "saga 9" to TvdbOverrideEntry(tvdbSeason = 9, seasonOrderType = "dvd"),
-            "saga 10" to TvdbOverrideEntry(tvdbSeason = 10, seasonOrderType = "dvd"),
-            "saga 11" to TvdbOverrideEntry(tvdbSeason = 11, seasonOrderType = "dvd"),
-            "saga 12" to TvdbOverrideEntry(tvdbSeason = 12, seasonOrderType = "dvd"),
+            // === Sagas 1-12 — Postes DVD officiels Toei (Japonais) + Épisodes absolus (100% miniatures & métadonnées) ===
+            "saga 1" to TvdbOverrideEntry(tvdbSeason = 1, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 0, preferJapanesePoster = true),
+            "saga 2" to TvdbOverrideEntry(tvdbSeason = 4, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 61, preferJapanesePoster = true),
+            "saga 3" to TvdbOverrideEntry(tvdbSeason = 6, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 130, preferJapanesePoster = true),
+            "saga 4" to TvdbOverrideEntry(tvdbSeason = 8, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 206, preferJapanesePoster = true),
+            "saga 5" to TvdbOverrideEntry(tvdbSeason = 12, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 325, preferJapanesePoster = true),
+            "saga 6" to TvdbOverrideEntry(tvdbSeason = 16, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 385, preferJapanesePoster = true),
+            "saga 7" to TvdbOverrideEntry(tvdbSeason = 17, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 516, preferJapanesePoster = true),
+            "saga 8" to TvdbOverrideEntry(tvdbSeason = 19, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 574, preferJapanesePoster = true),
+            "saga 9" to TvdbOverrideEntry(tvdbSeason = 20, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 746, preferJapanesePoster = true),
+            "saga 10" to TvdbOverrideEntry(tvdbSeason = 21, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 779, preferJapanesePoster = true),
+            "saga 11" to TvdbOverrideEntry(tvdbSeason = 22, seasonOrderType = "dvd", episodeOrderType = "absolute", episodeOffset = 891, preferJapanesePoster = true),
+            "saga 12" to TvdbOverrideEntry(tvdbSeason = 23, seasonOrderType = "official", episodeOrderType = "absolute", episodeOffset = 1085, preferJapanesePoster = true),
 
-            // === Kai (mêmes ordres DVD que les sagas correspondantes) ===
-            "kai - saga 1" to TvdbOverrideEntry(tvdbSeason = 1, seasonOrderType = "dvd"),
-            "kai - saga 2" to TvdbOverrideEntry(tvdbSeason = 2, seasonOrderType = "dvd"),
-            "kai - saga 3" to TvdbOverrideEntry(tvdbSeason = 3, seasonOrderType = "dvd"),
-            "kai - saga 4" to TvdbOverrideEntry(tvdbSeason = 4, seasonOrderType = "dvd"),
-            "kai - saga 5" to TvdbOverrideEntry(tvdbSeason = 5, seasonOrderType = "dvd"),
-            "kai - saga 6" to TvdbOverrideEntry(tvdbSeason = 6, seasonOrderType = "dvd"),
-            "kai - saga 7" to TvdbOverrideEntry(tvdbSeason = 7, seasonOrderType = "dvd"),
-            "kai - saga 8" to TvdbOverrideEntry(tvdbSeason = 8, seasonOrderType = "dvd"),
-            "kai - saga 9" to TvdbOverrideEntry(tvdbSeason = 9, seasonOrderType = "dvd"),
-            "kai - saga 10" to TvdbOverrideEntry(tvdbSeason = 10, seasonOrderType = "dvd"),
-            "kai - saga 11" to TvdbOverrideEntry(tvdbSeason = 11, seasonOrderType = "dvd"),
+            // === Kai (mêmes affiches DVD que les sagas correspondantes) ===
+            "kai - saga 1" to TvdbOverrideEntry(tvdbSeason = 1, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 2" to TvdbOverrideEntry(tvdbSeason = 4, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 3" to TvdbOverrideEntry(tvdbSeason = 6, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 4" to TvdbOverrideEntry(tvdbSeason = 8, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 5" to TvdbOverrideEntry(tvdbSeason = 12, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 6" to TvdbOverrideEntry(tvdbSeason = 16, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 7" to TvdbOverrideEntry(tvdbSeason = 17, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 8" to TvdbOverrideEntry(tvdbSeason = 19, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 9" to TvdbOverrideEntry(tvdbSeason = 20, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 10" to TvdbOverrideEntry(tvdbSeason = 21, seasonOrderType = "dvd", preferJapanesePoster = true),
+            "kai - saga 11" to TvdbOverrideEntry(tvdbSeason = 22, seasonOrderType = "dvd", preferJapanesePoster = true),
 
             // === Spéciaux & Spin-offs One Piece ===
             "log" to TvdbOverrideEntry(tvdbSeason = 15, seasonOrderType = "official"),
@@ -186,8 +196,11 @@ suspend fun Source.fetchTvdbForPanel(
     val seasonNumber = overrideEntry?.tvdbSeason ?: calculatedSeasonNumber
     val episodeOffset = overrideEntry?.episodeOffset ?: 0
     val seasonOrderType = overrideEntry?.seasonOrderType ?: "official"
+    val episodeOrderType = overrideEntry?.episodeOrderType
     val targetTvdbId = overrideEntry?.seriesId ?: seriesOverride?.seriesId
     val isMovieResolved = overrideEntry?.isMovie ?: isMovie
+
+    val preferJapanesePoster = overrideEntry?.preferJapanesePoster ?: false
 
     // Try External TMDB ID first when available (only if the panel doesn't explicitly redirect to another seriesId)
     if (externalTmdbId != null && externalTmdbId > 0 && overrideEntry?.seriesId == null) {
@@ -201,6 +214,8 @@ suspend fun Source.fetchTvdbForPanel(
             expectedNames = externalExpectedNames,
             movieWanted = isMovieResolved,
             seasonOrderType = seasonOrderType,
+            episodeOrderType = episodeOrderType,
+            preferJapanesePoster = preferJapanesePoster,
         )
         if (externalMeta != null) {
             return externalMeta.copy(episodeOffset = episodeOffset)
@@ -223,6 +238,8 @@ suspend fun Source.fetchTvdbForPanel(
             preference = preference,
             seasonOrderType = seasonOrderType,
             targetTvdbId = targetTvdbId,
+            preferJapanesePoster = preferJapanesePoster,
+            episodeOrderType = episodeOrderType,
         )
     }
 
@@ -245,6 +262,8 @@ suspend fun Source.fetchTvdbForPanel(
             preference = preference,
             seasonOrderType = seasonOrderType,
             targetTvdbId = targetTvdbId,
+            preferJapanesePoster = preferJapanesePoster,
+            episodeOrderType = episodeOrderType,
         )
     }
 
