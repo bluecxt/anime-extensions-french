@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.HttpException
 import fr.bluecxt.core.ANIMESAMA_LOG
-import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.anilist.AniListEpisodeMetadata as AniListEpisode
 import fr.bluecxt.core.anilist.AniListFetcher
 import fr.bluecxt.core.anilist.AniListMetadata
@@ -223,7 +222,7 @@ class AnimeSama :
 
         if (isHub) {
             anime.fetch_type = FetchType.Seasons
-            anime.season_number = HUB_SEASON_NUMBER
+            anime.season_number = 1.0
         }
 
         anime.populateFromDocument(document)
@@ -383,7 +382,7 @@ class AnimeSama :
                 status = anilistMetadata?.status?.takeIf { it != SAnime.UNKNOWN } ?: docStatus
                 initialized = true
                 fetch_type = FetchType.Episodes
-                season_number = HUB_SEASON_NUMBER
+                season_number = seasonOrdinal.takeIf { it > 0 }?.toDouble() ?: 1.0
                 background_url = anilistMetadata?.backdropUrl ?: document.selectFirst(".oe-fond img")?.attr("abs:src")
             }
         }.checkAndReportSeasonIssues(baseUrl, anime.title, ::getAnimeUrl)
@@ -453,7 +452,16 @@ class AnimeSama :
         val isMovie = isMovieContent(rawSeason, link, contentType, medias)
         val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != link }
             .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
-        val anilistMetadata = fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
+        val siteEpisodeOffset = calculateSiteEpisodeOffset(medias, link)
+        val fetchedMetadata = fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
+        val anilistMetadata = fetchedMetadata?.let { metadata ->
+            val localCount = episodes.size
+            if (siteEpisodeOffset > 0 && metadata.episodeCount >= siteEpisodeOffset + localCount) {
+                metadata.copy(episodeOffset = siteEpisodeOffset)
+            } else {
+                metadata
+            }
+        }
 
         val anilistEpCount = anilistMetadata?.let { it.episodeCount.takeIf { count -> count > 0 } ?: it.episodeSummaries.size } ?: 0
         val autoS0Offset = calculateAutoS0Offset(anilistMetadata, anilistEpCount, episodes.size, medias, link)
@@ -505,6 +513,14 @@ class AnimeSama :
             autoS0Offset += (mediaAnimeSamaCount - mediaAniListCount)
         }
         return autoS0Offset
+    }
+
+    /** Maps locally numbered Anime-Sama episodes to a continuous AniList episode number when available. */
+    private suspend fun calculateSiteEpisodeOffset(medias: List<UrlContent>, currentLink: String): Int {
+        val currentIndex = medias.indexOfFirst { it.url == currentLink }.takeIf { it >= 0 } ?: return 0
+        return medias.take(currentIndex)
+            .filter { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON }
+            .sumOf { media -> fetchPlayers(media.url, "vostfr").size }
     }
 
     private suspend fun fetchAggregatedEpisodes(link: String): List<EpisodePlayers> = langList.parallelMap { lang ->
