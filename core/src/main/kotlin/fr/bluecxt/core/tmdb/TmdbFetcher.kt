@@ -20,6 +20,7 @@ import fr.bluecxt.core.tmdb.utils.calculateSimilarityScore
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import keiyoushi.core.BuildConfig
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CancellationException
 import java.net.URLEncoder
 
 private val TMDB_API_KEY = BuildConfig.TMDB_API
@@ -62,6 +63,7 @@ suspend fun Source.fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR")
             null
         }
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.w(TMDB_LOG, "TMDB movie search failed for '$query': ${e.message}", e)
         null
     }
@@ -137,6 +139,7 @@ suspend fun Source.fetchTmdbMetadataById(id: Int, type: String, season: Int = 1,
     val typeClean = if (type == "tv" || type == "series") "tv" else "movie"
     constructMetadata(id, typeClean, season, lang)
 } catch (e: Exception) {
+    if (e is CancellationException) throw e
     Log.w(TMDB_LOG, "TMDB lookup by id=$id failed: ${e.message}", e)
     null
 }
@@ -234,6 +237,7 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
 
         return constructMetadata(id, mediaType, season, lang)
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.w(TMDB_LOG, "TMDB search request failed for '$query' (season $season, language $lang): ${e.message}", e)
         return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
     }
@@ -307,6 +311,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                     seasonSummary = seasonDto.overview?.takeIf { it.isNotBlank() } ?: mainSummary
                     seasonDto.episodes
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.w(TMDB_LOG, "TMDB season request failed for id=$id, season=$season, language=$lang: ${e.message}", e)
                     emptyList()
                 }
@@ -331,6 +336,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                         seasonPoster = "https://image.tmdb.org/t/p/w500${bestPoster.filePath}"
                     }
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.w(TMDB_LOG, "TMDB season artwork request failed for id=$id, season=$season: ${e.message}", e)
                 }
             }
@@ -353,6 +359,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                     val enSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=en-US")).awaitSuccess().use { it.body.string() }
                     tmdbJson.decodeFromString<TmdbSeasonResponse>(enSeasonBody).episodes
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.w(TMDB_LOG, "TMDB English episode fallback failed for id=$id, season=$season: ${e.message}", e)
                     null
                 }
@@ -378,6 +385,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                     val origSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$originalLang")).awaitSuccess().use { it.body.string() }
                     tmdbJson.decodeFromString<TmdbSeasonResponse>(origSeasonBody).episodes
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.w(TMDB_LOG, "TMDB original-language episode fallback failed for id=$id, season=$season: ${e.message}", e)
                     null
                 }
@@ -430,6 +438,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                             }
                         }
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                         Log.w(TMDB_LOG, "TMDB episode-offset fallback failed for id=$id, season=$season: ${e.message}", e)
                     }
                 }
@@ -454,6 +463,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
             )
         }
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.e(TMDB_LOG, "Error constructing metadata for id=$id, type=$mediaType, season=$season", e)
         null
     }

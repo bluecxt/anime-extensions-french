@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.network.await
 import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.utils.normalize
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -148,6 +149,7 @@ class AniListFetcher(private val source: Source) {
                     return@withLock Json.parseToJsonElement(it.body.string()).jsonObject
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 Log.w(ANIMESAMA_LOG, "AniList GraphQL request failed: ${e.message}")
                 return@withLock null
             }
