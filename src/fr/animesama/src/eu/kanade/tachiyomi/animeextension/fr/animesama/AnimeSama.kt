@@ -922,8 +922,14 @@ class AnimeSama :
             aniList.artist.isNullOrBlank() ||
             aniList.genre.isNullOrBlank() ||
             aniList.status == SAnime.UNKNOWN ||
-            (aniList.episodeCount <= 0 && (aniList.episodeSummaries.isEmpty() || aniList.episodeSummaries.values.any { it.title.isNullOrBlank() || it.title.matches(episodeBasicRegex) })) ||
-            (aniList.episodeCount > 0 && (aniList.episodeSummaries.size < aniList.episodeCount || aniList.episodeSummaries.values.any { it.title.isNullOrBlank() || it.title.matches(episodeBasicRegex) }))
+            (aniList.episodeCount <= 0 && (aniList.episodeSummaries.isEmpty() || aniList.episodeSummaries.values.any { episode ->
+                val episodeTitle = episode.title
+                episodeTitle.isNullOrBlank() || episodeTitle.matches(episodeBasicRegex)
+            })) ||
+            (aniList.episodeCount > 0 && (aniList.episodeSummaries.size < aniList.episodeCount || aniList.episodeSummaries.values.any { episode ->
+                val episodeTitle = episode.title
+                episodeTitle.isNullOrBlank() || episodeTitle.matches(episodeBasicRegex)
+            }))
         if (!needsFallback) return aniList
 
         val isOnePiece = (listOf(title) + titles).any { candidate ->
