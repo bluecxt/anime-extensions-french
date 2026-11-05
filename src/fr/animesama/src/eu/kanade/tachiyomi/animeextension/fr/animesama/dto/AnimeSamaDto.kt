@@ -40,7 +40,11 @@ enum class ContentType {
     }
 
     companion object {
-        private val kaiRegex by lazy { Regex("""(?i)\bKai(\s+saison\s+\d+)?$""") }
+        private val kaiRegex by lazy {
+            Regex("""(?i)(?:\bKai\s*[-:]?\s*(?:Saga|Saison)\b|\bSaga\s+\d+\s+Kai$|\bKai(?:\s+saison\s+\d+)?$)""")
+        }
+
+        fun isKai(title: String): Boolean = kaiRegex.containsMatchIn(title)
 
         fun from(title: String, urlPath: String = ""): ContentType = when {
             title.contains("Film", ignoreCase = true) ||

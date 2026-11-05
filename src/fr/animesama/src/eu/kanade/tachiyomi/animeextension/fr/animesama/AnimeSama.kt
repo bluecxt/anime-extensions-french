@@ -230,9 +230,10 @@ class AnimeSama :
 
         val (effectiveLink, effectiveSeason) = resolveEffectiveTarget(medias, link, season)
         val contentType = ContentType.from(effectiveSeason ?: anime.title, effectiveLink)
+        val isKai = ContentType.isKai(effectiveSeason ?: anime.title)
         val isMovie = isMovieContent(effectiveSeason, effectiveLink, contentType, medias)
         val fullTitle = formatSeasonTitle(anime.title, effectiveSeason ?: season.orEmpty(), allTitles)
-        val metadata = fetchMetadata(
+        val metadata = if (isKai) null else fetchMetadata(
             fullTitle,
             allTitles + anime.title,
             document,
@@ -359,10 +360,11 @@ class AnimeSama :
             val rawSeason = media.season.orEmpty()
             val fullTitle = formatSeasonTitle(anime.title, rawSeason, media.titles)
             val contentType = ContentType.from(fullTitle, media.url)
+            val isKai = ContentType.isKai(fullTitle)
             val isMovie = isMovieContent(rawSeason, media.url, contentType, medias)
             val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != media.url }
                 .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
-            val anilistMetadata = fetchMetadata(fullTitle, media.titles + anime.title, document, rawSeason, isMovie, seasonOrdinal)
+            val anilistMetadata = if (isKai) null else fetchMetadata(fullTitle, media.titles + anime.title, document, rawSeason, isMovie, seasonOrdinal)
 
             SAnime.create().apply {
                 title = fullTitle
@@ -450,10 +452,11 @@ class AnimeSama :
 
         val fullTitle = formatSeasonTitle(anime.title, rawSeason.orEmpty(), allTitles)
         val contentType = ContentType.from(rawSeason ?: anime.title, link)
+        val isKai = ContentType.isKai(rawSeason.orEmpty())
         val isMovie = isMovieContent(rawSeason, link, contentType, medias)
         val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != link }
             .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
-        val fetchedMetadata = fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
+        val fetchedMetadata = if (isKai) null else fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
         val isContinuousSeries = !isMovie && contentType == ContentType.SEASON &&
             fetchedMetadata != null && fetchedMetadata.episodeCount > episodes.size * 3
         val onePieceOffset = onePieceEpisodeOffset(anime.title, allTitles + fullTitle, seasonOrdinal)
@@ -473,7 +476,7 @@ class AnimeSama :
         val anilistEpCount = anilistMetadata?.let { it.episodeCount.takeIf { count -> count > 0 } ?: it.episodeSummaries.size } ?: 0
         val autoS0Offset = calculateAutoS0Offset(anilistMetadata, anilistEpCount, episodes.size, medias, link)
 
-        val s0Metadata = if (!isMovie && episodes.size > anilistEpCount && anilistEpCount > 0) {
+        val s0Metadata = if (!isKai && !isMovie && episodes.size > anilistEpCount && anilistEpCount > 0) {
             fetchMetadata(anime.title, allTitles, preDoc, "Special", false, 0)
         } else {
             null
@@ -614,9 +617,12 @@ class AnimeSama :
         link: String = "",
     ): List<SEpisode> {
         val contentType = ContentType.from(season ?: animeTitle, link)
+        val isKai = ContentType.isKai(season.orEmpty())
         val seasonNum = season?.let { extractSeasonNumber(it) } ?: 1
         val isMultiMovie = contentType == ContentType.MOVIE && this.size > 1
-        val defaultPrefix = if (contentType == ContentType.MOVIE) {
+        val defaultPrefix = if (isKai) {
+            "[Kai] "
+        } else if (contentType == ContentType.MOVIE) {
             if (isMultiMovie) "[Film] " else ""
         } else {
             contentType.getPrefix(seasonNum)
