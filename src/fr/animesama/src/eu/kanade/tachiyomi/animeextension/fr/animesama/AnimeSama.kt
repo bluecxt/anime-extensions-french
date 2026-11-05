@@ -358,13 +358,6 @@ class AnimeSama :
         return medias.parallelMap { media ->
             val rawSeason = media.season.orEmpty()
             val fullTitle = formatSeasonTitle(anime.title, rawSeason, media.titles)
-            val contentType = ContentType.from(fullTitle, media.url)
-            val isKai = ContentType.isKai(fullTitle)
-            val isMovie = isMovieContent(rawSeason, media.url, contentType, medias)
-            val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != media.url }
-                .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
-            val isOnePiece = isOnePieceTitle(anime.title, media.titles + fullTitle)
-            val anilistMetadata = if (isKai || isOnePiece) null else fetchMetadata(fullTitle, media.titles + anime.title, document, rawSeason, isMovie, seasonOrdinal)
 
             SAnime.create().apply {
                 title = fullTitle
@@ -373,21 +366,18 @@ class AnimeSama :
                     titles = allTitles,
                     season = rawSeason,
                 ).toJsonString(json)
-                thumbnail_url = anilistMetadata?.seasonPosterUrl ?: anilistMetadata?.mainPosterUrl ?: pagePoster ?: anime.thumbnail_url
-                Log.d(ANIMESAMA_LOG, "getSeasonList item: title='$fullTitle', rawSeason='$rawSeason', chosenThumbnail='$thumbnail_url', anilistSeasonPoster='${anilistMetadata?.seasonPosterUrl}', anilistMainPoster='${anilistMetadata?.mainPosterUrl}'")
+                thumbnail_url = pagePoster ?: anime.thumbnail_url
+                Log.d(ANIMESAMA_LOG, "getSeasonList item: title='$fullTitle', rawSeason='$rawSeason', chosenThumbnail='$thumbnail_url'")
                 description = document.selectFirstLog("p#synopsisText")?.text()?.takeIf(String::isNotBlank)
-                    ?: anilistMetadata?.summary?.takeIf(String::isNotBlank) ?: ""
-                anilistMetadata?.releaseDate?.let { date ->
-                    description = buildDescription(description.orEmpty(), date)
-                }
-                author = anilistMetadata?.author?.takeIf(String::isNotBlank) ?: docStudio
-                artist = anilistMetadata?.artist?.takeIf(String::isNotBlank) ?: docStudio
-                genre = anilistMetadata?.genre?.takeIf(String::isNotBlank) ?: docGenre
-                status = anilistMetadata?.status?.takeIf { it != SAnime.UNKNOWN } ?: docStatus
+                    ?: ""
+                author = docStudio
+                artist = docStudio
+                genre = docGenre
+                status = docStatus
                 initialized = true
                 fetch_type = FetchType.Episodes
                 season_number = HUB_SEASON_NUMBER
-                background_url = anilistMetadata?.backdropUrl ?: document.selectFirst(".oe-fond img")?.attr("abs:src")
+                background_url = document.selectFirst(".oe-fond img")?.attr("abs:src")
             }
         }.checkAndReportSeasonIssues(baseUrl, anime.title, ::getAnimeUrl)
     }
