@@ -19,6 +19,9 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.HttpException
 import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
+import fr.bluecxt.core.anilist.AniListEpisodeMetadata as AniListEpisode
+import fr.bluecxt.core.anilist.AniListFetcher
+import fr.bluecxt.core.anilist.AniListMetadata
 import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.VoiceLanguage.VA
 import fr.bluecxt.core.model.VoiceLanguage.VF
@@ -47,7 +50,6 @@ import keiyoushi.utils.get
 import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parallelMapNotNullBlocking
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.post
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.async
@@ -56,17 +58,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.longOrNull
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.io.IOException
@@ -76,6 +67,8 @@ import java.util.concurrent.ConcurrentHashMap
 class AnimeSama :
     ConfigurableSource(),
     JsoupExtensions {
+
+    private val aniListFetcher by lazy { AniListFetcher(this) }
 
     override val name = "Anime-Sama"
 
@@ -245,7 +238,8 @@ class AnimeSama :
             document,
             effectiveSeason,
             isMovie,
-            seasonOrdinal = effectiveSeason?.let(::extractSeasonNumber) ?: 1,
+            seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != effectiveLink }
+                .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1,
         )
         anime.enrichWithAniList(metadata, document, effectiveSeason, isHub)
 
@@ -366,7 +360,7 @@ class AnimeSama :
             val fullTitle = formatSeasonTitle(anime.title, rawSeason, media.titles)
             val contentType = ContentType.from(fullTitle, media.url)
             val isMovie = isMovieContent(rawSeason, media.url, contentType, medias)
-            val seasonOrdinal = medias.takeWhile { it.url != media.url }
+            val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != media.url }
                 .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
             val anilistMetadata = fetchMetadata(fullTitle, media.titles + anime.title, document, rawSeason, isMovie, seasonOrdinal)
 
@@ -379,14 +373,14 @@ class AnimeSama :
                 ).toJsonString(json)
                 thumbnail_url = anilistMetadata?.seasonPosterUrl ?: anilistMetadata?.mainPosterUrl ?: pagePoster ?: anime.thumbnail_url
                 Log.d(ANIMESAMA_LOG, "getSeasonList item: title='$fullTitle', rawSeason='$rawSeason', chosenThumbnail='$thumbnail_url', anilistSeasonPoster='${anilistMetadata?.seasonPosterUrl}', anilistMainPoster='${anilistMetadata?.mainPosterUrl}'")
-                description = anilistMetadata?.summary ?: document.selectFirstLog("p#synopsisText")?.text() ?: ""
+                description = anilistMetadata?.summary?.takeIf(String::isNotBlank) ?: document.selectFirstLog("p#synopsisText")?.text() ?: ""
                 anilistMetadata?.releaseDate?.let { date ->
                     description = buildDescription(description.orEmpty(), date)
                 }
-                author = anilistMetadata?.author ?: docStudio
-                artist = anilistMetadata?.artist ?: docStudio
-                genre = anilistMetadata?.genre ?: docGenre
-                status = anilistMetadata?.status ?: docStatus
+                author = anilistMetadata?.author?.takeIf(String::isNotBlank) ?: docStudio
+                artist = anilistMetadata?.artist?.takeIf(String::isNotBlank) ?: docStudio
+                genre = anilistMetadata?.genre?.takeIf(String::isNotBlank) ?: docGenre
+                status = anilistMetadata?.status?.takeIf { it != SAnime.UNKNOWN } ?: docStatus
                 initialized = true
                 fetch_type = FetchType.Episodes
                 season_number = HUB_SEASON_NUMBER
@@ -457,15 +451,15 @@ class AnimeSama :
         val fullTitle = formatSeasonTitle(anime.title, rawSeason.orEmpty(), allTitles)
         val contentType = ContentType.from(rawSeason ?: anime.title, link)
         val isMovie = isMovieContent(rawSeason, link, contentType, medias)
-        val seasonOrdinal = medias.takeWhile { it.url != link }
+        val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != link }
             .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
         val anilistMetadata = fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
 
-        val anilistEpCount = anilistMetadata?.episodeSummaries?.size ?: 0
+        val anilistEpCount = anilistMetadata?.let { it.episodeCount.takeIf { count -> count > 0 } ?: it.episodeSummaries.size } ?: 0
         val autoS0Offset = calculateAutoS0Offset(anilistMetadata, anilistEpCount, episodes.size, medias, link)
 
-        val s0Metadata = if (episodes.size > anilistEpCount && anilistEpCount > 0) {
-            fetchMetadata(anime.title, allTitles, preDoc, rawSeason, isMovie, seasonOrdinal)
+        val s0Metadata = if (!isMovie && episodes.size > anilistEpCount && anilistEpCount > 0) {
+            fetchMetadata(anime.title, allTitles, preDoc, "Special", false, 0)
         } else {
             null
         }
@@ -639,7 +633,7 @@ class AnimeSama :
         autoS0Offset: Int = 0,
     ): Pair<String, AniListEpisode?> {
         val offset = anilistMetadata?.episodeOffset ?: 0
-        val anilistEpCount = anilistMetadata?.episodeSummaries?.size ?: 0
+        val anilistEpCount = anilistMetadata?.let { it.episodeCount.takeIf { count -> count > 0 } ?: it.episodeSummaries.size } ?: 0
 
         val epMeta = anilistMetadata?.episodeSummaries?.get(epNum + offset)
         if (isSeasonOverflow(epMeta, contentType, epNum, anilistEpCount, s0Metadata)) {
@@ -760,9 +754,6 @@ class AnimeSama :
     }
 
     private val documentMutexes = ConcurrentHashMap<String, Mutex>()
-    private val aniListSeasonIdCache = ConcurrentHashMap<Pair<Int, Int>, Int>()
-    private val aniListMediaCache = ConcurrentHashMap<Int, AniListMetadata>()
-
     private suspend fun getOrFetchDocument(link: String): Document {
         getCachedDocument(link)?.let { return it }
 
@@ -858,186 +849,10 @@ class AnimeSama :
         append(description)
     }
 
-    /** Looks up anime metadata in AniList. Anime-Sama remains the source of episode order and video links. */
-    private suspend fun fetchAniListMetadata(
-        title: String,
-        titles: Set<String>,
-        document: Document? = null,
-        seasonOrdinal: Int = 1,
-    ): AniListMetadata? {
-        val sourceAniListId = document?.let(::extractAniListId)
-        if (sourceAniListId != null) {
-            val targetId = resolveAniListSeasonId(sourceAniListId, seasonOrdinal)
-            if (targetId != null) {
-                aniListMediaCache[targetId]?.let { return it }
-                fetchAniListMediaById(targetId)?.let { media ->
-                    return parseAniListMedia(media).also { aniListMediaCache[targetId] = it }
-                }
-            }
-        }
-
-        val candidates = (listOf(title) + titles).map(String::trim).filter(String::isNotBlank).distinct()
-        for (candidate in candidates) {
-            val query = """
-                query (${'$'}search: String) {
-                  Page(page: 1, perPage: 10) {
-                    media(search: ${'$'}search, type: ANIME, isAdult: false) {
-                      id
-                      title { romaji english native }
-                      description(asHtml: false)
-                      coverImage { extraLarge large }
-                      bannerImage
-                      startDate { year }
-                      episodes
-                      genres
-                      studios { nodes { name } }
-                      status
-                      streamingEpisodes { title thumbnail }
-                    }
-                  }
-                }
-            """.trimIndent()
-            val body = buildJsonObject {
-                put("query", query)
-                put("variables", buildJsonObject { put("search", candidate) })
-            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val root = try {
-                client.post(ANILIST_GRAPHQL_URL, headers, body).use { response ->
-                    json.parseToJsonElement(response.body.string()).jsonObject
-                }
-            } catch (e: Exception) {
-                Log.w(ANIMESAMA_LOG, "AniList lookup failed for '$candidate': ${e.message}")
-                continue
-            }
-            val media = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray.orEmpty()
-            val normalizedTitles = titles.map { it.normalize() }.toSet() + title.normalize()
-            val match = media.mapNotNull { it.jsonObjectOrNull() }
-                .map { it to aniListMatchScore(it, normalizedTitles) }
-                .maxByOrNull { it.second }
-                ?.takeIf { it.second >= ANILIST_MIN_MATCH_SCORE }
-                ?.first ?: continue
-
-            return parseAniListMedia(match)
-        }
-        return null
-    }
-
-    private fun parseAniListMedia(match: JsonObject): AniListMetadata {
-        val titleObj = match["title"]?.jsonObject
-        val poster = match["coverImage"]?.jsonObject?.let { image ->
-            image["extraLarge"]?.jsonPrimitive?.contentOrNull ?: image["large"]?.jsonPrimitive?.contentOrNull
-        }
-        val summary = match["description"]?.jsonPrimitive?.contentOrNull
-            ?.let { org.jsoup.Jsoup.parseBodyFragment(it).text() }
-        val year = match["startDate"]?.jsonObject?.get("year")?.jsonPrimitive?.intOrNull?.toString()
-        val genres = match["genres"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }?.joinToString(", ")
-        val studio = match["studios"]?.jsonObject?.get("nodes")?.jsonArray
-            ?.mapNotNull { it.jsonObject["name"]?.jsonPrimitive?.contentOrNull }?.joinToString(", ")
-        val episodes = match["streamingEpisodes"]?.jsonArray.orEmpty().mapNotNull { element ->
-            val episode = element.jsonObject
-            val episodeTitle = episode["title"]?.jsonPrimitive?.contentOrNull
-            val number = episodeTitle?.let(aniListEpisodeNumberRegex::find)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            if (number == null) null else number to AniListEpisode(
-                title = episodeTitle,
-                thumbnail = episode["thumbnail"]?.jsonPrimitive?.contentOrNull,
-            )
-        }.toMap()
-        return AniListMetadata(
-            title = titleObj?.get("english")?.jsonPrimitive?.contentOrNull
-                ?: titleObj?.get("romaji")?.jsonPrimitive?.contentOrNull,
-            summary = summary,
-            releaseDate = year,
-            mainPosterUrl = poster,
-            seasonPosterUrl = poster,
-            backdropUrl = match["bannerImage"]?.jsonPrimitive?.contentOrNull,
-            artist = studio,
-            author = studio,
-            status = match["status"]?.jsonPrimitive?.contentOrNull?.let(::aniListStatusToSAnime) ?: SAnime.UNKNOWN,
-            genre = genres,
-            episodeSummaries = episodes,
-            episodeCount = match["episodes"]?.jsonPrimitive?.intOrNull ?: 0,
-            seasonEpisodeCounts = emptyMap(),
-            seriesId = match["id"]?.jsonPrimitive?.longOrNull,
-        )
-    }
-
-    private suspend fun fetchAniListMediaById(id: Int): JsonObject? {
-        val query = """
-            query (${'$'}id: Int!) {
-              Media(id: ${'$'}id, type: ANIME) {
-                id
-                title { romaji english native }
-                description(asHtml: false)
-                coverImage { extraLarge large }
-                bannerImage
-                startDate { year }
-                episodes
-                genres
-                studios { nodes { name } }
-                status
-                streamingEpisodes { title thumbnail }
-              }
-            }
-        """.trimIndent()
-        return postAniListQuery(query, buildJsonObject { put("id", id) })
-            ?.get("data")?.jsonObject?.get("Media")?.jsonObjectOrNull()
-    }
-
-    /** Resolve the Nth Anime-Sama season through AniList's SEQUEL graph, ignoring films and specials. */
-    private suspend fun resolveAniListSeasonId(rootId: Int, seasonOrdinal: Int): Int? {
-        if (seasonOrdinal <= 1) return rootId
-        val cacheKey = rootId to seasonOrdinal
-        aniListSeasonIdCache[cacheKey]?.let { return it }
-        var currentId = rootId
-        var foundSeasons = 1
-        var traversed = 0
-        while (foundSeasons < seasonOrdinal && traversed < 12) {
-            val query = """
-                query (${'$'}id: Int!) {
-                  Media(id: ${'$'}id, type: ANIME) {
-                    relations {
-                      edges {
-                        relationType
-                        node { id format startDate { year } }
-                      }
-                    }
-                  }
-                }
-            """.trimIndent()
-            val current = postAniListQuery(query, buildJsonObject { put("id", currentId) })
-                ?.get("data")?.jsonObject?.get("Media")?.jsonObject ?: return null
-            val sequelNodes = current["relations"]?.jsonObject?.get("edges")?.jsonArray.orEmpty()
-                .mapNotNull { it.jsonObjectOrNull() }
-                .filter { it["relationType"]?.jsonPrimitive?.contentOrNull == "SEQUEL" }
-                .mapNotNull { it["node"]?.jsonObjectOrNull() }
-            val ordered = sequelNodes.sortedWith(
-                compareBy<JsonObject> { it["startDate"]?.jsonObject?.get("year")?.jsonPrimitive?.intOrNull ?: Int.MAX_VALUE }
-                    .thenBy { it["id"]?.jsonPrimitive?.intOrNull ?: Int.MAX_VALUE },
-            )
-            val nextSeason = ordered.firstOrNull {
-                it["format"]?.jsonPrimitive?.contentOrNull in setOf("TV", "TV_SHORT", "ONA")
-            }
-            val nextEntry = nextSeason ?: ordered.firstOrNull() ?: return null
-            currentId = nextEntry["id"]?.jsonPrimitive?.intOrNull ?: return null
-            if (nextSeason != null) foundSeasons++
-            traversed++
-        }
-        return currentId.takeIf { foundSeasons == seasonOrdinal }?.also { aniListSeasonIdCache[cacheKey] = it }
-    }
-
-    private suspend fun postAniListQuery(query: String, variables: JsonObject): JsonObject? {
-        val body = buildJsonObject {
-            put("query", query)
-            put("variables", variables)
-        }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-        return try {
-            client.post(ANILIST_GRAPHQL_URL, headers, body).use { response ->
-                json.parseToJsonElement(response.body.string()).jsonObject
-            }
-        } catch (e: Exception) {
-            Log.w(ANIMESAMA_LOG, "AniList GraphQL request failed: ${e.message}")
-            null
-        }
+    private fun extractAniListId(document: Document): Int? {
+        val href = document.select("a[href*='anilist.co/anime/']")
+            .firstNotNullOfOrNull { it.attr("abs:href").takeIf(String::isNotBlank) } ?: return null
+        return aniListIdRegex.find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
     }
 
     /** Keeps AniList first, and asks TMDB only when useful metadata is still missing. */
@@ -1049,20 +864,23 @@ class AnimeSama :
         isMovie: Boolean = season?.startsWith("Film", ignoreCase = true) == true,
         seasonOrdinal: Int = 1,
     ): AniListMetadata? {
-        val aniList = fetchAniListMetadata(title, titles, document, seasonOrdinal)
+        val aniList = if (seasonOrdinal == 0 && !isMovie) null else aniListFetcher.fetch(
+            title = title,
+            titles = titles,
+            linkedId = if (isMovie || seasonOrdinal <= 0) null else document?.let(::extractAniListId),
+            seasonOrdinal = seasonOrdinal.coerceAtLeast(1),
+        )
         val needsFallback = aniList == null ||
             aniList.summary.isNullOrBlank() ||
             aniList.mainPosterUrl.isNullOrBlank() ||
             aniList.artist.isNullOrBlank() ||
             aniList.genre.isNullOrBlank() ||
             aniList.status == SAnime.UNKNOWN ||
-            (aniList.episodeCount > 0 && (
-                aniList.episodeSummaries.size < aniList.episodeCount ||
-                    aniList.episodeSummaries.values.any { it.title.isNullOrBlank() || it.title.matches(episodeBasicRegex) }
-                ))
+            (aniList.episodeCount <= 0 && (aniList.episodeSummaries.isEmpty() || aniList.episodeSummaries.values.any { it.title.isNullOrBlank() || it.title.matches(episodeBasicRegex) })) ||
+            (aniList.episodeCount > 0 && (aniList.episodeSummaries.size < aniList.episodeCount || aniList.episodeSummaries.values.any { it.title.isNullOrBlank() || it.title.matches(episodeBasicRegex) }))
         if (!needsFallback) return aniList
 
-        val seasonNumber = if (isMovie) extractSeasonNumber(season.orEmpty()) ?: 1 else seasonOrdinal
+        val seasonNumber = when { isMovie -> 1; seasonOrdinal == 0 -> 0; else -> seasonOrdinal }
         val tmdbId = document?.let { extractTmdb(it, isMovie) }
         var tmdb = try {
             if (tmdbId != null) {
@@ -1104,15 +922,16 @@ class AnimeSama :
             releaseDate = aniList?.releaseDate?.takeIf(String::isNotBlank) ?: tmdbMetadata.releaseDate,
             mainPosterUrl = aniList?.mainPosterUrl?.takeIf(String::isNotBlank) ?: tmdbMetadata.mainPosterUrl,
             seasonPosterUrl = aniList?.seasonPosterUrl?.takeIf(String::isNotBlank) ?: tmdbMetadata.seasonPosterUrl,
-            backdropUrl = aniList?.backdropUrl,
+            backdropUrl = aniList?.backdropUrl?.takeIf(String::isNotBlank) ?: tmdbMetadata.backdropUrl,
             author = aniList?.author?.takeIf(String::isNotBlank) ?: tmdbMetadata.author,
             artist = aniList?.artist?.takeIf(String::isNotBlank) ?: tmdbMetadata.artist,
             status = aniList?.status?.takeIf { it != SAnime.UNKNOWN } ?: tmdbMetadata.status,
             genre = aniList?.genre?.takeIf(String::isNotBlank) ?: tmdbMetadata.genre,
             episodeSummaries = mergedEpisodes,
-            episodeCount = maxOf(aniList?.episodeCount ?: 0, tmdbEpisodes.size),
-            seasonEpisodeCounts = aniList?.seasonEpisodeCounts.orEmpty() + (seasonNumber to tmdbEpisodes.size),
+            episodeCount = maxOf(aniList?.episodeCount ?: 0, tmdbMetadata.episodeCount, tmdbEpisodes.size),
+            seasonEpisodeCounts = aniList?.seasonEpisodeCounts.orEmpty() + tmdbMetadata.seasonEpisodeCounts + (seasonNumber to maxOf(tmdbEpisodes.size, tmdbMetadata.episodeCount)),
             seriesId = aniList?.seriesId,
+            episodeOffset = tmdbMetadata.episodeOffset,
         )
     }
 
@@ -1122,32 +941,6 @@ class AnimeSama :
         val type = match.groupValues[1]
         if ((type == "movie") != isMovie) return null
         return match.groupValues[2].toLongOrNull()?.let { it to (type == "movie") }
-    }
-
-    private fun extractAniListId(document: Document): Int? {
-        val href = document.select("a[href*='anilist.co/anime/']")
-            .firstNotNullOfOrNull { it.attr("abs:href").takeIf(String::isNotBlank) }
-            ?: return null
-        return aniListIdRegex.find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
-    }
-
-    private fun aniListMatchScore(media: JsonObject, expected: Set<String>): Int {
-        val names = media["title"]?.jsonObject?.values.orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull }
-            .map { it.normalize() }
-        return when {
-            names.any { it in expected } -> 100
-            names.any { name -> expected.any { it.contains(name) || name.contains(it) } } -> 70
-            else -> 0
-        }
-    }
-
-    private fun kotlinx.serialization.json.JsonElement.jsonObjectOrNull(): JsonObject? = runCatching { jsonObject }.getOrNull()
-
-    private fun aniListStatusToSAnime(status: String): Int = when (status) {
-        "FINISHED" -> SAnime.COMPLETED
-        "RELEASING", "NOT_YET_RELEASED" -> SAnime.ONGOING
-        "HIATUS" -> SAnime.ONGOING
-        else -> SAnime.UNKNOWN
     }
 
     private fun isSeasonOverflow(
@@ -1160,8 +953,6 @@ class AnimeSama :
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        private const val ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
-        private const val ANILIST_MIN_MATCH_SCORE = 70
         private const val MAX_HUB_PATH_SEGMENTS = 3
         private val commentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
         private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
@@ -1183,7 +974,6 @@ class AnimeSama :
 
         private val movieCleanPrefixRegex = Regex("""(?i)^(?:\[Films?\]\s*|Films?\s*\d*\s*[:-]?\s*)""")
         private val movieCleanTrailingRegex = Regex("""(?i)\s+Films?$""")
-        private val aniListEpisodeNumberRegex = Regex("""(?i)(?:episode|ep\.?|#)\s*(\d+)""")
         private val tmdbIdRegex = Regex("""themoviedb\.org/(tv|movie)/(\d+)""")
         private val aniListIdRegex = Regex("""anilist\.co/anime/(\d+)""")
 
@@ -1192,26 +982,3 @@ class AnimeSama :
         private const val PREF_EARLY_FETCH_TYPE_DEFAULT = false
     }
 }
-
-private data class AniListMetadata(
-    val title: String?,
-    val summary: String?,
-    val releaseDate: String?,
-    val mainPosterUrl: String?,
-    val seasonPosterUrl: String?,
-    val backdropUrl: String?,
-    val author: String?,
-    val artist: String?,
-    val status: Int,
-    val genre: String?,
-    val episodeSummaries: Map<Int, AniListEpisode>,
-    val episodeCount: Int,
-    val seasonEpisodeCounts: Map<Int, Int>,
-    val seriesId: Long?,
-)
-
-private data class AniListEpisode(
-    val title: String?,
-    val thumbnail: String?,
-    val summary: String? = null,
-)
