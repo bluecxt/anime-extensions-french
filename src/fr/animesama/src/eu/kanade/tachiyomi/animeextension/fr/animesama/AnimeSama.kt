@@ -945,6 +945,8 @@ class AnimeSama :
         var tmdb = try {
             if (tmdbId != null) {
                 fetchTmdbMetadataById(tmdbId.first.toInt(), if (tmdbId.second) "movie" else "tv", seasonNumber)
+            } else {
+                null
             }
         } catch (e: Exception) {
             Log.w(ANIMESAMA_LOG, "TMDB fallback failed for '$title': ${e.message}")
