@@ -454,10 +454,17 @@ class AnimeSama :
         val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != link }
             .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
         val fetchedMetadata = fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
+        val isContinuousSeries = !isMovie && contentType == ContentType.SEASON &&
+            fetchedMetadata != null && fetchedMetadata.episodeCount > episodes.size * 3
         val onePieceOffset = onePieceEpisodeOffset(anime.title, allTitles + fullTitle, seasonOrdinal)
+        val siteEpisodeOffset = when {
+            onePieceOffset > 0 -> onePieceOffset
+            isContinuousSeries -> calculateSiteEpisodeOffset(medias, link)
+            else -> 0
+        }
         val anilistMetadata = fetchedMetadata?.let { metadata ->
-            if (onePieceOffset > 0 && metadata.episodeCount >= onePieceOffset + episodes.size) {
-                metadata.copy(episodeOffset = onePieceOffset)
+            if (siteEpisodeOffset > 0 && metadata.episodeCount >= siteEpisodeOffset + episodes.size) {
+                metadata.copy(episodeOffset = siteEpisodeOffset)
             } else {
                 metadata
             }
@@ -522,6 +529,21 @@ class AnimeSama :
             normalized.contains("one piece") || normalized == "wan pisu"
         }
         return if (isOnePiece) ONE_PIECE_SAGA_OFFSETS[sagaOrdinal] ?: 0 else 0
+    }
+
+    /** Fetches preceding Anime-Sama episode counts only for series with a continuous global episode list. */
+    private suspend fun calculateSiteEpisodeOffset(medias: List<UrlContent>, currentLink: String): Int {
+        val currentIndex = medias.indexOfFirst { it.url == currentLink }.takeIf { it >= 0 } ?: return 0
+        val precedingSeasons = medias.take(currentIndex)
+            .filter { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON }
+        val uncached = precedingSeasons.filterNot { episodeCountCache.containsKey(it.url) }
+        uncached.chunked(4).forEach { batch ->
+            batch.parallelMap { media ->
+                val count = fetchPlayers(media.url, "vostfr").size
+                if (count > 0) episodeCountCache.putIfAbsent(media.url, count)
+            }
+        }
+        return precedingSeasons.sumOf { media -> episodeCountCache[media.url] ?: 0 }
     }
 
     private suspend fun fetchAggregatedEpisodes(link: String): List<EpisodePlayers> = langList.parallelMap { lang ->
@@ -771,6 +793,7 @@ class AnimeSama :
     }
 
     private val documentMutexes = ConcurrentHashMap<String, Mutex>()
+    private val episodeCountCache = ConcurrentHashMap<String, Int>()
     private suspend fun getOrFetchDocument(link: String): Document {
         getCachedDocument(link)?.let { return it }
 
