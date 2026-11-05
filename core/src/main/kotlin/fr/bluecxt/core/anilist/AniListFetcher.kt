@@ -127,12 +127,15 @@ class AniListFetcher(private val source: Source) {
     }
 
     private suspend fun request(query: String, variables: JsonObject): JsonObject? = requestMutex.withLock {
-        val body = buildJsonObject { put("query", query); put("variables", variables) }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val body = buildJsonObject {
+            put("query", query)
+            put("variables", variables)
+        }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         for (attempt in 0..3) {
             val wait = MIN_INTERVAL - (System.currentTimeMillis() - lastRequestAt)
             if (wait > 0) delay(wait)
             try {
-                val response = source.client.newCall(POST(URL, source.headersBuilder().build(), body)).await()
+                val response = source.client.newCall(POST(URL, source.headers, body)).await()
                 val responseCode = response.code
                 lastRequestAt = System.currentTimeMillis()
                 if (responseCode == 429 || responseCode >= 500) {
@@ -145,7 +148,10 @@ class AniListFetcher(private val source: Source) {
                     return@withLock null
                 }
                 response.use {
-                    if (!it.isSuccessful) { Log.w(ANIMESAMA_LOG, "AniList returned HTTP ${it.code}"); return@withLock null }
+                    if (!it.isSuccessful) {
+                        Log.w(ANIMESAMA_LOG, "AniList returned HTTP ${it.code}")
+                        return@withLock null
+                    }
                     return@withLock Json.parseToJsonElement(it.body.string()).jsonObject
                 }
             } catch (e: Exception) {
@@ -160,7 +166,8 @@ class AniListFetcher(private val source: Source) {
     private fun parse(media: JsonObject): AniListMetadata {
         val title = media["title"]?.jsonObject
         val episodes = media["streamingEpisodes"]?.jsonArray.orEmpty().mapNotNull { element ->
-            val ep = element.jsonObject; val text = ep["title"]?.jsonPrimitive?.contentOrNull
+            val ep = element.jsonObject
+            val text = ep["title"]?.jsonPrimitive?.contentOrNull
             val n = text?.let { Regex("(?i)(?:episode|ep\\.?|#)\\s*(\\d+)").find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
             if (n == null) null else n to AniListEpisodeMetadata(text, ep["thumbnail"]?.jsonPrimitive?.contentOrNull)
         }.toMap()
@@ -172,7 +179,11 @@ class AniListFetcher(private val source: Source) {
             releaseDate = year, mainPosterUrl = media["coverImage"]?.jsonObject?.let { it["extraLarge"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull },
             seasonPosterUrl = media["coverImage"]?.jsonObject?.let { it["extraLarge"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull },
             backdropUrl = media["bannerImage"]?.jsonPrimitive?.contentOrNull, author = studios, artist = studios,
-            status = when (media["status"]?.jsonPrimitive?.contentOrNull) { "FINISHED" -> SAnime.COMPLETED; "RELEASING", "NOT_YET_RELEASED", "HIATUS" -> SAnime.ONGOING; else -> SAnime.UNKNOWN },
+            status = when (media["status"]?.jsonPrimitive?.contentOrNull) {
+                "FINISHED" -> SAnime.COMPLETED
+                "RELEASING", "NOT_YET_RELEASED", "HIATUS" -> SAnime.ONGOING
+                else -> SAnime.UNKNOWN
+            },
             genre = media["genres"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }?.joinToString(", ")?.ifBlank { null },
             episodeSummaries = episodes, episodeCount = media["episodes"]?.jsonPrimitive?.intOrNull ?: 0,
             seasonEpisodeCounts = emptyMap(), seriesId = media["id"]?.jsonPrimitive?.longOrNull,
@@ -182,8 +193,17 @@ class AniListFetcher(private val source: Source) {
 
     private fun score(media: JsonObject, expected: Set<String>): Int {
         val names = media["title"]?.jsonObject?.values.orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull }.map { it.normalize() }
-        return when { names.any { it in expected } -> 100; names.any { n -> n.length >= 8 && expected.any { e -> e.length >= 8 && (e.startsWith(n) || n.startsWith(e)) } } -> 85; else -> 0 }
+        return when {
+            names.any { it in expected } -> 100
+            names.any { n -> n.length >= 8 && expected.any { e -> e.length >= 8 && (e.startsWith(n) || n.startsWith(e)) } } -> 85
+            else -> 0
+        }
     }
 
-    companion object { private const val URL = "https://graphql.anilist.co"; private const val MIN_INTERVAL = 700L; private const val CACHE_TTL = 15 * 60 * 1000L; private val TV_FORMATS = setOf("TV", "TV_SHORT", "ONA") }
+    companion object {
+        private const val URL = "https://graphql.anilist.co"
+        private const val MIN_INTERVAL = 700L
+        private const val CACHE_TTL = 15 * 60 * 1000L
+        private val TV_FORMATS = setOf("TV", "TV_SHORT", "ONA")
+    }
 }
