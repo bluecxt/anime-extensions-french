@@ -131,7 +131,7 @@ class AniListFetcher(private val source: Source) {
             val wait = MIN_INTERVAL - (System.currentTimeMillis() - lastRequestAt)
             if (wait > 0) delay(wait)
             try {
-                val response = source.client.newCall(POST(URL, source.headersBuilder().build(), body)).await()
+                val response = source.client.newCall(POST(URL, source.headers, body)).await()
                 val responseCode = response.code
                 lastRequestAt = System.currentTimeMillis()
                 if (responseCode == 429 || responseCode >= 500) {
