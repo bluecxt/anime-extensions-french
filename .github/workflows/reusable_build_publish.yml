@@ -161,12 +161,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          INSPECTOR_LINK=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/bluecxt/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -n 1)
+          INSPECTOR_URL=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/bluecxt/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -n 1)
           if [ -z "$INSPECTOR_URL" ] || [ "$INSPECTOR_URL" = "null" ]; then
             echo "Error: Could not retrieve Inspector download URL."
             exit 1
           fi
-          curl -L -o ./Inspector.jar "$INSPECTOR_LINK"
+          curl -L -o ./Inspector.jar "$INSPECTOR_URL"
           ls -lh ./Inspector.jar
 
       - name: Generate Repository Metadata
