@@ -453,7 +453,15 @@ class AnimeSama :
         val isMovie = isMovieContent(rawSeason, link, contentType, medias)
         val seasonOrdinal = if (contentType == ContentType.SPECIAL || isMovie) 0 else medias.takeWhile { it.url != link }
             .count { ContentType.from(it.season.orEmpty(), it.url) == ContentType.SEASON } + 1
-        val anilistMetadata = fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
+        val fetchedMetadata = fetchMetadata(fullTitle, allTitles + anime.title, preDoc, rawSeason, isMovie, seasonOrdinal)
+        val onePieceOffset = onePieceEpisodeOffset(anime.title, allTitles + fullTitle, seasonOrdinal)
+        val anilistMetadata = fetchedMetadata?.let { metadata ->
+            if (onePieceOffset > 0 && metadata.episodeCount >= onePieceOffset + episodes.size) {
+                metadata.copy(episodeOffset = onePieceOffset)
+            } else {
+                metadata
+            }
+        }
 
         val anilistEpCount = anilistMetadata?.let { it.episodeCount.takeIf { count -> count > 0 } ?: it.episodeSummaries.size } ?: 0
         val autoS0Offset = calculateAutoS0Offset(anilistMetadata, anilistEpCount, episodes.size, medias, link)
@@ -505,6 +513,15 @@ class AnimeSama :
             autoS0Offset += (mediaAnimeSamaCount - mediaAniListCount)
         }
         return autoS0Offset
+    }
+
+    /** Anime-Sama numbers One Piece episodes within each saga; AniList uses the series-wide number. */
+    private fun onePieceEpisodeOffset(title: String, titles: Set<String>, sagaOrdinal: Int): Int {
+        val isOnePiece = (titles + title).any { candidate ->
+            val normalized = candidate.normalize()
+            normalized.contains("one piece") || normalized == "wan pisu"
+        }
+        return if (isOnePiece) ONE_PIECE_SAGA_OFFSETS[sagaOrdinal] ?: 0 else 0
     }
 
     private suspend fun fetchAggregatedEpisodes(link: String): List<EpisodePlayers> = langList.parallelMap { lang ->
@@ -880,7 +897,15 @@ class AnimeSama :
             (aniList.episodeCount > 0 && (aniList.episodeSummaries.size < aniList.episodeCount || aniList.episodeSummaries.values.any { it.title.isNullOrBlank() || it.title.matches(episodeBasicRegex) }))
         if (!needsFallback) return aniList
 
-        val seasonNumber = when { isMovie -> 1; seasonOrdinal == 0 -> 0; else -> seasonOrdinal }
+        val isOnePiece = (listOf(title) + titles).any { candidate ->
+            candidate.normalize().contains("one piece") || candidate.normalize() == "wan pisu"
+        }
+        val seasonNumber = when {
+            isMovie -> 1
+            seasonOrdinal == 0 -> 0
+            isOnePiece && seasonOrdinal >= ONE_PIECE_TMDB_SEASON_SHIFT_START -> seasonOrdinal + 1
+            else -> seasonOrdinal
+        }
         val tmdbId = document?.let { extractTmdb(it, isMovie) }
         var tmdb = try {
             if (tmdbId != null) {
@@ -978,6 +1003,21 @@ class AnimeSama :
         private val aniListIdRegex = Regex("""anilist\.co/anime/(\d+)""")
 
         private const val MIN_TITLE_LENGTH = 4
+        private val ONE_PIECE_SAGA_OFFSETS = mapOf(
+            1 to 0,
+            2 to 61,
+            3 to 143,
+            4 to 228,
+            5 to 325,
+            6 to 381,
+            7 to 516,
+            8 to 628,
+            9 to 750,
+            10 to 891,
+            11 to 1085,
+            12 to 1155,
+        )
+        private const val ONE_PIECE_TMDB_SEASON_SHIFT_START = 17
         private const val PREF_EARLY_FETCH_TYPE_KEY = "early_fetch"
         private const val PREF_EARLY_FETCH_TYPE_DEFAULT = false
     }
