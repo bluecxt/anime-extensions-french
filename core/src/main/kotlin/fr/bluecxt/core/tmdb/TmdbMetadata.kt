@@ -40,4 +40,7 @@ data class TmdbMetadata(
     val episodeOffset: Int = 0,
     val tmdbId: Int? = null,
     val type: String? = null,
+    val backdropUrl: String? = null,
+    val episodeCount: Int = episodeSummaries.size,
+    val seasonEpisodeCounts: Map<Int, Int> = emptyMap(),
 )

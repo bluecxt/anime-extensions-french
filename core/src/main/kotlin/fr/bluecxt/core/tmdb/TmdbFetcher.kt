@@ -20,6 +20,7 @@ import fr.bluecxt.core.tmdb.utils.calculateSimilarityScore
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import keiyoushi.core.BuildConfig
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CancellationException
 import java.net.URLEncoder
 
 private val TMDB_API_KEY = BuildConfig.TMDB_API
@@ -61,7 +62,9 @@ suspend fun Source.fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR")
         } else {
             null
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        Log.w(TMDB_LOG, "TMDB movie search failed for '$query': ${e.message}", e)
         null
     }
 }
@@ -107,7 +110,6 @@ suspend fun Source.fetchTmdbMetadata(title: String, season: Int = 1, type: Strin
     }
 
     Log.d(TMDB_LOG, "TMDB Search totally failed for '$title'")
-    tmdbCache[cacheKey] = null
     return null
 }
 
@@ -136,7 +138,9 @@ fun Source.filterSmartMetadata(meta: TmdbMetadata, isSpecialSeason: Boolean = fa
 suspend fun Source.fetchTmdbMetadataById(id: Int, type: String, season: Int = 1, lang: String = "fr-FR"): TmdbMetadata? = try {
     val typeClean = if (type == "tv" || type == "series") "tv" else "movie"
     constructMetadata(id, typeClean, season, lang)
-} catch (_: Exception) {
+} catch (e: Exception) {
+    if (e is CancellationException) throw e
+    Log.w(TMDB_LOG, "TMDB lookup by id=$id failed: ${e.message}", e)
     null
 }
 
@@ -232,7 +236,9 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
         val mediaType = bestMatch.mediaType ?: (targetType ?: "tv")
 
         return constructMetadata(id, mediaType, season, lang)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        Log.w(TMDB_LOG, "TMDB search request failed for '$query' (season $season, language $lang): ${e.message}", e)
         return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
     }
 }
@@ -244,6 +250,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
         val detailDto = tmdbJson.decodeFromString<TmdbDetailResponse>(detailResponse)
 
         val mainPoster = detailDto.posterPath?.takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
+        val backdropUrl = detailDto.backdropPath?.takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
         val mainSummary = detailDto.overview?.takeIf { it.isNotBlank() }
 
         val artist = detailDto.productionCompanies.map { it.name }.filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }
@@ -270,7 +277,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
         val author = authorList.distinct().joinToString(", ").takeIf { it.isNotBlank() }
 
         if (mediaType == "movie") {
-            val backdrop = detailDto.backdropPath?.takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w500$it" }
+            val backdrop = backdropUrl
             val movieTitle = detailDto.title?.ifBlank { null } ?: detailDto.name.orEmpty()
             TmdbMetadata(
                 summary = mainSummary,
@@ -285,6 +292,7 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                 episodeSummaries = mapOf(1 to Triple(movieTitle, backdrop, mainSummary)),
                 tmdbId = id,
                 type = mediaType,
+                backdropUrl = backdropUrl,
             )
         } else {
             val originalLang = detailDto.originalLanguage ?: "ja"
@@ -302,7 +310,9 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                     val seasonDto = tmdbJson.decodeFromString<TmdbSeasonResponse>(langSeasonBody)
                     seasonSummary = seasonDto.overview?.takeIf { it.isNotBlank() } ?: mainSummary
                     seasonDto.episodes
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Log.w(TMDB_LOG, "TMDB season request failed for id=$id, season=$season, language=$lang: ${e.message}", e)
                     emptyList()
                 }
             } else {
@@ -325,7 +335,10 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                     if (bestPoster?.filePath?.isNotBlank() == true) {
                         seasonPoster = "https://image.tmdb.org/t/p/w500${bestPoster.filePath}"
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Log.w(TMDB_LOG, "TMDB season artwork request failed for id=$id, season=$season: ${e.message}", e)
+                }
             }
 
             // Check if fallback to English is needed (if titles/summaries are missing or generic)
@@ -345,7 +358,9 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                 try {
                     val enSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=en-US")).awaitSuccess().use { it.body.string() }
                     tmdbJson.decodeFromString<TmdbSeasonResponse>(enSeasonBody).episodes
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Log.w(TMDB_LOG, "TMDB English episode fallback failed for id=$id, season=$season: ${e.message}", e)
                     null
                 }
             } else {
@@ -369,7 +384,9 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                 try {
                     val origSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$originalLang")).awaitSuccess().use { it.body.string() }
                     tmdbJson.decodeFromString<TmdbSeasonResponse>(origSeasonBody).episodes
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Log.w(TMDB_LOG, "TMDB original-language episode fallback failed for id=$id, season=$season: ${e.message}", e)
                     null
                 }
             } else {
@@ -420,7 +437,10 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                                 }
                             }
                         }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        Log.w(TMDB_LOG, "TMDB episode-offset fallback failed for id=$id, season=$season: ${e.message}", e)
+                    }
                 }
             }
 
@@ -437,9 +457,13 @@ private suspend fun Source.constructMetadata(id: Int, mediaType: String, season:
                 episodeSummaries = epMap,
                 tmdbId = id,
                 type = mediaType,
+                backdropUrl = backdropUrl,
+                episodeCount = detailDto.seasons.firstOrNull { it.seasonNumber == season }?.episodeCount ?: epMap.size,
+                seasonEpisodeCounts = detailDto.seasons.associate { it.seasonNumber to it.episodeCount },
             )
         }
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.e(TMDB_LOG, "Error constructing metadata for id=$id, type=$mediaType, season=$season", e)
         null
     }
