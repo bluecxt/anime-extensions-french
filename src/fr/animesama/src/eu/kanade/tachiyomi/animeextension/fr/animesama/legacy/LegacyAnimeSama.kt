@@ -1,8 +1,9 @@
 // Copyright bluecxt
 // SPDX-License-Identifier: Apache-2.0
-package eu.kanade.tachiyomi.animeextension.fr.animesama
+package eu.kanade.tachiyomi.animeextension.fr.animesama.legacy
 
 import android.util.Log
+import eu.kanade.tachiyomi.animeextension.fr.animesama.AnimeSama
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -18,15 +19,19 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-// a retirer en juillet 2027
+// To be removed in July 2027, once libraries have been migrated to JSON URLs.
 
+/** Log tag of the legacy parser, kept apart from the main source logs. */
 private const val LEGACY_LOG = "AnimeSamaLegacy"
 
+/**
+ * Languages explored by the legacy parser.
+ *
+ * The index of a language in this list is meaningful: legacy episode URLs store a list of URL
+ * lists, one list per entry of [LANG_VALUES].
+ */
 object LegacyAnimeSama {
     val LANG_VALUES = listOf("vostfr", "vf", "vf1", "vf2", "va", "vcn", "vj", "vkr", "vqc")
 }
@@ -43,7 +48,15 @@ private val seasonCleanRegex3 = Regex("""(?i)\s*-\s*(?:Saison|Season)\s*(\d+)"""
 private val seasonCleanRegex4 = Regex("""(?i)\s*(?:saison|season)\s*(\d+)""")
 private val partCleanRegex = Regex("""(?i)Partie\s*(\d+)""")
 
-// Helper extension functions to handle legacy URLs (non-JSON format) without TMDB integration.
+/**
+ * Fills a work whose URL was written before the JSON migration.
+ *
+ * Only the synopsis, the genres and the studio can be read from the HTML, and no TVDB lookup is
+ * attempted: a notice invites the user to add the work again so it gets the current format.
+ *
+ * @param anime library entry, updated in place.
+ * @return the same entry, enriched.
+ */
 suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
     Log.d(LEGACY_LOG, "getLegacyAnimeDetails: input url = '${anime.url}'")
     val animeUrlPath = anime.url.substringBefore("#").removeSuffix("/")
@@ -66,6 +79,16 @@ suspend fun AnimeSama.getLegacyAnimeDetails(anime: SAnime): SAnime {
     }
 }
 
+/**
+ * Lists the seasons of a work written before the JSON migration.
+ *
+ * Seasons are rebuilt from the `panneauAnime(...)` calls and from the `episodes<X> = "..."`
+ * variables of the page scripts. The produced URLs keep the historical `path#anchor|title`
+ * format so that the rest of the legacy parser keeps working.
+ *
+ * @param anime legacy work whose seasons are wanted.
+ * @return one [SAnime] per season, ready to list its episodes.
+ */
 suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
     Log.d(LEGACY_LOG, "getLegacySeasonList: input url = '${anime.url}'")
     val animeUrlPath = anime.url.substringBefore("#").removeSuffix("/")
@@ -134,6 +157,16 @@ suspend fun AnimeSama.getLegacySeasonList(anime: SAnime): List<SAnime> {
     }
 }
 
+/**
+ * Builds the episodes of a legacy season.
+ *
+ * The `episodes.js` file of every language is read in parallel and merged by index. A page whose
+ * path is still a work page uses its first season, and an anchor that does not start with `s`
+ * designates a movie, in which case a single episode is returned.
+ *
+ * @param anime legacy season whose episodes are wanted.
+ * @return the episodes, newest first.
+ */
 suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
     Log.d(LEGACY_LOG, "getLegacyEpisodeList: input url = '${anime.url}'")
     val animeUrlPath = anime.url.substringBefore("#").removeSuffix("/")
@@ -182,6 +215,15 @@ suspend fun AnimeSama.getLegacyEpisodeList(anime: SAnime): List<SEpisode> {
     return if (movieIndex == null) episodes.reversed() else listOf(episodes[movieIndex])
 }
 
+/**
+ * Reads the `episodes.js` file of one language and aligns the URL arrays by episode index.
+ *
+ * An HTML answer (an error page served by the site) is ignored, as is a missing file: those
+ * cases are not reported as errors, so that the other languages still produce a list.
+ *
+ * @param url absolute URL of the language folder, for example `.../saison1/vostfr`.
+ * @return one list of URLs per episode, empty when nothing could be read.
+ */
 private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>> {
     val cleanUrl = url.substringBefore("#")
     val docUrl = "${cleanUrl.removeSuffix("/")}/episodes.js"
@@ -211,6 +253,15 @@ private suspend fun AnimeSama.fetchLegacyPlayers(url: String): List<List<String>
     return List(maxEpisodes) { i -> servers.mapNotNull { it.getOrNull(i) }.distinct() }
 }
 
+/**
+ * Converts the aggregated URL lists into [SEpisode] entries.
+ *
+ * The language index is kept implicitly by the order of the JSON stored in the library, which
+ * is what allows [getLegacyHosterList] to rebuild the hoster labels later.
+ *
+ * @param list URLs grouped by language, then by episode.
+ * @return the numbered episodes, labelled with the languages they are available in.
+ */
 private fun AnimeSama.legacyPlayersToEpisodes(
     list: List<List<List<String>>>,
 ): List<SEpisode> {
@@ -232,6 +283,15 @@ private fun AnimeSama.legacyPlayersToEpisodes(
     }
 }
 
+/**
+ * Rebuilds the hosters of a legacy episode from the URL lists stored in the library.
+ *
+ * Each entry embeds its URLs and its language label in `internalData`, in the `json|language`
+ * form expected by [getLegacyVideoList].
+ *
+ * @param episode legacy episode whose URL holds the URL lists.
+ * @return one [Hoster] per language having at least one player.
+ */
 fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
     val playerUrls = try {
         json.decodeFromString<List<List<String>>>(episode.url)
@@ -249,6 +309,12 @@ fun AnimeSama.getLegacyHosterList(episode: SEpisode): List<Hoster> {
     }
 }
 
+/**
+ * Resolves the videos of a legacy hoster.
+ *
+ * @param hoster entry produced by [getLegacyHosterList], holding `json|language`.
+ * @return the extracted videos, every quality included.
+ */
 suspend fun AnimeSama.getLegacyVideoList(hoster: Hoster): List<Video> {
     val raw = hoster.internalData.takeIf { it.isNotBlank() } ?: return emptyList()
     val data = raw.split("|")
