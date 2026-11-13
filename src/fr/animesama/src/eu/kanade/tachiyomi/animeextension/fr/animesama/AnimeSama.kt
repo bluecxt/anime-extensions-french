@@ -2,13 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesama
 
-import android.util.Log
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.ContentType
-import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.EpisodePlayers
-import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.Player
-import eu.kanade.tachiyomi.animeextension.fr.animesama.dto.UrlContent
-import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
+import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacyAnimeDetails
+import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacyEpisodeList
+import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacyHosterList
+import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacySeasonList
+import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacyVideoList
+import eu.kanade.tachiyomi.animeextension.fr.animesama.metadata.buildSeasonAnime
+import eu.kanade.tachiyomi.animeextension.fr.animesama.metadata.enrichFromHub
+import eu.kanade.tachiyomi.animeextension.fr.animesama.model.ContentType
+import eu.kanade.tachiyomi.animeextension.fr.animesama.model.LinkSet
+import eu.kanade.tachiyomi.animeextension.fr.animesama.model.MediaUrl
+import eu.kanade.tachiyomi.animeextension.fr.animesama.model.PlayerLink
+import eu.kanade.tachiyomi.animeextension.fr.animesama.model.StoredPlayer
+import eu.kanade.tachiyomi.animeextension.fr.animesama.naming.EpisodeNaming
+import eu.kanade.tachiyomi.animeextension.fr.animesama.naming.SeasonTitles
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.BddScript
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.BddScriptParser
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.CatalogueCard
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.CataloguePage
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.HubInfo
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.HubPage
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.LanguageRef
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.LinkResolver
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.PageLoader
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.SeasonPage
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.SeasonRef
+import eu.kanade.tachiyomi.animeextension.fr.animesama.site.SitePaths
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
@@ -17,9 +37,10 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.HttpException
-import fr.bluecxt.core.ANIMESAMA_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
+import fr.bluecxt.core.extractors.router.getVideoServer
 import fr.bluecxt.core.filters.FilterSpec
+import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.VoiceLanguage.VA
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
@@ -29,43 +50,47 @@ import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportHosterIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportIncompleteness
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportSeasonIssues
 import fr.bluecxt.core.monitoring.SourceAuditor.checkAndReportVideoIssues
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
-import fr.bluecxt.core.source.Source
-import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
-import fr.bluecxt.core.tvdb.TvdbEpisode
 import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.tvdb.utils.fetchTvdbForPanel
 import fr.bluecxt.core.utils.JsoupExtensions
-import fr.bluecxt.core.utils.normalize
-import fr.bluecxt.core.utils.parseStatus
-import fr.bluecxt.core.utils.runCatchingCancellable
-import fr.bluecxt.core.utils.safeRelativePath
+import fr.bluecxt.core.utils.safeHttpCode
 import keiyoushi.core.R
 import keiyoushi.utils.addSwitchPreference
 import keiyoushi.utils.get
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parallelMap
-import keiyoushi.utils.parallelMapNotNullBlocking
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.useAsJsoup
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.longOrNull
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.util.Collections.synchronizedMap
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Anime-Sama source.
+ *
+ * The site exposes four page shapes, each handled by a dedicated parser in `site`:
+ *  - the catalogue and the "latest episodes" feed, which list works;
+ *  - the work page ("hub"), which holds the metadata and the seasons the site declares;
+ *  - a season page, which holds the languages the season is available in;
+ *  - a season page in one language, which holds the episode script (`bdd`).
+ *
+ * Since November 2026 a season page no longer carries embed URLs: it stores `<id>` references,
+ * resolved on demand by `/api/lien.php`. Links are therefore resolved when a video is started,
+ * never while listing episodes, which keeps a season at one request per language instead of one
+ * request per link.
+ *
+ * Entries stored before the JSON URL format are still readable through `LegacyAnimeSama`.
+ */
 class AnimeSama :
     ConfigurableSource(),
     JsoupExtensions {
@@ -73,28 +98,79 @@ class AnimeSama :
     override val name = "Anime-Sama"
 
     override val defaultBaseUrl = "https://anime-sama.to"
-    override val supportedServers = listOf("Sendvid", "Vidmoly", "Embed4me", "Minochinos", "Uqload", "Voe")
-    override val supportedVoices = setOf(VOSTFR, VF, VA, VQF)
+
     override val lang = "fr"
+
     override val supportsLatest = true
+
     override val defaultServer = "Vidmoly"
 
-    override fun getAnimeUrl(anime: SAnime): String = "$baseUrl${urlParser(anime.url).first.url}"
+    /**
+     * Servers the site is known to serve.
+     *
+     * Routing is done on the resolved embed URL, so a server missing from this list is simply
+     * never extracted; the names must match the shared router keys.
+     */
+    override val supportedServers = listOf(
+        "Vidmoly",
+        "Embed4me",
+        "Minochinos",
+        "Sibnet",
+        "Sendvid",
+        "Uqload",
+        "Voe",
+        "Vidoza",
+        "Lulu",
+        "Filemoon",
+        "Okru",
+        "Dood",
+    )
 
-    // ============================== Popular ===============================
-    override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val url = "$baseUrl/catalogue?page=$page"
-        val document = client.get(url, headers).useAsJsoup()
-        return parseCatalogue(document, page)
+    /** Languages the site can expose; a season rarely offers more than three. */
+    override val supportedVoices = setOf(VOSTFR, VF, VA, VQF)
+
+    /**
+     * Adds the "Early Fetch" switch to the extension settings.
+     *
+     * Some clients (Anikku among them) only read `fetch_type` while listing and never refresh it
+     * afterwards, so a work whose hub is only detected in [getAnimeDetails] shows no season at
+     * all. The switch resolves the fetch type from the catalogue for those clients.
+     *
+     * @param screen settings screen provided by the client.
+     */
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super.setupPreferenceScreen(screen)
+        screen.addSwitchPreference(
+            key = PREF_EARLY_FETCH_TYPE_KEY,
+            default = PREF_EARLY_FETCH_TYPE_DEFAULT,
+            title = getString(R.string.pref_early_fetch_type_title),
+            summary = getString(R.string.pref_early_fetch_type_summary),
+        )
     }
 
-    // ============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val document = client.get("$baseUrl/nouveautes/?type=episodes&page=$page", headers).useAsJsoup()
-        return parseCatalogue(document, page)
-    }
+    /**
+     * Whether the fetch type must be resolved while listing.
+     *
+     * Costs one work page per catalogue card, which is why it stays opt-in.
+     */
+    private val useEarlyFetch: Boolean
+        get() = preferences.getBoolean(PREF_EARLY_FETCH_TYPE_KEY, PREF_EARLY_FETCH_TYPE_DEFAULT)
 
-    // ============================== Search ===============================
+    /** Pages already loaded during this session, shared by every override. */
+    private val pages = PageLoader(::fetchDocument)
+
+    /** Resolves stored references into embed URLs, renewing an expired token once. */
+    private val linkResolver = LinkResolver(::callLinkApi, ::freshToken)
+
+    /** Router name of each hostname already seen, avoiding a lookup per link. */
+    private val serverNames = ConcurrentHashMap<String, String>()
+
+    // ============================== Catalogue ==============================
+
+    override suspend fun getPopularAnime(page: Int): AnimesPage = cataloguePage(pages.load("/catalogue/?page=$page"), page)
+
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = cataloguePage(pages.load("/nouveautes/?type=episodes&page=$page"), page)
+
     override val customFilters: List<FilterSpec>
         get() = listOf(
             select("Tri", "tri", AnimeSamaFilters.TRI_OPTIONS),
@@ -113,817 +189,691 @@ class AnimeSama :
         )
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        val term = query.trim()
+        if (term.startsWith(PREFIX_SEARCH)) return openWork(term.removePrefix(PREFIX_SEARCH).trim())
+
         val url = "$baseUrl/catalogue/".toHttpUrl().newBuilder().apply {
-            val q = query.trim()
-            if (q.isNotBlank()) addQueryParameter("search", q)
+            if (term.isNotBlank()) addQueryParameter("search", term)
             addQueryParameter("page", "$page")
             applyFilters(filters)
         }.build()
 
-        val document = client.get(url, headers).useAsJsoup()
-        return parseCatalogue(document, page)
+        return cataloguePage(pages.load(url.toString()), page)
     }
 
-    // ============================== Catalogue ===============================
-    private fun parseCatalogue(
-        document: Document,
-        page: Int,
-        animesSelector: String = ".as-carte",
-    ): AnimesPage {
-        val localUseEarlyFetch = this.useEarlyFetch
-        val animes = document.select(animesSelector).parallelMapNotNullBlocking { anime ->
-            val badgesVideo = anime.select("span.as-badge-autre, span.as-badge-anime")
-            if (badgesVideo.isEmpty()) return@parallelMapNotNullBlocking null
-
-            val link = anime.selectFirstLog("a")?.safeRelativePath()
-                ?: throw Exception("parsing failed report it to the dev")
-            val realLink = link.split("/").take(MAX_HUB_PATH_SEGMENTS).joinToString("/")
-            val thumbnail = anime.selectFirst(".as-carte-image > img")?.attr("abs:src")?.let { url ->
-                if ("thumb/" in url && ".webp" in url) { // low quality thumbnail
-                    url.replace("thumb/", "").replace(".webp", ".jpg")
-                } else {
-                    url
-                }
-            }
-
-            val name = anime.selectFirst(".as-carte-titre")?.text()
-                ?: anime.attr("data-nom").takeIf { it.isNotBlank() }
-                ?: ""
-            val names: Set<String> = buildSet {
-                // only in mainpage
-                add(name)
-                add(realLink.substringAfterLast("/").replace("-", " "))
-                anime.selectFirst("p.alternate-titles")?.text()?.split(",")
-                    ?.map { it.trim() }
-                    ?.let { addAll(it) }
-            }
-
-            val jsonUrl = UrlContent(url = realLink, titles = names, null).toJsonString()
-
-            SAnime.create().apply {
-                title = name
-                thumbnail_url = thumbnail
-                url = jsonUrl
-                if (localUseEarlyFetch) {
-                    val isHub = runCatchingCancellable {
-                        isHubPage(parseMedias(realLink, getOrFetchDocument(realLink), emptySet()))
-                    }.getOrDefault(false)
-                    if (isHub) {
-                        fetch_type = FetchType.Seasons
-                    }
-                }
+    /**
+     * Opens a work directly, used by the deep link activity.
+     *
+     * The work page itself does not list the work as a card, so the entry is built from the page
+     * metadata instead of being read from the catalogue cards.
+     *
+     * @param slug slug of the work, as found in `/catalogue/<slug>`.
+     * @return a single result, or an empty page when the work page cannot be loaded.
+     */
+    private suspend fun openWork(slug: String): AnimesPage {
+        val hubPath = SitePaths.hubPath("/catalogue/$slug")
+        val document = pages.load(hubPath) ?: return AnimesPage(emptyList(), false)
+        val hub = HubPage.parse(document, hubPath)
+        val anime = SAnime.create().apply {
+            title = hub.title?.takeIf { it.isNotBlank() } ?: slug
+            thumbnail_url = hub.posterUrl
+            url = MediaUrl(url = hubPath, titles = setOfNotNull(hub.title)).toJsonString(json)
+            // The work page is already loaded, so the fetch type costs nothing here.
+            if (hub.seasons.size > 1) {
+                fetch_type = FetchType.Seasons
+                season_number = HUB_SEASON_NUMBER
             }
         }
-        val lastPage = document.selectFirst(".pagi-aller input")?.attr("max")?.toIntOrNull() ?: 0
-        val hasNextPage = lastPage != 0 && page < lastPage
-        return AnimesPage(animes.distinctBy { it.url }, hasNextPage)
+        return AnimesPage(listOf(anime), false)
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super.setupPreferenceScreen(screen)
+    /**
+     * Rebuilds the absolute URL of an entry.
+     *
+     * Legacy entries do not hold JSON: their anchor is stripped so the URL still points at a
+     * real page, which matters for the web search and the error reports.
+     */
+    override fun getAnimeUrl(anime: SAnime): String {
+        val path = anime.storedMedia()?.url ?: anime.url.substringBefore("#").takeIf { it.startsWith("/") }
+        return "$baseUrl${path.orEmpty()}"
+    }
 
-        screen.addSwitchPreference(
-            key = PREF_EARLY_FETCH_TYPE_KEY,
-            default = PREF_EARLY_FETCH_TYPE_DEFAULT,
-            title = getString(R.string.pref_early_fetch_type_title),
-            summary = getString(R.string.pref_early_fetch_type_summary),
+    // =========================== Anime details ============================
+
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+        val stored = anime.storedMedia() ?: return getLegacyAnimeDetails(anime)
+        val hub = loadHub(stored.url)
+        val target = resolveTarget(stored, hub)
+        val seasonLabel = target?.label ?: stored.season
+        val titles = knownTitles(stored, hub)
+        val seriesTitle = hub.title?.takeIf { it.isNotBlank() } ?: anime.title
+        val isHub = target == null && hub.seasons.size > 1
+
+        anime.fetch_type = if (isHub) FetchType.Seasons else FetchType.Episodes
+        if (isHub) anime.season_number = HUB_SEASON_NUMBER
+
+        val tvdb = tvdbFor(
+            seriesTitle = seriesTitle,
+            seasonLabel = seasonLabel,
+            fullTitle = SeasonTitles.format(seriesTitle, seasonLabel.orEmpty(), titles),
+            titles = titles,
+            path = stored.url,
+            tmdbId = hub.tmdb?.takeIf { it.isMovie == isMovie(stored.url, seasonLabel) }?.id,
         )
+
+        return anime.enrichFromHub(hub, tvdb, seasonLabel, isHub)
+            .checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, currentName)
     }
-
-    private val useEarlyFetch: Boolean
-        get() = preferences.getBoolean(PREF_EARLY_FETCH_TYPE_KEY, PREF_EARLY_FETCH_TYPE_DEFAULT)
-
-    // =========================== Anime Details ============================
 
     override suspend fun fetchRelatedAnimeList(anime: SAnime): List<SAnime> {
-        val (parsedUrl, _) = urlParser(anime.url)
-        val link = parsedUrl.url
-        val document = client.get("$baseUrl$link", headers).useAsJsoup()
-        return parseCatalogue(document, 0).animes
+        val stored = anime.storedMedia() ?: return emptyList()
+        val document = pages.load(SitePaths.hubPath(stored.url)) ?: return emptyList()
+        val earlyFetch = useEarlyFetch
+        return CataloguePage.entries(document).parallelMap { card -> card.toAnime(earlyFetch) }
     }
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime = coroutineScope {
-        Log.d(ANIMESAMA_LOG, "getAnimeDetails: input url = '${anime.url}'")
-        val (parsedUrl, newUrl) = urlParser(anime.url)
-        val link = parsedUrl.url
-        val season = parsedUrl.season
-        val titles = parsedUrl.titles
-        Log.d(ANIMESAMA_LOG, "getAnimeDetails: parsed link = '$link', newUrl = $newUrl, season = $season")
+    // ============================== Seasons ===============================
 
-        if (!newUrl) return@coroutineScope getLegacyAnimeDetails(anime)
-
-        val document = getOrFetchDocument(link)
-        val pageAlters = extractAlternateTitles(document)
-        val allTitles = (titles + pageAlters).toSet()
-
-        val medias = parseMedias(link, document, allTitles)
-        val isHub = isHubPage(medias, season)
-
-        Log.d(ANIMESAMA_LOG, "media number = ${medias.size}")
-
-        if (isHub) {
-            anime.fetch_type = FetchType.Seasons
-            anime.season_number = HUB_SEASON_NUMBER
-        }
-
-        anime.populateFromDocument(document)
-
-        val (effectiveLink, effectiveSeason) = resolveEffectiveTarget(medias, link, season)
-        val contentType = ContentType.from(effectiveSeason ?: anime.title, effectiveLink)
-        val isMovie = isMovieContent(effectiveSeason, effectiveLink, contentType, medias)
-        val isSpecial = isSpecialSeason(effectiveSeason)
-        val tmdbId = extractTmdbId(document, isMovie)
-
-        val fullTitle = formatSeasonTitle(anime.title, effectiveSeason ?: season.orEmpty(), allTitles)
-        val tvdbMetadata = fetchTvdbForPanel(
-            seriesTitle = anime.title,
-            rawSeasonName = effectiveSeason ?: season,
-            fullTitle = fullTitle,
-            titles = allTitles,
-            isMovie = isMovie,
-            isSpecial = isSpecial,
-            externalTmdbId = tmdbId,
-        )
-
-        anime.enrichWithTvdb(tvdbMetadata, document, effectiveSeason, isHub, tmdbId)
-
-        anime.checkAndReportIncompleteness(baseUrl, ::getAnimeUrl, this@AnimeSama.name)
-    }
-
-    private fun isSpecialSeason(seasonName: String?): Boolean {
-        if (seasonName.isNullOrBlank()) return false
-        val lower = seasonName.lowercase()
-        return lower.contains("oav") || lower.contains("ova") || lower.contains("special") || lower.contains("spécial")
-    }
-
-    private fun resolveEffectiveTarget(medias: List<UrlContent>, link: String, season: String?): Pair<String, String?> {
-        val effectiveLink = if (medias.size == 1 && medias[0].url.isNotBlank()) medias[0].url else link
-        val effectiveSeason = season ?: if (medias.isNotEmpty()) medias[0].season else null
-        return Pair(effectiveLink, effectiveSeason)
-    }
-
-    private fun isMovieContent(season: String?, link: String, contentType: ContentType, medias: List<UrlContent> = emptyList()): Boolean = (season != null && season.startsWith("Film", ignoreCase = true)) ||
-        link.contains("film", ignoreCase = true) ||
-        contentType == ContentType.MOVIE ||
-        (medias.size == 1 && medias[0].url.contains("film", ignoreCase = true))
-
-    private fun SAnime.populateFromDocument(document: Document) {
-        val metaParts = document.selectFirst(".oe-meta")?.text()?.split("·")?.map { it.trim() }
-        val studio = (if (metaParts != null && metaParts.size >= 4) metaParts[2] else metaParts?.getOrNull(1))
-            ?: document.selectFirst("dl.oe-infos dt:contains(Studio) + dd")?.text()
-            ?: document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text()
-        if (author.isNullOrEmpty()) author = studio.orEmpty()
-        val genres = document.select(".oe-genres a, .genre-pill, div.genres-wrap > span").map { it.text() }.filter { it.isNotBlank() }
-        if (genre.isNullOrEmpty() && genres.isNotEmpty()) genre = genres.joinToString(", ")
-        val statusText = document.selectFirst(".oe-meta")?.text()
-            ?: document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text().orEmpty()
-        status = statusText.parseStatus()
-    }
-
-    private fun extractAlternateTitles(document: Document): Set<String> {
-        val alterText = document.selectFirst("#titreAlter, .oe-alters")?.text() ?: return emptySet()
-        return alterText.split(alterTitlesSplitRegex)
-            .map { it.trim() }
-            .filter { it.length >= MIN_TITLE_LENGTH }
-            .toSet()
-    }
-
-    private fun extractSpfTitles(document: Document): List<String> = newSpfRegex.findAll(document.html()).map { match ->
-        (match.groupValues[1].ifEmpty { match.groupValues[2] }).trim()
-    }.filter { it.isNotBlank() }.toList()
-
-    private fun resolveCoverAndBackdrop(document: Document, metadata: TvdbMetadata?, monoSeason: Boolean): Pair<String?, String?> {
-        val pageCover = document.selectFirst(".oe-affiche img")?.attr("abs:src")
-            ?: document.selectFirst(".oe-fond img")?.attr("abs:src")
-            ?: document.getElementById("coverOeuvre")?.attr("abs:src")
-        val targetPoster = if (monoSeason) (metadata?.seasonPosterUrl ?: metadata?.mainPosterUrl) else metadata?.mainPosterUrl
-        val poster = targetPoster ?: pageCover
-        val backdrop = metadata?.backdropUrl ?: document.selectFirst(".oe-fond img")?.attr("abs:src") ?: metadata?.mainPosterUrl
-        return Pair(poster, backdrop)
-    }
-
-    private fun SAnime.enrichWithTvdb(
-        tvdbMetadata: TvdbMetadata?,
-        document: Document,
-        season: String?,
-        isHub: Boolean,
-        tmdbId: Long? = null,
-    ) {
-        val rawYear = document.selectFirst(".oe-meta")?.text()?.split("·")?.firstOrNull()?.trim()
-            ?: document.selectFirst("div.info-grid > span:contains(Année) + .info-val")?.text()
-        val descriptionText = document.selectFirst("p#synopsisText")?.text().orEmpty()
-        val monoSeason = (season != null && !isHub)
-
-        tvdbMetadata?.let { metadata ->
-            if (artist.isNullOrBlank()) artist = metadata.artist
-            if (author.isNullOrBlank()) author = metadata.author
-            if (genre.isNullOrBlank()) genre = metadata.genre
-            if (status == SAnime.UNKNOWN) status = metadata.status
-        }
-
-        val (poster, backdrop) = resolveCoverAndBackdrop(document, tvdbMetadata, monoSeason)
-        if (poster != null) thumbnail_url = poster
-        if (backdrop != null) background_url = backdrop
-
-        enrichDescription(tvdbMetadata, monoSeason, descriptionText, rawYear)
-    }
-
-    private fun SAnime.enrichDescription(tvdbMetadata: TvdbMetadata?, monoSeason: Boolean, descriptionText: String, backupYear: String?) {
-        val targetSummary = tvdbMetadata?.summary?.takeIf { (it.isNotBlank() && monoSeason) || descriptionText.isBlank() } ?: descriptionText
-
-        val year = tvdbMetadata?.releaseDate ?: backupYear
-        val dedicatedSeasonDescriptionNeeded = (monoSeason && !tvdbMetadata?.summary.isNullOrBlank())
-        if (description.isNullOrEmpty() || dedicatedSeasonDescriptionNeeded) {
-            description = buildDescription(targetSummary, year)
-        }
-    }
-
-    // ============================== Season ==============================
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
-        Log.d(ANIMESAMA_LOG, "getSeasonList: input url = '${anime.url}'")
-        val (parsedUrl, newUrl) = urlParser(anime.url)
-        Log.d(ANIMESAMA_LOG, "getSeasonList: parsedUrl = $parsedUrl, newUrl = $newUrl")
-        if (!newUrl) return getLegacySeasonList(anime)
+        val stored = anime.storedMedia() ?: return getLegacySeasonList(anime)
+        val hub = loadHub(stored.url)
+        if (hub.seasons.isEmpty()) return emptyList()
 
-        val link = parsedUrl.url
-        val document = getOrFetchDocument(link)
-        val pageAlters = extractAlternateTitles(document)
-        val allTitles = (parsedUrl.titles + pageAlters).toSet()
+        val seriesTitle = hub.title?.takeIf { it.isNotBlank() } ?: anime.title
+        val titles = knownTitles(stored, hub)
 
-        val medias = parseMedias(link, document, allTitles)
-        val pagePoster = document.selectFirst(".oe-affiche img")?.attr("abs:src")
-            ?: document.selectFirst(".oe-fond img")?.attr("abs:src")
-            ?: document.getElementById("coverOeuvre")?.attr("abs:src")
-
-        val metaParts = document.selectFirst(".oe-meta")?.text()?.split("·")?.map { it.trim() }
-        val docStudio = (if (metaParts != null && metaParts.size >= 4) metaParts[2] else metaParts?.getOrNull(1))
-            ?: document.selectFirst("dl.oe-infos dt:contains(Studio) + dd")?.text()
-            ?: document.selectFirst("div.info-grid > span:contains(Studio) + .info-val")?.text()
-        val docGenres = document.select(".oe-genres a, .genre-pill, div.genres-wrap > span").map { it.text() }.filter { it.isNotBlank() }
-        val docGenre = docGenres.takeIf { it.isNotEmpty() }?.joinToString(", ")
-        val statusText = document.selectFirst(".oe-meta")?.text()
-            ?: document.selectFirst("div.info-grid > span:contains(État) + .info-val")?.text().orEmpty()
-        val docStatus = statusText.parseStatus()
-
-        return medias.parallelMap { media ->
-            val rawSeason = media.season.orEmpty()
-            val fullTitle = formatSeasonTitle(anime.title, rawSeason, media.titles)
-            val contentType = ContentType.from(fullTitle, media.url)
-            val isMovie = isMovieContent(rawSeason, media.url, contentType, medias)
-            val isSpecial = isSpecialSeason(rawSeason)
-            val tmdbId = extractTmdbId(document, isMovie)
-            val tvdbMetadata = fetchTvdbForPanel(
-                seriesTitle = anime.title,
-                rawSeasonName = rawSeason,
-                fullTitle = fullTitle,
-                titles = media.titles,
-                isMovie = isMovie,
-                isSpecial = isSpecial,
-                externalTmdbId = tmdbId,
-            )
-
-            SAnime.create().apply {
-                title = fullTitle
-                url = UrlContent(
-                    url = media.url,
-                    titles = allTitles,
-                    season = rawSeason,
-                ).toJsonString(json)
-                thumbnail_url = tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl ?: pagePoster ?: anime.thumbnail_url
-                Log.d(ANIMESAMA_LOG, "getSeasonList item: title='$fullTitle', rawSeason='$rawSeason', chosenThumbnail='$thumbnail_url', tvdbSeasonPoster='${tvdbMetadata?.seasonPosterUrl}', tvdbMainPoster='${tvdbMetadata?.mainPosterUrl}'")
-                description = tvdbMetadata?.summary ?: document.selectFirstLog("p#synopsisText")?.text() ?: ""
-                tvdbMetadata?.releaseDate?.let { date ->
-                    description = buildDescription(description.orEmpty(), date)
-                }
-                author = tvdbMetadata?.author ?: docStudio
-                artist = tvdbMetadata?.artist ?: docStudio
-                genre = tvdbMetadata?.genre ?: docGenre
-                status = tvdbMetadata?.status ?: docStatus
-                initialized = true
-                fetch_type = FetchType.Episodes
-                season_number = HUB_SEASON_NUMBER
-                background_url = tvdbMetadata?.backdropUrl ?: document.selectFirst(".oe-fond img")?.attr("abs:src")
-            }
-        }.checkAndReportSeasonIssues(baseUrl, anime.title, ::getAnimeUrl)
+        return hub.seasons
+            .parallelMap { season -> buildSeasonAnime(seriesTitle, anime, hub, season, titles) }
+            .checkAndReportSeasonIssues(baseUrl, anime.title, ::getAnimeUrl)
     }
 
     // ============================== Episodes ==============================
+
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val (parsedUrl, newUrl) = urlParser(anime.url)
-        Log.d(ANIMESAMA_LOG, "getEpisodeList: input url='${anime.url}', parsedUrl=$parsedUrl, newUrl=$newUrl")
-        if (!newUrl) return getLegacyEpisodeList(anime)
+        val stored = anime.storedMedia() ?: return getLegacyEpisodeList(anime)
+        val hub = loadHub(stored.url)
+        // A work with several seasons has no episode of its own until a season is chosen. Some
+        // clients call this before (or while) getAnimeDetails runs, so the fetch type is not set
+        // yet and the season list is never requested: answering with an empty list makes them
+        // show an error, so a single explanatory episode is returned instead.
+        val target = resolveTarget(stored, hub)
+            ?: return if (hub.seasons.size > 1) listOf(hubPlaceholder()) else emptyList()
 
-        val initialLink = parsedUrl.url
-        val initialSeason = parsedUrl.season
+        val seasonPath = SitePaths.seasonPath(target.path)
+        val primaryLanguage = SitePaths.language(target.path) ?: stored.lang ?: DEFAULT_LANGUAGE
+        val primaryDocument = pages.load(SitePaths.seasonUrl(seasonPath, primaryLanguage)) ?: return emptyList()
+        val primaryInfo = SeasonPage.parse(primaryDocument)
 
-        val preDoc = getOrFetchDocument(initialLink)
-        val pageAlters = extractAlternateTitles(preDoc)
-        val allTitles = (parsedUrl.titles + pageAlters).toSet()
+        // A season that is not out yet answers `200` with no `bdd` script: there is simply
+        // nothing to list, which is not a network error.
+        if (primaryInfo.bdd == null) return emptyList()
 
-        val medias = parseMedias(initialLink, preDoc, allTitles)
-        Log.d(ANIMESAMA_LOG, "getEpisodeList: found ${medias.size} medias for link='$initialLink'")
-
-        val isHub = isHubPage(medias, initialSeason)
-        if (isHub) {
-            Log.d(ANIMESAMA_LOG, "getEpisodeList: isHub=true for '$initialLink'")
-            return listOf(
-                SEpisode.create().apply {
-                    url = ""
-                    name = "⚠ Activez Early Fetch"
-                    summary = "Ouvrez les paramètres de cette extension, activez « Early Fetch », puis videz la base locale de cette extension."
-                },
-            )
+        val languages = primaryInfo.languages.ifEmpty {
+            listOf(LanguageRef(primaryLanguage, primaryLanguage.uppercase()))
         }
+        val tracks = languages.parallelMap { language -> language to loadScript(seasonPath, language.slug) }
+        val episodeCount = tracks.maxOfOrNull { (_, script) -> script?.episodeCount ?: 0 } ?: 0
+        if (episodeCount == 0) return emptyList()
 
-        val (link, rawSeason) = resolveEffectiveTarget(medias, initialLink, initialSeason)
-        val seasonDoc = if (link != initialLink) {
-            getOrFetchDocument(link)
-        } else {
-            preDoc
-        }
-
-        var spfTitles = extractSpfTitles(seasonDoc)
-        if (spfTitles.isEmpty()) {
-            for (lang in listOf("vostfr", "vf")) {
-                val cleanLink = link.removeSuffix("/")
-                val langDoc = try {
-                    getOrFetchDocument("$cleanLink/$lang/")
-                } catch (_: Exception) {
-                    try {
-                        getOrFetchDocument("$cleanLink/$lang")
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
-                if (langDoc != null) {
-                    val titles = extractSpfTitles(langDoc)
-                    if (titles.isNotEmpty()) {
-                        spfTitles = titles
-                        break
-                    }
-                }
-            }
-        }
-        val episodes = fetchAggregatedEpisodes(link)
-
-        val fullTitle = formatSeasonTitle(anime.title, rawSeason.orEmpty(), allTitles)
-        val contentType = ContentType.from(rawSeason ?: anime.title, link)
-        val isMovie = isMovieContent(rawSeason, link, contentType, medias)
-        val isSpecial = isSpecialSeason(rawSeason)
-        val tmdbId = extractTmdbId(preDoc, isMovie)
-        val tvdbMetadata = fetchTvdbForPanel(
-            seriesTitle = anime.title,
-            rawSeasonName = rawSeason,
-            fullTitle = fullTitle,
-            titles = allTitles,
-            isMovie = isMovie,
-            isSpecial = isSpecial,
-            externalTmdbId = tmdbId,
+        val seasonLabel = target.label.ifBlank { primaryInfo.seasonLabel.orEmpty() }
+        val seriesTitle = hub.title?.takeIf { it.isNotBlank() } ?: anime.title
+        val titles = knownTitles(stored, hub)
+        val tvdb = tvdbFor(
+            seriesTitle = seriesTitle,
+            seasonLabel = seasonLabel,
+            fullTitle = SeasonTitles.format(seriesTitle, seasonLabel, titles),
+            titles = titles,
+            path = target.path,
+            tmdbId = hub.tmdb?.takeIf { it.isMovie == isMovie(target.path, seasonLabel) }?.id,
         )
+        val seasonZero = loadSeasonZero(seriesTitle, tvdb, episodeCount)
 
-        val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
-        val autoS0Offset = calculateAutoS0Offset(tvdbMetadata, tvdbEpCount, episodes.size, medias, link)
-
-        val s0Metadata = if (episodes.size > tvdbEpCount && tvdbEpCount > 0) {
-            fetchTvdbMetadata(anime.title, season = 0, targetTvdbId = tvdbMetadata?.seriesId)
-        } else {
-            null
-        }
-
-        return episodes.episodesPlayersToSEpisodes(
-            tvdbMetadata = tvdbMetadata,
-            season = rawSeason,
-            animeTitle = anime.title,
-            s0Metadata = s0Metadata,
-            autoS0Offset = autoS0Offset,
-            spfTitles = spfTitles,
-            link = link,
-        ).reversed().checkAndReportEpisodeIssues(baseUrl, link, anime.title)
+        return buildEpisodes(
+            animeTitle = seriesTitle,
+            seasonPath = seasonPath,
+            seasonLabel = seasonLabel,
+            targetPath = target.path,
+            tracks = tracks,
+            episodeCount = episodeCount,
+            tvdb = tvdb,
+            seasonZero = seasonZero,
+        )
+            .reversed()
+            .checkAndReportEpisodeIssues(baseUrl, seasonPath, anime.title)
     }
 
-    private suspend fun calculateAutoS0Offset(
-        tvdbMetadata: TvdbMetadata?,
-        tvdbEpCount: Int,
-        epSize: Int,
-        medias: List<UrlContent>,
-        currentLink: String,
-    ): Int {
-        val hasEnoughTvdbEpisodes = tvdbEpCount >= epSize
-        if (tvdbEpCount <= 0 || hasEnoughTvdbEpisodes) return 0
+    // ============================== Hosters ===============================
 
-        var autoS0Offset = 0
-
-        val currentMediaIndex = medias.indexOfFirst { it.url == currentLink }.takeIf { it >= 0 } ?: medias.size
-
-        for (i in 0 until currentMediaIndex) {
-            val media = medias[i]
-            val mediaSeasonName = media.season.orEmpty()
-            val mediaSeasonNum = extractSeasonNumber(mediaSeasonName) ?: continue
-
-            val mediaTvdbCount = tvdbMetadata?.seasonEpisodeCounts?.get(mediaSeasonNum) ?: 0
-            if (mediaSeasonNum <= 0 || mediaTvdbCount <= 0) continue
-
-            val mediaPlayers = fetchPlayers(media.url, "vostfr")
-            val mediaAnimeSamaCount = mediaPlayers.size
-
-            if (mediaAnimeSamaCount <= mediaTvdbCount) continue
-
-            autoS0Offset += (mediaAnimeSamaCount - mediaTvdbCount)
-        }
-        return autoS0Offset
-    }
-
-    private suspend fun fetchAggregatedEpisodes(link: String): List<EpisodePlayers> = langList.parallelMap { lang ->
-        fetchPlayers(link, lang)
-    }
-        .flatten()
-        .groupBy { it.episodeNumber }
-        .map { (epNum, episodeList) ->
-            EpisodePlayers(
-                episodeNumber = epNum,
-                players = episodeList.flatMap { it.players }.distinctBy { it.url },
-            )
-        }
-        .ifEmpty {
-            throw IllegalStateException(getString(R.string.error_no_episodes_found))
-        }
-
-    // ============================== Hosters ==============================
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val players: List<Player> = try {
-            episode.url.parseAs(json)
-        } catch (_: Exception) {
-            return getLegacyHosterList(episode)
-        }
+        val stored = episode.storedLinks() ?: return getLegacyHosterList(episode)
 
-        val langs = players.map { it.lang }.distinct()
-        val hosters = langs.map { lang ->
-            val langPlayers = players.filter { it.lang == lang }
-            Hoster(
-                hosterName = lang.uppercase(),
-                internalData = json.encodeToString(langPlayers),
-            )
-        }.sortHosters()
-        return hosters.checkAndReportHosterIssues(baseUrl, episode.url, episode.name)
+        // One hoster per language, as everywhere else in the repo: picking a server is the
+        // video list's job, and the router already labels each resolved video with its server.
+        val hosters = stored.links
+            .groupBy { it.lang }
+            .map { (language, links) ->
+                Hoster(
+                    hosterName = language.uppercase(),
+                    internalData = LinkSet(stored.seasonPath, links).toJsonString(json),
+                )
+            }
+            .sortHosters()
+
+        return hosters.checkAndReportHosterIssues(baseUrl, stored.seasonPath, episode.name)
     }
 
-    // ============================== Videos ==============================
-    override suspend fun getVideoList(hoster: Hoster): List<Video> {
-        val players: List<Player> = try {
-            val playersJson = hoster.internalData.takeIf { it.isNotBlank() }
-                ?: return getLegacyVideoList(hoster)
-            json.decodeFromString(playersJson)
-        } catch (_: Exception) {
-            return getLegacyVideoList(hoster)
-        }
+    // ============================== Videos ===============================
 
-        val videos = players.parallelMap { player ->
-            extractVideos(player.url, player.lang, supportedServers)
-        }.flatten().sortVideos()
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val stored = hoster.internalData.toLinkSet(json)
+            ?: hoster.internalData.toStoredPlayers(json)
+            ?: return getLegacyVideoList(hoster)
+
+        val videos = stored.links
+            .parallelMap { link ->
+                val url = linkResolver.resolve(stored.seasonPath, link) ?: return@parallelMap emptyList()
+                extractVideos(url, link.lang.uppercase(), supportedServers)
+            }
+            .flatten()
+            .sortVideos()
 
         return videos.checkAndReportVideoIssues(
             baseUrl = baseUrl,
-            urlPath = "/${hoster.hosterName}",
+            urlPath = stored.seasonPath,
             hosterName = hoster.hosterName,
             extensionName = currentName,
             extensionVersion = currentVersion,
         )
     }
 
-    // ============================== Utils ===============================
-    private suspend fun List<EpisodePlayers>.episodesPlayersToSEpisodes(
-        tvdbMetadata: TvdbMetadata?,
-        season: String?,
-        animeTitle: String = "",
-        s0Metadata: TvdbMetadata? = null,
-        autoS0Offset: Int = 0,
-        spfTitles: List<String> = emptyList(),
-        link: String = "",
-    ): List<SEpisode> {
-        val contentType = ContentType.from(season ?: animeTitle, link)
-        val seasonNum = season?.let { extractSeasonNumber(it) } ?: 1
-        val isMultiMovie = contentType == ContentType.MOVIE && this.size > 1
-        val defaultPrefix = if (contentType == ContentType.MOVIE) {
-            if (isMultiMovie) "[Film] " else ""
+    // =============================== Utils ===============================
+
+    /**
+     * Loads a page, either relative to the current base URL or absolute.
+     *
+     * @param location path such as `/catalogue/07-ghost`, or a full URL for a filtered search.
+     * @return the parsed page, or `null` on a network or HTTP failure.
+     */
+    private suspend fun fetchDocument(location: String): Document? {
+        val url = if (location.startsWith("http")) location else "$baseUrl$location"
+        return try {
+            client.get(url, headers).useAsJsoup()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Wraps a loaded catalogue page into the answer expected by Aniyomi.
+     *
+     * When the "Early Fetch" switch is on, each card also gets its fetch type, at the cost of one
+     * work page per card.
+     *
+     * @param document loaded page, `null` when it could not be fetched.
+     * @param page index that was requested, used to decide whether another page exists.
+     */
+    private suspend fun cataloguePage(document: Document?, page: Int): AnimesPage {
+        if (document == null) return AnimesPage(emptyList(), false)
+        val earlyFetch = useEarlyFetch
+        return AnimesPage(
+            animes = CataloguePage.entries(document).parallelMap { card -> card.toAnime(earlyFetch) },
+            hasNextPage = CataloguePage.hasNextPage(document, page),
+        )
+    }
+
+    /**
+     * Loads and parses the work page of an entry.
+     *
+     * @param path any path inside the work.
+     * @throws Exception when the work page cannot be fetched: it is the only page carrying
+     *   metadata, so there is nothing useful to display without it.
+     */
+    private suspend fun loadHub(path: String): HubInfo {
+        val hubPath = SitePaths.hubPath(path)
+        val document = pages.load(hubPath) ?: throw ContentUnavailableException(WORK_UNAVAILABLE)
+        return HubPage.parse(document, hubPath)
+    }
+
+    /**
+     * Builds the episode shown while a work still points at its seasons.
+     *
+     * It carries no link on purpose: it is only there to explain what to do, so that clients
+     * that call [getEpisodeList] on a hub show a readable line instead of an empty, error-looking
+     * list. The text follows [useEarlyFetch], so it never asks for a switch that is already on.
+     *
+     * @return the explanatory episode.
+     */
+    private fun hubPlaceholder(): SEpisode = SEpisode.create().apply {
+        url = ""
+        if (useEarlyFetch) {
+            // The switch is already on: the season list is simply not resolved yet.
+            name = "⚠ Fiche en cours de résolution"
+            summary = "Les saisons de cette œuvre sont en cours de chargement. Rouvrez la fiche dans un instant pour les voir apparaître."
         } else {
-            contentType.getPrefix(seasonNum)
+            name = "⚠ Activez Early Fetch"
+            summary = "Ouvrez les paramètres de cette extension, activez « Early Fetch », puis videz la base locale de cette extension."
+        }
+    }
+
+    /**
+     * Chooses the season an entry actually points at.
+     *
+     * An entry opened from the catalogue points at a work: when that work declares a single
+     * season, the season is used directly so the user does not have to pick it.
+     */
+    private fun resolveTarget(stored: MediaUrl, hub: HubInfo): SeasonRef? {
+        val pointsAtSeason = stored.season != null || SitePaths.language(stored.url) != null
+        if (pointsAtSeason) return SeasonRef(stored.season.orEmpty(), stored.url)
+        return hub.seasons.singleOrNull()
+    }
+
+    /**
+     * Collects every title known for a work.
+     *
+     * Alternate titles and the work title both improve the TVDB match, which is the only source
+     * of episode titles.
+     */
+    private fun knownTitles(stored: MediaUrl, hub: HubInfo): Set<String> = (stored.titles + hub.altTitles + listOfNotNull(hub.title))
+        .filter { it.isNotBlank() }
+        .toSet()
+
+    /**
+     * Tells whether a season is a movie.
+     *
+     * @param path season path.
+     * @param seasonLabel season label, or `null` for a work.
+     */
+    private fun isMovie(path: String, seasonLabel: String?): Boolean = ContentType.from(seasonLabel.orEmpty(), path) == ContentType.MOVIE
+
+    /**
+     * Fetches the TVDB metadata of a season.
+     *
+     * @param seriesTitle title of the work.
+     * @param seasonLabel label of the season, or `null` for a work.
+     * @param fullTitle full title Aniyomi displays, used for the title match.
+     * @param titles alternate titles, used for the title match.
+     * @param path season path, used to detect the content kind.
+     * @param tmdbId TheMovieDB id advertised by the work page, when it matches the content kind.
+     */
+    private suspend fun tvdbFor(
+        seriesTitle: String,
+        seasonLabel: String?,
+        fullTitle: String,
+        titles: Set<String>,
+        path: String,
+        tmdbId: Long?,
+    ): TvdbMetadata? {
+        val contentType = ContentType.from(seasonLabel ?: seriesTitle, path)
+        return fetchTvdbForPanel(
+            seriesTitle = seriesTitle,
+            rawSeasonName = seasonLabel,
+            fullTitle = fullTitle,
+            titles = titles,
+            isMovie = contentType == ContentType.MOVIE,
+            isSpecial = contentType == ContentType.SPECIAL || contentType == ContentType.OAV,
+            externalTmdbId = tmdbId,
+        )
+    }
+
+    /**
+     * Fetches the season zero metadata, only when the site lists more episodes than TVDB knows.
+     *
+     * @param seriesTitle title of the work.
+     * @param tvdb metadata of the current season.
+     * @param siteEpisodeCount number of episodes the site lists.
+     */
+    private suspend fun loadSeasonZero(
+        seriesTitle: String,
+        tvdb: TvdbMetadata?,
+        siteEpisodeCount: Int,
+    ): TvdbMetadata? {
+        val knownEpisodes = tvdb?.episodeSummaries?.size ?: 0
+        if (knownEpisodes <= 0 || siteEpisodeCount <= knownEpisodes) return null
+        return try {
+            fetchTvdbMetadata(seriesTitle, season = 0, targetTvdbId = tvdb?.seriesId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Loads the bdd script of one language, or `null` when the page has none. */
+    private suspend fun loadScript(seasonPath: String, lang: String): BddScript? {
+        val document = pages.load(SitePaths.seasonUrl(seasonPath, lang)) ?: return null
+        return BddScriptParser.parse(document)
+    }
+
+    /**
+     * Loads a season page again to obtain a token the link API will accept.
+     *
+     * The token is embedded in the page and expires, so the cached copy is dropped first.
+     */
+    private suspend fun freshToken(seasonPath: String, lang: String): String? {
+        pages.invalidate(SitePaths.seasonUrl(seasonPath, lang))
+        return loadScript(seasonPath, lang)?.token
+    }
+
+    /**
+     * Resolves one reference through the link API.
+     *
+     * The API answers `403` for an expired page token, `404` for an unknown reference and `400`
+     * for a malformed request; the HTTP client turns every non-2xx answer into an exception.
+     *
+     * @param token page token the reference was read with.
+     * @param id reference to resolve.
+     */
+    private suspend fun callLinkApi(token: String, id: String): LinkResolver.ApiResult {
+        val response = try {
+            client.get("$baseUrl/api/lien.php?j=$token&l=$id", headers)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: HttpException) {
+            return apiFailure(e)
+        } catch (e: IOException) {
+            return apiFailure(e)
         }
 
-        return this.parallelMap { episode ->
-            val epNum = episode.episodeNumber
-            val spfName = if (contentType == ContentType.MOVIE) spfTitles.getOrNull(epNum - 1) else null
-            val (prefix, epMeta) = resolveEpisodeMetadata(epNum, tvdbMetadata, s0Metadata, contentType, defaultPrefix, autoS0Offset)
-            val baseName = formatEpisodeBaseName(epNum, contentType, animeTitle, season, epMeta?.title, tvdbMetadata?.title, this.size, spfName)
-            val effectivePrefix = if (contentType == ContentType.MOVIE) {
-                if (isMultiMovie) "[Film] " else ""
-            } else {
-                prefix
+        val resolved = try {
+            val body = response.use { it.body.string() }
+            jsonInstance.parseToJsonElement(body).jsonObject["u"]?.jsonPrimitive?.contentOrNull
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+
+        return if (resolved.isNullOrBlank()) {
+            LinkResolver.ApiResult.Unavailable
+        } else {
+            LinkResolver.ApiResult.Url(resolved)
+        }
+    }
+
+    /**
+     * Maps a failed link API call to a resolver outcome.
+     *
+     * @param error failure raised by the HTTP client.
+     */
+    private fun apiFailure(error: Throwable): LinkResolver.ApiResult = when (error.safeHttpCode) {
+        HTTP_FORBIDDEN -> LinkResolver.ApiResult.TokenRejected
+        HTTP_BAD_REQUEST, HTTP_NOT_FOUND -> LinkResolver.ApiResult.Unavailable
+        else -> LinkResolver.ApiResult.Failed
+    }
+
+    /**
+     * Returns the hostname of a URL.
+     *
+     * @param url URL to inspect.
+     * @return the hostname, or an empty string when the URL cannot be parsed.
+     */
+    private fun hostOf(url: String): String = try {
+        url.toHttpUrl().host
+    } catch (_: IllegalArgumentException) {
+        ""
+    }
+
+    /** Returns the router name of a hostname, or the hostname itself when unknown. */
+    private fun serverNameFor(host: String): String {
+        if (host.isBlank()) return ""
+        return serverNames.getOrPut(host) {
+            supportedServers.firstOrNull { name ->
+                getVideoServer(this, name)?.matches("https://$host/") == true
+            } ?: host
+        }
+    }
+
+    /**
+     * Builds the playable link of one raw reference.
+     *
+     * @param lang language the reference belongs to.
+     * @param raw raw reference, either `lien:<id>` or a full embed URL.
+     * @param script script the reference was read from, giving its host and state.
+     * @return the link, or `null` when the site flagged it as removed.
+     */
+    private fun playerLink(lang: String, raw: String, script: BddScript): PlayerLink? {
+        if (raw.startsWith(REFERENCE_PREFIX)) {
+            val id = raw.removePrefix(REFERENCE_PREFIX).takeIf { it.isNotBlank() } ?: return null
+            val host = script.hostOf(id).orEmpty()
+            if (script.isHostDead(host) || !script.isAlive(id)) return null
+            return PlayerLink(lang = lang, host = host, server = serverNameFor(host), id = id, token = script.token)
+        }
+
+        if (!raw.startsWith("http")) return null
+        val host = hostOf(raw).takeIf { it.isNotBlank() } ?: return null
+        if (script.isHostDead(host)) return null
+        return PlayerLink(lang = lang, host = host, server = serverNameFor(host), directUrl = raw)
+    }
+
+    /** Collects every playable link of one episode, across languages and servers. */
+    private fun collectLinks(
+        episodeNumber: Int,
+        tracks: List<Pair<LanguageRef, BddScript?>>,
+    ): List<PlayerLink> {
+        val links = mutableListOf<PlayerLink>()
+        for ((language, script) in tracks) {
+            if (script == null) continue
+            for (server in script.servers) {
+                val raw = server.refs.getOrNull(episodeNumber - 1) ?: continue
+                playerLink(language.slug, raw, script)?.let { links += it }
             }
-            val finalName = "$effectivePrefix$baseName".trim()
+        }
+        return links.distinctBy { Triple(it.lang, it.id, it.directUrl) }
+    }
 
-            val movieMetadata = if (contentType == ContentType.MOVIE && !spfName.isNullOrBlank()) {
-                val cleanSpf = spfName.replace(movieCleanPrefixRegex, "").trim()
-                val cleanAnimeTitle = animeTitle.replace(movieCleanPrefixRegex, "").replace(movieCleanTrailingRegex, "").trim()
-                val movieQuery = if (cleanSpf.isNotBlank()) "$cleanAnimeTitle $cleanSpf" else "$cleanAnimeTitle $spfName"
-                try {
-                    fetchTvdbMetadata(movieQuery, isMovie = true)
-                } catch (_: Exception) {
-                    null
-                }
-            } else {
-                null
-            }
+    /**
+     * Builds the episode list of a season.
+     *
+     * Episodes are merged by index across languages: episode 3 exists as soon as one language
+     * lists it, and an episode whose every link was removed is dropped.
+     */
+    private fun buildEpisodes(
+        animeTitle: String,
+        seasonPath: String,
+        seasonLabel: String,
+        targetPath: String,
+        tracks: List<Pair<LanguageRef, BddScript?>>,
+        episodeCount: Int,
+        tvdb: TvdbMetadata?,
+        seasonZero: TvdbMetadata?,
+    ): List<SEpisode> {
+        val contentType = ContentType.from(seasonLabel.ifBlank { animeTitle }, targetPath)
 
-            val movieThumbnail = movieMetadata?.seasonPosterUrl ?: movieMetadata?.mainPosterUrl
-            val finalPreview = movieThumbnail ?: epMeta?.thumbnail ?: tvdbMetadata?.backdropUrl ?: tvdbMetadata?.seasonPosterUrl ?: tvdbMetadata?.mainPosterUrl
+        return (1..episodeCount).map { number ->
+            // An episode whose every link was flagged dead by the site is kept: dropping it
+            // would leave a hole in the numbering, and the client can still show it as
+            // unavailable.
+            val links = collectLinks(number, tracks)
 
-            Log.d(ANIMESAMA_LOG, "episodesPlayersToSEpisodes: ep#$epNum -> name='$finalName', previewUrl='$finalPreview', hasSummary=${epMeta?.summary != null || movieMetadata?.summary != null}")
+            val (prefixOverride, tvdbEpisode) = EpisodeNaming.resolveTvdbEpisode(number, contentType, tvdb, seasonZero)
+            val name = EpisodeNaming.build(
+                episodeNumber = number,
+                contentType = contentType,
+                totalEpisodes = episodeCount,
+                animeTitle = animeTitle,
+                seasonLabel = seasonLabel,
+                seriesTitle = tvdb?.title,
+                episodeTitle = tvdbEpisode?.title,
+                prefixOverride = prefixOverride,
+            )
 
             SEpisode.create().apply {
-                name = finalName
-                episode_number = epNum.toFloat()
-                scanlator = episode.getScanlatorString()
-                url = episode.players.toJsonString(json)
-                summary = movieMetadata?.summary ?: epMeta?.summary ?: tvdbMetadata?.summary
-                preview_url = finalPreview
+                episode_number = number.toFloat()
+                this.name = name.value
+                scanlator = links.map { it.lang.uppercase() }.distinct().joinToString(", ")
+                url = LinkSet(seasonPath, links).toJsonString(json)
+                summary = tvdbEpisode?.summary ?: tvdb?.summary
+                // TVDB has no screenshot for every episode: fall back to the season artwork so
+                // that the episode list never shows an empty thumbnail.
+                preview_url = tvdbEpisode?.thumbnail
+                    ?: tvdb?.backdropUrl
+                    ?: tvdb?.seasonPosterUrl
+                    ?: tvdb?.mainPosterUrl
             }
         }
     }
 
-    private fun resolveEpisodeMetadata(
-        epNum: Int,
-        tvdbMetadata: TvdbMetadata?,
-        s0Metadata: TvdbMetadata?,
-        contentType: ContentType,
-        defaultPrefix: String,
-        autoS0Offset: Int = 0,
-    ): Pair<String, TvdbEpisode?> {
-        val offset = tvdbMetadata?.episodeOffset ?: 0
-        val tvdbEpCount = tvdbMetadata?.episodeSummaries?.size ?: 0
-
-        val epMeta = tvdbMetadata?.episodeSummaries?.get(epNum + offset)
-        if (isSeasonOverflow(epMeta, contentType, epNum, tvdbEpCount, s0Metadata)) {
-            val s0EpIndex = (epNum - tvdbEpCount) + offset + autoS0Offset
-            val s0Meta = s0Metadata?.episodeSummaries?.get(s0EpIndex)
-            if (s0Meta != null) return Pair("[OAV] ", s0Meta)
-        }
-        return Pair(defaultPrefix, epMeta)
-    }
-
-    private fun formatEpisodeBaseName(
-        epNum: Int,
-        contentType: ContentType,
-        animeTitle: String,
-        season: String?,
-        tvdbName: String?,
-        tvdbTitle: String?,
-        totalEpisodes: Int,
-        spfMovieName: String? = null,
-    ): String {
-        if (contentType == ContentType.MOVIE) {
-            val rawMovieName = if (!spfMovieName.isNullOrBlank()) {
-                spfMovieName
-            } else {
-                val cleanSeasonSub = season?.substringAfter("Film -", "")?.trim()?.takeIf { it.isNotBlank() }
-                val movieTitle = tvdbTitle?.takeIf { it.isNotBlank() }
-                    ?: cleanSeasonSub
-                    ?: season?.takeIf { it.isNotBlank() && !it.equals("Film", ignoreCase = true) }
-                    ?: animeTitle
-                if (totalEpisodes == 1) movieTitle else "$movieTitle $epNum"
-            }
-            return rawMovieName.replace(movieCleanPrefixRegex, "").trim().ifBlank {
-                if (totalEpisodes == 1) "Film" else "Film $epNum"
-            }
-        }
-
-        val cleanTvdbName = tvdbName?.trim()
-        return when {
-            cleanTvdbName.isNullOrBlank() || contentType == ContentType.SPECIAL -> "Épisode $epNum"
-
-            cleanTvdbName.matches(episodeBasicRegex) -> "Épisode $epNum"
-
-            cleanTvdbName.matches(episodeWithTitleRegex) -> {
-                val realTitle = episodeWithTitleRegex.find(cleanTvdbName)?.groupValues?.get(1)?.trim()
-                if (!realTitle.isNullOrBlank()) "Épisode $epNum - $realTitle" else "Épisode $epNum"
-            }
-
-            else -> "Épisode $epNum - $cleanTvdbName"
+    /**
+     * Converts a parsed catalogue card into a library entry.
+     *
+     * @param earlyFetch whether the fetch type must be resolved now, for clients that never
+     *   refresh it later.
+     */
+    private suspend fun CatalogueCard.toAnime(earlyFetch: Boolean): SAnime = SAnime.create().apply {
+        title = this@toAnime.title
+        thumbnail_url = this@toAnime.posterUrl
+        url = this@toAnime.media.toJsonString(json)
+        if (earlyFetch && isHub(this@toAnime.media.url)) {
+            fetch_type = FetchType.Seasons
+            season_number = HUB_SEASON_NUMBER
         }
     }
 
-    private suspend fun fetchPlayers(url: String, lang: String): List<EpisodePlayers> {
-        val jsUrl = "$baseUrl$url/$lang/episodes.js"
-        Log.d(ANIMESAMA_LOG, "fetchPlayers: lang=$lang, jsUrl='$jsUrl'")
-
-        val doc = try {
-            val response = client.get(jsUrl, headers)
-            Log.d(ANIMESAMA_LOG, "fetchPlayers: HTTP status=${response.code} for $jsUrl")
-            if (!response.isSuccessful) return emptyList()
-            response.body.string()
-        } catch (e: HttpException) {
-            Log.d(ANIMESAMA_LOG, "fetchPlayers: HTTP error for $jsUrl: ${e.message}")
-            return emptyList()
-        } catch (e: IOException) {
-            Log.e(ANIMESAMA_LOG, "fetchPlayers: network error for $jsUrl: ${e.message}")
-            return emptyList()
-        }
-
-        val servers = epsArrayRegex.findAll(doc).map { match ->
-            val arrayName = match.groupValues[1]
-            val arrayContent = match.groupValues[2]
-            val urls = urlInArrayRegex.findAll(arrayContent).map { it.groupValues[1].trim() }.toList()
-            Log.d(ANIMESAMA_LOG, "fetchPlayers: found server array 'eps$arrayName' with ${urls.size} urls")
-            urls
-        }.toList()
-
-        val maxEpisodes = servers.maxOfOrNull { it.size } ?: return emptyList()
-
-        val langTag = lang.uppercase()
-
-        val result = (0 until maxEpisodes).mapNotNull { index ->
-            val urlsForEpisode = servers.mapNotNull { it.getOrNull(index) }
-                .distinct()
-                .map { playerUrl -> Player(url = playerUrl, lang = langTag) }
-
-            if (urlsForEpisode.isNotEmpty()) {
-                EpisodePlayers(
-                    episodeNumber = index + 1,
-                    players = urlsForEpisode,
-                )
-            } else {
-                null
-            }
-        }
-
-        Log.d(ANIMESAMA_LOG, "fetchPlayers: lang=$lang -> extracted ${result.size} episodes")
-        return result
+    /**
+     * Tells whether a work declares several seasons.
+     *
+     * Only the work page knows it: the catalogue does not expose the season count.
+     *
+     * @param path path of a work or of one of its seasons.
+     */
+    private suspend fun isHub(path: String): Boolean {
+        val hubPath = SitePaths.hubPath(path)
+        val document = pages.load(hubPath) ?: return false
+        return HubPage.seasons(document, hubPath).size > 1
     }
 
-    private fun formatSeasonTitle(seriesTitle: String, rawSeasonName: String, titles: Set<String>): String {
-        val cleanSeason = rawSeasonName.trim()
+    /**
+     * Reads the stored payload of a library entry.
+     *
+     * Three formats can be found in a library: the current JSON, the bare path written by the
+     * first releases, and the anchored path handled by the legacy parser.
+     */
+    private fun SAnime.storedMedia(): MediaUrl? = url.toMediaUrl(json) ?: url.toBarePathMediaUrl()
 
-        val normalizedSeason = cleanSeason.normalize()
+    /**
+     * Reads the bare-path format, used before the JSON migration.
+     *
+     * Entries added by the first releases hold `/catalogue/<work>` or
+     * `/catalogue/<work>/<season>` with no JSON. The path alone is exactly what the current
+     * pipeline needs, so those entries keep working instead of falling back to the old HTML
+     * parser, which no longer matches the site.
+     *
+     * @return the decoded entry, or `null` for an anchored URL that only the legacy parser reads.
+     */
+    private fun String.toBarePathMediaUrl(): MediaUrl? {
+        if (!startsWith("/") || contains("#")) return null
 
-        if (titles.any { it.normalize() in normalizedSeason }) return cleanSeason
+        val path = SitePaths.normalize(this)
+        val segments = SitePaths.segments(path)
+        if (segments.size < 2) return null
 
-        if (cleanSeason.equals("Saison 1", ignoreCase = true)) return seriesTitle
-
-        if (cleanSeason.matches(seasonRegex)) {
-            val shortSeason = cleanSeason
-                .replace(seasonReplaceRegex, " ")
-                .replace(partReplaceRegex, "Part $1")
-                .trim()
-            return "$seriesTitle $shortSeason"
-        }
-
-        return "$seriesTitle $cleanSeason"
-    }
-
-    private val documentMutexes = ConcurrentHashMap<String, Mutex>()
-
-    private suspend fun getOrFetchDocument(link: String): Document {
-        getCachedDocument(link)?.let { return it }
-
-        val mutex = documentMutexes.computeIfAbsent(link) { Mutex() }
-        try {
-            return mutex.withLock {
-                getCachedDocument(link)?.let { return@withLock it }
-
-                client.get("$baseUrl$link", headers).useAsJsoup().also { doc ->
-                    putCachedDocument(link, doc)
-                }
-            }
-        } finally {
-            documentMutexes.remove(link, mutex)
-        }
-    }
-
-    private fun getCachedDocument(link: String): Document? {
-        val cached = documentCache[link] ?: return null
-        val (doc, timestamp) = cached
-        if (System.currentTimeMillis() - timestamp > CACHE_LIFETIME) {
-            documentCache.remove(link)
-            return null
-        }
-        return doc
-    }
-
-    private fun putCachedDocument(link: String, doc: Document) {
-        documentCache[link] = Pair(doc, System.currentTimeMillis())
-    }
-
-    private fun isHubPage(medias: List<UrlContent>, season: String? = null): Boolean = season == null && medias.size > 1
-
-    private fun parseMedias(link: String, document: Document, titles: Set<String>): List<UrlContent> {
-        val pathSegments = link.removePrefix("/").split("/")
-        val hubLink = "/" + pathSegments.take(2).joinToString("/")
-        Log.d(ANIMESAMA_LOG, "parseMedias: link = '$link', hubLink = '$hubLink'")
-
-        val scriptContent = document.select("script").joinToString("\n") { it.html() }
-        val uncommented = commentRegex.replace(scriptContent, "")
-        val medias = uncommented.lines()
-            .map { it.trim() }
-            .mapNotNull { line ->
-                panneauRegex.find(line)?.let { match ->
-                    val name = match.groupValues[1]
-                    val rawUrl = match.groupValues[2]
-                    val rawFolder = rawUrl.substringBefore("/")
-                    val subFolder = if (rawFolder.lowercase() in langList) "" else rawFolder
-                    val urlClean = subFolder.safeRelativePath("$baseUrl$hubLink/")?.removeSuffix("/") ?: return@mapNotNull null
-                    Log.d(ANIMESAMA_LOG, "parseMedias: found rawUrl = '$rawUrl' -> urlClean = '$urlClean'")
-                    UrlContent(
-                        url = urlClean,
-                        titles = titles,
-                        season = name,
-                    )
-                }
-            }.distinctBy { it.url }
-
-        if (medias.isEmpty()) throw Exception("Aucune saison trouvée. Elle n'est probablement pas encore sortie, sinon signalez-le au développeur.")
-        return medias
-    }
-
-    private fun urlParser(jsonUrl: String): Pair<UrlContent, Boolean> = try {
-        val urlContent: UrlContent = jsonUrl.parseAs(json)
-        val parsedUrl = UrlContent(
-            urlContent.url,
-            urlContent.titles,
-            urlContent.season,
+        return MediaUrl(
+            url = path,
+            season = if (segments.size >= 3) seasonLabelOf(segments[2]) else null,
         )
-        Pair(parsedUrl, true)
-    } catch (_: SerializationException) { // legacy
-        parseLegacyUrl(jsonUrl)
-    } catch (_: IllegalArgumentException) { // legacy malformed json
-        parseLegacyUrl(jsonUrl)
     }
 
-    private fun parseLegacyUrl(jsonUrl: String): Pair<UrlContent, Boolean> {
-        val link = jsonUrl.substringBefore("#")
+    /**
+     * Derives a season label from a season slug.
+     *
+     * Old entries do not store the label the site displayed. The slug is the only hint, and an
+     * empty label is harmless: the season page states its own label when needed.
+     *
+     * @param slug season slug, for example `saison1`, `film` or `oav`.
+     */
+    private fun seasonLabelOf(slug: String): String = when {
+        slug.contains("film", ignoreCase = true) -> "Film"
+        slug.contains("oav", ignoreCase = true) || slug.contains("ova", ignoreCase = true) -> "OAV"
+        else -> SEASON_SLUG_REGEX.find(slug)?.let { "Saison ${it.groupValues[1]}" }.orEmpty()
+    }
 
-        val titleFromUrl = jsonUrl.substringAfter("|", "").takeIf { it.isNotBlank() }
-        val slugTitle = link.substringAfterLast("/").replace("-", " ")
+    /**
+     * Reads the stored links of an episode.
+     *
+     * Episodes listed by the previous version hold resolved URLs instead of page references;
+     * they are converted so that an existing library keeps playing without a refresh.
+     */
+    private fun SEpisode.storedLinks(): LinkSet? = url.toLinkSet(json) ?: url.toStoredPlayers(json)
 
-        val titles: Set<String> = buildSet {
-            titleFromUrl?.let { add(it) }
-            add(slugTitle)
+    /**
+     * Converts the links written by the previous version of the extension.
+     *
+     * @param serializer JSON instance of the source.
+     */
+    private fun String.toStoredPlayers(serializer: Json): LinkSet? = try {
+        val players = parseAs<List<StoredPlayer>>(serializer)
+        if (players.isEmpty()) {
+            null
+        } else {
+            LinkSet(
+                seasonPath = "",
+                links = players.map { player ->
+                    val host = hostOf(player.url)
+                    PlayerLink(
+                        lang = player.lang,
+                        host = host,
+                        server = serverNameFor(host),
+                        directUrl = player.url,
+                    )
+                },
+            )
         }
-        val parsedUrl = UrlContent(link, titles, null)
-        return Pair(parsedUrl, false)
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
     }
 
-    private fun buildDescription(description: String, year: String?): String = buildString {
-        if (!year.isNullOrBlank()) append("Date de sortie : $year\n\n")
-        append(description)
+    /** Decodes a stored URL, returning `null` for the pre-JSON format. */
+    private fun String.toMediaUrl(serializer: Json): MediaUrl? = try {
+        parseAs<MediaUrl>(serializer)
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
     }
 
-    private fun isSeasonOverflow(
-        epMeta: TvdbEpisode?,
-        contentType: ContentType,
-        epNum: Int,
-        tvdbEpCount: Int,
-        s0Metadata: TvdbMetadata?,
-    ): Boolean = epMeta == null && contentType == ContentType.SEASON && epNum > tvdbEpCount && s0Metadata != null
-
-    private fun extractTmdb(document: Document): Pair<Long, Boolean>? {
-        val href = document.selectFirst("a[href*='themoviedb.org/']")?.attr("href") ?: return null
-        val match = tmdbIdRegex.find(href) ?: return null
-        val type = match.groupValues[1]
-        val id = match.groupValues[2].toLongOrNull() ?: return null
-        return Pair(id, type == "movie")
-    }
-
-    private fun extractTmdbId(document: Document, isMovie: Boolean): Long? {
-        val (id, isTmdbMovie) = extractTmdb(document) ?: return null
-        return if (isMovie == isTmdbMovie) id else null
+    /** Decodes stored links, returning `null` for an unknown or older format. */
+    private fun String.toLinkSet(serializer: Json): LinkSet? = try {
+        parseAs<LinkSet>(serializer)
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
     }
 
     companion object {
+        /** Prefix a deep link uses to designate a work instead of a search term. */
         const val PREFIX_SEARCH = "id:"
-        private const val MAX_HUB_PATH_SEGMENTS = 3
-        private val commentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
-        private val panneauRegex = Regex("""panneauAnime\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""")
-        private val epsArrayRegex = Regex("""var\s+eps([a-zA-Z0-9_]+)\s*=\s*\[(.*?)];""", RegexOption.DOT_MATCHES_ALL)
-        private val urlInArrayRegex = Regex("""['"]([^'"]+)['"]""")
-        private val documentCache = synchronizedMap(
-            mutableMapOf<String, Pair<Document, Long>>(),
-        )
-        const val CACHE_LIFETIME = 30000L
-        private val langList = listOf("vostfr", "vf", "vj", "var", "vcn", "vqc", "vkr", "va", "vf1", "vf2")
 
-        private val episodeBasicRegex = Regex("""(?i)^(?:Épisode|Episode)\s*\d+$""")
-        private val episodeWithTitleRegex = Regex("""(?i)^(?:Épisode|Episode)\s*\d+\s*[-:]\s*(.+)""")
-        private val seasonRegex = Regex("""(?i)^Saison\s*\d+.*""")
-        private val seasonReplaceRegex = Regex("""(?i)\s*Saison\s*""")
-        private val partReplaceRegex = Regex("""(?i)Partie\s*(\d+)""")
-        private val newSpfRegex = Regex("""newSPF\(\s*(?:"([^"]*)"|'([^']*)')\s*\)""")
-        private val alterTitlesSplitRegex = Regex("""\s*,\s*|\s*;\s*|\s*/\s*""")
+        /** Matches the season number in a season slug, for the pre-JSON entries. */
+        private val SEASON_SLUG_REGEX = Regex("""(?i)^saison(\d+)""")
 
-        private val movieCleanPrefixRegex = Regex("""(?i)^(?:\[Films?\]\s*|Films?\s*\d*\s*[:-]?\s*)""")
-        private val movieCleanTrailingRegex = Regex("""(?i)\s+Films?$""")
-        private val tmdbIdRegex = Regex("""themoviedb\.org/(tv|movie)/(\d+)""")
+        /** Prefix the site uses for a link that must be resolved by the API. */
+        private const val REFERENCE_PREFIX = "lien:"
 
-        private const val MIN_TITLE_LENGTH = 4
+        /** Language used when an entry carries none. */
+        private const val DEFAULT_LANGUAGE = "vostfr"
+
+        /** Preference key of the "Early Fetch" switch. */
         private const val PREF_EARLY_FETCH_TYPE_KEY = "early_fetch"
+
+        /** Default state of the "Early Fetch" switch: off, since it costs one request per card. */
         private const val PREF_EARLY_FETCH_TYPE_DEFAULT = false
+
+        /** Status returned by the link API for an expired page token. */
+        private const val HTTP_FORBIDDEN = 403
+
+        /** Status returned by the link API for a malformed request. */
+        private const val HTTP_BAD_REQUEST = 400
+
+        /** Status returned by the link API for an unknown reference. */
+        private const val HTTP_NOT_FOUND = 404
+
+        /** Message shown when the work page cannot be loaded. */
+        private const val WORK_UNAVAILABLE =
+            "La fiche de cette œuvre est introuvable sur Anime-Sama. Réessayez plus tard."
     }
 }

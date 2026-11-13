@@ -10,13 +10,26 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 /**
- * Springboard that accepts https://anime-sama.tv/catalogue/<item> intents
- * and redirects them to the main Aniyomi process.
+ * Entry point for `https://anime-sama.to/catalogue/<item>` links opened from a browser.
+ *
+ * The activity does nothing but forward the intent to the main Aniyomi process as a targeted
+ * search, then finishes immediately.
  */
 class AnimeSamaUrlActivity : Activity() {
 
+    /**
+     * Log tag based on the class name, used to report intent problems.
+     */
     private val tag = javaClass.simpleName
 
+    /**
+     * Parses the received URI and hands the search over to Aniyomi.
+     *
+     * The second path segment is taken as the work slug. The activity always finishes, including
+     * when the URI cannot be read or when Aniyomi is not installed.
+     *
+     * @param savedInstanceState restored state, unused.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
