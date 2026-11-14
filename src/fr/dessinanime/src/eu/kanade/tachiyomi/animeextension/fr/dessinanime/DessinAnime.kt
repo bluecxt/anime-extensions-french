@@ -21,11 +21,14 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.DESSINANIME_LOG
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.filters.FilterSpec
+import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.RateLimitException
 import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.runCatchingCancellable
@@ -36,11 +39,14 @@ import keiyoushi.utils.addSwitchPreference
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.get
 import keiyoushi.utils.parallelCatchingFlatMap
+import keiyoushi.utils.parallelMap
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.useAsJsoup
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -48,6 +54,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Response
 import org.jsoup.Jsoup.parse
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
@@ -56,6 +63,44 @@ import java.util.concurrent.ConcurrentHashMap
 
 private const val MIN_PAGE_SIZE_JSON = 36
 private const val MIN_PAGE_SIZE_HTML = 10
+
+/**
+ * Number of work pages read at once while resolving the fetch type of a listing.
+ *
+ * The site is behind Cloudflare and answers 429 when hammered, so the early fetch stays a small
+ * batch instead of one request per card fired at once.
+ */
+private const val EARLY_FETCH_CONCURRENCY = 10
+
+/**
+ * Shown when a work page answers with a Cloudflare Turnstile challenge instead of content.
+ *
+ * The catalogue API is not protected while every work page is, so this is not a bug the user can
+ * work around by retrying: the challenge has to be solved once in the app WebView, which stores
+ * the `cf_clearance` cookie every later request reuses.
+ */
+private const val CLOUDFLARE_TURNSTILE_MESSAGE = "Cloudflare Turnstile protège les pages de ce site. " +
+    "Ouvrez la WebView de cette extension (menu de la source → WebView), validez le défi, " +
+    "puis relancez le chargement."
+
+/** Status code Cloudflare uses when it challenges a request instead of serving the page. */
+private const val HTTP_FORBIDDEN = 403
+
+/** Status code the challenge interstitial uses when it is not served as a 403. */
+private const val HTTP_UNAVAILABLE = 503
+
+/** Status code sent when the site throttles the extension. */
+private const val HTTP_TOO_MANY_REQUESTS = 429
+
+/** Shown when the site throttles the extension instead of answering. */
+private const val RATE_LIMIT_MESSAGE = "Le site limite les requêtes (HTTP 429). Réessayez dans un instant."
+
+/**
+ * Raised when a protected page answers with a Cloudflare Turnstile challenge instead of content.
+ *
+ * Its message is user-facing: the app shows the exception message in place of the listing.
+ */
+private class TurnstileChallengeException : Exception(CLOUDFLARE_TURNSTILE_MESSAGE)
 
 private val rsRegex = Regex("""\${'$'}RS\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""")
 private val iframeRegex = Regex("""\"iframe_url\":\"(?<url>https://[^"\\]+)\"""")
@@ -80,6 +125,9 @@ class DessinAnime : ConfigurableSource() {
     private val paginationMapPopular = ConcurrentHashMap<Int, String>()
     private val paginationMutex = Mutex()
 
+    /** Bounds the work pages opened at once by the early fetch, see [EARLY_FETCH_CONCURRENCY]. */
+    private val hubSemaphore = Semaphore(EARLY_FETCH_CONCURRENCY)
+
     override suspend fun getPopularAnime(page: Int): AnimesPage {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("api/catalogue")
@@ -97,22 +145,7 @@ class DessinAnime : ConfigurableSource() {
 
         val data: List<CatalogueDto> = client.get(urlBuilder.build(), headers).parseAs(json)
 
-        val localUseEarlyFetch = this.useEarlyFetch
-        val animes = data.map { item ->
-            val anime = item.toSAnime()
-            if (localUseEarlyFetch && !anime.url.contains("/movie/")) {
-                val isHub = runCatchingCancellable {
-                    val doc = client.get("$baseUrl${anime.url}", headers).useAsJsoup().apply { resolveSuspense() }
-                    val seriesData = doc.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
-                    val count = seriesData?.seasons?.size ?: doc.select("a.bg-card").size
-                    count > 1
-                }.getOrDefault(false)
-                if (isHub) {
-                    anime.coreSetFetchType(Seasons)
-                }
-            }
-            anime
-        }
+        val animes = data.map { it.toSAnime() }.withEarlyFetch()
 
         val hasNextPage = data.size >= MIN_PAGE_SIZE_JSON
 
@@ -150,6 +183,7 @@ class DessinAnime : ConfigurableSource() {
             }
             .distinctBy { it.url }
             .toList()
+            .withEarlyFetch()
 
         return AnimesPage(animes, false)
     }
@@ -162,7 +196,7 @@ class DessinAnime : ConfigurableSource() {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val searchUrl = "$baseUrl/api/search?q=$encodedQuery"
             val searchItems: List<SearchItemDto> = client.get(searchUrl, headers).parseAs(json)
-            val animes = searchItems.map { it.toSAnime() }
+            val animes = searchItems.map { it.toSAnime() }.withEarlyFetch()
             return AnimesPage(animes, false)
         }
         val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
@@ -202,11 +236,95 @@ class DessinAnime : ConfigurableSource() {
                 }
             }
             .toList()
+            .withEarlyFetch()
 
         val hasNextPage = animes.size >= MIN_PAGE_SIZE_HTML
 
         return AnimesPage(animes, hasNextPage)
     }
+
+    // ========================== Early fetch ==========================
+
+    /**
+     * Resolves the fetch type of every entry when the "Early Fetch" switch is on.
+     *
+     * Some clients (Anikku) read `fetch_type` at listing time and never refresh it from the work
+     * page, so a multi-season work must already be typed [Seasons] when the card is returned;
+     * otherwise their episode list shows the placeholder forever.
+     *
+     * The work page is the only place carrying the season count, so this costs one request per
+     * entry — the reason the switch is off by default. Movies are skipped: they are single works
+     * by construction, so fetching them would spend a request to learn nothing.
+     */
+    private suspend fun List<SAnime>.withEarlyFetch(): List<SAnime> {
+        if (!useEarlyFetch) return this
+        return parallelMap { anime ->
+            if (anime.url.contains("/movie/")) {
+                return@parallelMap anime
+            }
+            hubSemaphore.withPermit {
+                if (isHubPage(anime.url)) anime.fetch_type = Seasons
+            }
+            anime
+        }
+    }
+
+    /**
+     * Tells whether the work at [path] declares several seasons.
+     *
+     * A Cloudflare challenge is not an answer to this question: [loadPage] turns it into an
+     * exception, so the listing fails with an explanation instead of being read as "one season".
+     * A card whose page is gone (404, 410…) only loses its fetch type: it is dead anyway, and
+     * failing the whole listing over it would hide the 35 healthy cards next to it.
+     */
+    private suspend fun isHubPage(path: String): Boolean = try {
+        val soup = parse(loadPage(path), "$baseUrl$path").apply { resolveSuspense() }
+        val seriesData = soup.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
+        (seriesData?.seasons?.size ?: soup.select("a.bg-card").size) > 1
+    } catch (e: TurnstileChallengeException) {
+        throw e
+    } catch (e: RateLimitException) {
+        throw e
+    } catch (_: ContentUnavailableException) {
+        false
+    }
+
+    /**
+     * Loads [path] and returns its HTML.
+     *
+     * Every work page is protected by Cloudflare Turnstile while the catalogue API is not, so a
+     * challenge is the expected failure of this source, not an exceptional one. It is reported as
+     * such: letting it through would yield an empty document, the parsers would read it as "no
+     * season, no episode", and the user would get a plausible-looking listing that cannot work.
+     *
+     * @param path site-relative path, such as `/tv/2098-batman-la-serie-animee`.
+     * @throws TurnstileChallengeException when the answer is a challenge.
+     * @throws RateLimitException when the site throttles the extension.
+     * @throws ContentUnavailableException when the page is gone or answers another error status.
+     */
+    private suspend fun loadPage(path: String): String = client.newCall(GET("$baseUrl$path", headers)).await().use { response ->
+        if (response.isChallenge()) throw TurnstileChallengeException()
+        if (response.code == HTTP_TOO_MANY_REQUESTS) throw RateLimitException(RATE_LIMIT_MESSAGE)
+        if (!response.isSuccessful) throw ContentUnavailableException("HTTP ${response.code} sur $baseUrl$path")
+        response.body.string().also {
+            if (it.isChallengePage()) throw TurnstileChallengeException()
+        }
+    }
+
+    /** Tells whether [this] response is refused by Cloudflare instead of served. */
+    private fun Response.isChallenge(): Boolean {
+        if (header("cf-mitigated").equals("challenge", ignoreCase = true)) return true
+        if (code == HTTP_FORBIDDEN) return true
+        return code == HTTP_UNAVAILABLE && header("Server").orEmpty().contains("cloudflare", ignoreCase = true)
+    }
+
+    /**
+     * Tells whether [this] body is a Cloudflare interstitial served with a 2xx status.
+     *
+     * Only markers that never appear on a served page are checked: Cloudflare injects
+     * `challenge-platform` scripts into normal responses too, so that one cannot be used here.
+     */
+    private fun String.isChallengePage(): Boolean = contains("Just a moment", ignoreCase = true) || contains("cf-browser-verification", ignoreCase = true)
 
     // ============================ Details =============================
 
@@ -216,8 +334,7 @@ class DessinAnime : ConfigurableSource() {
         val isSeasonPage = targetSeasonNum != null
 
         val url = "$baseUrl${anime.url}"
-        val document = client.newCall(GET(url, headers)).awaitSuccess().use { it.body.string() }
-        val soup = parse(document, url).apply { resolveSuspense() }
+        val soup = parse(loadPage(anime.url), url).apply { resolveSuspense() }
 
         val posterDto = soup.extractNextJs<DessinAnimePosterDto> {
             it is JsonObject && it.jsonObject["variant"]?.jsonPrimitive?.contentOrNull == "poster"
@@ -244,7 +361,7 @@ class DessinAnime : ConfigurableSource() {
         }
 
         if (isHub) {
-            anime.coreSetFetchType(Seasons)
+            anime.fetch_type = Seasons
         } else if (isMovie || soup.selectFirst("a.group.rounded-xl") == null) {
             anime.status = SAnime.COMPLETED
         }
@@ -266,7 +383,7 @@ class DessinAnime : ConfigurableSource() {
     // ============================ Seasons =============================
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
-        val soup = client.get("$baseUrl${anime.url}", headers).useAsJsoup().apply { resolveSuspense() }
+        val soup = parse(loadPage(anime.url), "$baseUrl${anime.url}").apply { resolveSuspense() }
         val seriesData = soup.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
 
         if (seriesData != null && seriesData.seasons.size > 1) {
@@ -289,8 +406,8 @@ class DessinAnime : ConfigurableSource() {
             url = "${anime.url}/$sNum/1"
             thumbnail_url = season.posterPath ?: anime.thumbnail_url
             status = if (index < totalSeasons - 1) SAnime.COMPLETED else anime.status
-            coreSetFetchType(Episodes)
-            coreSetSeasonNumber(HUB_SEASON_NUMBER)
+            fetch_type = Episodes
+            season_number = HUB_SEASON_NUMBER
             initialized = true
         }
     }
@@ -310,8 +427,8 @@ class DessinAnime : ConfigurableSource() {
                 val poster = soup.selectFirst("a[href='$sUrl'] img")?.attr("abs:src") ?: ""
                 thumbnail_url = anime.thumbnail_url ?: poster
                 status = if (index < siteSeasons.size - 1) SAnime.COMPLETED else anime.status
-                coreSetFetchType(Episodes)
-                coreSetSeasonNumber(HUB_SEASON_NUMBER)
+                fetch_type = Episodes
+                season_number = HUB_SEASON_NUMBER
                 initialized = true
             }
         }
@@ -320,7 +437,7 @@ class DessinAnime : ConfigurableSource() {
     // ============================ Episodes =============================
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val document = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess().use { it.body.string() }
+        val document = loadPage(anime.url)
         val soup = parse(document, "$baseUrl${anime.url}").apply { resolveSuspense() }
 
         if (anime.url.contains("/movie/") || document.contains("\"mediaType\":\"MOVIE\"")) {
@@ -335,13 +452,7 @@ class DessinAnime : ConfigurableSource() {
         val isHub = !isTargetingSpecificSeason && seasonCount > 1
         if (isHub) {
             Log.d(DESSINANIME_LOG, "getEpisodeList: isHub=true for '${anime.url}'")
-            return listOf(
-                SEpisode.create().apply {
-                    url = ""
-                    name = "⚠ Activez Early Fetch"
-                    summary = "Ouvrez les paramètres de cette extension, activez « Early Fetch », puis videz la base locale de cette extension."
-                },
-            )
+            return listOf(hubPlaceholder())
         }
 
         if (seriesData != null && seriesData.seasons.isNotEmpty()) {
@@ -359,8 +470,7 @@ class DessinAnime : ConfigurableSource() {
     private suspend fun parseHtmlEpisodes(soup: Document, anime: SAnime): List<SEpisode> {
         var episodeList = soup.select("a.group.rounded-xl")
         if (episodeList.isEmpty() && soup.selectFirst("a.bg-card") != null) {
-            val doc1 = client.newCall(GET("$baseUrl${anime.url}/1/1", headers)).awaitSuccess().use { it.body.string() }
-            val soup1 = parse(doc1, "$baseUrl${anime.url}/1/1").apply { resolveSuspense() }
+            val soup1 = parse(loadPage("${anime.url}/1/1"), "$baseUrl${anime.url}/1/1").apply { resolveSuspense() }
             episodeList = soup1.select("a.group.rounded-xl")
         }
 
@@ -388,6 +498,25 @@ class DessinAnime : ConfigurableSource() {
         }
     }
 
+    /**
+     * Builds the episode shown while a work still points at its seasons.
+     *
+     * It carries no link on purpose: it only explains what to do, so that clients calling
+     * [getEpisodeList] on a hub show a readable line instead of an empty, error-looking list.
+     * The text follows [useEarlyFetch], so it never asks for a switch that is already on.
+     */
+    private fun hubPlaceholder(): SEpisode = SEpisode.create().apply {
+        url = ""
+        if (useEarlyFetch) {
+            // The switch is on: this entry was stored before the listing could resolve it.
+            name = "⚠ Fiche en cours de résolution"
+            summary = "Les saisons de cette œuvre sont en cours de chargement. Rouvrez la fiche dans un instant pour les voir apparaître."
+        } else {
+            name = "⚠ Activez Early Fetch"
+            summary = "Ouvrez les paramètres de cette extension, activez « Early Fetch », puis videz la base locale de cette extension."
+        }
+    }
+
     private fun buildMovie(anime: SAnime): List<SEpisode> = listOf(
         SEpisode.create().apply {
             episode_number = 1F
@@ -400,7 +529,7 @@ class DessinAnime : ConfigurableSource() {
     // ============================ Hosters =============================
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val html = client.newCall(GET("$baseUrl${episode.url}", headers)).awaitSuccess().use { it.body.string() }
+        val html = loadPage(episode.url)
         val soup = parse(html, "$baseUrl${episode.url}").apply { resolveSuspense() }
 
         val playerEmbed = soup.extractNextJs<PlayerEmbedDto> { it is JsonObject && "players" in it.jsonObject }
