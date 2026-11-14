@@ -614,6 +614,23 @@
             }
         },
         {
+            "name": "Dessin Anime Hub Placeholder (Early Fetch)",
+            "target": "GET_EPISODE_LIST",
+            "input": {
+                "anime": {
+                    "url": "/tv/2098-batman-la-serie-animee",
+                    "title": "Batman : La Série animée"
+                }
+            },
+            "contract": {
+                "minCount": 1,
+                "maxCount": 1,
+                "requireNonBlankFields": [
+                    "name"
+                ]
+            }
+        },
+        {
             "name": "Dessin Anime Episode List Check",
             "target": "GET_EPISODE_LIST",
             "input": {
