@@ -79,9 +79,15 @@ jobs:
         env:
           SIGNING_KEY: ${{ secrets.signing_key }}
         run: |
-          if [ -n "$SIGNING_KEY" ]; then
-            echo "$SIGNING_KEY" | base64 -d > signingkey.jks
-            chmod 600 signingkey.jks
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::secrets.signing_key is empty, refusing to build extensions signed with an unknown key"
+            exit 1
+          fi
+          echo "$SIGNING_KEY" | base64 -d > signingkey.jks
+          chmod 600 signingkey.jks
+          if [ ! -s signingkey.jks ]; then
+            echo "::error::the decoded signing key is empty"
+            exit 1
           fi
 
       - name: Build extensions

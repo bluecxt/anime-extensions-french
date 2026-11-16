@@ -122,11 +122,12 @@ class PluginExtensionLegacy : Plugin<Project> {
                         getDefaultProguardFile("proguard-android-optimize.txt"),
                         rootProject.file("config/proguard-rules.pro"),
                     )
-                    signingConfig = if (rootProject.file("signingkey.jks").exists()) {
-                        signingConfigs.getByName("dev")
-                    } else {
-                        signingConfigs.getByName("debug")
-                    }
+                    // Never fall back to the debug keystore. A debug-signed APK can never
+                    // match the fingerprint published in repo.json, and the debug keystore
+                    // is regenerated per CI runner, so the fingerprint would drift on every
+                    // run and every extension built that way would stay "untrusted" forever
+                    // in the client. Failing here is loud and recoverable.
+                    signingConfig = signingConfigs.getByName("dev")
                     matchingFallbacks.addAll(listOf("debug", "release"))
                 }
             }

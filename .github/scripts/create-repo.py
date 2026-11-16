@@ -60,11 +60,10 @@ def extract_apk_fingerprint(apk_path):
         offset += 8 + pair_len
     return ""
 
-signing_fingerprint = ""
+signing_fingerprints = {}
 
-for apk in REPO_APK_DIR.iterdir():
-    if not signing_fingerprint:
-        signing_fingerprint = extract_apk_fingerprint(apk)
+for apk in sorted(REPO_APK_DIR.glob("*.apk")):
+    signing_fingerprints[apk.name] = extract_apk_fingerprint(apk)
     badging = subprocess.check_output(
         [
             ANDROID_BUILD_TOOLS / "aapt",
@@ -126,6 +125,28 @@ for apk in REPO_APK_DIR.iterdir():
 
 with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as index_file:
     json.dump(index_min_data, index_file, ensure_ascii=False, separators=(",", ":"))
+
+if not signing_fingerprints:
+    raise SystemExit("No APK found in repo/apk: cannot determine the signing fingerprint")
+
+unreadable = sorted(name for name, fp in signing_fingerprints.items() if not fp)
+if unreadable:
+    raise SystemExit(
+        "Could not read the APK signing block (V1-only or unsigned APK?): "
+        + ", ".join(unreadable)
+    )
+
+distinct_fingerprints = sorted(set(signing_fingerprints.values()))
+if len(distinct_fingerprints) > 1:
+    details = ", ".join(f"{name}={fp}" for name, fp in sorted(signing_fingerprints.items()))
+    raise SystemExit(
+        "APKs are not all signed with the same key, refusing to publish a fingerprint. "
+        "Rebuild the whole set with one signing config. Details: " + details
+    )
+
+signing_fingerprint = distinct_fingerprints[0]
+for apk_name, fingerprint in sorted(signing_fingerprints.items()):
+    print(f"Verified signature of {apk_name}: {fingerprint}")
 
 repo_name = os.environ.get("REPO_NAME")
 if repo_name:
