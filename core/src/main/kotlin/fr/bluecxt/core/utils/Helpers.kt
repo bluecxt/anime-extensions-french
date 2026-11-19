@@ -10,10 +10,13 @@ import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.model.RateLimitException
 import keiyoushi.utils.useAsJsoup
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Headers
@@ -103,7 +106,21 @@ fun defaultHeaders(
 /**
  * Normalize a String by putting everything in lowercase and keep only letter and digit
  */
-fun String.normalize(): String = lowercase().filter { it.isLetterOrDigit() }.trim()
+fun String.normalize(): String = buildString(length) {
+    var lastWasSpace = true
+    for (c in this@normalize) {
+        if (c.isLetterOrDigit() || c.category == CharCategory.LETTER_NUMBER || c.category == CharCategory.OTHER_NUMBER) {
+            append(c.lowercaseChar())
+            lastWasSpace = false
+        } else if (!lastWasSpace) {
+            append(' ')
+            lastWasSpace = true
+        }
+    }
+    if (isNotEmpty() && last() == ' ') {
+        setLength(length - 1)
+    }
+}
 
 /**
  * Awaits response and verifies status:
@@ -287,14 +304,16 @@ val Throwable.safeHttpCode: Int?
             val method = this.javaClass.getMethod("getCode")
             val result = method.invoke(this) as? Int
             if (result != null) return result
-        } catch (_: Throwable) {}
+        } catch (_: Throwable) {
+        }
 
         // 2. Field reflection
         try {
             val field = this.javaClass.getDeclaredField("code").apply { isAccessible = true }
             val result = field.get(this) as? Int
             if (result != null) return result
-        } catch (_: Throwable) {}
+        } catch (_: Throwable) {
+        }
 
         // 3. Fallback: Parse status code from message "HTTP error <code...>"
         val msg = message ?: return null
@@ -321,3 +340,52 @@ fun CharSequence.containsAny(keywords: Array<String>): Boolean {
 inline val Int.megabytes: Long get() = this.toLong() * 1024 * 1024
 inline val Int.kilobytes: Long get() = this.toLong() * 1024
 inline val Int.gigabytes: Long get() = this.toLong() * 1024 * 1024 * 1024
+
+fun StringBuilder.addTrackers(trackers: Map<Trackers, Int>): StringBuilder = apply {
+    if (trackers.isEmpty()) return this
+    append("Trackers: ")
+    append(trackers.entries.joinToString(" • ") { "[${it.key}](${it.key.buildUrl(it.value)})" })
+    append("\n")
+}
+
+fun StringBuilder.addTrackersEnd(trackers: Map<Trackers, Int>): StringBuilder = apply {
+    if (trackers.isEmpty()) return this
+    append(MD_SEPARATOR)
+    addTrackers(trackers)
+}
+
+const val MD_SEPARATOR = "\n\n---\n\n"
+
+enum class Trackers(val url: String) {
+    AniList("https://anilist.co/anime/"),
+    MyAnimeList("https://myanimelist.net/anime/"),
+    ;
+
+    fun buildUrl(id: Any): String = "$url$id"
+}
+
+suspend fun <T : Any> awaitFirstNonNull(deferreds: List<Deferred<T?>>): T? {
+    if (deferreds.isEmpty()) return null
+
+    val remaining = deferreds.toMutableList()
+    try {
+        while (remaining.isNotEmpty()) {
+            val (result, completedDeferred) = select<Pair<T?, Deferred<T?>>> {
+                remaining.forEach { deferred ->
+                    deferred.onAwait { value ->
+                        value to deferred
+                    }
+                }
+            }
+
+            if (result != null) {
+                return result
+            } else {
+                remaining.remove(completedDeferred)
+            }
+        }
+    } finally {
+        remaining.forEach { it.cancel() }
+    }
+    return null
+}
