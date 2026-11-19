@@ -44,6 +44,25 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
+/** Type d'artwork TVDB : poster de saison. */
+private const val ARTWORK_TYPE_SEASON_POSTER = 7
+
+/** Type d'artwork TVDB : bannière de saison. */
+private const val ARTWORK_TYPE_SEASON_BANNER = 8
+
+/** Longueur minimale d'un titre pour accepter un match partiel. */
+private const val MIN_PARTIAL_MATCH_LENGTH = 3
+
+/** Scores de ressemblance et ajustements par préférence de média. */
+private const val SCORE_EXACT_TITLE = 100
+private const val SCORE_CONTAINS_BASE = 85
+private const val BONUS_ANIMATION_GENRE = 45
+private const val PENALTY_NO_ANIMATION_GENRE = 60
+private const val BONUS_ANIME_SLUG = 30
+private const val PENALTY_LIVE_ACTION_SLUG = 40
+private const val BONUS_JAPANESE_ORIGIN = 15
+private const val PENALTY_WESTERN_ORIGIN = 25
+
 enum class MediaPreference {
     ANIME,
     DRAMA,
@@ -367,7 +386,7 @@ class TvdbFetcher(
 
         val artworks = sDto?.artwork.orEmpty()
         val rawSeasonPoster = artworks
-            .filter { it.type == 7 && !it.image.isNullOrBlank() }
+            .filter { it.type == ARTWORK_TYPE_SEASON_POSTER && !it.image.isNullOrBlank() }
             .let { list ->
                 if (preferJapanesePoster) {
                     list.filter { it.language?.equals("jpn", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
@@ -386,8 +405,8 @@ class TvdbFetcher(
             if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
         }
 
-        val rawSeasonBackdrop = artworks.firstOrNull { it.type == 8 && it.language?.equals(lang, ignoreCase = true) == true }?.image
-            ?: artworks.firstOrNull { it.type == 8 }?.image
+        val rawSeasonBackdrop = artworks.firstOrNull { it.type == ARTWORK_TYPE_SEASON_BANNER && it.language?.equals(lang, ignoreCase = true) == true }?.image
+            ?: artworks.firstOrNull { it.type == ARTWORK_TYPE_SEASON_BANNER }?.image
 
         val fullSeasonBackdrop = rawSeasonBackdrop?.takeIf { it.isNotBlank() }?.let {
             if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
@@ -483,7 +502,7 @@ class TvdbFetcher(
             if (norm == target) return 2 // Immediate exact match (short-circuit)
 
             if (!hasPartialMatch) {
-                val minLen = 3
+                val minLen = MIN_PARTIAL_MATCH_LENGTH
                 if (norm.contains(target) || (norm.length >= minLen && target.contains(norm))) {
                     hasPartialMatch = true
                 }
@@ -688,13 +707,13 @@ class TvdbFetcher(
         for (candidate in candidateTitles) {
             var currentScore = 0
             when {
-                candidate == normQuery -> currentScore += 100
+                candidate == normQuery -> currentScore += SCORE_EXACT_TITLE
 
                 candidate.contains(normQuery) || normQuery.contains(candidate) -> {
                     val longer = maxOf(candidate.length, normQuery.length)
                     val shorter = minOf(candidate.length, normQuery.length)
                     val ratio = shorter.toDouble() / longer
-                    currentScore += (85 * ratio).toInt()
+                    currentScore += (SCORE_CONTAINS_BASE * ratio).toInt()
                 }
             }
 
@@ -716,30 +735,30 @@ class TvdbFetcher(
         when (preference) {
             MediaPreference.ANIME -> {
                 if (isAnimation) {
-                    maxScore += 45
+                    maxScore += BONUS_ANIMATION_GENRE
                 } else if (result.genres.isNotEmpty()) {
-                    maxScore -= 60
+                    maxScore -= PENALTY_NO_ANIMATION_GENRE
                 }
 
-                if (isAnimeSlug) maxScore += 30
-                if (isLiveActionSlug) maxScore -= 40
+                if (isAnimeSlug) maxScore += BONUS_ANIME_SLUG
+                if (isLiveActionSlug) maxScore -= PENALTY_LIVE_ACTION_SLUG
 
                 if (result.primaryLanguage == "jpn" || result.country == "jpn") {
-                    maxScore += 15
+                    maxScore += BONUS_JAPANESE_ORIGIN
                 }
                 if ((result.country == "usa" || result.country == "gbr") && !isAnimation) {
-                    maxScore -= 25
+                    maxScore -= PENALTY_WESTERN_ORIGIN
                 }
             }
 
             MediaPreference.DRAMA -> {
                 if (isAnimation) {
-                    maxScore -= 60
+                    maxScore -= PENALTY_NO_ANIMATION_GENRE
                 }
-                if (isLiveActionSlug) maxScore += 40
-                if (isAnimeSlug) maxScore -= 40
+                if (isLiveActionSlug) maxScore += PENALTY_LIVE_ACTION_SLUG
+                if (isAnimeSlug) maxScore -= PENALTY_LIVE_ACTION_SLUG
                 if (result.primaryLanguage == "jpn" || result.country == "jpn" || result.country == "kor") {
-                    maxScore += 15
+                    maxScore += BONUS_JAPANESE_ORIGIN
                 }
             }
 

@@ -25,6 +25,17 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 
+/** Nombre de tentatives avant d'abandonner une extraction de playlist. */
+private const val MAX_EXTRACT_ATTEMPTS = 3
+
+/** Tailles d'unités utilisées pour formater un débit. */
+private const val BYTES_PER_GB = 1_000_000_000L
+private const val BYTES_PER_MB = 1_000_000L
+private const val BYTES_PER_KB = 1_000L
+
+/** Tolérance d'arrondi avant de préférer la qualité entière déduite du débit. */
+private const val QUALITY_ROUNDING_TOLERANCE = 5
+
 class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
 
     // ================================ M3U8 ================================
@@ -88,7 +99,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
 
         var masterPlaylist = ""
         var attempts = 0
-        while (attempts < 3) {
+        while (attempts < MAX_EXTRACT_ATTEMPTS) {
             try {
                 masterPlaylist = client.newCall(GET(playlistUrl, masterHeaders))
                     .awaitSuccess().bodyString()
@@ -99,7 +110,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                     throw ContentUnavailableException("HLS playlist unavailable ($httpCode): $playlistUrl")
                 }
                 attempts++
-                if (attempts >= 3) {
+                if (attempts >= MAX_EXTRACT_ATTEMPTS) {
                     Log.e(PLAYLIST_LOG, "Failed to fetch HLS playlist after 3 attempts: $playlistUrl", e)
                     throw e
                 }
@@ -271,9 +282,9 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
 
     private fun formatBytes(bytes: Long?): String = when {
         bytes == null -> ""
-        bytes >= 1_000_000_000 -> "%.2f GB/s".format(bytes / 1_000_000_000.0)
-        bytes >= 1_000_000 -> "%.2f MB/s".format(bytes / 1_000_000.0)
-        bytes >= 1_000 -> "%.2f KB/s".format(bytes / 1_000.0)
+        bytes >= BYTES_PER_GB -> "%.2f GB/s".format(bytes / BYTES_PER_GB.toDouble())
+        bytes >= BYTES_PER_MB -> "%.2f MB/s".format(bytes / BYTES_PER_MB.toDouble())
+        bytes >= BYTES_PER_KB -> "%.2f KB/s".format(bytes / BYTES_PER_KB.toDouble())
         bytes > 1 -> "$bytes bytes/s"
         bytes == 1L -> "$bytes byte/s"
         else -> ""
@@ -290,7 +301,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
     private fun stnQuality(quality: String): String {
         val intQuality = quality.trim().toIntOrNull() ?: return quality
         val result = STANDARD_QUALITIES.minByOrNull { abs(it - intQuality) } ?: intQuality
-        return if (abs(result - intQuality) <= 5) "${result}p" else "${intQuality}p"
+        return if (abs(result - intQuality) <= QUALITY_ROUNDING_TOLERANCE) "${result}p" else "${intQuality}p"
     }
 
     /**

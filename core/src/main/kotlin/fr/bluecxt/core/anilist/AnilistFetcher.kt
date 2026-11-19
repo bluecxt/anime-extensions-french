@@ -26,6 +26,10 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
+/** Taille de page de recherche et troncature des corps d'erreur. */
+private const val SEARCH_PAGE_SIZE = 10
+private const val MAX_ERROR_BODY_CHARS = 300
+
 private const val ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
 private val DEFAULT_RATE_LIMIT_DELAY: Duration = 1500.milliseconds
 private val MAX_RATE_LIMIT_DELAY: Duration = 10.seconds
@@ -57,7 +61,7 @@ suspend fun Source.fetchAnilistMetadata(
     return runCatchingCancellable {
         val variables = buildJsonObject {
             put("search", JsonPrimitive(cleaned.searchTitle))
-            put("perPage", JsonPrimitive(10))
+            put("perPage", JsonPrimitive(SEARCH_PAGE_SIZE))
             year?.let { put("year", JsonPrimitive(it)) }
             format?.let { put("format", JsonPrimitive(it.name)) }
         }
@@ -213,7 +217,7 @@ internal suspend inline fun <reified T> Source.executeAnilistGraphQl(
 
             if (!response.isSuccessful) {
                 error(
-                    "HTTP ${response.code} from AniList [$context]: ${rawBody.take(300)}",
+                    "HTTP ${response.code} from AniList [$context]: ${rawBody.take(MAX_ERROR_BODY_CHARS)}",
                 )
             }
 

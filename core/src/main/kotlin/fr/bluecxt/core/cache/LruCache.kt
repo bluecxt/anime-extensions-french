@@ -11,6 +11,9 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
+/** Facteur de charge par défaut des caches LRU. */
+private const val DEFAULT_LOAD_FACTOR = 0.75f
+
 /**
  * Cache Clé-Valeur polymorphique avec politique d'éviction LRU (capacité bornée) et expiration TTL.
  * Idéal pour les métadonnées d'APIs externes (AniList, TMDB, TVDB) ou les caches d'épisodes/vidéos.
@@ -34,7 +37,7 @@ class LruCache<K : Any, V>(
     private val mutexes = ConcurrentHashMap<K, Mutex>()
 
     private val map: MutableMap<K, Entry<V>> = Collections.synchronizedMap(
-        object : LinkedHashMap<K, Entry<V>>(maxEntries, 0.75f, true) {
+        object : LinkedHashMap<K, Entry<V>>(maxEntries, DEFAULT_LOAD_FACTOR, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, Entry<V>>?): Boolean = size > maxEntries
         },
     )

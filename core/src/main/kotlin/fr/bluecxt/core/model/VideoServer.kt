@@ -4,6 +4,9 @@ package fr.bluecxt.core.model
 
 import android.util.Log
 
+/** Longueur du préfixe "https:" retiré pour isoler l'hôte. */
+private const val SCHEME_PREFIX_LENGTH = 6
+
 data class VideoServer(
     val name: String,
     val hosts: List<String>,
@@ -16,7 +19,7 @@ data class VideoServer(
 
             host.startsWith("regex:") -> {
                 runCatching {
-                    host.substring(6).toRegex(RegexOption.IGNORE_CASE).containsMatchIn(url)
+                    host.substring(SCHEME_PREFIX_LENGTH).toRegex(RegexOption.IGNORE_CASE).containsMatchIn(url)
                 }.getOrDefault(false)
             }
 

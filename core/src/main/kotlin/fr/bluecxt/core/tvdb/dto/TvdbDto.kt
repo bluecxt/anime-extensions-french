@@ -7,6 +7,12 @@ import fr.bluecxt.core.tvdb.TvdbMetadata
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/** Identifiants de types d'artwork de l'API TVDB. */
+private const val ARTWORK_TYPE_POSTER = 2
+private const val ARTWORK_TYPE_BACKGROUND = 3
+private const val ARTWORK_TYPE_SERIES_POSTER = 14
+private const val ARTWORK_TYPE_SEASON_ART = 15
+
 // https://thetvdb.github.io/v4-api/
 
 /**
@@ -292,7 +298,7 @@ internal data class TvdbSeriesExtendedData(
      * Fanart / Backdrop image URL (Type 3 = Series Background).
      */
     val backdropUrl: String?
-        get() = artworks.firstOrNull { it.type == 3 && !it.image.isNullOrBlank() }?.image?.let {
+        get() = artworks.firstOrNull { it.type == ARTWORK_TYPE_BACKGROUND && !it.image.isNullOrBlank() }?.image?.let {
             if (it.startsWith("http")) it else "https://artworks.thetvdb.com$it"
         }
 }
@@ -347,7 +353,7 @@ internal data class TvdbMovieExtendedData(
 
     fun toTvdbMetadata(): TvdbMetadata {
         val bestPoster = artworks
-            .filter { (it.type == 2 || it.type == 14) && !it.image.isNullOrBlank() }
+            .filter { (it.type == ARTWORK_TYPE_POSTER || it.type == ARTWORK_TYPE_SERIES_POSTER) && !it.image.isNullOrBlank() }
             .maxByOrNull { it.score }
             ?.image
             ?: image?.takeIf { it.isNotBlank() }
@@ -361,7 +367,7 @@ internal data class TvdbMovieExtendedData(
             releaseDate = releaseDate,
             mainPosterUrl = fullPosterUrl,
             seasonPosterUrl = fullPosterUrl,
-            backdropUrl = artworks.find { it.type == 15 || it.type == 3 }
+            backdropUrl = artworks.find { it.type == ARTWORK_TYPE_SEASON_ART || it.type == ARTWORK_TYPE_BACKGROUND }
                 ?.image
                 ?.takeIf { it.isNotBlank() }
                 ?.let { if (it.startsWith("http")) it else "https://artworks.thetvdb.com$it" },

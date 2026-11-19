@@ -765,6 +765,7 @@ style:
       - "1"
       - "2"
       - "0xFF"
+      - "401"
       - "1024"
       - "200"
       - "206"
@@ -785,7 +786,7 @@ style:
     ignoreAnnotation: false
     ignoreNamedArgument: true
     ignoreEnums: false
-    ignoreRanges: false
+    ignoreRanges: true
     ignoreExtensionFunctions: true
   MandatoryBracesLoops:
     active: false

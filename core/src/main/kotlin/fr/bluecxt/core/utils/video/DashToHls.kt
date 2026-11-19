@@ -11,6 +11,10 @@ import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import kotlin.math.ceil
 
+/** Diviseur bits -> kbps et échelle d'arrondi des durées. */
+private const val KBPS_DIVISOR = 1000
+private const val DECIMAL_SCALE = 1000.0
+
 /**
  * Une piste audio DASH déjà résolue (init + segments fMP4) prête à être convertie en playlist HLS.
  *
@@ -258,7 +262,7 @@ class DashToExtractedSource {
         return ExtractedSource(
             url = playlist.toDataUri(),
             quality = height?.let { "${it}p" }
-                ?: bandwidth.takeIf { it > 0 }?.let { "${it / 1000} kbps" }
+                ?: bandwidth.takeIf { it > 0 }?.let { "${it / KBPS_DIVISOR} kbps" }
                 ?: "Auto",
             frameRate = fps?.let { "${formatDecimal(it)}fps" },
             audioTracks = audioTracks,
@@ -418,7 +422,7 @@ class DashToExtractedSource {
      * Formate un nombre décimal sans zéros inutiles (`29.970` → `29.97`, `24.0` → `24`).
      */
     private fun formatDecimal(value: Double): String {
-        val rounded = kotlin.math.round(value * 1000.0) / 1000.0
+        val rounded = kotlin.math.round(value * DECIMAL_SCALE) / DECIMAL_SCALE
         return if (rounded == rounded.toLong().toDouble()) {
             rounded.toLong().toString()
         } else {

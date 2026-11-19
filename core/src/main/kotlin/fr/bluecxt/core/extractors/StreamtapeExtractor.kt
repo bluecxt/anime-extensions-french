@@ -8,11 +8,14 @@ import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 
+/** Position du segment d'identifiant dans l'URL Streamtape. */
+private const val URL_ID_SEGMENT_INDEX = 4
+
 class StreamtapeExtractor(private val client: OkHttpClient) {
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val baseUrl = "https://streamtape.com/e/"
         val newUrl = if (!url.startsWith(baseUrl)) {
-            val id = url.split("/").getOrNull(4) ?: return emptyList()
+            val id = url.split("/").getOrNull(URL_ID_SEGMENT_INDEX) ?: return emptyList()
             baseUrl + id
         } else {
             url

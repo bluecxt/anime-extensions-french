@@ -14,6 +14,13 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import kotlin.reflect.typeOf
 
+/** Bornes des séquences UTF-8 et radix hexadécimal. */
+private const val UTF8_ONE_BYTE_MAX = 0x80
+private const val UTF8_TWO_BYTE_MAX = 0x800
+private const val UTF8_THREE_BYTES = 3
+private const val UTF8_FOUR_BYTES = 4
+private const val HEX_RADIX = 16
+
 private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
 
 private fun <T> extractValueNextJs(
@@ -87,7 +94,7 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
             pos++
             val commaIdx = body.indexOf(',', pos)
             if (commaIdx == -1) break
-            val byteLen = body.substring(pos, commaIdx).toIntOrNull(16) ?: break
+            val byteLen = body.substring(pos, commaIdx).toIntOrNull(HEX_RADIX) ?: break
             pos = commaIdx + 1
             var bytes = 0
             val start = pos
@@ -95,16 +102,16 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
                 // Count UTF-8 bytes per code point. Surrogate pairs (supplementary characters,
                 // e.g. emoji) occupy 4 UTF-8 bytes; we consume both surrogate chars in one step.
                 when {
-                    body[pos].code < 0x80 -> bytes += 1
+                    body[pos].code < UTF8_ONE_BYTE_MAX -> bytes += 1
 
-                    body[pos].code < 0x800 -> bytes += 2
+                    body[pos].code < UTF8_TWO_BYTE_MAX -> bytes += 2
 
                     Character.isHighSurrogate(body[pos]) -> {
-                        bytes += 4
+                        bytes += UTF8_FOUR_BYTES
                         pos++ // consume the high surrogate; the loop increment handles the low
                     }
 
-                    else -> bytes += 3
+                    else -> bytes += UTF8_THREE_BYTES
                 }
                 pos++
             }

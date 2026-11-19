@@ -1,6 +1,12 @@
 // Copyright bluecxt
+
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.utils.unpacker
+
+/** Radix base-62 et offsets des alphabets du packer. */
+private const val BASE62 = 62
+private const val DIGIT_OFFSET = 10
+private const val LETTER_OFFSET = 36
 
 /**
  * Helper class to unpack JavaScript code compressed by [packer](http://dean.edwards.name/packer/).
@@ -56,19 +62,19 @@ object Unpacker {
     private fun parseRadix62(str: String): Int {
         var result = 0
         for (ch in str.toCharArray()) {
-            result = result * 62 + when {
+            result = result * BASE62 + when {
                 ch.code <= '9'.code -> { // 0-9
                     ch.code - '0'.code
                 }
 
                 ch.code >= 'a'.code -> { // a-z
                     // ch - 'a' + 10
-                    ch.code - ('a'.code - 10)
+                    ch.code - ('a'.code - DIGIT_OFFSET)
                 }
 
                 else -> { // A-Z
                     // ch - 'A' + 36
-                    ch.code - ('A'.code - 36)
+                    ch.code - ('A'.code - LETTER_OFFSET)
                 }
             }
         }

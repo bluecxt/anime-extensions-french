@@ -62,13 +62,29 @@ import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
+/** Nombre d'extractions simultanées autorisées. */
+private const val MAX_CONCURRENT_EXTRACTIONS = 10
+
+/** Limites de connexions OkHttp. */
+private const val MAX_REQUESTS = 64
+private const val MAX_REQUESTS_PER_HOST = 20
+
+/** Base de calcul de la pénalité d'écart de qualité. */
+private const val QUALITY_SCORE_BASE = 1_000_000
+
+/** Longueur de l'identifiant anonymisé. */
+private const val HASHED_ID_LENGTH = 16
+
+/** Longueur minimale d'un titre d'épisode pour être conservé. */
+private const val MIN_EPISODE_TITLE_LENGTH = 3
+
 val EXTRACTOR_TIMEOUT = 30.seconds
 
 /**
  * Global semaphore to limit the number of concurrent extractions.
  * Prevents overwhelming video servers and local DNS/OkHttp connection pools.
  */
-private val extractionSemaphore = Semaphore(10)
+private val extractionSemaphore = Semaphore(MAX_CONCURRENT_EXTRACTIONS)
 
 /**
  * Base class for all French Anime Extensions using extensions-lib v16.
@@ -152,8 +168,8 @@ abstract class Source :
         network.client.newBuilder()
             .dispatcher(
                 Dispatcher().apply {
-                    maxRequests = 64
-                    maxRequestsPerHost = 20
+                    maxRequests = MAX_REQUESTS
+                    maxRequestsPerHost = MAX_REQUESTS_PER_HOST
                 },
             )
             .addInterceptor { chain ->
@@ -340,7 +356,7 @@ abstract class Source :
                     if (prefQualInt == null) {
                         actualQual
                     } else {
-                        1000000 - abs(actualQual - prefQualInt)
+                        QUALITY_SCORE_BASE - abs(actualQual - prefQualInt)
                     }
                 }
                 .thenByDescending { video ->
@@ -552,7 +568,7 @@ abstract class Source :
         }
     }
 
-    private fun formatName(currentName: String, tmdbName: String?, epNum: Int): String = if (currentName.contains(Regex("(?i)Episode\\s*\\d+")) || currentName.isBlank() || currentName.length < 3) {
+    private fun formatName(currentName: String, tmdbName: String?, epNum: Int): String = if (currentName.contains(Regex("(?i)Episode\\s*\\d+")) || currentName.isBlank() || currentName.length < MIN_EPISODE_TITLE_LENGTH) {
         if (tmdbName != null) "Episode $epNum - $tmdbName" else "Episode $epNum"
     } else {
         if (currentName.contains("Episode", true)) currentName else "Episode $epNum - $currentName"
@@ -584,7 +600,7 @@ abstract class Source :
             val bytes = androidId.toByteArray()
             val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(bytes)
-            val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(16)
+            val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(HASHED_ID_LENGTH)
 
             val url =
                 "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +

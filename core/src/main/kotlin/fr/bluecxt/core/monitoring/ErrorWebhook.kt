@@ -20,6 +20,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
+/** Capacité et facteur de charge du cache de déduplication. */
+private const val SENT_CACHE_MAX_ENTRIES = 64
+private const val CACHE_LOAD_FACTOR = 0.75f
+
+/** Constantes FNV-1a 32 bits du hachage de déduplication. */
+private const val FNV_OFFSET_BASIS = -2128831035
+private const val FNV_PRIME = 16777619
+
 private const val WEBHOOK_URL = BuildConfig.WEBHOOK_URL
 private const val WEBHOOK_SECRET = BuildConfig.WEBHOOK_SECRET
 
@@ -50,7 +58,7 @@ object ErrorWebhook {
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
     // LRU cache bounded at MAX_CACHE_SIZE; webhookMutex provides exclusive access
-    private val sentWebhooksCache = object : LinkedHashMap<Int, Long>(64, 0.75f, true) {
+    private val sentWebhooksCache = object : LinkedHashMap<Int, Long>(SENT_CACHE_MAX_ENTRIES, CACHE_LOAD_FACTOR, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Long>): Boolean = size > MAX_CACHE_SIZE
     }
     private val webhookMutex = Mutex()
@@ -84,9 +92,9 @@ object ErrorWebhook {
      * Ultra-fast 32-bit FNV-1a non-cryptographic hash for zero-allocation payload deduplication.
      */
     private fun fastHash(data: String): Int {
-        var hash = -2128831035
+        var hash = FNV_OFFSET_BASIS
         for (char in data) {
-            hash = (hash xor char.code) * 16777619
+            hash = (hash xor char.code) * FNV_PRIME
         }
         return hash
     }

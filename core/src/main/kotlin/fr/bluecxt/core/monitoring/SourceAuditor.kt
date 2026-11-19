@@ -8,6 +8,10 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
+/** Longueurs de troncature des rapports. */
+private const val DESCRIPTION_PREVIEW_CHARS = 120
+private const val URL_PREVIEW_CHARS = 60
+
 object SourceAuditor {
 
     private fun isValidHttpUrl(baseUrl: String, rawUrl: String?): Boolean {
@@ -54,7 +58,7 @@ object SourceAuditor {
                 add("Genre: ${genre.orEmpty()}")
                 add("Studio: ${author.orEmpty()}")
                 add("Cover URL: ${thumbnail_url.orEmpty()}")
-                add("Description: ${description.orEmpty().take(120)}...")
+                add("Description: ${description.orEmpty().take(DESCRIPTION_PREVIEW_CHARS)}...")
             }
             ErrorWebhook.sendWebhook(
                 baseUrl = baseUrl,
@@ -188,7 +192,7 @@ object SourceAuditor {
             it.videoUrl.isBlank() || it.videoUrl.toHttpUrlOrNull() == null
         }
         if (invalidVideos.isNotEmpty()) {
-            val sampleUrl = invalidVideos.firstOrNull()?.videoUrl?.take(60) ?: "blank"
+            val sampleUrl = invalidVideos.firstOrNull()?.videoUrl?.take(URL_PREVIEW_CHARS) ?: "blank"
             ErrorWebhook.sendWebhook(
                 baseUrl = baseUrl,
                 url = "$baseUrl$urlPath",

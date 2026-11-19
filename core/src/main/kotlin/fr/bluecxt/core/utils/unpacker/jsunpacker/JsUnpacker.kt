@@ -1,6 +1,13 @@
 // Copyright bluecxt
+
 // SPDX-License-Identifier: Apache-2.0
 package fr.bluecxt.core.utils.unpacker.jsunpacker
+
+/** Indices des groupes de la regex du packer et radix par défaut. */
+private const val GROUP_RADIX = 2
+private const val GROUP_COUNT = 3
+private const val GROUP_SYMTAB = 4
+private const val DEFAULT_RADIX = 10
 
 /**
  * This singleton class provides functionality to detect and unpack packed javascript based on Dean Edwards JavaScript's Packer.
@@ -122,9 +129,9 @@ object JsUnpacker {
         val unpacked = packedExtractRegex.findAll(scriptBlock).mapNotNull { result ->
 
             val payload = result.groups[1]?.value
-            val symtab = result.groups[4]?.value?.split('|')
-            val radix = result.groups[2]?.value?.toIntOrNull() ?: 10
-            val count = result.groups[3]?.value?.toIntOrNull()
+            val symtab = result.groups[GROUP_SYMTAB]?.value?.split('|')
+            val radix = result.groups[GROUP_RADIX]?.value?.toIntOrNull() ?: DEFAULT_RADIX
+            val count = result.groups[GROUP_COUNT]?.value?.toIntOrNull()
             val unbaser = Unbaser(radix)
 
             if (payload == null || symtab == null || count == null || symtab.size != count) {

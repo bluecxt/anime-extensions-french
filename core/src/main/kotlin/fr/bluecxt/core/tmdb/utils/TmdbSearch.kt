@@ -5,6 +5,12 @@ package fr.bluecxt.core.tmdb.utils
 import fr.bluecxt.core.source.Source
 import java.text.Normalizer
 
+/** Scores et pénalités du calcul de similarité de titres. */
+private const val SIMILARITY_CONTAINED_BASE = 85
+private const val SIMILARITY_PENALTY_MULTIPLIER = 5
+private const val SIMILARITY_WORD_WEIGHT = 70
+private const val MIN_SIMILARITY_SCORE = 50
+
 private val explicitSeasonRegex = Regex("""(?i)\b(?:Saison|Season)\s*(\d+)""")
 private val sagaNumberRegex = Regex("""(?i)\bSaga\s*(\d+)""")
 
@@ -57,7 +63,7 @@ fun calculateSimilarityScore(query: String, candidate: String): Int {
     if (s1.contains(s2) || s2.contains(s1)) {
         val longer = maxOf(s1.length, s2.length)
         val shorter = minOf(s1.length, s2.length)
-        return maxOf(0, 85 - (longer - shorter) * 5)
+        return maxOf(0, SIMILARITY_CONTAINED_BASE - (longer - shorter) * SIMILARITY_PENALTY_MULTIPLIER)
     }
 
     // Word-based matching for translated titles
@@ -66,7 +72,7 @@ fun calculateSimilarityScore(query: String, candidate: String): Int {
     if (words1.isEmpty() || words2.isEmpty()) return 0
 
     val matchingWords = words1.count { w1 -> words2.any { w2 -> w1 == w2 } }
-    return (matchingWords.toDouble() / maxOf(words1.size, words2.size) * 70).toInt()
+    return (matchingWords.toDouble() / maxOf(words1.size, words2.size) * SIMILARITY_WORD_WEIGHT).toInt()
 }
 
-fun Source.isTitleSimilar(q1: String, q2: String): Boolean = calculateSimilarityScore(q1, q2) >= 50
+fun Source.isTitleSimilar(q1: String, q2: String): Boolean = calculateSimilarityScore(q1, q2) >= MIN_SIMILARITY_SCORE

@@ -22,11 +22,14 @@ import keiyoushi.core.BuildConfig
 import kotlinx.serialization.json.Json
 import java.net.URLEncoder
 
+/** Nombre maximal d'entrées conservées dans le cache TMDB. */
+private const val METADATA_CACHE_MAX_SIZE = 250
+
 private val TMDB_API_KEY = BuildConfig.TMDB_API
 private const val TMDB_BASE_URL = "https://api.themoviedb.org/3"
 private val tmdbCache: MutableMap<String, TmdbMetadata?> = java.util.Collections.synchronizedMap(
-    object : LinkedHashMap<String, TmdbMetadata?>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TmdbMetadata?>): Boolean = size > 250
+    object : LinkedHashMap<String, TmdbMetadata?>(METADATA_CACHE_MAX_ENTRIES, METADATA_CACHE_LOAD_FACTOR, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TmdbMetadata?>): Boolean = size > METADATA_CACHE_MAX_SIZE
     },
 )
 
@@ -45,6 +48,19 @@ private val ignoredRegex by lazy {
     }
     Regex("(?i)(" + terms.joinToString("|").ifEmpty { "NOMATCH" } + ")")
 }
+
+/** Capacité et facteur de charge du cache de métadonnées TMDB. */
+private const val METADATA_CACHE_MAX_ENTRIES = 64
+private const val METADATA_CACHE_LOAD_FACTOR = 0.75f
+
+/** Score minimal pour retenir un résultat de recherche. */
+private const val MIN_MATCH_SCORE = 50
+
+/** Identifiant TMDB du genre Animation. */
+private const val TMDB_ANIMATION_GENRE_ID = 16
+
+/** Bonus appliqué aux résultats animés lors de la sélection. */
+private const val ANIMATION_SCORE_BONUS = 25
 
 /**
  * Fetches TMDB metadata specifically for a movie.
@@ -188,7 +204,7 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
 
             val score = maxOf(calculateSimilarityScore(query, resultTitle), calculateSimilarityScore(query, resultOriginalTitle))
 
-            if (score < 50) {
+            if (score < MIN_MATCH_SCORE) {
                 val bestId = res.id
                 val altUrl = "$TMDB_BASE_URL/$mType/$bestId/alternative_titles?api_key=$TMDB_API_KEY"
                 var altScore = 0
@@ -199,14 +215,14 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
                         altScore = maxOf(altScore, calculateSimilarityScore(query, alt.title))
                     }
                 } catch (_: Exception) {}
-                if (altScore < 50) continue
+                if (altScore < MIN_MATCH_SCORE) continue
             }
 
             val votes = res.voteCount
-            val isAnimation = res.genreIds.contains(16) // 16 = Animation genre ID
+            val isAnimation = res.genreIds.contains(TMDB_ANIMATION_GENRE_ID)
 
             // Selection score calculation: Similarity score + 25 bonus points if media is Animation
-            val finalScore = maxOf(score, 50) + (if (isAnimation) 25 else 0)
+            val finalScore = maxOf(score, MIN_MATCH_SCORE) + (if (isAnimation) ANIMATION_SCORE_BONUS else 0)
             if (finalScore > highestScore) {
                 highestScore = finalScore
                 maxVotes = votes

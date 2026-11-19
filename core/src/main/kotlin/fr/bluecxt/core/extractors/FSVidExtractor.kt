@@ -16,6 +16,11 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
+/** Masque d'octet et constantes du hachage d'URL FSVid. */
+private const val BYTE_MASK = 255
+private const val URL_HASH_BASE = 0x3D
+private const val URL_HASH_STEP = 89
+
 const val VERSION = 1
 
 class FSVidExtractor(private val client: OkHttpClient) {
@@ -85,7 +90,7 @@ class FSVidExtractor(private val client: OkHttpClient) {
         val hostname = runCatching { url.toHttpUrl().host }.getOrDefault("fsvid.lol")
         var hostSum = 0
         for (char in hostname) {
-            hostSum = (hostSum + char.code) and 255
+            hostSum = (hostSum + char.code) and BYTE_MASK
         }
 
         val decodedBytes = Base64.decode(encodedStr, Base64.DEFAULT)
@@ -94,7 +99,7 @@ class FSVidExtractor(private val client: OkHttpClient) {
 
         val decrypted = buildString {
             for (i in reversed.indices) {
-                val kk = (0x3D + i * 89 + hostSum) and 255
+                val kk = (URL_HASH_BASE + i * URL_HASH_STEP + hostSum) and BYTE_MASK
                 append((reversed[i].code xor kk).toChar())
             }
         }

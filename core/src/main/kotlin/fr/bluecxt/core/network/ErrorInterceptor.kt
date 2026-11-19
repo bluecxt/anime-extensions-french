@@ -17,6 +17,10 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
+/** Taille maximale lue dans une réponse en erreur, et longueur conservée. */
+private const val MAX_PEEK_BYTES = 512L
+private const val MAX_ERROR_BODY_CHARS = 200
+
 const val INTERCEPTOR_VERSION = "1.0"
 
 /**
@@ -79,7 +83,7 @@ class ErrorInterceptor(
 
             val code = response.code
             if (!response.isSuccessful && code != 404 && code != 429 && code !in 300..399 && code !in 502..504 && code !in 522..524) {
-                val responseBody = response.peekBody(512).string().take(200).ifBlank { null }
+                val responseBody = response.peekBody(MAX_PEEK_BYTES).string().take(MAX_ERROR_BODY_CHARS).ifBlank { null }
                 ErrorWebhook.sendWebhook(
                     baseUrl = request.url.host,
                     url = request.url.toString(),

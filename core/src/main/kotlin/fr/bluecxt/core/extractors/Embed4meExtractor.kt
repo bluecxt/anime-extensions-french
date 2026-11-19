@@ -16,6 +16,12 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+/** Radix hexadécimal. */
+private const val HEX_RADIX = 16
+
+/** Décalage d'un quartet dans un octet. */
+private const val NIBBLE_SHIFT = 4
+
 class Embed4meExtractor(private val client: OkHttpClient) {
 
     private val json: Json by injectLazy()
@@ -89,7 +95,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
         val data = ByteArray(len / 2)
         var i = 0
         while (i < len) {
-            data[i / 2] = ((Character.digit(s[i], 16) shl 4) + Character.digit(s[i + 1], 16)).toByte()
+            data[i / 2] = ((Character.digit(s[i], HEX_RADIX) shl NIBBLE_SHIFT) + Character.digit(s[i + 1], HEX_RADIX)).toByte()
             i += 2
         }
         return data

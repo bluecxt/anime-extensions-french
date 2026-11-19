@@ -15,6 +15,11 @@ import fr.bluecxt.core.tvdb.fetchTvdbMetadata
 import fr.bluecxt.core.utils.normalize
 import kotlinx.serialization.Serializable
 
+/** Seuil de score pour retenir le meilleur résultat et bornes de repli. */
+private const val MIN_MATCH_SCORE = 60
+private const val TITLE_PREFIX_LENGTH = 4
+private const val MAX_SECONDARY_TITLES = 5
+
 @Serializable
 data class TvdbOverrideEntry(
     val tvdbSeason: Int? = null,
@@ -244,17 +249,17 @@ suspend fun Source.fetchTvdbForPanel(
     }
 
     val bestPrimary = primaryResults.maxByOrNull { it.matchScore }
-    if (targetTvdbId != null || (bestPrimary != null && bestPrimary.matchScore >= 60)) {
+    if (targetTvdbId != null || (bestPrimary != null && bestPrimary.matchScore >= MIN_MATCH_SCORE)) {
         return bestPrimary?.copy(episodeOffset = episodeOffset)
     }
 
     // 2. Fallback to Secondary Titles only if primary score is < 60 and no explicit targetTvdbId
-    val minLen = if (seriesTitle.length <= 4) seriesTitle.length else 4
+    val minLen = if (seriesTitle.length <= TITLE_PREFIX_LENGTH) seriesTitle.length else TITLE_PREFIX_LENGTH
     val secondaryTitles = titles.map { sanitizeTitle(it) }
         .filter { it.isNotBlank() && it.length >= minLen && !primaryTitles.contains(it) }
         .distinct()
 
-    val secondaryResults = secondaryTitles.take(5).mapNotNull { title ->
+    val secondaryResults = secondaryTitles.take(MAX_SECONDARY_TITLES).mapNotNull { title ->
         fetchTvdbMetadata(
             title,
             seasonNumber,

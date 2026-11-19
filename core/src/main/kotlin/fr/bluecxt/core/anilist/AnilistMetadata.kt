@@ -5,6 +5,9 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import fr.bluecxt.core.anilist.dto.AnilistMediaDto
 import fr.bluecxt.core.utils.parseStatus
 
+/** Nombre maximal de noms de staff conservés. */
+private const val MAX_RELEVANT_STAFF = 4
+
 enum class AnilistFormat {
     TV,
     TV_SHORT,
@@ -211,7 +214,7 @@ internal fun AnilistMediaDto.toMetadata(): AnilistMetadata {
         }
         .mapNotNull { it.node?.name?.full }
         .distinct()
-        .take(4)
+        .take(MAX_RELEVANT_STAFF)
 
     val mappedTags = tags.map {
         AnilistTag(

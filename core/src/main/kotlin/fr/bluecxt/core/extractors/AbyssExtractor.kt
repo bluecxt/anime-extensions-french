@@ -18,6 +18,9 @@ import javax.crypto.spec.SecretKeySpec
 
 // writed using https://github.com/skoruppa/docchi-players/blob/main/abysse.py
 
+/** Taille de l'IV AES-CTR, en octets. */
+private const val AES_IV_BYTES = 16
+
 class AbyssExtractor(private val client: OkHttpClient) {
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
@@ -133,6 +136,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
         return payload
     }
 
+    // Parsing d'échappements \uXXXX et d'octets : offsets imposés par le format.
+    @Suppress("MagicNumber")
     private fun decodeEscapedBinary(escaped: String): String {
         if (escaped.isEmpty()) return ""
         val out = StringBuilder()
@@ -202,7 +207,7 @@ class AbyssExtractor(private val client: OkHttpClient) {
 
     private fun aesCtrTransform(dataBytes: ByteArray, keySeed: String): ByteArray? = try {
         val key = deriveKey(keySeed)
-        val iv = key.copyOfRange(0, 16)
+        val iv = key.copyOfRange(0, AES_IV_BYTES)
         val secretKey = SecretKeySpec(key, "AES")
         val ivParameterSpec = IvParameterSpec(iv)
         val cipher = Cipher.getInstance("AES/CTR/NoPadding")
@@ -397,6 +402,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
         return null
     }
 
+    // Décodage Base64 maison (masques et décalages de bits imposés par le format).
+    @Suppress("MagicNumber")
     private fun customDecode(encoded: String): String {
         val out = java.io.ByteArrayOutputStream()
         encoded.chunked(4).forEach { chunk ->

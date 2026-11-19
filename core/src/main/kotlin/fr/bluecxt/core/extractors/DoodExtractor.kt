@@ -11,6 +11,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.text.RegexOption
 
+/** Taille de la table de hachage Doodstream. */
+private const val HASH_TABLE_SIZE = 10
+
 // writed using https://github.com/skoruppa/docchi-players/blob/main/dood.py
 
 class DoodExtractor(private val client: OkHttpClient) {
@@ -90,7 +93,7 @@ class DoodExtractor(private val client: OkHttpClient) {
         val finalUrl = if (baseUrl.contains("cloudflarestorage.")) {
             baseUrl
         } else {
-            baseUrl + createHashTable(10) + token + System.currentTimeMillis()
+            baseUrl + createHashTable(HASH_TABLE_SIZE) + token + System.currentTimeMillis()
         }
 
         val videoHeaders = Headers.Builder()

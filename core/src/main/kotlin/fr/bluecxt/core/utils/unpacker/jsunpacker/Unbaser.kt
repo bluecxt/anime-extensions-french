@@ -4,6 +4,8 @@ package fr.bluecxt.core.utils.unpacker.jsunpacker
 
 import kotlin.math.pow
 
+// Bornes des alphabets base-N standard (36, 52, 54, 62, 95) imposées par le format.
+@Suppress("MagicNumber")
 internal data class Unbaser(
     private val base: Int,
 ) {
