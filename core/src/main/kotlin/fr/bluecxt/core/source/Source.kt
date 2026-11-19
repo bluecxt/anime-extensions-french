@@ -25,6 +25,7 @@ import fr.bluecxt.core.filters.FilterProvider
 import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.model.RateLimitException
+import fr.bluecxt.core.model.VideoServer
 import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
@@ -219,6 +220,16 @@ abstract class Source :
             return listOf(Video(videoUrl = playerUrl, videoTitle = quality))
         }
 
+        val servers = buildServers(allowedServers)
+        val server = selectServer(servers, playerUrl) ?: return emptyList()
+
+        val rawSources = extractRawSources(server, playerUrl)
+
+        return mapToVideos(rawSources, lang, server)
+    }
+
+    /** Construit les serveurs autorisés, en retirant Filemoon si l'option est désactivée. */
+    private fun buildServers(allowedServers: List<String>): List<VideoServer> {
         val isFilemoonDisabled = preferences.getBoolean(CommonPreferences.PREF_DISABLE_FILEMOON_KEY, false)
 
         val filteredAllowedServers = if (isFilemoonDisabled) {
@@ -227,63 +238,62 @@ abstract class Source :
             allowedServers
         }
 
-        val servers = filteredAllowedServers.mapNotNull { getVideoServer(this, it) }
-        val server = servers.find { s -> s.matches(playerUrl) } ?: return emptyList()
+        return filteredAllowedServers.mapNotNull { getVideoServer(this, it) }
+    }
 
-        val rawSources = try {
-            extractionSemaphore.withPermit {
-                withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
-                    delay(Random.nextLong(0, 500).milliseconds)
-                    server.extractor(playerUrl)
-                }
-            }
-        } catch (e: Exception) {
-            if (e.isCancellation()) {
-                Log.d(SERVER_LOG, "Job was cancelled by the app for ${server.name}")
-                throw e
-            }
+    /** Choisit le premier serveur dont les hôtes correspondent à l'URL du lecteur. */
+    private fun selectServer(servers: List<VideoServer>, playerUrl: String): VideoServer? = servers.find { s -> s.matches(playerUrl) }
 
-            val httpCode = e.safeHttpCode
-            val isUnavailable = e.isUnavailable() ||
-                httpCode == 404 || httpCode == 410
-
-            if (isUnavailable) {
-                Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")
-                emptyList()
-            } else if (e.isRateLimited()) {
-                Log.w(SERVER_LOG, "Rate limited on ${server.name}: ${e.message}")
-                if (BuildConfig.DEBUG) {
-                    listOf(
-                        ExtractedSource(
-                            url = playerUrl,
-                            quality = "Rate Limited: ${server.name}",
-                            isError = true,
-                        ),
-                    )
-                } else {
-                    emptyList()
-                }
-            } else {
-                Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message ?: e.javaClass.simpleName}", e)
-                if (BuildConfig.DEBUG) {
-                    listOf(
-                        ExtractedSource(
-                            url = playerUrl,
-                            quality = e.message ?: e.javaClass.simpleName,
-                            isError = true,
-                        ),
-                    )
-                } else {
-                    emptyList()
-                }
+    /** Lance l'extraction d'un serveur et convertit tout échec en liste de sources. */
+    private suspend fun extractRawSources(server: VideoServer, playerUrl: String): List<ExtractedSource> = try {
+        extractionSemaphore.withPermit {
+            withTimeoutOrNull(EXTRACTOR_TIMEOUT) {
+                delay(Random.nextLong(0, 500).milliseconds)
+                server.extractor(playerUrl)
             }
-        } ?: run {
-            Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT): ${server.name}")
+        }
+    } catch (e: Exception) {
+        extractionFailureSources(e, server, playerUrl)
+    } ?: timeoutSources(server, playerUrl)
+
+    /** Sources renvoyées quand l'extracteur a échoué (indisponibilité, quota ou erreur générique). */
+    private fun extractionFailureSources(
+        e: Exception,
+        server: VideoServer,
+        playerUrl: String,
+    ): List<ExtractedSource> {
+        if (e.isCancellation()) {
+            Log.d(SERVER_LOG, "Job was cancelled by the app for ${server.name}")
+            throw e
+        }
+
+        val httpCode = e.safeHttpCode
+        val isUnavailable = e.isUnavailable() ||
+            httpCode == 404 || httpCode == 410
+
+        return if (isUnavailable) {
+            Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")
+            emptyList()
+        } else if (e.isRateLimited()) {
+            Log.w(SERVER_LOG, "Rate limited on ${server.name}: ${e.message}")
             if (BuildConfig.DEBUG) {
                 listOf(
                     ExtractedSource(
                         url = playerUrl,
-                        quality = "Timeout ($EXTRACTOR_TIMEOUT)",
+                        quality = "Rate Limited: ${server.name}",
+                        isError = true,
+                    ),
+                )
+            } else {
+                emptyList()
+            }
+        } else {
+            Log.e(SERVER_LOG, "Server failed: ${server.name}: ${e.message ?: e.javaClass.simpleName}", e)
+            if (BuildConfig.DEBUG) {
+                listOf(
+                    ExtractedSource(
+                        url = playerUrl,
+                        quality = e.message ?: e.javaClass.simpleName,
                         isError = true,
                     ),
                 )
@@ -291,9 +301,26 @@ abstract class Source :
                 emptyList()
             }
         }
-
-        return rawSources.map { it.buildFromSource(lang, server.name) }
     }
+
+    /** Sources renvoyées quand l'extracteur a dépassé [EXTRACTOR_TIMEOUT]. */
+    private fun timeoutSources(server: VideoServer, playerUrl: String): List<ExtractedSource> {
+        Log.w(SERVER_LOG, "Timeout ($EXTRACTOR_TIMEOUT): ${server.name}")
+        return if (BuildConfig.DEBUG) {
+            listOf(
+                ExtractedSource(
+                    url = playerUrl,
+                    quality = "Timeout ($EXTRACTOR_TIMEOUT)",
+                    isError = true,
+                ),
+            )
+        } else {
+            emptyList()
+        }
+    }
+
+    /** Convertit les sources extraites en objets Video lisibles par l'application. */
+    private fun mapToVideos(rawSources: List<ExtractedSource>, lang: String?, server: VideoServer): List<Video> = rawSources.map { it.buildFromSource(lang, server.name) }
 
     protected fun getServerName(url: String, allowedServers: List<String>): String? {
         val servers = allowedServers.mapNotNull { getVideoServer(this, it) }

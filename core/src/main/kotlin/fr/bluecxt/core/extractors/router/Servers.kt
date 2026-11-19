@@ -72,289 +72,324 @@ val DEFAULT_SERVER = listOf(
  * Factory pour créer les objets serveurs à la demande.
  * Cela permet à R8/ProGuard de supprimer les extracteurs non utilisés par une extension.
  */
-fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
-    "Sibnet" -> VideoServer(
-        name = "Sibnet",
-        hosts = listOf("sibnet.ru"),
-        extractor = { url -> SibnetExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+fun getVideoServer(source: Source, name: String): VideoServer? = SERVER_FACTORIES[name]?.invoke(source)
 
-    "Sendvid" -> VideoServer(
-        name = "Sendvid",
-        hosts = listOf("sendvid.com"),
-        extractor = { url -> SendvidExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
-    )
+/**
+ * Table de dispatch nom de serveur -> fabrique, pour garder une complexité cyclomatique minimale.
+ */
+private val SERVER_FACTORIES: Map<String, (Source) -> VideoServer> = mapOf(
+    "Sibnet" to ::sibnetServer,
+    "Sendvid" to ::sendvidServer,
 
     // "Waveplayer" -> VideoServer(
     //     name = "WavePlayer",
     //     hosts = listOf("waveanime.fr"),
     //     extractor = { url -> WaveplayerExtractor(source.extractorClient, source.headers).videosFromUrl(url, "") },
     // )
-
-    "GoogleDrive" -> VideoServer(
-        name = "GoogleDrive",
-        hosts = listOf("drive.usercontent.google.com"),
-        extractor = { id -> GoogleDriveExtractor(source.extractorClient).videosFromUrl(id) },
-    )
-
-    "Vidmoly" -> VideoServer(
-        name = "Vidmoly",
-        hosts = listOf(
-            "vidmoly.me",
-            "vidmoly.to",
-            "vidmoly.biz",
-            "vidmoly.net",
-            "vidmoly.org",
-            "vidmoly.cc",
-            "ansembed.net",
-            "voembed.net",
-        ),
-        extractor = { url -> VidmolyExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
-    )
-
-    "Minochinos" -> VideoServer(
-        name = "Minochinos",
-        hosts = listOf("minochinos.com", "vidhide.com"),
-        extractor = { url -> MinochinosExtractor(source.extractorClient).videosFromUrl(url) },
-    )
-
-    "Abyss", "Abysse" -> VideoServer(
-        name = "Abyss",
-        hosts = listOf(
-            "abysscdn.com",
-            "hydraxcdn.biz",
-            "short.icu",
-            "embedplayabyss.top",
-            "abyssplayer.com",
-        ),
-        extractor = { url -> AbyssExtractor(source.extractorClient).videosFromUrl(url) },
-    )
-
-    "Embed4me" -> VideoServer(
-        name = "Embed4me",
-        hosts = listOf("*embed4me.*", "seekstreaming.com"),
-        extractor = { url -> Embed4meExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+    "GoogleDrive" to ::googleDriveServer,
+    "Vidmoly" to ::vidmolyServer,
+    "Minochinos" to ::minochinosServer,
+    "Abyss" to ::abyssServer,
+    "Abysse" to ::abyssServer,
+    "Embed4me" to ::embed4meServer,
 
     // "Vk" -> VideoServer( // the majority of urls look down
     //     name = "Vk",
     //     hosts = listOf("vk.com", "vk.ru"),
     //     extractor = { url -> VkExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
     // )
-
-    "Streamtape" -> VideoServer(
-        name = "Streamtape",
-        hosts = listOf(
-            "streamtape.com",
-            "shavetape.cash",
-            "streamtape.to",
-            "streamtape.net",
-            "streamtape.pe",
-            "streamtape.org",
-            "shavetape.com",
-        ),
-        extractor = { url -> StreamtapeExtractor(source.extractorClient).videosFromUrl(url) },
-    )
-
-    "Filemoon" -> VideoServer(
-        name = "Filemoon",
-        hosts = listOf(
-            "filemoon.to",
-            "filemoon.sx",
-            "filemoon.ps",
-            "filemoon.eu",
-            "nzn3.org",
-            "boosteradx.online",
-            "byse.sx",
-            "bysewihe.com",
-            "bysedikamoum.com",
-        ),
-        extractor = { url -> FilemoonExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+    "Streamtape" to ::streamtapeServer,
+    "Filemoon" to ::filemoonServer,
 
     // "JWPlayer" -> VideoServer(
     //     name = "JWPlayer",
     //     hosts = emptyList(), // Generic
     //     extractor = { url -> JWplayerExtractor(source.extractorClient).videosFromUrl(url) },
     // )
+    "Okru" to ::okruServer,
+    "Mymail" to ::mymailServer,
+    "Dood" to ::doodServer,
+    "Vidara" to ::vidaraServer,
+    "Streamix" to ::streamixServer,
+    "Voe" to ::voeServer,
+    "Vidoza" to ::vidozaServer,
+    "Lulu" to ::luluServer,
+    "Uqload" to ::uqloadServer,
+    "Vudeo" to ::vudeoServer,
+    "Vido" to ::vidoServer,
+    "UltraCDN" to ::ultraCdnServer,
+    "Upstream" to ::upstreamServer,
+    "StreamHide" to ::streamHideServer,
+    "StreamVid" to ::streamVidServer,
+    "StreamHub" to ::streamHubServer,
+    "StreamDav" to ::streamDavServer,
+    "Vidzy" to ::vidzyServer,
+    "FSVid" to ::fsVidServer,
+    "Kakaflix" to ::kakaflixServer,
+    "Kokoflix" to ::kokoflixServer,
+)
 
-    "Okru" -> VideoServer(
-        name = "Okru",
-        hosts = listOf("ok.ru", "odnoklassniki.ru"),
-        extractor = { url -> OkruExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun sibnetServer(source: Source): VideoServer = VideoServer(
+    name = "Sibnet",
+    hosts = listOf("sibnet.ru"),
+    extractor = { url -> SibnetExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Mymail" -> VideoServer(
-        name = "Mymail",
-        hosts = listOf("my.mail.ru"),
-        extractor = { url -> MymailExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun sendvidServer(source: Source): VideoServer = VideoServer(
+    name = "Sendvid",
+    hosts = listOf("sendvid.com"),
+    extractor = { url -> SendvidExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
+)
 
-    "Dood" -> VideoServer(
-        name = "Dood",
-        hosts = listOf(
-            "dood.watch", "doodstream.com", "dood.to", "dood.so", "dood.cx", "dood.la", "dood.ws",
-            "dood.sh", "doodstream.co", "dood.pm", "dood.wf", "dood.re", "dood.yt", "dooood.com",
-            "dood.stream", "ds2play.com", "doods.pro", "ds2video.com", "d0o0d.com", "do0od.com",
-            "d0000d.com", "d000d.com", "dood.li", "dood.work", "dooodster.com", "vidply.com",
-            "all3do.com", "do7go.com", "doodcdn.io", "doply.net", "vide0.net", "vvide0.com",
-            "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com",
-        ),
-        extractor = { url -> DoodExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun googleDriveServer(source: Source): VideoServer = VideoServer(
+    name = "GoogleDrive",
+    hosts = listOf("drive.usercontent.google.com"),
+    extractor = { id -> GoogleDriveExtractor(source.extractorClient).videosFromUrl(id) },
+)
 
-    "Vidara" -> VideoServer(
-        name = "Vidara",
-        hosts = listOf(
-            "vidara.so",
-            "vidara.to",
-            "vidaraa.cc",
-            "vidavaca.cc",
-            "viewdara.com",
-            "vidchampions.com",
-            "thebesthosterv.com",
-            "kitchenstories.fit",
-            "odysseusa.cc",
-            "shadowbyte.site",
-        ),
-        extractor = { url -> VidaraExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun vidmolyServer(source: Source): VideoServer = VideoServer(
+    name = "Vidmoly",
+    hosts = listOf(
+        "vidmoly.me",
+        "vidmoly.to",
+        "vidmoly.biz",
+        "vidmoly.net",
+        "vidmoly.org",
+        "vidmoly.cc",
+        "ansembed.net",
+        "voembed.net",
+    ),
+    extractor = { url -> VidmolyExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
+)
 
-    "Streamix" -> VideoServer(
-        name = "Streamix",
-        hosts = listOf("streamix.so", "stmix.io"),
-        extractor = { url -> StreamixExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun minochinosServer(source: Source): VideoServer = VideoServer(
+    name = "Minochinos",
+    hosts = listOf("minochinos.com", "vidhide.com"),
+    extractor = { url -> MinochinosExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Voe" -> VideoServer(
-        name = "Voe",
-        hosts = listOf(
-            "voe.sx", "voe-unblock.com", "voe-unblock.net", "voeunblock.com", "un-block-voe.net",
-            "voeunbl0ck.com", "voeunblck.com", "voeunblk.com", "voe-un-block.com", "jonathansociallike.com",
-            "voeun-block.net", "v-o-e-unblock.com", "edwardarriveoften.com", "nathanfromsubject.com",
-            "audaciousdefaulthouse.com", "launchreliantcleaverriver.com", "kennethofficialitem.com",
-            "reputationsheriffkennethsand.com", "fittingcentermondaysunday.com", "lukecomparetwo.com",
-            "housecardsummerbutton.com", "fraudclatterflyingcar.com", "wolfdyslectic.com",
-            "bigclatterhomesguideservice.com", "uptodatefinishconferenceroom.com", "jayservicestuff.com",
-            "realfinanceblogcenter.com", "tinycat-voe-fashion.com", "paulkitchendark.com",
-            "metagnathtuggers.com", "gamoneinterrupted.com", "chromotypic.com", "crownmakermacaronicism.com",
-            "generatesnitrosate.com", "yodelswartlike.com", "figeterpiazine.com", "strawberriesporail.com",
-            "valeronevijao.com", "timberwoodanotia.com", "apinchcaseation.com", "nectareousoverelate.com",
-            "nonesnanking.com", "smoki.cc", "chuckle-tube.com", "goofy-banana.com",
-            "voeunblock1.com", "voeunblock2.com", "voeunblock3.com", "voeunblock4.com", "voeunblock5.com",
-            "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
-            "jessicayeahcatch.com", "kathyinformationwhether.com", "ralphysuccessfull.org", "bryantenunder.com",
-            "sandratableother.com", "derricknationtop.com", "teresapoliticallearn.com",
-        ),
-        extractor = { url -> VoeExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun abyssServer(source: Source): VideoServer = VideoServer(
+    name = "Abyss",
+    hosts = listOf(
+        "abysscdn.com",
+        "hydraxcdn.biz",
+        "short.icu",
+        "embedplayabyss.top",
+        "abyssplayer.com",
+    ),
+    extractor = { url -> AbyssExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Vidoza" -> VideoServer(
-        name = "Vidoza",
-        hosts = listOf("vidoza.net", "vidoza.co", "videzz.net"),
-        extractor = { url -> VidozaExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun embed4meServer(source: Source): VideoServer = VideoServer(
+    name = "Embed4me",
+    hosts = listOf("*embed4me.*", "seekstreaming.com"),
+    extractor = { url -> Embed4meExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Lulu" -> VideoServer(
-        name = "Lulu",
-        hosts = listOf(
-            "luluvdo.com", "lulu.st", "luluvid.com", "luluvdoo.com",
-            "ryderjet.com", "vtbe.to", "savefiles.com", "dhcplay.com",
-            "filelions.live", "filelions.online", "filelions.to", "kinoger.be",
-            "vidhidehub.com", "vidhidevip.com", "vidhidepre.com", "smoothpre.com",
-            "dhtpre.com", "peytonepre.com", "movearnpre.com", "dintezuvio.com",
-        ),
-        extractor = { url -> LuluExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun streamtapeServer(source: Source): VideoServer = VideoServer(
+    name = "Streamtape",
+    hosts = listOf(
+        "streamtape.com",
+        "shavetape.cash",
+        "streamtape.to",
+        "streamtape.net",
+        "streamtape.pe",
+        "streamtape.org",
+        "shavetape.com",
+    ),
+    extractor = { url -> StreamtapeExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Uqload" -> VideoServer(
-        name = "Uqload",
-        hosts = listOf(
-            "uqload.com",
-            "uqload.co",
-            "uqload.to",
-            "uqload.is",
-            "uqload.bz",
-            "uqload.io",
-            "uqload.cx",
-            "uqload.vc",
-            "uqload.net",
-            "uqload.ws",
-        ),
-        extractor = { url -> UqloadExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun filemoonServer(source: Source): VideoServer = VideoServer(
+    name = "Filemoon",
+    hosts = listOf(
+        "filemoon.to",
+        "filemoon.sx",
+        "filemoon.ps",
+        "filemoon.eu",
+        "nzn3.org",
+        "boosteradx.online",
+        "byse.sx",
+        "bysewihe.com",
+        "bysedikamoum.com",
+    ),
+    extractor = { url -> FilemoonExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Vudeo" -> VideoServer(
-        name = "Vudeo",
-        hosts = listOf("vudeo.co"),
-        extractor = { url -> VudeoExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun okruServer(source: Source): VideoServer = VideoServer(
+    name = "Okru",
+    hosts = listOf("ok.ru", "odnoklassniki.ru"),
+    extractor = { url -> OkruExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Vido" -> VideoServer(
-        name = "Vido",
-        hosts = listOf("Vido.*"),
-        extractor = { url -> VidoExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun mymailServer(source: Source): VideoServer = VideoServer(
+    name = "Mymail",
+    hosts = listOf("my.mail.ru"),
+    extractor = { url -> MymailExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "UltraCDN" -> VideoServer(
-        name = "UltraCDN",
-        hosts = listOf("daisukianime.xyz", "vidstream.pro", "animesultra.org"),
-        extractor = { url -> VidstreamExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun doodServer(source: Source): VideoServer = VideoServer(
+    name = "Dood",
+    hosts = listOf(
+        "dood.watch", "doodstream.com", "dood.to", "dood.so", "dood.cx", "dood.la", "dood.ws",
+        "dood.sh", "doodstream.co", "dood.pm", "dood.wf", "dood.re", "dood.yt", "dooood.com",
+        "dood.stream", "ds2play.com", "doods.pro", "ds2video.com", "d0o0d.com", "do0od.com",
+        "d0000d.com", "d000d.com", "dood.li", "dood.work", "dooodster.com", "vidply.com",
+        "all3do.com", "do7go.com", "doodcdn.io", "doply.net", "vide0.net", "vvide0.com",
+        "d-s.io", "dsvplay.com", "myvidplay.com", "playmogo.com",
+    ),
+    extractor = { url -> DoodExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Upstream" -> VideoServer(
-        name = "Upstream",
-        hosts = listOf("upstream.to", "upstream.co"),
-        extractor = { url -> UpstreamExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun vidaraServer(source: Source): VideoServer = VideoServer(
+    name = "Vidara",
+    hosts = listOf(
+        "vidara.so",
+        "vidara.to",
+        "vidaraa.cc",
+        "vidavaca.cc",
+        "viewdara.com",
+        "vidchampions.com",
+        "thebesthosterv.com",
+        "kitchenstories.fit",
+        "odysseusa.cc",
+        "shadowbyte.site",
+    ),
+    extractor = { url -> VidaraExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "StreamHide" -> VideoServer(
-        name = "StreamHide",
-        hosts = listOf("guccihide.com", "streamhide.to", "streamhide.com", "streamhide.co", "streamhide.cc"),
-        extractor = { url -> StreamHideExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
-    )
+private fun streamixServer(source: Source): VideoServer = VideoServer(
+    name = "Streamix",
+    hosts = listOf("streamix.so", "stmix.io"),
+    extractor = { url -> StreamixExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "StreamVid" -> VideoServer(
-        name = "StreamVid",
-        hosts = listOf("streamvid.net", "streamvid.co"),
-        extractor = { url -> StreamVidExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun voeServer(source: Source): VideoServer = VideoServer(
+    name = "Voe",
+    hosts = listOf(
+        "voe.sx", "voe-unblock.com", "voe-unblock.net", "voeunblock.com", "un-block-voe.net",
+        "voeunbl0ck.com", "voeunblck.com", "voeunblk.com", "voe-un-block.com", "jonathansociallike.com",
+        "voeun-block.net", "v-o-e-unblock.com", "edwardarriveoften.com", "nathanfromsubject.com",
+        "audaciousdefaulthouse.com", "launchreliantcleaverriver.com", "kennethofficialitem.com",
+        "reputationsheriffkennethsand.com", "fittingcentermondaysunday.com", "lukecomparetwo.com",
+        "housecardsummerbutton.com", "fraudclatterflyingcar.com", "wolfdyslectic.com",
+        "bigclatterhomesguideservice.com", "uptodatefinishconferenceroom.com", "jayservicestuff.com",
+        "realfinanceblogcenter.com", "tinycat-voe-fashion.com", "paulkitchendark.com",
+        "metagnathtuggers.com", "gamoneinterrupted.com", "chromotypic.com", "crownmakermacaronicism.com",
+        "generatesnitrosate.com", "yodelswartlike.com", "figeterpiazine.com", "strawberriesporail.com",
+        "valeronevijao.com", "timberwoodanotia.com", "apinchcaseation.com", "nectareousoverelate.com",
+        "nonesnanking.com", "smoki.cc", "chuckle-tube.com", "goofy-banana.com",
+        "voeunblock1.com", "voeunblock2.com", "voeunblock3.com", "voeunblock4.com", "voeunblock5.com",
+        "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
+        "jessicayeahcatch.com", "kathyinformationwhether.com", "ralphysuccessfull.org", "bryantenunder.com",
+        "sandratableother.com", "derricknationtop.com", "teresapoliticallearn.com",
+    ),
+    extractor = { url -> VoeExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "StreamHub" -> VideoServer(
-        name = "StreamHub",
-        hosts = listOf("streamhub.gg", "streamhub.ink"),
-        extractor = { url -> StreamHubExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun vidozaServer(source: Source): VideoServer = VideoServer(
+    name = "Vidoza",
+    hosts = listOf("vidoza.net", "vidoza.co", "videzz.net"),
+    extractor = { url -> VidozaExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "StreamDav" -> VideoServer(
-        name = "StreamDav",
-        hosts = listOf("streamdav.com"),
-        extractor = { url -> StreamDavExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun luluServer(source: Source): VideoServer = VideoServer(
+    name = "Lulu",
+    hosts = listOf(
+        "luluvdo.com", "lulu.st", "luluvid.com", "luluvdoo.com",
+        "ryderjet.com", "vtbe.to", "savefiles.com", "dhcplay.com",
+        "filelions.live", "filelions.online", "filelions.to", "kinoger.be",
+        "vidhidehub.com", "vidhidevip.com", "vidhidepre.com", "smoothpre.com",
+        "dhtpre.com", "peytonepre.com", "movearnpre.com", "dintezuvio.com",
+    ),
+    extractor = { url -> LuluExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Vidzy" -> VideoServer(
-        name = "Vidzy",
-        hosts = listOf("vidzy.live", "vidzy.cc", "vidzy.org"),
-        extractor = { url -> VidzyExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun uqloadServer(source: Source): VideoServer = VideoServer(
+    name = "Uqload",
+    hosts = listOf(
+        "uqload.com",
+        "uqload.co",
+        "uqload.to",
+        "uqload.is",
+        "uqload.bz",
+        "uqload.io",
+        "uqload.cx",
+        "uqload.vc",
+        "uqload.net",
+        "uqload.ws",
+    ),
+    extractor = { url -> UqloadExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "FSVid" -> VideoServer(
-        name = "FSVid",
-        hosts = listOf("fsvid.lol"),
-        extractor = { url -> FSVidExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun vudeoServer(source: Source): VideoServer = VideoServer(
+    name = "Vudeo",
+    hosts = listOf("vudeo.co"),
+    extractor = { url -> VudeoExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Kakaflix" -> VideoServer(
-        name = "Kakaflix",
-        hosts = listOf("kakaflix.lol", "fr.kakaflix.lol"),
-        extractor = { url -> KakaflixExtractor(source.extractorClient).videosFromUrl(url) },
-    )
+private fun vidoServer(source: Source): VideoServer = VideoServer(
+    name = "Vido",
+    hosts = listOf("Vido.*"),
+    extractor = { url -> VidoExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    "Kokoflix" -> VideoServer(
-        name = "Kokoflix",
-        hosts = listOf("kokoflix.lol"),
-        extractor = { url -> KokoflixExtractor(source).videosFromUrl(url) },
-    )
+private fun ultraCdnServer(source: Source): VideoServer = VideoServer(
+    name = "UltraCDN",
+    hosts = listOf("daisukianime.xyz", "vidstream.pro", "animesultra.org"),
+    extractor = { url -> VidstreamExtractor(source.extractorClient).videosFromUrl(url) },
+)
 
-    else -> null
-}
+private fun upstreamServer(source: Source): VideoServer = VideoServer(
+    name = "Upstream",
+    hosts = listOf("upstream.to", "upstream.co"),
+    extractor = { url -> UpstreamExtractor(source.extractorClient).videosFromUrl(url) },
+)
+
+private fun streamHideServer(source: Source): VideoServer = VideoServer(
+    name = "StreamHide",
+    hosts = listOf("guccihide.com", "streamhide.to", "streamhide.com", "streamhide.co", "streamhide.cc"),
+    extractor = { url -> StreamHideExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
+)
+
+private fun streamVidServer(source: Source): VideoServer = VideoServer(
+    name = "StreamVid",
+    hosts = listOf("streamvid.net", "streamvid.co"),
+    extractor = { url -> StreamVidExtractor(source.extractorClient).videosFromUrl(url) },
+)
+
+private fun streamHubServer(source: Source): VideoServer = VideoServer(
+    name = "StreamHub",
+    hosts = listOf("streamhub.gg", "streamhub.ink"),
+    extractor = { url -> StreamHubExtractor(source.extractorClient).videosFromUrl(url) },
+)
+
+private fun streamDavServer(source: Source): VideoServer = VideoServer(
+    name = "StreamDav",
+    hosts = listOf("streamdav.com"),
+    extractor = { url -> StreamDavExtractor(source.extractorClient).videosFromUrl(url) },
+)
+
+private fun vidzyServer(source: Source): VideoServer = VideoServer(
+    name = "Vidzy",
+    hosts = listOf("vidzy.live", "vidzy.cc", "vidzy.org"),
+    extractor = { url -> VidzyExtractor(source.extractorClient).videosFromUrl(url) },
+)
+
+private fun fsVidServer(source: Source): VideoServer = VideoServer(
+    name = "FSVid",
+    hosts = listOf("fsvid.lol"),
+    extractor = { url -> FSVidExtractor(source.extractorClient).videosFromUrl(url) },
+)
+
+private fun kakaflixServer(source: Source): VideoServer = VideoServer(
+    name = "Kakaflix",
+    hosts = listOf("kakaflix.lol", "fr.kakaflix.lol"),
+    extractor = { url -> KakaflixExtractor(source.extractorClient).videosFromUrl(url) },
+)
+
+private fun kokoflixServer(source: Source): VideoServer = VideoServer(
+    name = "Kokoflix",
+    hosts = listOf("kokoflix.lol"),
+    extractor = { url -> KokoflixExtractor(source).videosFromUrl(url) },
+)

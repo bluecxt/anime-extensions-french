@@ -1,15 +1,14 @@
 package eu.kanade.tachiyomi.animeextension.all.torrentio
 
 import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.Content
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.EpisodeList
+import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.EpisodeVideo
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.GetPopularTitlesResponse
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.GetUrlTitleDetailsResponse
 import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.StreamDataTorrent
+import eu.kanade.tachiyomi.animeextension.all.torrentio.dto.TorrentioStream
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -21,8 +20,8 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
 import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.source.Source
+import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
-import keiyoushi.core.R
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -30,7 +29,7 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-/** Nombre maximal d'acteurs et taille de page de l'API. */
+/** Maximum number of actors and API page size. */
 private const val MAX_ACTORS = 4
 private const val PAGE_SIZE = 40
 
@@ -273,7 +272,23 @@ class Torrentio : Source() {
         val imdbId = parts[0]
         val type = parts[1].lowercase()
 
-        val query = """
+        val content = fetchTitleDetailsContent(justWatchDetailsQuery(), buildDetailsVariables(parts.last()))
+        applyTitleDetails(anime, content)
+
+        applyAnimeFetchType(anime, imdbId, type)
+
+        return anime
+    }
+
+    private fun applyTitleDetails(anime: SAnime, content: Content?) {
+        anime.title = content?.title ?: ""
+        anime.thumbnail_url = "https://images.justwatch.com${content?.posterUrl?.replace("{profile}", "s718")?.replace("{format}", "webp")}"
+        anime.description = content?.shortDescription ?: ""
+        val genresList = content?.genres?.mapNotNull { it.translation }.orEmpty()
+        anime.genre = genresList.joinToString()
+    }
+
+    private fun justWatchDetailsQuery(): String = """
             query GetUrlTitleDetails(${"$"}fullPath: String!, ${"$"}country: Country!, ${"$"}language: Language!) {
               urlV2(fullPath: ${"$"}fullPath) {
                 node {
@@ -299,51 +314,54 @@ class Torrentio : Source() {
                 }
               }
             }
-        """.trimIndent()
+    """.trimIndent()
 
+    private fun buildDetailsVariables(fullPath: String): String {
         val country = preferences.getString(PREF_REGION_KEY, PREF_REGION_DEFAULT)
         val language = preferences.getString(PREF_JW_LANG_KEY, PREF_JW_LANG_DEFAULT)
-        val variables = """
+        return """
             {
-              "fullPath": "${parts.last()}",
+              "fullPath": "$fullPath",
               "country": "$country",
               "language": "$language"
             }
         """.trimIndent()
+    }
 
-        val content = runCatching {
-            json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).awaitSuccess().body.string())
-        }.getOrNull()?.data?.urlV2?.node?.content
+    private suspend fun fetchTitleDetailsContent(query: String, variables: String): Content? = runCatching {
+        json.decodeFromString<GetUrlTitleDetailsResponse>(client.newCall(makeGraphQLRequest(query, variables)).awaitSuccess().body.string())
+    }.getOrNull()?.data?.urlV2?.node?.content
 
-        anime.title = content?.title ?: ""
-        anime.thumbnail_url = "https://images.justwatch.com${content?.posterUrl?.replace("{profile}", "s718")?.replace("{format}", "webp")}"
-        anime.description = content?.shortDescription ?: ""
-        val genresList = content?.genres?.mapNotNull { it.translation }.orEmpty()
-        anime.genre = genresList.joinToString()
-
+    private suspend fun applyAnimeFetchType(anime: SAnime, imdbId: String, type: String) {
         if (type == "series" || type == "show") {
-            val cinemeta = fetchCinemeta(imdbId, "series")
-            val seasons = cinemeta.meta?.videos?.mapNotNull { it.season }?.distinct() ?: emptyList()
-
-            val isSeasonUrl = anime.url.contains("#season=")
-            if (seasons.size > 1 && !isSeasonUrl) {
-                setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
-            } else {
-                setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
-                if (isSeasonUrl) {
-                    val sNum = anime.url.substringAfter("#season=").toIntOrNull() ?: 1
-                    val sSuffix = if (sNum == 0) "Special" else "Season $sNum"
-                    if (!anime.title.contains("Season", true)) {
-                        anime.title = "${anime.title} - $sSuffix"
-                    }
-                    setSeasonNumberSafe(anime, sNum.toDouble())
-                }
-            }
+            applySeriesFetchType(anime, imdbId)
         } else {
             setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
         }
+    }
 
-        return anime
+    private suspend fun applySeriesFetchType(anime: SAnime, imdbId: String) {
+        val cinemeta = fetchCinemeta(imdbId, "series")
+        val seasons = cinemeta.meta?.videos?.mapNotNull { it.season }?.distinct() ?: emptyList()
+
+        val isSeasonUrl = anime.url.contains("#season=")
+        if (seasons.size > 1 && !isSeasonUrl) {
+            setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Seasons)
+        } else {
+            setFetchTypeSafe(anime, eu.kanade.tachiyomi.animesource.model.FetchType.Episodes)
+            if (isSeasonUrl) {
+                applySeasonSuffix(anime)
+            }
+        }
+    }
+
+    private fun applySeasonSuffix(anime: SAnime) {
+        val sNum = anime.url.substringAfter("#season=").toIntOrNull() ?: 1
+        val sSuffix = if (sNum == 0) "Special" else "Season $sNum"
+        if (!anime.title.contains("Season", true)) {
+            anime.title = "${anime.title} - $sSuffix"
+        }
+        setSeasonNumberSafe(anime, sNum.toDouble())
     }
 
     // ============================== Seasons ==============================
@@ -381,12 +399,7 @@ class Torrentio : Source() {
         val imdbId = parts[0]
         val type = parts[1].lowercase()
 
-        val episodeList = if (type == "movie") {
-            val responseString = client.newCall(episodeListRequest(anime)).awaitSuccess().body.string()
-            json.decodeFromString<EpisodeList>(responseString)
-        } else {
-            fetchCinemeta(imdbId, "series")
-        }
+        val episodeList = fetchEpisodeList(anime, imdbId, type)
 
         val targetSeason = if (anime.url.contains("#season=")) {
             anime.url.substringAfter("#season=").toIntOrNull()
@@ -396,120 +409,174 @@ class Torrentio : Source() {
 
         // Fetch TMDB Metadata for thumbs and summaries
         val tmdbLang = preferences.getString(PREF_TMDB_LANG_KEY, PREF_TMDB_LANG_DEFAULT)!!
-        val tmdbSeasonsMeta = if (imdbId.isNotBlank()) {
-            val tmdbIdUrl = "https://api.themoviedb.org/3/find/$imdbId?api_key=24621da8ae19dce721e59eff2ab479bb&external_source=imdb_id"
-            val tmdbIdData = runCatching {
-                val idRes = client.newCall(GET(tmdbIdUrl)).awaitSuccess().use { it.body.string() }
-                val idJson = org.json.JSONObject(idRes)
-                val movieResults = idJson.optJSONArray("movie_results")
-                val tvResults = idJson.optJSONArray("tv_results")
-                if (movieResults != null && movieResults.length() > 0) {
-                    movieResults.getJSONObject(0).getInt("id") to "movie"
-                } else if (tvResults != null && tvResults.length() > 0) {
-                    tvResults.getJSONObject(0).getInt("id") to "tv"
-                } else {
-                    null
-                }
-            }.getOrNull()
-
-            tmdbIdData?.let { (id, mType) ->
-                if (mType == "movie") {
-                    mapOf(1 to fetchTmdbMetadataById(id, mType, 1, tmdbLang))
-                } else {
-                    val seasonsToFetch = if (targetSeason != null) {
-                        listOf(targetSeason)
-                    } else {
-                        episodeList.meta?.videos?.mapNotNull { it.season }?.distinct() ?: listOf(1)
-                    }
-
-                    seasonsToFetch.parallelMap { s ->
-                        s to fetchTmdbMetadataById(id, mType, s, tmdbLang)
-                    }.toMap()
-                }
-            }
-        } else {
-            null
-        }
+        val tmdbSeasonsMeta = fetchTmdbSeasonsMeta(imdbId, targetSeason, episodeList, tmdbLang)
 
         return when (episodeList.meta?.type) {
-            "series" -> {
-                val allVideos = episodeList.meta.videos
-                    ?.let { vList ->
-                        if (preferences.getBoolean(UPCOMING_EP_KEY, UPCOMING_EP_DEFAULT)) {
-                            vList
-                        } else {
-                            vList.filter { video -> (video.released?.let { parseDate(it) } ?: 0L) <= System.currentTimeMillis() }
-                        }
-                    }
-                    ?.sortedWith(compareBy({ video -> video.season ?: 1 }, { video -> video.number ?: 1 }))
-                    .orEmpty()
-
-                val seasons = allVideos.mapNotNull { it.season }.distinct()
-                val hasMultipleSeasons = seasons.size > 1 || seasons.contains(0)
-
-                val filteredVideos = if (targetSeason != null) {
-                    allVideos.filter { it.season == targetSeason }
-                } else {
-                    allVideos
-                }
-
-                filteredVideos.map { video ->
-                    val sNum = video.season ?: 1
-                    val eNum = video.number ?: 1
-                    SEpisode.create().apply {
-                        episode_number = eNum.toFloat()
-                        url = "/stream/series/${video.id}.json"
-                        date_upload = video.released?.let { parseDate(it) } ?: 0L
-
-                        val sPrefix = when {
-                            sNum == 0 -> "[Special] "
-                            hasMultipleSeasons -> "[S$sNum] "
-                            else -> ""
-                        }
-
-                        val epTitle = if (video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))) {
-                            "Episode $eNum"
-                        } else {
-                            if (video.title.contains("Episode", true)) video.title else "Episode $eNum - ${video.title}"
-                        }
-
-                        name = "$sPrefix$epTitle"
-                        scanlator = (video.released?.let { parseDate(it) } ?: 0L)
-                            .takeIf { it > System.currentTimeMillis() }
-                            ?.let { "Upcoming" }
-                            ?: ""
-
-                        tmdbSeasonsMeta?.get(sNum)?.let { meta ->
-                            val epMeta = meta.episodeSummaries[eNum]
-                            if (epMeta != null) {
-                                if (video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))) {
-                                    epMeta.first?.let { name = "$sPrefix$it" }
-                                }
-                                preview_url = epMeta.second
-                                summary = epMeta.third
-                            }
-                        }
-                    }
-                }.asReversed()
-            }
-
-            "movie" -> {
-                listOf(
-                    SEpisode.create().apply {
-                        episode_number = 1.0F
-                        url = "/stream/movie/${episodeList.meta.id}.json"
-                        name = "[Movie] Film"
-                        tmdbSeasonsMeta?.get(1)?.let { meta ->
-                            summary = meta.summary ?: ""
-                            preview_url = meta.episodeSummaries[1]?.second
-                        }
-                    },
-                ).asReversed()
-            }
-
+            "series" -> buildSeriesEpisodes(episodeList, targetSeason, tmdbSeasonsMeta)
+            "movie" -> buildMovieEpisodes(episodeList, tmdbSeasonsMeta)
             else -> emptyList()
         }
     }
+
+    private suspend fun fetchEpisodeList(anime: SAnime, imdbId: String, type: String): EpisodeList = if (type == "movie") {
+        val responseString = client.newCall(episodeListRequest(anime)).awaitSuccess().body.string()
+        json.decodeFromString<EpisodeList>(responseString)
+    } else {
+        fetchCinemeta(imdbId, "series")
+    }
+
+    private suspend fun fetchTmdbSeasonsMeta(
+        imdbId: String,
+        targetSeason: Int?,
+        episodeList: EpisodeList,
+        tmdbLang: String,
+    ): Map<Int, TmdbMetadata?>? = if (imdbId.isNotBlank()) {
+        val tmdbIdData = resolveTmdbId(imdbId)
+        tmdbIdData?.let { (id, mType) ->
+            fetchTmdbSeasonMetadata(id, mType, targetSeason, episodeList, tmdbLang)
+        }
+    } else {
+        null
+    }
+
+    private suspend fun resolveTmdbId(imdbId: String): Pair<Int, String>? {
+        val tmdbIdUrl = "https://api.themoviedb.org/3/find/$imdbId?api_key=24621da8ae19dce721e59eff2ab479bb&external_source=imdb_id"
+        return runCatching {
+            val idRes = client.newCall(GET(tmdbIdUrl)).awaitSuccess().use { it.body.string() }
+            val idJson = org.json.JSONObject(idRes)
+            val movieResults = idJson.optJSONArray("movie_results")
+            val tvResults = idJson.optJSONArray("tv_results")
+            if (movieResults != null && movieResults.length() > 0) {
+                movieResults.getJSONObject(0).getInt("id") to "movie"
+            } else if (tvResults != null && tvResults.length() > 0) {
+                tvResults.getJSONObject(0).getInt("id") to "tv"
+            } else {
+                null
+            }
+        }.getOrNull()
+    }
+
+    private suspend fun fetchTmdbSeasonMetadata(
+        id: Int,
+        mType: String,
+        targetSeason: Int?,
+        episodeList: EpisodeList,
+        tmdbLang: String,
+    ): Map<Int, TmdbMetadata?> {
+        if (mType == "movie") {
+            return mapOf(1 to fetchTmdbMetadataById(id, mType, 1, tmdbLang))
+        }
+
+        val seasonsToFetch = if (targetSeason != null) {
+            listOf(targetSeason)
+        } else {
+            episodeList.meta?.videos?.mapNotNull { it.season }?.distinct() ?: listOf(1)
+        }
+
+        return seasonsToFetch.parallelMap { s ->
+            s to fetchTmdbMetadataById(id, mType, s, tmdbLang)
+        }.toMap()
+    }
+
+    private fun buildSeriesEpisodes(
+        episodeList: EpisodeList,
+        targetSeason: Int?,
+        tmdbSeasonsMeta: Map<Int, TmdbMetadata?>?,
+    ): List<SEpisode> {
+        val allVideos = relevantSeriesVideos(episodeList)
+        val seasons = allVideos.mapNotNull { it.season }.distinct()
+        val hasMultipleSeasons = seasons.size > 1 || seasons.contains(0)
+
+        val filteredVideos = if (targetSeason != null) {
+            allVideos.filter { it.season == targetSeason }
+        } else {
+            allVideos
+        }
+
+        return filteredVideos.map { video ->
+            buildSeriesEpisode(video, hasMultipleSeasons, tmdbSeasonsMeta)
+        }.asReversed()
+    }
+
+    private fun relevantSeriesVideos(episodeList: EpisodeList): List<EpisodeVideo> = episodeList.meta?.videos
+        ?.let { vList ->
+            if (preferences.getBoolean(UPCOMING_EP_KEY, UPCOMING_EP_DEFAULT)) {
+                vList
+            } else {
+                vList.filter { video -> (video.released?.let { parseDate(it) } ?: 0L) <= System.currentTimeMillis() }
+            }
+        }
+        ?.sortedWith(compareBy({ video -> video.season ?: 1 }, { video -> video.number ?: 1 }))
+        .orEmpty()
+
+    private fun buildSeriesEpisode(
+        video: EpisodeVideo,
+        hasMultipleSeasons: Boolean,
+        tmdbSeasonsMeta: Map<Int, TmdbMetadata?>?,
+    ): SEpisode {
+        val sNum = video.season ?: 1
+        val eNum = video.number ?: 1
+        return SEpisode.create().apply {
+            episode_number = eNum.toFloat()
+            url = "/stream/series/${video.id}.json"
+            date_upload = video.released?.let { parseDate(it) } ?: 0L
+
+            val sPrefix = seasonPrefix(sNum, hasMultipleSeasons)
+            name = "$sPrefix${episodeTitle(video, eNum)}"
+            scanlator = (video.released?.let { parseDate(it) } ?: 0L)
+                .takeIf { it > System.currentTimeMillis() }
+                ?.let { "Upcoming" }
+                ?: ""
+
+            applyTmdbEpisodeMetadata(this, video, sNum, eNum, sPrefix, tmdbSeasonsMeta)
+        }
+    }
+
+    private fun seasonPrefix(sNum: Int, hasMultipleSeasons: Boolean): String = when {
+        sNum == 0 -> "[Special] "
+        hasMultipleSeasons -> "[S$sNum] "
+        else -> ""
+    }
+
+    private fun episodeTitle(video: EpisodeVideo, eNum: Int): String = if (
+        video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))
+    ) {
+        "Episode $eNum"
+    } else {
+        if (video.title.contains("Episode", true)) video.title else "Episode $eNum - ${video.title}"
+    }
+
+    private fun applyTmdbEpisodeMetadata(
+        episode: SEpisode,
+        video: EpisodeVideo,
+        sNum: Int,
+        eNum: Int,
+        sPrefix: String,
+        tmdbSeasonsMeta: Map<Int, TmdbMetadata?>?,
+    ) {
+        val meta = tmdbSeasonsMeta?.get(sNum) ?: return
+        val epMeta = meta.episodeSummaries[eNum] ?: return
+        if (video.title.isNullOrBlank() || video.title.matches(Regex("(?i)Episode\\s*\\d+"))) {
+            epMeta.first?.let { episode.name = "$sPrefix$it" }
+        }
+        episode.preview_url = epMeta.second
+        episode.summary = epMeta.third
+    }
+
+    private fun buildMovieEpisodes(
+        episodeList: EpisodeList,
+        tmdbSeasonsMeta: Map<Int, TmdbMetadata?>?,
+    ): List<SEpisode> = listOf(
+        SEpisode.create().apply {
+            episode_number = 1.0F
+            url = "/stream/movie/${episodeList.meta?.id}.json"
+            name = "[Movie] Film"
+            tmdbSeasonsMeta?.get(1)?.let { meta ->
+                summary = meta.summary ?: ""
+                preview_url = meta.episodeSummaries[1]?.second
+            }
+        },
+    ).asReversed()
 
     override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
     private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }
@@ -518,49 +585,58 @@ class Torrentio : Source() {
     // ============================ Video Links =============================
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val mainURL = buildString {
-            append("$baseUrl/")
-
-            val appendQueryParam: (String, Set<String>?) -> Unit = { key, values ->
-                values?.takeIf { it.isNotEmpty() }?.let {
-                    append("$key=${it.filter(String::isNotBlank).joinToString(",")}|")
-                }
-            }
-
-            appendQueryParam("providers", preferences.getStringSet(PREF_PROVIDER_KEY, PREF_PROVIDERS_DEFAULT))
-            appendQueryParam("language", preferences.getStringSet(PREF_LANG_KEY, PREF_LANG_DEFAULT))
-            appendQueryParam("qualityfilter", preferences.getStringSet(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT))
-
-            val sortKey = preferences.getString(PREF_SORT_KEY, "quality")
-            appendQueryParam("sort", sortKey?.let { setOf(it) })
-
-            val token = preferences.getString(PREF_TOKEN_KEY, null)
-            val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
-
-            when {
-                token.isNullOrBlank() && debridProvider != "none" -> {
-                    handler.post {
-                        context.let {
-                            Toast.makeText(
-                                it,
-                                "Kindly input the debrid token in the extension settings.",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    }
-                    throw UnsupportedOperationException()
-                }
-
-                !token.isNullOrBlank() && debridProvider != "none" -> append("$debridProvider=$token|")
-            }
-            append(episode.url)
-        }.removeSuffix("|")
+        val mainURL = buildStreamUrl(episode)
 
         val responseString = client.newCall(GET(mainURL)).awaitSuccess().body.string()
         val streamList = json.decodeFromString<StreamDataTorrent>(responseString)
         val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
 
-        val animeTrackers = """http://nyaa.tracker.wf:7777/announce,
+        val animeTrackers = buildTrackerList()
+
+        return streamList.streams?.map { stream ->
+            buildHoster(stream, debridProvider, animeTrackers)
+        }.orEmpty()
+    }
+
+    private fun buildStreamUrl(episode: SEpisode): String = buildString {
+        append("$baseUrl/")
+
+        val appendQueryParam: (String, Set<String>?) -> Unit = { key, values ->
+            values?.takeIf { it.isNotEmpty() }?.let {
+                append("$key=${it.filter(String::isNotBlank).joinToString(",")}|")
+            }
+        }
+
+        appendQueryParam("providers", preferences.getStringSet(PREF_PROVIDER_KEY, PREF_PROVIDERS_DEFAULT))
+        appendQueryParam("language", preferences.getStringSet(PREF_LANG_KEY, PREF_LANG_DEFAULT))
+        appendQueryParam("qualityfilter", preferences.getStringSet(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT))
+
+        val sortKey = preferences.getString(PREF_SORT_KEY, "quality")
+        appendQueryParam("sort", sortKey?.let { setOf(it) })
+
+        val token = preferences.getString(PREF_TOKEN_KEY, null)
+        val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
+
+        when {
+            token.isNullOrBlank() && debridProvider != "none" -> {
+                handler.post {
+                    context.let {
+                        Toast.makeText(
+                            it,
+                            "Kindly input the debrid token in the extension settings.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+                throw UnsupportedOperationException()
+            }
+
+            !token.isNullOrBlank() && debridProvider != "none" -> append("$debridProvider=$token|")
+        }
+        append(episode.url)
+    }.removeSuffix("|")
+
+    private suspend fun buildTrackerList(): String = """http://nyaa.tracker.wf:7777/announce,
             http://anidex.moe:6969/announce,http://tracker.anirena.com:80/announce,
             udp://tracker.uw0.xyz:6969/announce,
             http://share.camoe.cn:8080/announce,
@@ -586,19 +662,18 @@ class Torrentio : Source() {
             udp://valakas.rollo.dnsabr.com:2710/announce,
             udp://www.torrent.eu.org:451/announce,
              ${fetchTrackers().split("\n").joinToString(",")}
-        """.trimIndent()
+    """.trimIndent()
 
-        return streamList.streams?.map { stream ->
-            val urlOrHash =
-                if (debridProvider == "none") {
-                    val trackerList = animeTrackers.split(",").map { it.trim() }.filter { it.isNotBlank() }.joinToString("&tr=")
-                    "magnet:?xt=urn:btih:${stream.infoHash}&dn=${stream.infoHash}&tr=$trackerList&index=${stream.fileIdx}"
-                } else {
-                    stream.url ?: ""
-                }
-            val title = ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title)
-            Hoster(hosterName = title, internalData = urlOrHash)
-        }.orEmpty()
+    private fun buildHoster(stream: TorrentioStream, debridProvider: String?, animeTrackers: String): Hoster {
+        val urlOrHash =
+            if (debridProvider == "none") {
+                val trackerList = animeTrackers.split(",").map { it.trim() }.filter { it.isNotBlank() }.joinToString("&tr=")
+                "magnet:?xt=urn:btih:${stream.infoHash}&dn=${stream.infoHash}&tr=$trackerList&index=${stream.fileIdx}"
+            } else {
+                stream.url ?: ""
+            }
+        val title = ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title)
+        return Hoster(hosterName = title, internalData = urlOrHash)
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
@@ -635,479 +710,13 @@ class Torrentio : Source() {
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val context = screen.context
-
-        // Debrid provider
-        ListPreference(context).apply {
-            key = PREF_DEBRID_KEY
-            title = context.getString(R.string.pref_debrid_title)
-            entries = PREF_DEBRID_ENTRIES
-            entryValues = PREF_DEBRID_VALUES
-            setDefaultValue("none")
-            summary = context.getString(R.string.pref_debrid_summary)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
-
-        // Token
-        EditTextPreference(context).apply {
-            key = PREF_TOKEN_KEY
-            title = context.getString(R.string.pref_token_title)
-            setDefaultValue(PREF_TOKEN_DEFAULT)
-            summary = PREF_TOKEN_SUMMARY
-
-            setOnPreferenceChangeListener { _, newValue ->
-                runCatching {
-                    val value = (newValue as String).trim().ifBlank { PREF_TOKEN_DEFAULT }
-                    Toast.makeText(context, context.getString(R.string.pref_restart_message), Toast.LENGTH_LONG).show()
-                    preferences.edit().putString(key, value).commit()
-                }.getOrDefault(false)
-            }
-        }.also(screen::addPreference)
-
-        // Provider
-        MultiSelectListPreference(context).apply {
-            key = PREF_PROVIDER_KEY
-            title = context.getString(R.string.pref_providers_title)
-            entries = PREF_PROVIDERS
-            entryValues = PREF_PROVIDERS_VALUE
-            setDefaultValue(PREF_PROVIDERS_DEFAULT)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
-            }
-        }.also(screen::addPreference)
-
-        // Exclude Qualities
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_QUALITY_KEY
-            title = "Exclude Qualities/Resolutions"
-            entries = PREF_QUALITY
-            entryValues = PREF_QUALITY_VALUE
-            setDefaultValue(PREF_QUALITY_DEFAULT)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
-            }
-        }.also(screen::addPreference)
-
-        // Priority foreign language
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_LANG_KEY
-            title = "Priority foreign language"
-            entries = PREF_LANG
-            entryValues = PREF_LANG_VALUE
-            setDefaultValue(PREF_LANG_DEFAULT)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
-            }
-        }.also(screen::addPreference)
-
-        // Sorting
-        ListPreference(screen.context).apply {
-            key = PREF_SORT_KEY
-            title = "Sorting"
-            entries = PREF_SORT_ENTRIES
-            entryValues = PREF_SORT_VALUES
-            setDefaultValue("quality")
-            summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = UPCOMING_EP_KEY
-            title = "Show Upcoming Episodes"
-            setDefaultValue(UPCOMING_EP_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
-            }
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = IS_DUB_KEY
-            title = "Dubbed Video Priority"
-            setDefaultValue(IS_DUB_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
-            }
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = IS_EFFICIENT_KEY
-            title = "Efficient Video Priority"
-            setDefaultValue(IS_EFFICIENT_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
-            }
-            summary = "Codec: (HEVC / x265)  & AV1. High-quality video with less data usage."
-        }.also(screen::addPreference)
-
-        // JustWatch Settings
-
-        // Region
-        ListPreference(screen.context).apply {
-            key = PREF_REGION_KEY
-            title = "Catalogue Region"
-            entries = PREF_REGION_ENTRIES
-            entryValues = PREF_REGION_VALUES
-            setDefaultValue(PREF_REGION_DEFAULT)
-            summary = "Region based catalogue recommendation."
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
-
-        // Poster and Titles Language
-        ListPreference(screen.context).apply {
-            key = PREF_JW_LANG_KEY
-            title = "Poster and Titles Language"
-            entries = PREF_JW_LANG_ENTRIES
-            entryValues = PREF_JW_LANG_VALUES
-            setDefaultValue(PREF_JW_LANG_DEFAULT)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
-
-        // TMDB Language
-        ListPreference(screen.context).apply {
-            key = PREF_TMDB_LANG_KEY
-            title = "TMDB: Metadata Language (Episodes)"
-            entries = PREF_TMDB_LANG_ENTRIES
-            entryValues = PREF_TMDB_LANG_VALUES
-            setDefaultValue(PREF_TMDB_LANG_DEFAULT)
-            summary = "Language for episode descriptions and thumbnails."
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
-    }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) = addTorrentioPreferences(screen)
 
     companion object {
         const val PREFIX_SEARCH = "id:"
 
-        // Token
-        private const val PREF_TOKEN_KEY = "token"
-        private const val PREF_TOKEN_DEFAULT = ""
-        private const val PREF_TOKEN_SUMMARY = "Exclusive to Debrid providers; not intended for Torrents."
-
-        // Debrid
-        private const val PREF_DEBRID_KEY = "debrid_provider"
-        private val PREF_DEBRID_ENTRIES = arrayOf(
-            "None",
-            "RealDebrid",
-            "Premiumize",
-            "AllDebrid",
-            "DebridLink",
-            "Offcloud",
-            "TorBox",
-        )
-        private val PREF_DEBRID_VALUES = arrayOf(
-            "none",
-            "realdebrid",
-            "premiumize",
-            "alldebrid",
-            "debridlink",
-            "offcloud",
-            "torbox",
-        )
-
-        // Sort
-        private const val PREF_SORT_KEY = "sorting_link"
-        private val PREF_SORT_ENTRIES = arrayOf(
-            "By quality then seeders",
-            "By quality then size",
-            "By seeders",
-            "By size",
-        )
-        private val PREF_SORT_VALUES = arrayOf(
-            "quality",
-            "qualitysize",
-            "seeders",
-            "size",
-
-        )
-
-        // Provider
-        private const val PREF_PROVIDER_KEY = "provider_selection"
-        private val PREF_PROVIDERS = arrayOf(
-            "YTS",
-            "EZTV",
-            "RARBG",
-            "1337x",
-            "ThePirateBay",
-            "KickassTorrents",
-            "TorrentGalaxy",
-            "MagnetDL",
-            "HorribleSubs",
-            "NyaaSi",
-            "TokyoTosho",
-            "AniDex",
-            "🇷🇺 Rutor",
-            "🇷🇺 Rutracker",
-            "🇵🇹 Comando",
-            "🇵🇹 BluDV",
-            "🇫🇷 Torrent9",
-            "🇪🇸 MejorTorrent",
-            "🇲🇽 Cinecalidad",
-            "🇮🇹 ilCorsaroNero",
-            "🇪🇸 Wolfmax4k",
-        )
-
-        private val PREF_PROVIDERS_VALUE = arrayOf(
-            "yts",
-            "eztv",
-            "rarbg",
-            "1337x",
-            "thepiratebay",
-            "kickasstorrents",
-            "torrentgalaxy",
-            "magnetdl",
-            "horriblesubs",
-            "nyaasi",
-            "tokyotosho",
-            "anidex",
-            "rutor",
-            "rutracker",
-            "comando",
-            "bludv",
-            "torrent9",
-            "mejortorrent",
-            "cinecalidad",
-            "ilcorsaronero",
-            "wolfmax4k",
-        )
-
-        private val PREF_DEFAULT_PROVIDERS_VALUE = arrayOf(
-            "yts",
-            "eztv",
-            "rarbg",
-            "1337x",
-            "thepiratebay",
-            "kickasstorrents",
-            "torrentgalaxy",
-            "magnetdl",
-            "horriblesubs",
-            "nyaasi",
-            "tokyotosho",
-            "anidex",
-        )
-        private val PREF_PROVIDERS_DEFAULT = PREF_DEFAULT_PROVIDERS_VALUE.toSet()
-
-        // / Qualities/Resolutions
-        private const val PREF_QUALITY_KEY = "quality_selection"
-        private val PREF_QUALITY = arrayOf(
-            "BluRay REMUX",
-            "HDR/HDR10+/Dolby Vision",
-            "Dolby Vision",
-            "Dolby Vision + HDR",
-            "3D",
-            "Non 3D (DO NOT SELECT IF NOT SURE)",
-            "4k",
-            "1080p",
-            "720p",
-            "480p",
-            "Other (DVDRip/HDRip/BDRip...)",
-            "Screener",
-            "Cam",
-            "Unknown",
-        )
-
-        private val PREF_QUALITY_VALUE = arrayOf(
-            "brremux",
-            "hdrall",
-            "dolbyvision",
-            "dolbyvisionwithhdr",
-            "threed",
-            "nonthreed",
-            "4k",
-            "1080p",
-            "720p",
-            "480p",
-            "other",
-            "scr",
-            "cam",
-            "unknown",
-        )
-
-        private val PREF_DEFAULT_QUALITY_VALUE = arrayOf(
-            "720p",
-            "480p",
-            "other",
-            "scr",
-            "cam",
-            "unknown",
-        )
-
-        private val PREF_QUALITY_DEFAULT = PREF_DEFAULT_QUALITY_VALUE.toSet()
-
-        // Qualities/Resolutions
-        private const val PREF_LANG_KEY = "lang_selection"
-        private val PREF_LANG = arrayOf(
-            "🇯🇵 Japanese",
-            "🇷🇺 Russian",
-            "🇮🇹 Italian",
-            "🇵🇹 Portuguese",
-            "🇪🇸 Spanish",
-            "🇲🇽 Latino",
-            "🇰🇷 Korean",
-            "🇨🇳 Chinese",
-            "🇹🇼 Taiwanese",
-            "🇫🇷 French",
-
-            "🇩🇪 German",
-            "🇳🇱 Dutch",
-            "🇮🇳 Hindi",
-            "🇮🇳 Telugu",
-            "🇮🇳 Tamil",
-            "🇵🇱 Polish",
-            "🇱🇹 Lithuanian",
-            "🇱🇻 Latvian",
-            "🇪🇪 Estonian",
-            "🇨🇿 Czech",
-
-            "🇸🇰 Slovakian",
-            "🇸🇮 Slovenian",
-            "🇭🇺 Hungarian",
-            "🇷🇴 Romanian",
-            "🇧🇬 Bulgarian",
-            "🇷🇸 Serbian",
-            "🇭🇷 Croatian",
-            "🇺🇦 Ukrainian",
-            "🇬🇷 Greek",
-            "🇩🇰 Danish",
-
-            "🇫🇮 Finnish",
-            "🇸🇪 Swedish",
-            "🇳🇴 Norwegian",
-            "🇹🇷 Turkish",
-            "🇸🇦 Arabic",
-            "🇮🇷 Persian",
-            "🇮🇱 Hebrew",
-            "🇻🇳 Vietnamese",
-            "🇮🇩 Indonesian",
-            "🇲🇾 Malay",
-
-            "🇹🇭 Thai",
-        )
-        private val PREF_LANG_VALUE = arrayOf(
-            "japanese",
-            "russian",
-            "italian",
-            "portuguese",
-            "spanish",
-            "latino",
-            "korean",
-            "chinese",
-            "taiwanese",
-            "french",
-
-            "german",
-            "dutch",
-            "hindi",
-            "telugu",
-            "tamil",
-            "polish",
-            "lithuanian",
-            "latvian",
-            "estonian",
-            "czech",
-
-            "slovakian",
-            "slovenian",
-            "hungarian",
-            "romanian",
-            "bulgarian",
-            "serbian",
-            "croatian",
-            "ukrainian",
-            "greek",
-            "danish",
-
-            "finnish",
-            "swedish",
-            "norwegian",
-            "turkish",
-            "arabic",
-            "persian",
-            "hebrew",
-            "vietnamese",
-            "indonesian",
-            "malay",
-
-            "thai",
-
-        )
-
-        private val PREF_LANG_DEFAULT = setOf<String>()
-
-        private const val UPCOMING_EP_KEY = "upcoming_ep"
-        private const val UPCOMING_EP_DEFAULT = false
-
-        private const val IS_DUB_KEY = "dubbed"
-        private const val IS_DUB_DEFAULT = false
-
-        private const val IS_EFFICIENT_KEY = "efficient"
-        private const val IS_EFFICIENT_DEFAULT = false
-
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
         }
-
-        // JustWatch settings
-        // Region
-        private const val PREF_REGION_KEY = "jw_region"
-        private val PREF_REGION_ENTRIES = arrayOf(
-            "Albania", "Algeria", "Androrra", "Angola", "Antigua and Barbuda", "Argentina", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Barbados", "Belarus", "Belgium", "Belize", "Bermuda", "Bolivia", "Bosnia and Herzegovina", "Brazil", "Bulgaria", "Burkina Faso", "Cameroon", "Canada", "Cape Verde", "Chad", "Chile", "Colombia", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic", "DR Congo", "Denmark", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Estonia", "Fiji", "Finland", "France", "French Guiana", "French Polynesia", "Germany", "Ghana", "Gibraltar", "Greece", "Guatemala", "Guernsey", "Guyana", "Honduras", "Hong Kong", "Hungary", "Iceland", "India", "Indonesia", "Iraq", "Ireland", "Israel", "Italy", "Ivory Coast", "Jamaica", "Japan", "Jordan", "Kenya", "Kosovo", "Kuwait", "Latvia", "Lebanon", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Macedonia", "Madagascar", "Malawi", "Malaysia", "Mali", "Malta", "Mauritius", "Mexico", "Moldova", "Monaco", "Montenegro", "Morocco", "Mozambique", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "Norway", "Oman", "Pakistan", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Saint Lucia", "San Marino", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Singapore", "Slovakia", "Slovenia", "South Africa", "South Korea", "Spain", "Sweden", "Switzerland", "Taiwan", "Tanzania", "Thailand", "Trinidad and Tobago", "Tunisia", "Turkey", "Turks and Caicos Islands", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Vatican City", "Venezuela", "Yemen", "Zambia", "Zimbabwe",
-        )
-        private val PREF_REGION_VALUES = arrayOf(
-            "AL", "DZ", "AD", "AO", "AG", "AR", "AU", "AT", "AZ", "BS", "BH", "BB", "BY", "BE", "BZ", "BM", "BO", "BA", "BR", "BG", "BF", "CM", "CA", "CV", "TD", "CL", "CO", "CR", "HR", "CU", "CY", "CZ", "CD", "DK", "DO", "EC", "EG", "SV", "GQ", "EE", "FJ", "FI", "FR", "GF", "PF", "DE", "GH", "GI", "GR", "GT", "GG", "GY", "HN", "HK", "HU", "IS", "IN", "ID", "IQ", "IE", "IL", "IT", "CI", "JM", "JP", "JO", "KE", "XK", "KW", "LV", "LB", "LY", "LI", "LT", "LU", "MK", "MG", "MW", "MY", "ML", "MT", "MU", "MX", "MD", "MC", "ME", "MA", "MZ", "NL", "NZ", "NI", "NE", "NG", "NO", "OM", "PK", "PS", "PA", "PG", "PY", "PE", "PH", "PL", "PT", "QA", "RO", "RU", "LC", "SM", "SA", "SN", "RS", "SC", "SG", "SK", "SI", "ZA", "KR", "ES", "SE", "CH", "TW", "TZ", "TH", "TT", "TN", "TR", "TC", "UG", "UA", "AE", "UK", "US", "UY", "VA", "VE", "YE", "ZM", "ZW",
-        )
-        private const val PREF_REGION_DEFAULT = "US"
-
-        // JustWatch language in Poster, Titles
-        private const val PREF_JW_LANG_KEY = "jw_lang"
-        private val PREF_JW_LANG_ENTRIES = arrayOf(
-            "Arabic", "Azerbaijani", "Belarusian", "Bulgarian", "Bosnian", "Catalan", "Czech", "German", "Greek", "English", "English (U.S.A.)", "Spanish", "Spanish (Spain)", "Spanish (Latinamerican)", "Estonian", "Finnish", "French", "French (Canada)", "Hebrew", "Croatian", "Hungarian", "Icelandic", "Italian", "Japanese", "Korean", "Lithuanian", "Latvian", "Macedonian", "Maltese", "Polish", "Portuguese", "Portuguese (Portugal)", "Portuguese (Brazil)", "Romanian", "Russian", "Slovakian", "Slovenian", "Albanian", "Serbian", "Swedish", "Swahili", "Turkish", "Ukrainian", "Urdu", "Chinese",
-        )
-        private val PREF_JW_LANG_VALUES = arrayOf(
-            "ar", "az", "be", "bg", "bs", "ca", "cs", "de", "el", "en", "en-US", "es", "es-ES", "es-LA", "et", "fi", "fr", "fr-CA", "he", "hr", "hu", "is", "it", "ja", "ko", "lt", "lv", "mk", "mt", "pl", "pt", "pt-PT", "pt-BR", "ro", "ru", "sk", "sl", "sq", "sr", "sv", "sw", "tr", "uk", "ur", "zh",
-
-        )
-        private const val PREF_JW_LANG_DEFAULT = "en"
-
-        // TMDB Language
-        private const val PREF_TMDB_LANG_KEY = "tmdb_lang"
-        private val PREF_TMDB_LANG_ENTRIES = arrayOf("English", "French")
-        private val PREF_TMDB_LANG_VALUES = arrayOf("en-US", "fr-FR")
-        private const val PREF_TMDB_LANG_DEFAULT = "en-US"
     }
 }

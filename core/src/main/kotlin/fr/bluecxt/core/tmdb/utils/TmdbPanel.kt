@@ -44,6 +44,37 @@ private val tmdbOverridesMap: Map<String, TmdbSeriesOverride> by lazy {
     }
 }
 
+private fun resolvePanelMediaType(rawSeasonName: String?): PanelMediaType {
+    val isMovie = rawSeasonName?.contains("Film", ignoreCase = true) == true || rawSeasonName?.contains("Movie", ignoreCase = true) == true
+    val isSpinOff = rawSeasonName != null && extractSeasonNumber(rawSeasonName) == null && !isMovie
+    return when {
+        isMovie -> PanelMediaType.MOVIE
+        isSpinOff -> PanelMediaType.SPIN_OFF
+        else -> PanelMediaType.SEASON
+    }
+}
+
+private suspend fun Source.findMovieMetadata(seriesTitle: String, fullTitle: String, titles: Set<String>): TmdbMetadata? = fetchTmdbMovieMetadata(seriesTitle)
+    ?: fetchTmdbMovieMetadata(fullTitle)
+    ?: titles.firstNotNullOfOrNull { fetchTmdbMovieMetadata(it) }
+
+private suspend fun Source.findSpinOffMetadata(
+    seriesTitle: String,
+    fullTitle: String,
+    titles: Set<String>,
+    rawSeasonName: String?,
+    seasonNumber: Int,
+): TmdbMetadata? {
+    val spinOffName = rawSeasonName.orEmpty().trim()
+    return fetchTmdbMetadata(spinOffName, 1)
+        ?: fetchTmdbMetadata(fullTitle, 1)
+        ?: titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, seasonNumber) }
+        ?: fetchTmdbMetadata(seriesTitle, seasonNumber)
+}
+
+private suspend fun Source.findSeasonMetadata(seriesTitle: String, titles: Set<String>, seasonNumber: Int): TmdbMetadata? = titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, seasonNumber) }
+    ?: fetchTmdbMetadata(seriesTitle, seasonNumber)
+
 /**
  * High-level helper function for extensions to fetch TMDB metadata for any panel/tab
  * (Movies, Spin-offs like Steins;Gate 0, or standard Seasons).
@@ -69,34 +100,12 @@ suspend fun Source.fetchTmdbForPanel(
         if (groupResult != null) return groupResult
     }
 
-    val isMovie = rawSeasonName?.contains("Film", ignoreCase = true) == true || rawSeasonName?.contains("Movie", ignoreCase = true) == true
-    val isSpinOff = rawSeasonName != null && extractSeasonNumber(rawSeasonName) == null && !isMovie
-
-    val mediaType = when {
-        isMovie -> PanelMediaType.MOVIE
-        isSpinOff -> PanelMediaType.SPIN_OFF
-        else -> PanelMediaType.SEASON
-    }
+    val mediaType = resolvePanelMediaType(rawSeasonName)
 
     val result = when (mediaType) {
-        PanelMediaType.MOVIE -> {
-            fetchTmdbMovieMetadata(seriesTitle)
-                ?: fetchTmdbMovieMetadata(fullTitle)
-                ?: titles.firstNotNullOfOrNull { fetchTmdbMovieMetadata(it) }
-        }
-
-        PanelMediaType.SPIN_OFF -> {
-            val spinOffName = rawSeasonName.orEmpty().trim()
-            fetchTmdbMetadata(spinOffName, 1)
-                ?: fetchTmdbMetadata(fullTitle, 1)
-                ?: titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, seasonNumber) }
-                ?: fetchTmdbMetadata(seriesTitle, seasonNumber)
-        }
-
-        PanelMediaType.SEASON -> {
-            titles.firstNotNullOfOrNull { fetchTmdbMetadata(it, seasonNumber) }
-                ?: fetchTmdbMetadata(seriesTitle, seasonNumber)
-        }
+        PanelMediaType.MOVIE -> findMovieMetadata(seriesTitle, fullTitle, titles)
+        PanelMediaType.SPIN_OFF -> findSpinOffMetadata(seriesTitle, fullTitle, titles, rawSeasonName, seasonNumber)
+        PanelMediaType.SEASON -> findSeasonMetadata(seriesTitle, titles, seasonNumber)
     }
 
     return result?.copy(episodeOffset = episodeOffset)

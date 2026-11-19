@@ -96,14 +96,56 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         },
     ): List<ExtractedSource> {
         val masterHeaders = masterHeadersGen(headers, referer)
+        val masterPlaylist = fetchMasterPlaylist(playlistUrl, masterHeaders)
 
-        var masterPlaylist = ""
+        // Check if there isn't multiple streams available
+        if (PLAYLIST_SEPARATOR !in masterPlaylist) {
+            return listOf(
+                ExtractedSource(
+                    url = playlistUrl,
+                    headers = masterHeaders,
+                    subtitleTracks = subtitleList,
+                    audioTracks = audioList,
+                ),
+            )
+        }
+
+        // Get subtitles
+        val subtitleTracks = subtitleList + parseSubtitleTracks(masterPlaylist, playlistUrl)
+
+        // Get audio tracks
+        val audioTracks = audioList + parseAudioTracks(masterPlaylist, playlistUrl)
+
+        return masterPlaylist.substringAfter(PLAYLIST_SEPARATOR).split(PLAYLIST_SEPARATOR).mapNotNull { stream ->
+            parseVariant(
+                stream,
+                playlistUrl,
+                subtitleTracks,
+                audioTracks,
+                toStandardQuality,
+                videoHeadersGen,
+                referer,
+            )
+        }
+            .sortedByDescending { (bandwidth, _) ->
+                bandwidth ?: 0L
+            }
+            .map { (_, video) -> video }
+    }
+
+    /**
+     * Récupère le playlist maître en réessayant au plus [MAX_EXTRACT_ATTEMPTS] fois.
+     * Un code 404/410 est bloquant, les autres erreurs sont retentées puis relancées.
+     */
+    private suspend fun fetchMasterPlaylist(
+        playlistUrl: String,
+        masterHeaders: Headers,
+    ): String {
         var attempts = 0
         while (attempts < MAX_EXTRACT_ATTEMPTS) {
             try {
-                masterPlaylist = client.newCall(GET(playlistUrl, masterHeaders))
+                return client.newCall(GET(playlistUrl, masterHeaders))
                     .awaitSuccess().bodyString()
-                break
             } catch (e: Exception) {
                 val httpCode = e.safeHttpCode
                 if (httpCode == 404 || httpCode == 410) {
@@ -118,73 +160,68 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
                 delay(1.seconds)
             }
         }
-        // Check if there isn't multiple streams available
-        if (PLAYLIST_SEPARATOR !in masterPlaylist) {
-            return listOf(
-                ExtractedSource(
-                    url = playlistUrl,
-                    headers = masterHeaders,
-                    subtitleTracks = subtitleList,
-                    audioTracks = audioList,
-                ),
-            )
+        return ""
+    }
+
+    /** Pistes de sous-titres déclarées par le playlist maître. */
+    private fun parseSubtitleTracks(masterPlaylist: String, playlistUrl: String): List<Track> = SUBTITLE_REGEX.findAll(masterPlaylist).mapNotNull {
+        Track(
+            UrlUtils.fixUrl(it.groupValues[2], playlistUrl) ?: return@mapNotNull null,
+            it.groupValues[1],
+        )
+    }.toList()
+
+    /** Pistes audio déclarées par le playlist maître. */
+    private fun parseAudioTracks(masterPlaylist: String, playlistUrl: String): List<Track> = AUDIO_REGEX.findAll(masterPlaylist).mapNotNull {
+        Track(
+            UrlUtils.fixUrl(it.groupValues[2], playlistUrl) ?: return@mapNotNull null,
+            it.groupValues[1],
+        )
+    }.toList()
+
+    /** Convertit une variante du playlist maître en source extraite, ou null si elle est ignorée. */
+    private fun parseVariant(
+        stream: String,
+        playlistUrl: String,
+        subtitleTracks: List<Track>,
+        audioTracks: List<Track>,
+        toStandardQuality: (String) -> String,
+        videoHeadersGen: (Headers, String, String) -> Headers,
+        referer: String,
+    ): Pair<Long?, ExtractedSource>? {
+        val codec = CODECS_REGEX.find(stream)?.groupValues?.get(1)
+        if (!codec.isNullOrBlank()) {
+            // Skip audio only streams. Can check if `codecs` starts with any of avc/hev1/hvc1/vp9/av01.
+            val codecs = codec.split(',')
+            if (codecs.all { it.startsWith("mp4a") }) return null
         }
 
-        // Get subtitles
-        val subtitleTracks = subtitleList + SUBTITLE_REGEX.findAll(masterPlaylist).mapNotNull {
-            Track(
-                UrlUtils.fixUrl(it.groupValues[2], playlistUrl) ?: return@mapNotNull null,
-                it.groupValues[1],
-            )
-        }.toList()
+        val resolution = RESOLUTION_REGEX.find(stream)?.groupValues?.get(1) ?: ""
+        val rawQuality = QUALITY_REGEX.find(resolution)?.groupValues?.get(1) ?: ""
+        val quality = toStandardQuality(rawQuality)
 
-        // Get audio tracks
-        val audioTracks = audioList + AUDIO_REGEX.findAll(masterPlaylist).mapNotNull {
-            Track(
-                UrlUtils.fixUrl(it.groupValues[2], playlistUrl) ?: return@mapNotNull null,
-                it.groupValues[1],
-            )
-        }.toList()
-
-        return masterPlaylist.substringAfter(PLAYLIST_SEPARATOR).split(PLAYLIST_SEPARATOR).mapNotNull { stream ->
-            val codec = CODECS_REGEX.find(stream)?.groupValues?.get(1)
-            if (!codec.isNullOrBlank()) {
-                // Skip audio only streams. Can check if `codecs` starts with any of avc/hev1/hvc1/vp9/av01.
-                val codecs = codec.split(',')
-                if (codecs.all { it.startsWith("mp4a") }) return@mapNotNull null
+        val frameRate = FRAME_RATE_REGEX.find(stream)?.groupValues?.get(1)
+            ?.toDoubleOrNull()
+            ?.let { fps ->
+                "${fps.roundToInt()}fps"
             }
 
-            val resolution = RESOLUTION_REGEX.find(stream)?.groupValues?.get(1) ?: ""
-            val rawQuality = QUALITY_REGEX.find(resolution)?.groupValues?.get(1) ?: ""
-            val quality = toStandardQuality(rawQuality)
+        val bandwidth = BANDWIDTH_REGEX.find(stream)
+            ?.groupValues?.get(1)
+            ?.toLongOrNull()
 
-            val frameRate = FRAME_RATE_REGEX.find(stream)?.groupValues?.get(1)
-                ?.toDoubleOrNull()
-                ?.let { fps ->
-                    "${fps.roundToInt()}fps"
-                }
+        val videoUrl = stream.substringAfter("\n").substringBefore("\n").let { url ->
+            UrlUtils.fixUrl(url, playlistUrl)?.trimEnd()
+        } ?: return null
 
-            val bandwidth = BANDWIDTH_REGEX.find(stream)
-                ?.groupValues?.get(1)
-                ?.toLongOrNull()
-
-            val videoUrl = stream.substringAfter("\n").substringBefore("\n").let { url ->
-                UrlUtils.fixUrl(url, playlistUrl)?.trimEnd()
-            } ?: return@mapNotNull null
-
-            bandwidth to ExtractedSource(
-                url = videoUrl,
-                quality = quality,
-                frameRate = frameRate,
-                headers = videoHeadersGen(headers, referer, videoUrl),
-                subtitleTracks = subtitleTracks,
-                audioTracks = audioTracks,
-            )
-        }
-            .sortedByDescending { (bandwidth, _) ->
-                bandwidth ?: 0L
-            }
-            .map { (_, video) -> video }
+        return bandwidth to ExtractedSource(
+            url = videoUrl,
+            quality = quality,
+            frameRate = frameRate,
+            headers = videoHeadersGen(headers, referer, videoUrl),
+            subtitleTracks = subtitleTracks,
+            audioTracks = audioTracks,
+        )
     }
 
     fun generateMasterHeaders(baseHeaders: Headers, referer: String): Headers = baseHeaders.newBuilder().apply {
