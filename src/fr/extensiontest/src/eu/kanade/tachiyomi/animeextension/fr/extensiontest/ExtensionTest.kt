@@ -48,12 +48,14 @@ class ExtensionTest :
             SAnime.create().apply {
                 title = "Test Observabilité & Monitoring (Tous les types d'erreurs)"
                 url = "/test-monitoring"
-                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/assets/repo_logo.svg"
+                thumbnail_url =
+                    "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/assets/repo_logo.svg"
             },
             SAnime.create().apply {
                 title = "Test Extracteurs & Hosters (Lazy / Non-Lazy)"
                 url = "/test-extractors"
-                thumbnail_url = "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/assets/repo_logo.svg"
+                thumbnail_url =
+                    "https://github.com/bluecxt/anime-extensions-french/raw/refs/heads/main/assets/repo_logo.svg"
             },
         ),
         false,
@@ -72,13 +74,64 @@ class ExtensionTest :
                 "• Rafale complète (Batch)"
         } else {
             buildString {
-                val char1 = "✦"
-                val char2 = "⫻"
-                append("Uqload $char1 802p $char2 23.98fps\n")
-                append("Sendvid $char1 1080p $char2 60fps\n")
-                append("Sibnet $char1 720p $char2 60fps\n")
-                append("Vidmoly $char1 1080p\n")
-                append("Vk $char1 60fps")
+                description = buildString {
+                    // Titres (Headings)
+                    appendLine("# Titre H1")
+                    appendLine("## Titre H2")
+                    appendLine("### Titre H3")
+                    appendLine("#### Titre H4")
+                    appendLine("##### Titre H5")
+                    appendLine("###### Titre H6\n\n")
+
+                    // Formatage de texte (Text Formatting)
+                    appendLine("**Texte en gras**")
+                    appendLine("*Texte en italique*")
+                    appendLine("***Texte en gras et italique***")
+                    appendLine("~~Texte barré~~")
+                    appendLine("__Texte gras alternatif__\n\n")
+
+                    // Paragraphes et retours à la ligne
+                    appendLine("Premier paragraphe de texte standard.")
+                    appendLine("Ligne avec deux espaces à la fin pour saut doux  ")
+                    appendLine("Ligne suivante.\n\n")
+
+                    // Citations (Blockquotes)
+                    appendLine("> Ceci est une citation simple.")
+                    appendLine("> Deuxième ligne de la citation.")
+                    appendLine(">> Citation imbriquée de niveau 2")
+                    appendLine(">> hey 2")
+                    appendLine(">>> Citation imbriquée de niveau 3")
+                    appendLine(">>> HEY hey\n\n")
+
+                    // Listes à puces (Unordered Lists)
+                    appendLine("- Élément à puce 1")
+                    appendLine("- Élément à puce 2")
+                    appendLine("  - Sous-élément indenté 2.1")
+                    appendLine("  - Sous-élément indenté 2.2")
+                    appendLine("* Autre puce avec astérisque\n\n")
+
+                    // Code en ligne et blocs de code (Code)
+                    appendLine("Exécutez la commande `val x = 42` pour tester.")
+                    appendLine("```kotlin")
+                    appendLine("fun main() {")
+                    appendLine("    println(\"Hello, world!\")")
+                    appendLine("}")
+                    appendLine("```\n\n")
+
+                    // Liens et Images (Links & Images)
+                    appendLine("[Lien hypertexte](https://example.com)\n\n")
+                    appendLine("![Image alternative](https://placehold.co/600x400/png \"Image test\")\n\n")
+                    appendLine("[![Titre de la vidéo](https://i.ytimg.com/vi/ofvB4LYH7bE/hqdefault.jpg)](https://www.youtube.com/watch?v=ofvB4LYH7bE)\n\n")
+
+                    // Tableaux (max visible sans slider = 2)
+                    appendLine("| En-tête 1 | En-tête 2 | En-tête 3 |")
+                    appendLine("| :--- | :---: | ---: |")
+                    appendLine("| Aligné à gauche | Centré | Aligné à droite |")
+                    appendLine("| Valeur A | Valeur B | Valeur C |\n\n")
+
+                    // Ligne de separation
+                    appendLine("---")
+                }
             }
         }
     }
@@ -294,8 +347,20 @@ class ExtensionTest :
         }
         SourceAuditor.run {
             dummyAnime.checkAndReportIncompleteness(baseUrl, "/incomplet-test", currentName, currentVersion)
-            listOf<SEpisode>().checkAndReportEpisodeIssues(baseUrl, "/incomplet-test", "Test Incomplet Auditor", currentName, currentVersion)
-            listOf(Video("invalid_video_url_test", "Test Video")).checkAndReportVideoIssues(baseUrl, "/incomplet-test", "HosterTest", currentName, currentVersion)
+            listOf<SEpisode>().checkAndReportEpisodeIssues(
+                baseUrl,
+                "/incomplet-test",
+                "Test Incomplet Auditor",
+                currentName,
+                currentVersion
+            )
+            listOf(Video("invalid_video_url_test", "Test Video")).checkAndReportVideoIssues(
+                baseUrl,
+                "/incomplet-test",
+                "HosterTest",
+                currentName,
+                currentVersion
+            )
         }
         return "SourceAuditor rapports envoyés au webhook"
     }
@@ -333,5 +398,6 @@ class ExtensionTest :
     override fun latestUpdatesParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
     override fun latestUpdatesRequest(page: Int): Request = Request.Builder().url(defaultBaseUrl).build()
     override fun searchAnimeParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = Request.Builder().url(defaultBaseUrl).build()
+    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request =
+        Request.Builder().url(defaultBaseUrl).build()
 }
