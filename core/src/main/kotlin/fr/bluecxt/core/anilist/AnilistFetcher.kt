@@ -212,13 +212,13 @@ internal suspend inline fun <reified T> Source.executeAnilistGraphQl(
             }
 
             if (!response.isSuccessful) {
-                throw IllegalStateException(
+                error(
                     "HTTP ${response.code} from AniList [$context]: ${rawBody.take(300)}",
                 )
             }
 
             if (rawBody.isBlank()) {
-                throw IllegalStateException("Empty response body from AniList [$context]")
+                error("Empty response body from AniList [$context]")
             }
 
             val graphQlResponse = anilistJson.decodeFromString<AnilistGraphQlResponse<T>>(rawBody)
@@ -231,7 +231,7 @@ internal suspend inline fun <reified T> Source.executeAnilistGraphQl(
                 if (isOnlyNotFound) return@use null
 
                 val joinedMessages = errors.joinToString("; ") { "${it.message} (status=${it.status})" }
-                throw IllegalStateException("GraphQL errors [$context]: $joinedMessages")
+                error("GraphQL errors [$context]: $joinedMessages")
             }
 
             graphQlResponse.data

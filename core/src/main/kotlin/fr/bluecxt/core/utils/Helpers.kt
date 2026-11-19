@@ -64,7 +64,7 @@ private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
  * derived from the given or active User-Agent string.
  */
 fun Headers.Builder.addClientHints(userAgent: String? = null): Headers.Builder {
-    val actualUserAgent = userAgent ?: DEFAULT_USER_AGENT ?: throw IllegalStateException()
+    val actualUserAgent = userAgent ?: DEFAULT_USER_AGENT ?: error("User-Agent and DEFAULT_USER_AGENT are both null")
     val chromeMatch = CHROME_VERSION_REGEX.find(actualUserAgent)
     if (chromeMatch != null) {
         val major = chromeMatch.groupValues[1]

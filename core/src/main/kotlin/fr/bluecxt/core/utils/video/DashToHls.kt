@@ -426,8 +426,6 @@ class DashToExtractedSource {
         }
     }
 
-    private fun List<Element>.typeIs(type: String): List<Element>? = filter { it.attr("contentType") == type || it.attr("mimeType").startsWith(type) }.takeIf { it.isNotEmpty() }
-
     private companion object {
         const val REPRESENTATION_ID_TOKEN = "\$RepresentationID\$"
 

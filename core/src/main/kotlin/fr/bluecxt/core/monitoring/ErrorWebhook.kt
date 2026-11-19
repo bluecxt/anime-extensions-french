@@ -291,7 +291,7 @@ object ErrorWebhook {
                     .build()
 
                 client.newCall(request).enqueue(object : okhttp3.Callback {
-                    override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {}
+                    override fun onFailure(call: okhttp3.Call, e: java.io.IOException) = Unit
                     override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) = response.close()
                 })
             } catch (_: Exception) {

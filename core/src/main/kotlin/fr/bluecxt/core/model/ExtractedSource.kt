@@ -4,7 +4,6 @@ package fr.bluecxt.core.model
 
 import eu.kanade.tachiyomi.animesource.model.Track
 import okhttp3.Headers
-import okhttp3.HttpUrl
 
 data class ExtractedSource(
     val url: String,

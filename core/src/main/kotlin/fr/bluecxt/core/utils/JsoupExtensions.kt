@@ -19,7 +19,7 @@ interface JsoupExtensions {
      */
     private val sourceSelf: Source
         get() = this as? Source
-            ?: throw IllegalStateException("JsoupExtensions interface must only be implemented by a subclass of Source")
+            ?: error("JsoupExtensions interface must only be implemented by a subclass of Source")
 
     /**
      * JSoup selectFirst wrapper that logs a webhook if the selector returns null.
