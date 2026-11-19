@@ -4,9 +4,11 @@ package fr.bluecxt.core.utils.video
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers
 import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Attempts to detect the resolution (height) of an MP4 video by reading its header atoms.
@@ -14,13 +16,15 @@ import okhttp3.OkHttpClient
  * Strict timeout of 1.5 seconds ensures the UI never hangs waiting for this metadata.
  */
 suspend fun OkHttpClient.detectMp4Resolution(url: String, headers: Headers): Int? {
-    return withTimeoutOrNull(1500) {
+    return withTimeoutOrNull(1.5.seconds) {
         val requestHeaders = headers.newBuilder()
             .set("Range", "bytes=0-65535")
             .build()
 
         val response = try {
             newCall(GET(url, requestHeaders)).awaitSuccess()
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             return@withTimeoutOrNull null
         }
