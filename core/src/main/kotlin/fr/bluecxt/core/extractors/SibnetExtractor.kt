@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.SIBNET_LOG
 import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.video.detectMp4Resolution
@@ -41,7 +42,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
                 if (retryHtml.contains("Видео недоступно") || retryHtml.contains("Video not available")) {
                     throw ContentUnavailableException("Sibnet: Video explicitly marked as unavailable")
                 }
-                throw Exception("Could not find player script in Sibnet (Title: ${document.title()})")
+                throw ExtractionException("Could not find player script in Sibnet (Title: ${document.title()})")
             }
         }
 

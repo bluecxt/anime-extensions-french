@@ -5,6 +5,7 @@ package fr.bluecxt.core.extractors
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -60,7 +61,7 @@ class DoodExtractor(private val client: OkHttpClient) {
             if (src == "/e/" || src == "/e") {
                 throw ContentUnavailableException("Doodstream: Video not found")
             }
-            val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: throw Exception("Doodstream: Could not resolve iframe URL")
+            val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: throw ExtractionException("Doodstream: Could not resolve iframe URL")
             response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccessOrUnavailable(iframeUrl)
             html = response.body.string()
         } else {
@@ -80,12 +81,12 @@ class DoodExtractor(private val client: OkHttpClient) {
         )
         val match = mainRegex.find(html)
         if (match == null) {
-            throw Exception("Doodstream: Could find token in script")
+            throw ExtractionException("Doodstream: Could find token in script")
         }
 
         val passPath = match.groupValues[1]
         val token = match.groupValues[2]
-        val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: throw Exception("Doodstream: Could not resolve pass URL")
+        val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: throw ExtractionException("Doodstream: Could not resolve pass URL")
 
         val baseResponse = client.newCall(GET(passUrl, currentHeaders)).awaitSuccessOrUnavailable(passUrl)
         val baseUrl = baseResponse.body.string().trim()

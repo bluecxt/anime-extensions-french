@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.POST
 import fr.bluecxt.core.VIDARA_LOG
 import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.utils.toJsonRequestBody
@@ -26,10 +27,10 @@ open class VidaraExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val regex = Regex("""/(?:e|v)/([0-9a-zA-Z]+)""")
-        val mediaId = regex.find(url)?.groupValues?.get(1) ?: throw Exception("Could not extract mediaId for Vidara/Streamix")
+        val mediaId = regex.find(url)?.groupValues?.get(1) ?: throw ExtractionException("Could not extract mediaId for Vidara/Streamix")
         Log.d(VIDARA_LOG, "Extracted mediaId: $mediaId")
 
-        val httpUrl = url.toHttpUrlOrNull() ?: throw Exception("Invalid URL for Vidara/Streamix")
+        val httpUrl = url.toHttpUrlOrNull() ?: throw ExtractionException("Invalid URL for Vidara/Streamix")
         val host = httpUrl.host
 
         val apiUrl = "https://$host$apiPath"

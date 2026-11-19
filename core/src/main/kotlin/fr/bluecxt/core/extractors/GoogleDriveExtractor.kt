@@ -4,6 +4,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Cookie
@@ -62,7 +63,7 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
             }
         }
 
-        if (videoList.isEmpty()) throw Exception("GoogleDrive: No video sources found")
+        if (videoList.isEmpty()) throw ExtractionException("GoogleDrive: No video sources found")
 
         return videoList
     }

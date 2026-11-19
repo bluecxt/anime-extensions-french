@@ -7,6 +7,7 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.VOE_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.network.DdosGuardInterceptor
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
@@ -55,7 +56,7 @@ class VoeExtractor(private val client: OkHttpClient) {
             fallbackMethod(html, headers)
         }
 
-        if (results.isEmpty()) throw Exception("Voe: Failed to extract video using both new and fallback methods")
+        if (results.isEmpty()) throw ExtractionException("Voe: Failed to extract video using both new and fallback methods")
 
         return results
     }

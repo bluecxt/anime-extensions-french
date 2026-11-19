@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.UQLOAD_LOG
 import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
@@ -38,9 +39,9 @@ class UqloadExtractor(private val client: OkHttpClient) {
         }
         val soup = response.useAsJsoup()
 
-        val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: throw Exception("Could not find script with video data in Uqload")
+        val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: throw ExtractionException("Could not find script with video data in Uqload")
 
-        val unpackedJs = autoUnpacker(script) ?: throw Exception("Could not unpack script in Uqload")
+        val unpackedJs = autoUnpacker(script) ?: throw ExtractionException("Could not unpack script in Uqload")
 
         val m3u8Master = Regex("""sources:\s*\[\{\s*file:\s*"([^"]+)"""").find(unpackedJs)?.groupValues?.get(1)
 
@@ -80,6 +81,6 @@ class UqloadExtractor(private val client: OkHttpClient) {
             }
         }
 
-        throw Exception("Uqload: No video sources found (HLS or MP4)")
+        throw ExtractionException("Uqload: No video sources found (HLS or MP4)")
     }
 }

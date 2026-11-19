@@ -243,7 +243,7 @@ class TvdbFetcher(
                 return it
             }
 
-            val remoteMedia: TvdbRemoteMedia = resolveRemoteMedia(remoteId, source, expectedNames, movieWanted)
+            val remoteMedia: TvdbRemoteMedia = resolveRemoteMedia(remoteId, expectedNames, movieWanted)
                 ?: return@withLock null
 
             if (remoteMedia.isMovie) {
@@ -514,7 +514,6 @@ class TvdbFetcher(
 
     private suspend fun resolveRemoteMedia(
         remoteId: Long,
-        source: ExternalSourceId?,
         expectedNames: Set<String>,
         movieWanted: Boolean? = null,
     ): TvdbRemoteMedia? {

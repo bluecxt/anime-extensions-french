@@ -6,13 +6,16 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import fr.bluecxt.core.JWPLAYER_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.video.PlaylistUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -52,7 +55,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                 videoHeaders = finalHeaders,
             )
         } else {
-            throw Exception("JWPlayer: Failed to intercept m3u8 URL (Timeout or block)")
+            throw ExtractionException("JWPlayer: Failed to intercept m3u8 URL (Timeout or block)")
         }
     }
 
@@ -121,7 +124,8 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                                     return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(injectedHtml.toByteArray()))
                                 }
                             } catch (e: Exception) {
-                                // Ignore injection errors
+                                // Les erreurs d'injection HTML ne doivent pas interrompre l'interception.
+                                Log.w(JWPLAYER_LOG, "Échec de l'injection HTML dans l'iframe", e)
                             }
                         }
                         return super.shouldInterceptRequest(view, request)
@@ -129,6 +133,7 @@ class JWplayerExtractor(private val client: OkHttpClient) {
                 }
                 view.loadUrl(url)
             } catch (e: Exception) {
+                Log.w(JWPLAYER_LOG, "Échec de l'initialisation du WebView", e)
                 latch.countDown()
             }
         }

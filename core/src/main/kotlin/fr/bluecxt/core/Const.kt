@@ -34,6 +34,7 @@ const val VOE_LOG: String = "VoeLog"
 const val VIDOZA_LOG: String = "VidozaLog"
 const val UQLOAD_LOG: String = "UqloadLog"
 const val SIBNET_LOG: String = "SibnetLog"
+const val ABYSS_LOG: String = "AbyssLog"
 const val VIDMOLY_LOG: String = "VidmolyLog"
 
 // Extension logs

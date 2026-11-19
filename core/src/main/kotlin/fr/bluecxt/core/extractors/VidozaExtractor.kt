@@ -4,6 +4,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,7 +48,7 @@ class VidozaExtractor(private val client: OkHttpClient) {
             }
 
             else -> {
-                throw Exception("Vidoza: No video links found in HTML")
+                throw ExtractionException("Vidoza: No video links found in HTML")
             }
         }
 
@@ -61,7 +62,7 @@ class VidozaExtractor(private val client: OkHttpClient) {
             )
         }
 
-        if (videoList.isEmpty()) throw Exception("Vidoza: Failed to parse video links from matches")
+        if (videoList.isEmpty()) throw ExtractionException("Vidoza: Failed to parse video links from matches")
 
         return videoList
     }

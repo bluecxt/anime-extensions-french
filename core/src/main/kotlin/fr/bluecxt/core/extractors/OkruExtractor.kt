@@ -4,6 +4,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.utils.useAsJsoup
@@ -30,7 +31,7 @@ class OkruExtractor(private val client: OkHttpClient) {
         val document = client.newCall(GET(url)).awaitSuccessOrUnavailable(url).useAsJsoup()
         val videoString = document.selectFirst("div[data-options]")
             ?.attr("data-options")
-            ?: throw Exception("Could not find video data in Okru")
+            ?: throw ExtractionException("Could not find video data in Okru")
 
         return when {
             "ondemandHls" in videoString -> {

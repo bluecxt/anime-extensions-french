@@ -4,6 +4,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -21,7 +22,7 @@ class MymailExtractor(private val client: OkHttpClient) {
         val responseBody = response.use { it.body.string() }
 
         val json = JSONObject(responseBody)
-        val videosArray = json.optJSONArray("videos") ?: throw Exception("Could not find video data in Mymail response")
+        val videosArray = json.optJSONArray("videos") ?: throw ExtractionException("Could not find video data in Mymail response")
 
         val results = mutableListOf<ExtractedSource>()
 
@@ -42,7 +43,7 @@ class MymailExtractor(private val client: OkHttpClient) {
             )
         }
 
-        if (results.isEmpty()) throw Exception("Mymail: No video sources found")
+        if (results.isEmpty()) throw ExtractionException("Mymail: No video sources found")
 
         return results.asReversed()
     }

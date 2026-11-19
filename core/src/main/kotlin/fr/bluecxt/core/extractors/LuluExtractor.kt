@@ -4,6 +4,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
@@ -45,18 +46,18 @@ class LuluExtractor(private val client: OkHttpClient) {
 
     private fun extractM3u8Url(html: String): String = when {
         html.contains("eval(function(p,a,c,k,e") -> {
-            val unpacked = autoUnpacker(html) ?: throw Exception("LuluExtractor: Could not unpack script")
+            val unpacked = autoUnpacker(html) ?: throw ExtractionException("LuluExtractor: Could not unpack script")
             Pattern.compile("sources:\\[\\{file:\"([^\"]+)\"")
                 .matcher(unpacked)
                 .takeIf { it.find() }
-                ?.group(1) ?: throw Exception("LuluExtractor: Could not find m3u8 in unpacked script")
+                ?.group(1) ?: throw ExtractionException("LuluExtractor: Could not find m3u8 in unpacked script")
         }
 
         else -> {
             Pattern.compile("sources: \\[\\{file:\"(https?://[^\"]+)\"")
                 .matcher(html)
                 .takeIf { it.find() }
-                ?.group(1) ?: throw Exception("LuluExtractor: Could not find m3u8 in HTML")
+                ?.group(1) ?: throw ExtractionException("LuluExtractor: Could not find m3u8 in HTML")
         }
     }
 

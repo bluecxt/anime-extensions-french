@@ -3,7 +3,10 @@
 package fr.bluecxt.core.extractors
 
 import android.util.Base64
+import android.util.Log
+import fr.bluecxt.core.FILEMOON_LOG
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.video.PlaylistUtils
 import kotlinx.serialization.SerialName
@@ -89,7 +92,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         }
 
         val mediaId = Regex("/(?:e|eyi|d|download|j\\d+)/([0-9a-zA-Z]+)").find(resolvedUrl.toString())?.groupValues?.get(1)
-            ?: throw Exception("Filemoon: Could not extract media ID from $resolvedUrl")
+            ?: throw ExtractionException("Filemoon: Could not extract media ID from $resolvedUrl")
 
         val apiHeaders = initialHeaders.newBuilder()
             .set("Referer", url)
@@ -110,7 +113,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             try {
                 playbackData = doChallengeFlow(host, mediaId, apiHeaders, resolvedUrl.toString())
             } catch (e: Exception) {
-                throw Exception("Filemoon: All extraction flows failed: ${e.message}", e)
+                throw ExtractionException("Filemoon: All extraction flows failed: ${e.message}", e)
             }
         }
 
@@ -124,11 +127,12 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                 val decryptedJson = json.decodeFromString<PlaybackResponse>(decrypted)
                 decryptedJson.sources?.let { sources.addAll(it) }
             } catch (e: Exception) {
-                // Ignore decryption errors for individual playback parts if we have others
+                // Les erreurs de déchiffrement d'un playback isolé sont ignorées si d'autres sources existent.
+                Log.w(FILEMOON_LOG, "Échec du déchiffrement d'un playback, sources ignorées", e)
             }
         }
 
-        if (sources.isEmpty()) throw Exception("Filemoon: No sources found in playback data")
+        if (sources.isEmpty()) throw ExtractionException("Filemoon: No sources found in playback data")
 
         val streamUrl = sources.first().url.let {
             if (it.startsWith("/")) "https://$host$it" else it
@@ -175,11 +179,11 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             .build()
 
         return try {
-            executeChallengeFlow(base, mediaId, apiHeaders, refererHost, embedUrl, userAgent, cachedFingerprint ?: createNewFingerprint(base, apiHeaders, userAgent))
+            executeChallengeFlow(base, mediaId, apiHeaders, refererHost, embedUrl, cachedFingerprint ?: createNewFingerprint(base, apiHeaders, userAgent))
         } catch (_: Exception) {
             // Invalidate cache and retry with fresh attestation
             cachedFingerprint = null
-            executeChallengeFlow(base, mediaId, apiHeaders, refererHost, embedUrl, userAgent, createNewFingerprint(base, apiHeaders, userAgent))
+            executeChallengeFlow(base, mediaId, apiHeaders, refererHost, embedUrl, createNewFingerprint(base, apiHeaders, userAgent))
         }
     }
 
@@ -220,7 +224,6 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         apiHeaders: Headers,
         refererHost: String,
         embedUrl: String,
-        userAgent: String,
         fp: Fingerprint,
     ): PlaybackResponse {
         val captchaUrl = "$base/api/videos/$mediaId/embed/captcha"
@@ -248,7 +251,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         ).awaitSuccessOrUnavailable(verifyUrl).parseAs<VerifyResponse>()
 
         if (verifyResponse.status != "ok" || verifyResponse.token == null) {
-            throw Exception("PoW verification failed: ${verifyResponse.status}")
+            throw ExtractionException("PoW verification failed: ${verifyResponse.status}")
         }
 
         val playbackUrl = "$base/api/videos/$mediaId/embed/playback"
@@ -323,7 +326,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         val finalConst = 2246822519L
         val mask32 = 0xFFFFFFFFL
 
-        fun rl(val_: Long, shift: Int): Long = ((val_ shl shift) or (val_ ushr (32 - shift))) and mask32
+        fun rl(value: Long, shift: Int): Long = ((value shl shift) or (value ushr (32 - shift))) and mask32
 
         val prefix = "$nonce:".toByteArray(Charsets.ISO_8859_1)
 
@@ -417,7 +420,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                 return counter.toString()
             }
         }
-        throw Exception("PoW solver: no solution found in $maxIterations iterations")
+        throw ExtractionException("PoW solver: no solution found in $maxIterations iterations")
     }
 
     private fun generateClientFingerprint(userAgent: String): ClientFingerprint {
@@ -498,7 +501,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
     private inline fun <reified T> Response.parseAs(): T {
         val bodyStr = body.string()
         if (!isSuccessful) {
-            throw Exception("HTTP $code: $bodyStr")
+            throw ExtractionException("HTTP $code: $bodyStr")
         }
         return json.decodeFromString(bodyStr)
     }
@@ -506,6 +509,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
     private fun String.toHttpUrlOrNull() = try {
         toHttpUrl()
     } catch (e: Exception) {
+        Log.w(FILEMOON_LOG, "URL invalide ignorée : $this", e)
         null
     }
 

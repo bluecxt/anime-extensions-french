@@ -4,6 +4,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -36,7 +37,7 @@ class VkExtractor(private val client: OkHttpClient, private val headers: Headers
             )
         }.toList()
 
-        if (videos.isEmpty()) throw Exception("Vk: No video URLs found in response")
+        if (videos.isEmpty()) throw ExtractionException("Vk: No video URLs found in response")
 
         return videos
     }

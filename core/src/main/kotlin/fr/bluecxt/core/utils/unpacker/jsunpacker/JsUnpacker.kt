@@ -61,6 +61,8 @@ object JsUnpacker {
      *
      * @return the packed scripts passed in [scriptBlocks].
      */
+    // Conversion volontaire : ce code vendor ne doit pas être réécrit, on limite la portée du spread.
+    @Suppress("SpreadOperator")
     fun detect(scriptBlocks: Collection<String>): List<String> = detect(*scriptBlocks.toTypedArray())
 
     /**
@@ -113,6 +115,8 @@ object JsUnpacker {
      *
      * @return unpacked code in a flat list or an empty list if non is packed.
      */
+    // Conversion volontaire : ce code vendor ne doit pas être réécrit, on limite la portée du spread.
+    @Suppress("SpreadOperator")
     fun unpack(scriptBlocks: Collection<String>): List<String> = unpack(*scriptBlocks.toTypedArray())
 
     /**

@@ -3,7 +3,9 @@
 package fr.bluecxt.core.extractors
 
 import android.util.Base64
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import fr.bluecxt.core.ABYSS_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.video.PlaylistUtils
@@ -12,6 +14,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import java.security.MessageDigest
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -201,7 +204,7 @@ class AbyssExtractor(private val client: OkHttpClient) {
         }
         val md5 = MessageDigest.getInstance("MD5")
         val hash = md5.digest(digestSource)
-        val hexString = hash.joinToString("") { String.format("%02x", it) }
+        val hexString = hash.joinToString("") { String.format(Locale.ROOT, "%02x", it) }
         return hexString.toByteArray(Charsets.UTF_8)
     }
 
@@ -214,6 +217,7 @@ class AbyssExtractor(private val client: OkHttpClient) {
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec)
         cipher.doFinal(dataBytes)
     } catch (e: Exception) {
+        Log.w(ABYSS_LOG, "Échec de la transformation AES-CTR", e)
         null
     }
 
@@ -342,7 +346,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
             } else {
                 val hlsSources = hls.optJSONArray("sources")
                 if (hlsSources != null) {
-                    (0 until hlsSources.length()).mapNotNull { hlsSources.optJSONObject(it) }.forEach { hs ->
+                    for (i in 0 until hlsSources.length()) {
+                        val hs = hlsSources.optJSONObject(i) ?: continue
                         val f = listOf("file", "url", "src").map { hs.optString(it, "") }.firstOrNull { it.isNotEmpty() }
                         if (f != null) {
                             val label = hs.optString("label", "Video")

@@ -4,6 +4,7 @@ package fr.bluecxt.core.extractors
 
 import eu.kanade.tachiyomi.network.GET
 import fr.bluecxt.core.model.ExtractedSource
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -34,7 +35,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
             else -> decodedUrl.substringAfterLast("/").trim()
         }
 
-        if (videoId.isEmpty() || videoId.contains("http")) throw Exception("Embed4me: Invalid video ID extracted from $url")
+        if (videoId.isEmpty() || videoId.contains("http")) throw ExtractionException("Embed4me: Invalid video ID extracted from $url")
 
         val parsedUrl = url.toHttpUrl()
         val apiUrl = "${parsedUrl.scheme}://${parsedUrl.host}/api/v1/video?id=$videoId&w=1920&h=1080&r="
@@ -65,7 +66,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
                 .build()
             return listOf(ExtractedSource(url = videoUrl, headers = videoHeaders))
         } else {
-            throw Exception("Embed4me: No video URL found in decrypted JSON")
+            throw ExtractionException("Embed4me: No video URL found in decrypted JSON")
         }
     }
 
@@ -86,7 +87,7 @@ class Embed4meExtractor(private val client: OkHttpClient) {
             val decryptedBytes = cipher.doFinal(data)
             return String(decryptedBytes, Charsets.UTF_8)
         } catch (e: Exception) {
-            throw Exception("Embed4me: Decryption error: ${e.message}")
+            throw ExtractionException("Embed4me: Decryption error: ${e.message}", e)
         }
     }
 

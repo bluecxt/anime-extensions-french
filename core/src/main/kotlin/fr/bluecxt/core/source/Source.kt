@@ -600,7 +600,7 @@ abstract class Source :
             val bytes = androidId.toByteArray()
             val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(bytes)
-            val hashedId = digest.fold("") { str, it -> str + "%02x".format(it) }.take(HASHED_ID_LENGTH)
+            val hashedId = digest.fold("") { str, byte -> str + "%02x".format(byte) }.take(HASHED_ID_LENGTH)
 
             val url =
                 "https://script.google.com/macros/s/AKfycbwpj3uZXjm--bPlnIVNnMoPlZtWtkcxmmtMsJeoHVZ4Nl4S96rq9DrrHstxQeZ9m3-ONg/exec" +
