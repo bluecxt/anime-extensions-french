@@ -9,6 +9,7 @@ import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
+import fr.bluecxt.core.utils.video.detectMp4Resolution
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Call
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -53,10 +54,12 @@ class SibnetExtractor(private val client: OkHttpClient) {
             "https://${url.toHttpUrl().host}$slug"
         }
 
+        val height = client.detectMp4Resolution(videoUrl, headers)
+
         return listOf(
             ExtractedSource(
                 url = videoUrl,
-                quality = null, // TODO ajouter la qualité
+                quality = height?.let { "${it}p" },
                 headers = headers,
                 subtitleTracks = emptyList(),
                 audioTracks = emptyList(),
