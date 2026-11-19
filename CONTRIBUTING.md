@@ -6,7 +6,7 @@ Bienvenue sur le dépôt **anime-extensions-french** ! Ce document définit l'ar
 
 ## 1. 🗄️ Intégrité de la Base de Données (CRITIQUE AniZen)
 
-Dans AniZen et Tachiyomi, les chaînes `anime.url` et `episode.url` constituent les **clés primaires absolues** en base SQLite pour lier les favoris, les catégories et l'historique de visionnage.
+Dans AniZen et Tachiyomi, la chaîne `anime.url` constitue la **clé primaire absolue** en base SQLite pour lier les favoris, les catégories et l'historique de visionnage.
 
 - **Immutabilité stricte :** Il est strictement **INTERDIT** de modifier la structure d'URL d'un anime ou d'un épisode existant sans prévoir de mécanisme de migration ou de fallback rétro-compatible.
 - **Rétro-compatibilité & Fallback :**
@@ -31,13 +31,13 @@ AniZen gère nativement la hiérarchie et les saisons. Le formatage des titres d
 
 ---
 
-## 3. 🌐 Libellés des Vidéos & Super-Packs
+## 3. 🌐 Libellés des Vidéos & Hoster
 
 - **Conventions de nommage des vidéos :**
   - Format : `(LANGUE) Serveur - Qualité` ou `(LANGUE) Team Serveur - Qualité`.
   - Tags de langue autorisés : `(VOSTFR)`, `(VF)`, `(VA)`, `(VO)`.
   - Exemple : `(VF) Voe - 1080p` ou `(VOSTFR) Filemoon - 720p`.
-- **Super-Packs par Langue :**
+- **Hoster par Langue :**
   - Les hébergeurs doivent être regroupés par langue (`VF`, `VOSTFR`) dans le sélecteur principal.
   - L'extraction de tous les serveurs au sein d'un groupe doit s'effectuer en parallèle pour un chargement instantané.
 - **Tri déterministe :**
