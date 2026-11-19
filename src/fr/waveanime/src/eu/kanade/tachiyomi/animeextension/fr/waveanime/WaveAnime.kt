@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.extractors.WaveplayerExtractor
-import fr.bluecxt.core.preference.CommonPreferences
+import fr.bluecxt.core.monitoring.ErrorWebhook.sendWebhook
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable
@@ -203,7 +203,12 @@ class WaveAnime : ConfigurableSource() {
         val masterUrl = "$baseUrl/playback/$episodeId/manifest.mpd"
 
         val tracks = fetchSubtitles(episodeId)
-        val rawSources = waveplayerExtractor.videosFromUrl(masterUrl, "$baseUrl/watch/$episodeId", tracks)
+        val rawSources = waveplayerExtractor.videosFromUrl(
+            masterUrl = masterUrl,
+            refererUrl = "$baseUrl/watch/$episodeId",
+            subtitleTracks = tracks,
+            onQualityError = { message -> sendWebhook(masterUrl, message) },
+        )
 
         return rawSources.map { source ->
             source.buildFromSource(lang = null, name = "(DASH) WavePlayer")
