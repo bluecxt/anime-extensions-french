@@ -161,7 +161,6 @@ class AnimeSamaFan : ConfigurableSource() {
 
     private fun urlparseDetailsAsSearchResult(document: Document): AnimesPage {
         val titleElement = document.selectFirst("h1.anime-title") ?: document.selectFirst("h1")
-        val isAnimePage = document.selectFirst(".anime-cover, .synopsis-content, .seasons-grid") != null
 
         val anime = SAnime.create().apply {
             title = titleElement?.text()?.replace("VOSTFR", "", true)?.replace("VF", "", true)?.trim() ?: "Unknown Title"

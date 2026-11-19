@@ -106,12 +106,6 @@ class LesPoroiniens : ConfigurableSource() {
     private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(SLUG_REGEX_1, "")
         .lowercase().replace(SLUG_REGEX_2, "_").replace(SLUG_REGEX_3, "_").trim('_')
 
-    private fun parseStatus(status: String?): Int = when (status?.lowercase()?.trim()) {
-        "en cours", "en cou" -> SAnime.ONGOING
-        "terminé", "fini" -> SAnime.COMPLETED
-        else -> SAnime.UNKNOWN
-    }
-
     companion object {
         private val SLUG_REGEX_1 = Regex("[\\u0300-\\u036f]")
         private val SLUG_REGEX_2 = Regex("[^a-z0-9]")

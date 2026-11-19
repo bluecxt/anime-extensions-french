@@ -43,8 +43,6 @@ class AnimoFlix : ConfigurableSource() {
     companion object {
         private val seasonRegex = Regex("""(?i)(?:Saison|Season)\s*(\d+)|(\d+)$""")
         private val epNumRegex = Regex("""(\d+(?:\.\d+)?)""")
-        private val qualityNumRegex = Regex("""(\d+)p""")
-        private val lecteurRegex = Regex("(?i)Lecteur\\s*\\d+\\s*-?\\s*")
         private val cleanTitleRegex = Regex("""(?i)(?:Saison|Season)\s*\d+|FILM|MOVIE|OAV|OVA|\(TV\)|\(Film\)|\(OAV\)|\(OVA\)|\s+\d+$""")
 
         private val GENRE_OPTIONS = arrayOf(
@@ -309,7 +307,6 @@ class AnimoFlix : ConfigurableSource() {
                 seasonCards.map { card ->
                     async(Dispatchers.IO) {
                         val seasonName = card.selectFirst(".season-card-title, .season-title")?.text() ?: ""
-                        val seasonNum = parseSeasonNumber(seasonName)
                         val seasonUrl = card.attr("href").let { if (it.startsWith("http")) it else baseUrl + it }
                         val seasonResponse = client.newCall(GET(seasonUrl, headers)).awaitSuccess()
 
