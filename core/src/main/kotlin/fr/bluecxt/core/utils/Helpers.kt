@@ -236,6 +236,34 @@ suspend inline fun <A, B> Iterable<A>.parallelCatchingCancellableFlatMap(
 }
 
 /**
+ * Parallel implementation of [Iterable.flatMap], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ *
+ * Catches and ignores failures while filtering out null collections,
+ * while preserving coroutine cooperative cancellation.
+ *
+ * Note: Do NOT use [kotlinx.coroutines.withTimeout] inside [f] as it throws
+ * [kotlinx.coroutines.TimeoutCancellationException], which would cancel sibling coroutines.
+ */
+suspend inline fun <A, B> Iterable<A>.parallelCatchingCancellableFlatMapNotNull(
+    crossinline f: suspend (A) -> Iterable<B>?,
+): List<B> = withContext(Dispatchers.IO) {
+    map {
+        async {
+            runCatchingCancellable { f(it) }.getOrNull()
+        }
+    }.awaitAll().filterNotNull().flatten()
+}
+
+/**
+ * Thread-blocking parallel implementation of [Iterable.flatMap], running the transform function
+ * inside [runCatchingCancellable] on [Dispatchers.IO].
+ */
+inline fun <A, B> Iterable<A>.parallelCatchingCancellableFlatMapNotNullBlocking(
+    crossinline f: suspend (A) -> Iterable<B>?,
+): List<B> = runBlocking { parallelCatchingCancellableFlatMapNotNull(f) }
+
+/**
  * Thread-blocking parallel implementation of [Iterable.flatMap], running the transform function
  * inside [runCatchingCancellable] on [Dispatchers.IO].
  */
