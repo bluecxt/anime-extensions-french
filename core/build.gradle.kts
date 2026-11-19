@@ -29,6 +29,7 @@ android {
         val tvdbApi = System.getenv("TVDB_API") ?: localProperties.getProperty("TVDB_API", "")
         val webhookUrl = System.getenv("WEBHOOK_URL") ?: localProperties.getProperty("WEBHOOK_URL", "")
         val webhookSecret = System.getenv("WEBHOOK_SECRET") ?: localProperties.getProperty("WEBHOOK_SECRET", "")
+        val rawEmbedMode = (System.getenv("RAW_EMBED_MODE") ?: localProperties.getProperty("RAW_EMBED_MODE", "false")).toBoolean()
 
         require(tmdbApi.isNotBlank()) { "TMDB_API missing" }
         require(tvdbApi.isNotBlank()) { "TVDB_API missing" }
@@ -39,6 +40,7 @@ android {
         buildConfigField("String", "TVDB_API", "\"$tvdbApi\"")
         buildConfigField("String", "WEBHOOK_URL", "\"$webhookUrl\"")
         buildConfigField("String", "WEBHOOK_SECRET", "\"$webhookSecret\"")
+        buildConfigField("boolean", "RAW_EMBED_MODE", "$rawEmbedMode")
     }
 
     namespace = "keiyoushi.core"

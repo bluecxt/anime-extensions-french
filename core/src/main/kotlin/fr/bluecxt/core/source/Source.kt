@@ -201,6 +201,12 @@ abstract class Source :
     }
 
     suspend fun extractVideos(playerUrl: String, lang: String? = null, allowedServers: List<String>): List<Video> {
+        if (BuildConfig.RAW_EMBED_MODE) {
+            val serverName = allowedServers.find { getVideoServer(this, it)?.matches(playerUrl) == true } ?: "Embed"
+            val quality = if (lang != null) "($lang) $serverName" else serverName
+            return listOf(Video(videoUrl = playerUrl, videoTitle = quality))
+        }
+
         val isFilemoonDisabled = preferences.getBoolean(CommonPreferences.PREF_DISABLE_FILEMOON_KEY, false)
 
         val filteredAllowedServers = if (isFilemoonDisabled) {
