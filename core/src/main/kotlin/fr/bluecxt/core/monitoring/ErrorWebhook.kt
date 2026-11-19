@@ -3,6 +3,7 @@
 package fr.bluecxt.core.monitoring
 
 import fr.bluecxt.core.network.INTERCEPTOR_VERSION
+import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.utils.JSOUP_EXTENSIONS_VERSION
 import keiyoushi.core.BuildConfig
 import kotlinx.coroutines.CoroutineScope
@@ -101,6 +102,8 @@ object ErrorWebhook {
     private val IGNORED_CALLER_PREFIXES = listOf(
         "fr.bluecxt.core.monitoring",
         "fr.bluecxt.core.network",
+        "fr.bluecxt.core.source.Source",
+        "fr.bluecxt.core.source.ConfigurableSource",
         "okhttp3.",
         "okio.",
         "kotlin.",
@@ -143,6 +146,55 @@ object ErrorWebhook {
             }
         }
         return "N/A"
+    }
+
+    /**
+     * Méthode principale pour les extensions (Source).
+     * Récupère automatiquement les métadonnées de la source (baseUrl, nom, version, domaine custom)
+     * ainsi que la méthode appelante via la stacktrace.
+     */
+    fun Source.sendWebhook(
+        url: String,
+        context: String,
+        exception: Throwable? = null,
+        caller: String? = null,
+    ) {
+        if (isCustomDomain) return
+        sendWebhook(
+            baseUrl = baseUrl,
+            url = url,
+            context = context,
+            exception = exception,
+            extensionName = currentName,
+            extensionVersion = currentVersion,
+            caller = caller ?: findCallerMethod(exception),
+        )
+    }
+
+    /**
+     * Surcharge acceptant une liste de contextes pour une Source.
+     */
+    fun Source.sendWebhook(
+        url: String,
+        additionalContext: List<String>,
+        throwable: Throwable? = null,
+        caller: String? = null,
+    ) {
+        if (isCustomDomain) return
+        val details = if (throwable != null) {
+            additionalContext + "${throwable::class.java.simpleName}: ${throwable.message}"
+        } else {
+            additionalContext
+        }
+        sendWebhook(
+            baseUrl = baseUrl,
+            url = url,
+            additionalContext = details,
+            extensionName = currentName,
+            extensionVersion = currentVersion,
+            caller = caller ?: findCallerMethod(throwable),
+            throwable = throwable,
+        )
     }
 
     /**
