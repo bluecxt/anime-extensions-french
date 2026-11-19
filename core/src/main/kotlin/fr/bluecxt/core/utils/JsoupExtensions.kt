@@ -1,5 +1,6 @@
 package fr.bluecxt.core.utils
 
+import fr.bluecxt.core.monitoring.ErrorWebhook.sendWebhook
 import fr.bluecxt.core.source.Source
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
@@ -30,7 +31,7 @@ interface JsoupExtensions {
         val element = this.selectFirst(cssSelector)
         if (element == null) {
             val src = sourceSelf
-            src.sendErrorWebhook(
+            src.sendWebhook(
                 url = this.baseUri().ifBlank { src.baseUrl },
                 context = "Selector failed: '$cssSelector'",
             )
@@ -48,7 +49,7 @@ interface JsoupExtensions {
         val elements = this.select(cssSelector)
         if (elements.isEmpty()) {
             val src = sourceSelf
-            src.sendErrorWebhook(
+            src.sendWebhook(
                 url = this.baseUri().ifBlank { src.baseUrl },
                 context = "Selector returned empty: '$cssSelector'",
             )

@@ -10,9 +10,9 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import fr.bluecxt.core.CommonPreferences
 import fr.bluecxt.core.EXTENSIONTEST_LOG
 import fr.bluecxt.core.extractors.UqloadExtractor
+import fr.bluecxt.core.monitoring.ErrorWebhook.sendWebhook
 import fr.bluecxt.core.monitoring.SourceAuditor
 import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
@@ -70,7 +70,7 @@ class ExtensionTest :
                 "• TIMEOUT\n" +
                 "• SELECTOR_ERROR (Jsoup)\n" +
                 "• SourceAuditor (Données incomplètes)\n" +
-                "• Custom Diagnostic (sendErrorWebhook)\n" +
+                "• Custom Diagnostic (sendWebhook)\n" +
                 "• Rafale complète (Batch)"
         } else {
             buildString {
@@ -174,7 +174,7 @@ class ExtensionTest :
                 episode_number = 7f
             },
             SEpisode.create().apply {
-                name = "8. Erreur Custom avec Exception (sendErrorWebhook direct)"
+                name = "8. Erreur Custom avec Exception (sendWebhook direct)"
                 url = "/error-custom"
                 episode_number = 8f
             },
@@ -352,21 +352,21 @@ class ExtensionTest :
                 "/incomplet-test",
                 "Test Incomplet Auditor",
                 currentName,
-                currentVersion
+                currentVersion,
             )
             listOf(Video("invalid_video_url_test", "Test Video")).checkAndReportVideoIssues(
                 baseUrl,
                 "/incomplet-test",
                 "HosterTest",
                 currentName,
-                currentVersion
+                currentVersion,
             )
         }
         return "SourceAuditor rapports envoyés au webhook"
     }
 
     private fun triggerCustomError(): String {
-        sendErrorWebhook(
+        sendWebhook(
             url = "$baseUrl/test-custom-diagnostic",
             context = "Test diagnostic direct déclenché depuis ExtensionTest",
             exception = IllegalStateException("Test exception diagnostic avec stacktrace"),
@@ -398,6 +398,5 @@ class ExtensionTest :
     override fun latestUpdatesParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
     override fun latestUpdatesRequest(page: Int): Request = Request.Builder().url(defaultBaseUrl).build()
     override fun searchAnimeParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request =
-        Request.Builder().url(defaultBaseUrl).build()
+    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = Request.Builder().url(defaultBaseUrl).build()
 }
