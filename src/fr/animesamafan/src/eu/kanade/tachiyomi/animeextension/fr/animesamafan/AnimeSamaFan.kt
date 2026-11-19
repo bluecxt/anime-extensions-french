@@ -1,5 +1,5 @@
 // Copyright bluecxt
-// SPDX-License-Identifier: ApacheSEASON_SENTINEL_MOVIE
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animesamafan
 
 import android.util.Log

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.franime
 
+import android.util.Log
 import eu.kanade.tachiyomi.animeextension.fr.franime.dto.Anime
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -472,9 +473,11 @@ class FrAnime : ConfigurableSource() {
         val hexData = try {
             String(android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT))
         } catch (e: Exception) {
+            Log.w("FrAnime", "Échec du décodage Base64 du lien chiffré", e)
             return null
         }
         if (hexData.isEmpty()) return null
+        var echecJournalise = false
         for (key in 0..XOR_KEY_MAX) {
             val sb = StringBuilder()
             try {
@@ -488,6 +491,11 @@ class FrAnime : ConfigurableSource() {
                 val result = sb.toString()
                 if (result.startsWith("http")) return result
             } catch (e: Exception) {
+                // Une seule trace par appel : l'échec se répète pour chaque clé testée.
+                if (!echecJournalise) {
+                    Log.w("FrAnime", "Échec du déchiffrement XOR avec la clé $key", e)
+                    echecJournalise = true
+                }
                 continue
             }
         }

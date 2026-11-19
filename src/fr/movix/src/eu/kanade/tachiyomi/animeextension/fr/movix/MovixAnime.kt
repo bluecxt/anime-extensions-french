@@ -68,6 +68,7 @@ class MovixAnime : BaseMovix("Movix Anime") {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Log.w(MOVIXANIME_LOG, "Échec de la recherche populaire pour ${item.title}", e)
                 null
             }
         }.filterNotNull()

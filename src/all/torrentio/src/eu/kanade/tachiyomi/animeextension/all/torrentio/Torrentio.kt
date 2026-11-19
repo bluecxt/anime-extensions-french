@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.parallelMap
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.tmdb.fetchTmdbMetadataById
 import keiyoushi.core.R
@@ -629,7 +630,7 @@ class Torrentio : Source() {
             .build()
 
         client.newCall(request).awaitSuccess().use { response ->
-            if (!response.isSuccessful) throw Exception("Unexpected code $response")
+            if (!response.isSuccessful) throw ExtractionException("Unexpected code $response")
             return response.body.string().trim()
         }
     }

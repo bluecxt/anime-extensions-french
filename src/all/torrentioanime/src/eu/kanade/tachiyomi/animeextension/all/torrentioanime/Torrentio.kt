@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.source.Source
 import keiyoushi.core.R
 import keiyoushi.utils.bodyString
@@ -198,7 +199,7 @@ class Torrentio : Source() {
             }
 
             if (params.season.isNotBlank() && params.year.isBlank()) {
-                throw Exception("Year cannot be blank if season is set")
+                error("Year cannot be blank if season is set")
             }
 
             if (params.season.isNotBlank() && params.year.isNotBlank()) {
@@ -499,7 +500,7 @@ class Torrentio : Source() {
             .build()
 
         client.newCall(request).awaitSuccess().use { response ->
-            if (!response.isSuccessful) throw Exception("Unexpected code $response")
+            if (!response.isSuccessful) throw ExtractionException("Unexpected code $response")
             return response.body.string().trim()
         }
     }

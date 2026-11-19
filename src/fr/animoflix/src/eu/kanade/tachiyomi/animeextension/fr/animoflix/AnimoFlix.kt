@@ -1,7 +1,8 @@
 // Copyright bluecxt
-// SPDX-License-Identifier: ApacheSEASON_SENTINEL_MOVIE
+// SPDX-License-Identifier: Apache-2.0
 package eu.kanade.tachiyomi.animeextension.fr.animoflix
 
+import android.util.Log
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -10,6 +11,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import fr.bluecxt.core.ANIMOFLIX_LOG
 import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.TmdbMetadata
@@ -405,6 +407,7 @@ class AnimoFlix : ConfigurableSource() {
         val langsMap = try {
             json.decodeFromString<Map<String, String>>(episode.url)
         } catch (e: Exception) {
+            Log.w(ANIMOFLIX_LOG, "Échec du décodage de la liste des hosters", e)
             return emptyList()
         }
 
