@@ -11,6 +11,7 @@ import okhttp3.Cookie
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 
 private const val ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
 
@@ -42,30 +43,32 @@ class GoogleDriveExtractor(private val client: OkHttpClient) {
                 )
             } else {
                 val document = resp.useAsJsoup()
-
-                val itemSize: String = document.selectFirst("span.uc-name-size")
-                    ?.let { " ${it.ownText().trim()} " }
-                    ?: ""
-
-                val finalVideoUrl = initialVideoUrl.toHttpUrl().newBuilder().apply {
-                    document.select("input[type=hidden]").forEach {
-                        setQueryParameter(it.attr("name"), it.attr("value"))
-                    }
-                }.build().toString()
-
-                videoList.add(
-                    ExtractedSource(
-                        url = finalVideoUrl,
-                        quality = itemSize.trim().removeSurrounding("(", ")"),
-                        headers = docHeaders,
-                    ),
-                )
+                videoList.add(buildHtmlSource(initialVideoUrl, document, docHeaders))
             }
         }
 
         if (videoList.isEmpty()) throw ExtractionException("GoogleDrive: No video sources found")
 
         return videoList
+    }
+
+    /** Construit la source à partir du formulaire HTML de la page Drive. */
+    private fun buildHtmlSource(initialVideoUrl: String, document: Document, headers: Headers): ExtractedSource {
+        val itemSize: String = document.selectFirst("span.uc-name-size")
+            ?.let { " ${it.ownText().trim()} " }
+            ?: ""
+
+        val finalVideoUrl = initialVideoUrl.toHttpUrl().newBuilder().apply {
+            document.select("input[type=hidden]").forEach {
+                setQueryParameter(it.attr("name"), it.attr("value"))
+            }
+        }.build().toString()
+
+        return ExtractedSource(
+            url = finalVideoUrl,
+            quality = itemSize.trim().removeSurrounding("(", ")"),
+            headers = headers,
+        )
     }
 
     private fun List<Cookie>.toStr(): String = this.joinToString("; ") { "${it.name}=${it.value}" }

@@ -37,21 +37,27 @@ object ExtensionResources {
         }
     }
 
-    fun getApkPath(app: Application, clazz: Class<*>): String? {
-        // 1. Try via class CodeSource location
+    fun getApkPath(app: Application, clazz: Class<*>): String? = findApkFromCodeSource(clazz)
+        ?: findApkFromClassLoader(clazz)
+        ?: findApkFromPackageManager(app, clazz)
+
+    // 1. Try via class CodeSource location
+    private fun findApkFromCodeSource(clazz: Class<*>): String? {
         try {
-            clazz.protectionDomain?.codeSource?.location?.path?.let { path ->
-                val clean = path.substringBefore("!/").removePrefix("file:")
-                if (clean.endsWith(".apk") || clean.endsWith(".ext")) {
-                    Log.d(EXTENSION_RESOURCES_LOG, "[Solution 1 - CodeSource] Found APK: $clean for ${clazz.name}")
-                    return clean
-                }
+            val path = clazz.protectionDomain?.codeSource?.location?.path ?: return null
+            val clean = path.substringBefore("!/").removePrefix("file:")
+            if (clean.endsWith(".apk") || clean.endsWith(".ext")) {
+                Log.d(EXTENSION_RESOURCES_LOG, "[Solution 1 - CodeSource] Found APK: $clean for ${clazz.name}")
+                return clean
             }
         } catch (e: Exception) {
             Log.w(EXTENSION_RESOURCES_LOG, "CodeSource lookup failed for ${clazz.name}: ${e.message}")
         }
+        return null
+    }
 
-        // 2. Try via ClassLoader (DexClassLoader / PathClassLoader)
+    // 2. Try via ClassLoader (DexClassLoader / PathClassLoader)
+    private fun findApkFromClassLoader(clazz: Class<*>): String? {
         val classLoader = clazz.classLoader
         if (classLoader is BaseDexClassLoader) {
             try {
@@ -60,23 +66,34 @@ object ExtensionResources {
                 val dexElementsField = pathList.javaClass.getDeclaredField("dexElements").apply { isAccessible = true }
                 val dexElements = dexElementsField.get(pathList) as? Array<*>
                 if (dexElements != null) {
-                    for (element in dexElements) {
-                        val fileField = element?.javaClass?.declaredFields?.firstOrNull { it.name == "path" || it.name == "file" }
-                        fileField?.isAccessible = true
-                        val file = fileField?.get(element)
-                        val path = file?.toString()
-                        if (path != null && (path.endsWith(".apk") || path.endsWith(".ext"))) {
-                            Log.d(EXTENSION_RESOURCES_LOG, "[Solution 2 - ClassLoader] Found APK: $path for ${clazz.name}")
-                            return path
-                        }
-                    }
+                    return findApkInDexElements(dexElements, clazz.name)
                 }
             } catch (e: Exception) {
                 Log.w(EXTENSION_RESOURCES_LOG, "ClassLoader reflection lookup failed for ${clazz.name}: ${e.message}")
             }
         }
+        return null
+    }
 
-        // 3. Fallback to packageManager if installed globally
+    /**
+     * Scans DexPathList elements for a loaded `.apk`/`.ext` path.
+     */
+    private fun findApkInDexElements(dexElements: Array<*>, className: String): String? {
+        for (element in dexElements) {
+            val fileField = element?.javaClass?.declaredFields?.firstOrNull { it.name == "path" || it.name == "file" }
+            fileField?.isAccessible = true
+            val file = fileField?.get(element)
+            val path = file?.toString()
+            if (path != null && (path.endsWith(".apk") || path.endsWith(".ext"))) {
+                Log.d(EXTENSION_RESOURCES_LOG, "[Solution 2 - ClassLoader] Found APK: $path for $className")
+                return path
+            }
+        }
+        return null
+    }
+
+    // 3. Fallback to packageManager if installed globally
+    private fun findApkFromPackageManager(app: Application, clazz: Class<*>): String? {
         val pkgName = clazz.`package`?.name ?: ""
         return try {
             val path = app.packageManager.getPackageInfo(pkgName, 0).applicationInfo?.publicSourceDir

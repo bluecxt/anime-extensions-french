@@ -173,7 +173,6 @@ class CloudflareInterceptor(
      * early as soon as `cf_clearance` appears, so most solves complete in ~5s
      * for managed challenges and ~8-15s for Turnstile.
      */
-    @SuppressLint("SetJavaScriptEnabled")
     private fun resolveWithWebView(originalRequest: Request, url: HttpUrl): Request {
         val completionLatch = CountDownLatch(1)
         val jsInterface = CloudflareJSInterface(completionLatch)
@@ -192,6 +191,55 @@ class CloudflareInterceptor(
         // Force the canonical UA into the WebView if the request didn't carry one.
         requestHeaders.putIfAbsent("User-Agent", userAgent)
 
+        launchWebView(requestUrlString, requestHeaders, jsInterface, webViewRef, completionLatch)
+
+        // Wait for the JS interface to signal cf_clearance presence (or timeout).
+        try {
+            completionLatch.await(SOLVE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+
+        // Tear down the WebView on the main thread and wait for the ack so
+        // the calling thread never reads a torn-down reference.
+        teardownWebView(webViewRef, destroyLatch)
+        destroyLatch.await(TEARDOWN_ACK_MS, TimeUnit.MILLISECONDS)
+
+        // Extract cookies from CookieManager and sync into OkHttp + cache.
+        val cookies = readCookies(url, requestUrlString)
+
+        if (cookies.isEmpty()) {
+            throw IOException("Cloudflare WebView solve produced no cookies for $url")
+        }
+
+        // Sync to the OkHttp client's cookie jar using the REAL url.
+        // The old code used a fake http:// URL which silently discarded cookies.
+        syncCookiesToClient(url, cookies)
+
+        // Cache cf_clearance + __cf_bm for cross-request reuse in this session.
+        cacheCookies(url, cookies)
+
+        if (!cookies.containsKey("cf_clearance")) {
+            throw IOException("Cloudflare WebView solve did not produce cf_clearance for $url (cookies: ${cookies.keys})")
+        }
+
+        return attachCookies(originalRequest, cookies.values.toList())
+    }
+
+    /**
+     * Creates and loads the challenged URL in a [WebView] on the main thread.
+     *
+     * The setup failure path still signals [completionLatch] so the caller stops
+     * waiting immediately.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun launchWebView(
+        requestUrlString: String,
+        requestHeaders: Map<String, String>,
+        jsInterface: CloudflareJSInterface,
+        webViewRef: AtomicReference<WebView?>,
+        completionLatch: CountDownLatch,
+    ) {
         handler.post {
             val webView = WebView(context)
             webViewRef.set(webView)
@@ -226,16 +274,12 @@ class CloudflareInterceptor(
                 completionLatch.countDown()
             }
         }
+    }
 
-        // Wait for the JS interface to signal cf_clearance presence (or timeout).
-        try {
-            completionLatch.await(SOLVE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
-
-        // Tear down the WebView on the main thread and wait for the ack so
-        // the calling thread never reads a torn-down reference.
+    /**
+     * Tears the [WebView] down on the main thread and acks via [destroyLatch].
+     */
+    private fun teardownWebView(webViewRef: AtomicReference<WebView?>, destroyLatch: CountDownLatch) {
         handler.post {
             try {
                 webViewRef.get()?.stopLoading()
@@ -247,23 +291,25 @@ class CloudflareInterceptor(
                 destroyLatch.countDown()
             }
         }
-        destroyLatch.await(TEARDOWN_ACK_MS, TimeUnit.MILLISECONDS)
+    }
 
-        // Extract cookies from CookieManager and sync into OkHttp + cache.
+    /**
+     * Reads the cookies set by the WebView for [requestUrlString], keyed by name.
+     */
+    private fun readCookies(url: HttpUrl, requestUrlString: String): Map<String, Cookie> {
         val cookieHeader = CookieManager.getInstance().getCookie(requestUrlString) ?: ""
-        val cookies = cookieHeader.split(";")
+        return cookieHeader.split(";")
             .mapNotNull { raw ->
                 val parsed = Cookie.parse(url, raw.trim())
                 parsed?.let { it.name to it }
             }
             .toMap()
+    }
 
-        if (cookies.isEmpty()) {
-            throw IOException("Cloudflare WebView solve produced no cookies for $url")
-        }
-
-        // Sync to the OkHttp client's cookie jar using the REAL url.
-        // The old code used a fake http:// URL which silently discarded cookies.
+    /**
+     * Persists WebView-acquired cookies into the OkHttp client's cookie jar.
+     */
+    private fun syncCookiesToClient(url: HttpUrl, cookies: Map<String, Cookie>) {
         try {
             client.cookieJar.saveFromResponse(
                 url = url,
@@ -272,8 +318,12 @@ class CloudflareInterceptor(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to sync WebView cookies to OkHttp cookie jar", e)
         }
+    }
 
-        // Cache cf_clearance + __cf_bm for cross-request reuse in this session.
+    /**
+     * Caches the Cloudflare cookies acquired by the WebView for cross-request reuse.
+     */
+    private fun cacheCookies(url: HttpUrl, cookies: Map<String, Cookie>) {
         val cacheableCookies = cookies.entries
             .filter { (name, _) -> name == "cf_clearance" || name.startsWith("__cf_") || name.startsWith("cf_") }
             .map { it.value }
@@ -281,12 +331,6 @@ class CloudflareInterceptor(
             cookieCache.put(url, cacheableCookies)
             Log.d(TAG, "Cached ${cacheableCookies.size} CF cookies for $url.host (cf_clearance=${cookies.containsKey("cf_clearance")})")
         }
-
-        if (!cookies.containsKey("cf_clearance")) {
-            throw IOException("Cloudflare WebView solve did not produce cf_clearance for $url (cookies: ${cookies.keys})")
-        }
-
-        return attachCookies(originalRequest, cookies.values.toList())
     }
 
     /**

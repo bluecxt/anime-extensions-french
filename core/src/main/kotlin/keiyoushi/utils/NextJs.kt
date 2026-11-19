@@ -80,8 +80,7 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
 
         // Validate everything before colon is hex digits
         val id = body.substring(pos, colonIdx)
-        val isInvalidChunkId = id.isEmpty() || !id.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
-        if (isInvalidChunkId) {
+        if (isInvalidChunkId(id)) {
             pos++
             continue
         }
@@ -89,45 +88,72 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
         pos = colonIdx + 1
         if (pos >= body.length) break
 
-        if (body[pos] == 'T') {
-            // Binary chunk: T<hexLen>,<content>
-            // byteLen is the UTF-8 byte length of the content, not the char count.
-            pos++
-            val commaIdx = body.indexOf(',', pos)
-            if (commaIdx == -1) break
-            val byteLen = body.substring(pos, commaIdx).toIntOrNull(HEX_RADIX) ?: break
-            pos = commaIdx + 1
-            var bytes = 0
-            val start = pos
-            while (pos < body.length && bytes < byteLen) {
-                // Count UTF-8 bytes per code point. Surrogate pairs (supplementary characters,
-                // e.g. emoji) occupy 4 UTF-8 bytes; we consume both surrogate chars in one step.
-                when {
-                    body[pos].code < UTF8_ONE_BYTE_MAX -> bytes += 1
-
-                    body[pos].code < UTF8_TWO_BYTE_MAX -> bytes += 2
-
-                    Character.isHighSurrogate(body[pos]) -> {
-                        bytes += UTF8_FOUR_BYTES
-                        pos++ // consume the high surrogate; the loop increment handles the low
-                    }
-
-                    else -> bytes += UTF8_THREE_BYTES
-                }
-                pos++
-            }
-            try {
-                results.add(jsonInstance.parseToJsonElement(body.substring(start, pos)))
-            } catch (_: Exception) {}
-        } else {
-            // JSON chunk — parse by bracket depth
-            val (element, end) = parseJsonAt(body, pos)
-            if (element != null) results.add(element)
-            pos = end
-        }
+        pos = readRscChunk(body, pos, results) ?: break
     }
 
     return results
+}
+
+/** Returns `true` when [id] is not a non-empty sequence of hex digits. */
+private fun isInvalidChunkId(id: String): Boolean = id.isEmpty() || !id.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+
+/**
+ * Reads the RSC chunk starting at [start] (immediately after its `<hex>:` header), appends
+ * the parsed JSON value to [results] and returns the position right after the chunk, or
+ * `null` when the chunk is truncated.
+ */
+private fun readRscChunk(body: String, start: Int, results: MutableList<JsonElement>): Int? = if (body[start] == 'T') {
+    readBinaryChunk(body, start, results)
+} else {
+    // JSON chunk — parse by bracket depth
+    val (element, end) = parseJsonAt(body, start)
+    if (element != null) results.add(element)
+    end
+}
+
+/**
+ * Reads the binary chunk whose `T` marker is at [start], appends its parsed JSON value to
+ * [results] and returns the position right after the chunk, or `null` when it is truncated.
+ */
+private fun readBinaryChunk(body: String, start: Int, results: MutableList<JsonElement>): Int? {
+    // Binary chunk: T<hexLen>,<content>
+    // byteLen is the UTF-8 byte length of the content, not the char count.
+    var pos = start + 1
+    val commaIdx = body.indexOf(',', pos)
+    if (commaIdx == -1) return null
+    val byteLen = body.substring(pos, commaIdx).toIntOrNull(HEX_RADIX) ?: return null
+    pos = commaIdx + 1
+    val contentStart = pos
+    pos = advanceUtf8Bytes(body, pos, byteLen)
+    parseJsonOrNull(body.substring(contentStart, pos))?.let { results.add(it) }
+    return pos
+}
+
+/**
+ * Advances from [start] until [byteLen] UTF-8 bytes have been consumed and returns the
+ * resulting position.
+ */
+private fun advanceUtf8Bytes(body: String, start: Int, byteLen: Int): Int {
+    var pos = start
+    var bytes = 0
+    while (pos < body.length && bytes < byteLen) {
+        // Count UTF-8 bytes per code point. Surrogate pairs (supplementary characters,
+        // e.g. emoji) occupy 4 UTF-8 bytes; we consume both surrogate chars in one step.
+        when {
+            body[pos].code < UTF8_ONE_BYTE_MAX -> bytes += 1
+
+            body[pos].code < UTF8_TWO_BYTE_MAX -> bytes += 2
+
+            Character.isHighSurrogate(body[pos]) -> {
+                bytes += UTF8_FOUR_BYTES
+                pos++ // consume the high surrogate; the loop increment handles the low
+            }
+
+            else -> bytes += UTF8_THREE_BYTES
+        }
+        pos++
+    }
+    return pos
 }
 
 /**
@@ -137,6 +163,16 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
 private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
     if (start >= body.length) return Pair(null, start)
 
+    val (end, textEnd) = scanJsonValueEnd(body, start)
+    return Pair(textEnd?.let { parseJsonOrNull(body.substring(start, it)) }, end)
+}
+
+/**
+ * Scans the JSON value starting at [start] in [body] and returns the position immediately
+ * after it, together with the end index of its text — the closing bracket, or the position
+ * before the trailing whitespace. The text end is `null` when no complete value was found.
+ */
+private fun scanJsonValueEnd(body: String, start: Int): Pair<Int, Int?> {
     var depth = 0
     var inString = false
     var escape = false
@@ -157,26 +193,33 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
             continue
         }
         if (inString) continue
-        when (c) {
-            '{', '[' -> depth++
-
-            '}', ']' -> if (--depth == 0) {
-                return try {
-                    Pair(jsonInstance.parseToJsonElement(body.substring(start, i)), i)
-                } catch (_: Exception) {
-                    Pair(null, i)
-                }
-            }
+        val (newDepth, closed) = applyBracket(c, depth)
+        depth = newDepth
+        if (closed) {
+            return Pair(i, i)
         }
         if (depth == 0 && c.isWhitespace()) {
-            return try {
-                Pair(jsonInstance.parseToJsonElement(body.substring(start, i - 1)), i)
-            } catch (_: Exception) {
-                Pair(null, i)
-            }
+            return Pair(i, i - 1)
         }
     }
-    return Pair(null, i)
+    return Pair(i, null)
+}
+
+/**
+ * Applies the bracket [c] to [depth], returning the updated depth and whether the value is
+ * closed by this bracket (depth back to zero).
+ */
+private fun applyBracket(c: Char, depth: Int): Pair<Int, Boolean> = when (c) {
+    '{', '[' -> Pair(depth + 1, false)
+    '}', ']' -> Pair(depth - 1, depth - 1 == 0)
+    else -> Pair(depth, false)
+}
+
+/** Parses [text] as JSON, returning `null` when it is not valid JSON. */
+private fun parseJsonOrNull(text: String): JsonElement? = try {
+    jsonInstance.parseToJsonElement(text)
+} catch (_: Exception) {
+    null
 }
 
 /**

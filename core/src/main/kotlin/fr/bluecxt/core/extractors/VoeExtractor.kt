@@ -121,22 +121,25 @@ class VoeExtractor(private val client: OkHttpClient) {
                     videoHeaders = headers,
                 )
             } else {
-                val quality = if (label != null) {
-                    "${label}p"
-                } else {
-                    val mp4Res = clientDdos.detectMp4Resolution(streamUrl, headers)
-                    if (mp4Res != null) "${mp4Res}p" else null
-                }
                 listOf(
                     ExtractedSource(
                         url = streamUrl,
-                        quality = quality,
+                        quality = fallbackQuality(streamUrl, label, headers),
                         headers = headers,
                     ),
                 )
             }
         }
         return emptyList()
+    }
+
+    /** Qualité du flux de secours : libellé `video_height` s'il existe, sinon détection MP4. */
+    private suspend fun fallbackQuality(streamUrl: String, label: String?, headers: Headers): String? {
+        if (label != null) {
+            return "${label}p"
+        }
+        val mp4Res = clientDdos.detectMp4Resolution(streamUrl, headers)
+        return if (mp4Res != null) "${mp4Res}p" else null
     }
 
     private fun voeDecode(encryptedData: String, luts: String): JsonObject? = runCatching {

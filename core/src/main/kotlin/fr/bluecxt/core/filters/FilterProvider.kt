@@ -131,51 +131,61 @@ object FilterEngine {
 
     fun applyFilters(builder: HttpUrl.Builder, filters: Iterable<AnimeFilter<*>>): HttpUrl.Builder {
         for (filter in filters) {
-            when (filter) {
-                is DynamicFoldableFilter -> {
-                    applyFilters(builder, filter.state)
-                }
-
-                is DynamicSelectFilter -> {
-                    val value = filter.toQuery()
-                    if (value.isNotBlank()) builder.addQueryParameter(filter.param, value)
-                }
-
-                is DynamicTextFilter -> {
-                    val value = filter.state.trim()
-                    if (value.isNotBlank()) builder.addQueryParameter(filter.param, value)
-                }
-
-                is DynamicCheckBoxFilter -> {
-                    if (filter.state) builder.addQueryParameter(filter.param, filter.queryValue)
-                }
-
-                is DynamicGroupFilter -> {
-                    filter.toQuery().forEach { value ->
-                        builder.addQueryParameter(filter.param, value)
-                    }
-                }
-
-                is DynamicTriStateGroupFilter -> {
-                    filter.included().forEach { value ->
-                        builder.addQueryParameter(filter.includeParam, value)
-                    }
-                    filter.excluded().forEach { value ->
-                        builder.addQueryParameter(filter.excludeParam, value)
-                    }
-                }
-
-                is AnimeFilter.Group<*> -> {
-                    val subFilters = filter.state.filterIsInstance<AnimeFilter<*>>()
-                    if (subFilters.isNotEmpty()) {
-                        applyFilters(builder, subFilters)
-                    }
-                }
-
-                else -> {}
-            }
+            applyFilter(builder, filter)
         }
         return builder
+    }
+
+    /**
+     * Applies a single filter, preserving the original dispatch order.
+     */
+    private fun applyFilter(builder: HttpUrl.Builder, filter: AnimeFilter<*>) {
+        when (filter) {
+            is DynamicFoldableFilter -> applyFilters(builder, filter.state)
+            is DynamicSelectFilter -> applySelectFilter(builder, filter)
+            is DynamicTextFilter -> applyTextFilter(builder, filter)
+            is DynamicCheckBoxFilter -> applyCheckBoxFilter(builder, filter)
+            is DynamicGroupFilter -> applyGroupFilter(builder, filter)
+            is DynamicTriStateGroupFilter -> applyTriStateGroupFilter(builder, filter)
+            is AnimeFilter.Group<*> -> applyNestedGroupFilter(builder, filter)
+            else -> {}
+        }
+    }
+
+    private fun applySelectFilter(builder: HttpUrl.Builder, filter: DynamicSelectFilter) {
+        val value = filter.toQuery()
+        if (value.isNotBlank()) builder.addQueryParameter(filter.param, value)
+    }
+
+    private fun applyTextFilter(builder: HttpUrl.Builder, filter: DynamicTextFilter) {
+        val value = filter.state.trim()
+        if (value.isNotBlank()) builder.addQueryParameter(filter.param, value)
+    }
+
+    private fun applyCheckBoxFilter(builder: HttpUrl.Builder, filter: DynamicCheckBoxFilter) {
+        if (filter.state) builder.addQueryParameter(filter.param, filter.queryValue)
+    }
+
+    private fun applyGroupFilter(builder: HttpUrl.Builder, filter: DynamicGroupFilter) {
+        filter.toQuery().forEach { value ->
+            builder.addQueryParameter(filter.param, value)
+        }
+    }
+
+    private fun applyTriStateGroupFilter(builder: HttpUrl.Builder, filter: DynamicTriStateGroupFilter) {
+        filter.included().forEach { value ->
+            builder.addQueryParameter(filter.includeParam, value)
+        }
+        filter.excluded().forEach { value ->
+            builder.addQueryParameter(filter.excludeParam, value)
+        }
+    }
+
+    private fun applyNestedGroupFilter(builder: HttpUrl.Builder, filter: AnimeFilter.Group<*>) {
+        val subFilters = filter.state.filterIsInstance<AnimeFilter<*>>()
+        if (subFilters.isNotEmpty()) {
+            applyFilters(builder, subFilters)
+        }
     }
 
     fun getQueryMap(filters: Iterable<AnimeFilter<*>>): Map<String, List<String>> {
@@ -186,49 +196,59 @@ object FilterEngine {
 
     private fun collectQueryMap(filters: Iterable<AnimeFilter<*>>, map: MutableMap<String, MutableList<String>>) {
         for (filter in filters) {
-            when (filter) {
-                is DynamicFoldableFilter -> {
-                    collectQueryMap(filter.state, map)
-                }
+            collectFilterQuery(filter, map)
+        }
+    }
 
-                is DynamicSelectFilter -> {
-                    val value = filter.toQuery()
-                    if (value.isNotBlank()) map.getOrPut(filter.param) { mutableListOf() }.add(value)
-                }
+    /**
+     * Collects the query parameters of a single filter, preserving the original dispatch order.
+     */
+    private fun collectFilterQuery(filter: AnimeFilter<*>, map: MutableMap<String, MutableList<String>>) {
+        when (filter) {
+            is DynamicFoldableFilter -> collectQueryMap(filter.state, map)
+            is DynamicSelectFilter -> collectSelectQuery(filter, map)
+            is DynamicTextFilter -> collectTextQuery(filter, map)
+            is DynamicCheckBoxFilter -> collectCheckBoxQuery(filter, map)
+            is DynamicGroupFilter -> collectGroupQuery(filter, map)
+            is DynamicTriStateGroupFilter -> collectTriStateGroupQuery(filter, map)
+            is AnimeFilter.Group<*> -> collectNestedGroupQuery(filter, map)
+            else -> {}
+        }
+    }
 
-                is DynamicTextFilter -> {
-                    val value = filter.state.trim()
-                    if (value.isNotBlank()) map.getOrPut(filter.param) { mutableListOf() }.add(value)
-                }
+    private fun collectSelectQuery(filter: DynamicSelectFilter, map: MutableMap<String, MutableList<String>>) {
+        val value = filter.toQuery()
+        if (value.isNotBlank()) map.getOrPut(filter.param) { mutableListOf() }.add(value)
+    }
 
-                is DynamicCheckBoxFilter -> {
-                    if (filter.state) map.getOrPut(filter.param) { mutableListOf() }.add(filter.queryValue)
-                }
+    private fun collectTextQuery(filter: DynamicTextFilter, map: MutableMap<String, MutableList<String>>) {
+        val value = filter.state.trim()
+        if (value.isNotBlank()) map.getOrPut(filter.param) { mutableListOf() }.add(value)
+    }
 
-                is DynamicGroupFilter -> {
-                    filter.toQuery().forEach { value ->
-                        map.getOrPut(filter.param) { mutableListOf() }.add(value)
-                    }
-                }
+    private fun collectCheckBoxQuery(filter: DynamicCheckBoxFilter, map: MutableMap<String, MutableList<String>>) {
+        if (filter.state) map.getOrPut(filter.param) { mutableListOf() }.add(filter.queryValue)
+    }
 
-                is DynamicTriStateGroupFilter -> {
-                    filter.included().forEach { value ->
-                        map.getOrPut(filter.includeParam) { mutableListOf() }.add(value)
-                    }
-                    filter.excluded().forEach { value ->
-                        map.getOrPut(filter.excludeParam) { mutableListOf() }.add(value)
-                    }
-                }
+    private fun collectGroupQuery(filter: DynamicGroupFilter, map: MutableMap<String, MutableList<String>>) {
+        filter.toQuery().forEach { value ->
+            map.getOrPut(filter.param) { mutableListOf() }.add(value)
+        }
+    }
 
-                is AnimeFilter.Group<*> -> {
-                    val subFilters = filter.state.filterIsInstance<AnimeFilter<*>>()
-                    if (subFilters.isNotEmpty()) {
-                        collectQueryMap(subFilters, map)
-                    }
-                }
+    private fun collectTriStateGroupQuery(filter: DynamicTriStateGroupFilter, map: MutableMap<String, MutableList<String>>) {
+        filter.included().forEach { value ->
+            map.getOrPut(filter.includeParam) { mutableListOf() }.add(value)
+        }
+        filter.excluded().forEach { value ->
+            map.getOrPut(filter.excludeParam) { mutableListOf() }.add(value)
+        }
+    }
 
-                else -> {}
-            }
+    private fun collectNestedGroupQuery(filter: AnimeFilter.Group<*>, map: MutableMap<String, MutableList<String>>) {
+        val subFilters = filter.state.filterIsInstance<AnimeFilter<*>>()
+        if (subFilters.isNotEmpty()) {
+            collectQueryMap(subFilters, map)
         }
     }
 

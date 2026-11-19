@@ -42,7 +42,7 @@ class DoodExtractor(private val client: OkHttpClient) {
             .add("Referer", "https://$host/")
             .build()
 
-        var response = client.newCall(GET(webUrl, headers)).awaitSuccessOrUnavailable(webUrl)
+        val response = client.newCall(GET(webUrl, headers)).awaitSuccessOrUnavailable(webUrl)
         val actualUrl = response.request.url.toString()
         var html = response.body.string()
 
@@ -59,42 +59,15 @@ class DoodExtractor(private val client: OkHttpClient) {
             throw ContentUnavailableException("Doodstream: Video not found")
         }
 
-        // Check for iframe
-        val iframeMatch = Regex("""<iframe\s*src="([^"]+)""").find(html)
-        if (iframeMatch != null) {
-            val src = iframeMatch.groupValues[1]
-            if (src == "/e/" || src == "/e") {
-                throw ContentUnavailableException("Doodstream: Video not found")
-            }
-            val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: extractionFailure("Doodstream: Could not resolve iframe URL")
-            response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccessOrUnavailable(iframeUrl)
-            html = response.body.string()
-        } else {
-            val embedUrl = webUrl.replace("/d/", "/e/")
-            response = client.newCall(GET(embedUrl, currentHeaders)).awaitSuccessOrUnavailable(embedUrl)
-            html = response.body.string()
-        }
+        html = fetchEmbedHtml(webUrl, html, currentHeaders)
 
         // Extract quality
-        val qualityMatch = Regex("""\b(360|480|720|1080|1440|2160)[pP]""").find(html)
-        val quality = qualityMatch?.let { "${it.groupValues[1]}p" }
+        val quality = extractQuality(html)
 
         // Extract token and pass URL
-        val mainRegex = Regex(
-            """dsplayer\.hotkeys[^']+'([^']+).+?function\s*makePlay.+?return[^?]+([^"]+)""",
-            RegexOption.DOT_MATCHES_ALL,
-        )
-        val match = mainRegex.find(html)
-        if (match == null) {
-            extractionFailure("Doodstream: Could find token in script")
-        }
+        val (token, passUrl) = extractTokenAndPassUrl(html, webUrl)
 
-        val passPath = match.groupValues[1]
-        val token = match.groupValues[2]
-        val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: extractionFailure("Doodstream: Could not resolve pass URL")
-
-        val baseResponse = client.newCall(GET(passUrl, currentHeaders)).awaitSuccessOrUnavailable(passUrl)
-        val baseUrl = baseResponse.body.string().trim()
+        val baseUrl = fetchBaseUrl(passUrl, currentHeaders)
 
         val finalUrl = if (baseUrl.contains("cloudflarestorage.")) {
             baseUrl
@@ -114,6 +87,53 @@ class DoodExtractor(private val client: OkHttpClient) {
                 headers = videoHeaders,
             ),
         )
+    }
+
+    /** Charge la page embed (iframe ou `/e/`) et renvoie son HTML. */
+    private suspend fun fetchEmbedHtml(webUrl: String, html: String, currentHeaders: Headers): String {
+        val iframeMatch = Regex("""<iframe\s*src="([^"]+)""").find(html)
+        return if (iframeMatch != null) {
+            val src = iframeMatch.groupValues[1]
+            if (src == "/e/" || src == "/e") {
+                throw ContentUnavailableException("Doodstream: Video not found")
+            }
+            val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: extractionFailure("Doodstream: Could not resolve iframe URL")
+            val iframeResponse = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccessOrUnavailable(iframeUrl)
+            iframeResponse.body.string()
+        } else {
+            val embedUrl = webUrl.replace("/d/", "/e/")
+            val embedResponse = client.newCall(GET(embedUrl, currentHeaders)).awaitSuccessOrUnavailable(embedUrl)
+            embedResponse.body.string()
+        }
+    }
+
+    /** Qualité vidéo annoncée dans le HTML, ou `null` si elle est absente. */
+    private fun extractQuality(html: String): String? {
+        val qualityMatch = Regex("""\b(360|480|720|1080|1440|2160)[pP]""").find(html)
+        return qualityMatch?.let { "${it.groupValues[1]}p" }
+    }
+
+    /** Extrait le jeton de lecture et l'URL `pass` depuis le script du player. */
+    private fun extractTokenAndPassUrl(html: String, webUrl: String): Pair<String, String> {
+        val mainRegex = Regex(
+            """dsplayer\.hotkeys[^']+'([^']+).+?function\s*makePlay.+?return[^?]+([^"]+)""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
+        val match = mainRegex.find(html)
+        if (match == null) {
+            extractionFailure("Doodstream: Could find token in script")
+        }
+
+        val passPath = match.groupValues[1]
+        val token = match.groupValues[2]
+        val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: extractionFailure("Doodstream: Could not resolve pass URL")
+        return token to passUrl
+    }
+
+    /** Récupère l'URL de base du CDN à partir de l'URL `pass`. */
+    private suspend fun fetchBaseUrl(passUrl: String, currentHeaders: Headers): String {
+        val baseResponse = client.newCall(GET(passUrl, currentHeaders)).awaitSuccessOrUnavailable(passUrl)
+        return baseResponse.body.string().trim()
     }
 
     private fun createHashTable(length: Int = 10): String {

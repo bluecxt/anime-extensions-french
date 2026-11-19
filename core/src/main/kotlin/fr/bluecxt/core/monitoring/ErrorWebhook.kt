@@ -132,28 +132,37 @@ object ErrorWebhook {
             ?: Thread.currentThread().stackTrace
 
         for (element in trace) {
-            val className = element.className
-            if (IGNORED_CALLER_PREFIXES.none { className.startsWith(it) }) {
-                val simpleClass = className.substringAfterLast('.')
-                var resolvedClass = simpleClass
-                var resolvedMethod = element.methodName
-
-                if (simpleClass.contains('$')) {
-                    val parts = simpleClass.split('$')
-                    resolvedClass = parts[0]
-                    if (resolvedMethod == "invokeSuspend" || resolvedMethod == "invoke") {
-                        val candidate = parts.drop(1).firstOrNull { it.isNotEmpty() && !it.all(Char::isDigit) }
-                        if (candidate != null) {
-                            resolvedMethod = candidate
-                        }
-                    }
-                }
-
-                val lineSuffix = if (element.lineNumber > 0) ":${element.lineNumber}" else ""
-                return "$resolvedClass.$resolvedMethod$lineSuffix"
-            }
+            val resolved = resolveCallerElement(element)
+            if (resolved != null) return resolved
         }
         return "N/A"
+    }
+
+    /**
+     * Resolves a single stack frame into `Class.method(:line)`, or `null` when the
+     * frame belongs to an ignored infrastructure package.
+     */
+    private fun resolveCallerElement(element: StackTraceElement): String? {
+        val className = element.className
+        if (IGNORED_CALLER_PREFIXES.any { className.startsWith(it) }) return null
+
+        val simpleClass = className.substringAfterLast('.')
+        var resolvedClass = simpleClass
+        var resolvedMethod = element.methodName
+
+        if (simpleClass.contains('$')) {
+            val parts = simpleClass.split('$')
+            resolvedClass = parts[0]
+            if (resolvedMethod == "invokeSuspend" || resolvedMethod == "invoke") {
+                val candidate = parts.drop(1).firstOrNull { it.isNotEmpty() && !it.all(Char::isDigit) }
+                if (candidate != null) {
+                    resolvedMethod = candidate
+                }
+            }
+        }
+
+        val lineSuffix = if (element.lineNumber > 0) ":${element.lineNumber}" else ""
+        return "$resolvedClass.$resolvedMethod$lineSuffix"
     }
 
     /**

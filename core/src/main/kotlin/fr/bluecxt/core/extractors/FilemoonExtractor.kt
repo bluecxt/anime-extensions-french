@@ -110,24 +110,55 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             .build()
 
         // 2. Try flows
-        var playbackData: PlaybackResponse? = null
-
-        // Try Legacy Flow first
-        try {
-            playbackData = doLegacyFlow(host, mediaId, apiHeaders)
-        } catch (_: Exception) {
-            // Log.d("Filemoon", "Legacy Flow failed: ${e.message}")
-        }
-
-        if (playbackData == null || (playbackData.sources.isNullOrEmpty() && playbackData.playback == null)) {
-            try {
-                playbackData = doChallengeFlow(host, mediaId, apiHeaders, resolvedUrl.toString())
-            } catch (e: Exception) {
-                extractionFailure("Filemoon: All extraction flows failed: ${e.message}", e)
-            }
-        }
+        val playbackData = fetchPlaybackData(host, mediaId, apiHeaders, resolvedUrl.toString())
 
         // 3. Extract sources
+        val sources = collectSources(playbackData)
+
+        if (sources.isEmpty()) extractionFailure("Filemoon: No sources found in playback data")
+
+        val streamUrl = resolveStreamUrl(sources.first().url, host)
+
+        val finalHeaders = apiHeaders.newBuilder()
+            .set("User-Agent", userAgent)
+            .set("Referer", "https://$host/")
+            .build()
+
+        return playlistUtils.extractFromHls(
+            playlistUrl = streamUrl,
+            referer = "https://$host/",
+            masterHeaders = finalHeaders,
+            videoHeaders = finalHeaders,
+        )
+    }
+
+    /**
+     * Tente d'abord le flux legacy, puis le flux challenge si le premier n'a rien rendu.
+     */
+    private suspend fun fetchPlaybackData(host: String, mediaId: String, apiHeaders: Headers, resolvedUrl: String): PlaybackResponse {
+        // Try Legacy Flow first
+        val legacyData = try {
+            doLegacyFlow(host, mediaId, apiHeaders)
+        } catch (_: Exception) {
+            // Log.d("Filemoon", "Legacy Flow failed: ${e.message}")
+            null
+        }
+
+        if (legacyData != null && !(legacyData.sources.isNullOrEmpty() && legacyData.playback == null)) {
+            return legacyData
+        }
+
+        return try {
+            doChallengeFlow(host, mediaId, apiHeaders, resolvedUrl)
+        } catch (e: Exception) {
+            extractionFailure("Filemoon: All extraction flows failed: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Concatène les sources directes et celles découvertes dans le playback chiffré.
+     */
+    private fun collectSources(playbackData: PlaybackResponse): List<Source> {
         val sources = mutableListOf<Source>()
         playbackData.sources?.let { sources.addAll(it) }
 
@@ -142,24 +173,13 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             }
         }
 
-        if (sources.isEmpty()) extractionFailure("Filemoon: No sources found in playback data")
-
-        val streamUrl = sources.first().url.let {
-            if (it.startsWith("/")) "https://$host$it" else it
-        }
-
-        val finalHeaders = apiHeaders.newBuilder()
-            .set("User-Agent", userAgent)
-            .set("Referer", "https://$host/")
-            .build()
-
-        return playlistUtils.extractFromHls(
-            playlistUrl = streamUrl,
-            referer = "https://$host/",
-            masterHeaders = finalHeaders,
-            videoHeaders = finalHeaders,
-        )
+        return sources
     }
+
+    /**
+     * Résout une URL de source relative par rapport au host retenu.
+     */
+    private fun resolveStreamUrl(sourceUrl: String, host: String): String = if (sourceUrl.startsWith("/")) "https://$host$sourceUrl" else sourceUrl
 
     private suspend fun doLegacyFlow(host: String, mediaId: String, headers: Headers): PlaybackResponse {
         val apiUrl = "https://$host/api/videos/$mediaId/playback"
@@ -326,6 +346,27 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         return Base64.encodeToString(signatureBytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     }
 
+    /** Rotation circulaire à gauche sur 32 bits, masquée sur 32 bits. */
+    @Suppress("MagicNumber")
+    private fun rl(value: Long, shift: Int, mask32: Long): Long = ((value shl shift) or (value ushr (32 - shift))) and mask32
+
+    /**
+     * Un tour de mélange du PoW : les huit opérations sont appliquées dans l'ordre imposé à l'état
+     * (s0, s1, s2, s3) porté par [state]. Le tableau est muté puis renvoyé tel quel.
+     */
+    @Suppress("MagicNumber")
+    private fun mixingRound(state: LongArray, mask32: Long): LongArray {
+        state[0] = (state[0] + state[1]) and mask32
+        state[3] = rl(state[3] xor state[0], 16, mask32)
+        state[2] = (state[2] + state[3]) and mask32
+        state[1] = rl(state[1] xor state[2], 12, mask32)
+        state[0] = (state[0] + state[1]) and mask32
+        state[3] = rl(state[3] xor state[0], 8, mask32)
+        state[2] = (state[2] + state[3]) and mask32
+        state[1] = rl(state[1] xor state[2], 7, mask32)
+        return state
+    }
+
     // Constantes d'état et angles de rotation imposés par l'algorithme PoW type BLAKE :
     // les nommer serait du bruit, elles ne sont pas paramétrables.
     @Suppress("MagicNumber")
@@ -336,93 +377,53 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         val finalConst = 2246822519L
         val mask32 = 0xFFFFFFFFL
 
-        fun rl(value: Long, shift: Int): Long = ((value shl shift) or (value ushr (32 - shift))) and mask32
-
         val prefix = "$nonce:".toByteArray(Charsets.ISO_8859_1)
 
         for (counter in 0 until maxIterations) {
             val counterBytes = counter.toString().toByteArray(Charsets.ISO_8859_1)
             val inputBytes = prefix + counterBytes
 
-            var s0 = 1779033703L
-            var s1 = 3144134277L
-            var s2 = 1013904242L
-            var s3 = 2773480762L
+            var state = longArrayOf(1779033703L, 3144134277L, 1013904242L, 2773480762L)
 
             for (b in inputBytes) {
                 val bLong = b.toLong() and 0xFFL
-                s0 = (s0 + bLong) and mask32
-                s0 = rl(s0, 7)
-                s0 = (s0 + s1) and mask32
-                s3 = rl(s3 xor s0, 16)
-                s2 = (s2 + s3) and mask32
-                s1 = rl(s1 xor s2, 12)
-                s0 = (s0 + s1) and mask32
-                s3 = rl(s3 xor s0, 8)
-                s2 = (s2 + s3) and mask32
-                s1 = rl(s1 xor s2, 7)
+                state[0] = (state[0] + bLong) and mask32
+                state[0] = rl(state[0], 7, mask32)
+                state = mixingRound(state, mask32)
             }
 
             repeat(8) {
-                s0 = (s0 + s1) and mask32
-                s3 = rl(s3 xor s0, 16)
-                s2 = (s2 + s3) and mask32
-                s1 = rl(s1 xor s2, 12)
-                s0 = (s0 + s1) and mask32
-                s3 = rl(s3 xor s0, 8)
-                s2 = (s2 + s3) and mask32
-                s1 = rl(s1 xor s2, 7)
+                state = mixingRound(state, mask32)
             }
 
             val buf = LongArray(bufferSize)
             for (i in 0 until bufferSize) {
-                s0 = (s0 + s1) and mask32
-                s3 = rl(s3 xor s0, 16)
-                s2 = (s2 + s3) and mask32
-                s1 = rl(s1 xor s2, 12)
-                s0 = (s0 + s1) and mask32
-                s3 = rl(s3 xor s0, 8)
-                s2 = (s2 + s3) and mask32
-                s1 = rl(s1 xor s2, 7)
-                buf[i] = (s0 xor s2) and mask32
+                state = mixingRound(state, mask32)
+                buf[i] = (state[0] xor state[2]) and mask32
             }
 
             repeat(2) {
                 for (si in 0 until bufferSize) {
                     val a = (buf[si] and bufferMask.toLong()).toInt()
                     var c = (buf[si] + buf[a]) and mask32
-                    c = rl(c, 13)
+                    c = rl(c, 13, mask32)
                     c = (c xor ((buf[(si + 1) and bufferMask] * initConst) and mask32)) and mask32
                     buf[si] = c
-                    s0 = (s0 xor c) and mask32
-                    s0 = (s0 + s1) and mask32
-                    s3 = rl(s3 xor s0, 16)
-                    s2 = (s2 + s3) and mask32
-                    s1 = rl(s1 xor s2, 12)
-                    s0 = (s0 + s1) and mask32
-                    s3 = rl(s3 xor s0, 8)
-                    s2 = (s2 + s3) and mask32
-                    s1 = rl(s1 xor s2, 7)
+                    state[0] = (state[0] xor c) and mask32
+                    state = mixingRound(state, mask32)
                 }
             }
 
-            s0 = (s0 + s1) and mask32
-            s3 = rl(s3 xor s0, 16)
-            s2 = (s2 + s3) and mask32
-            s1 = rl(s1 xor s2, 12)
-            s0 = (s0 + s1) and mask32
-            s3 = rl(s3 xor s0, 8)
-            s2 = (s2 + s3) and mask32
-            s1 = rl(s1 xor s2, 7)
+            state = mixingRound(state, mask32)
 
-            var outVal = s0
+            var outVal = state[0]
             for (ci in 0 until 64) {
                 val d = buf[ci]
                 outVal = (outVal + d) and mask32
-                outVal = rl(outVal, 5)
+                outVal = rl(outVal, 5, mask32)
                 outVal = (outVal xor ((d * finalConst) and mask32)) and mask32
             }
-            outVal = (outVal xor s2) and mask32
+            outVal = (outVal xor state[2]) and mask32
 
             val actualLeading = if (outVal > 0) java.lang.Long.numberOfLeadingZeros(outVal) - 32 else 32
 

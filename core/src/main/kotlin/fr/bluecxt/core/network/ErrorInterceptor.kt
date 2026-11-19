@@ -108,12 +108,7 @@ class ErrorInterceptor(
             if (e.isTransientOrLocal()) throw e
 
             // 3. Categorize true server-side/domain failures
-            val errorType = when (e) {
-                is UnknownHostException -> "DNS_FAILURE"
-                is SSLException -> "SSL_ERROR"
-                is SocketTimeoutException -> "TIMEOUT"
-                else -> "NETWORK_ERROR"
-            }
+            val errorType = classifyErrorType(e)
 
             ErrorWebhook.sendWebhook(
                 baseUrl = request.url.host,
@@ -130,6 +125,19 @@ class ErrorInterceptor(
 
             throw e
         }
+    }
+
+    /**
+     * Catégorise une [IOException] non transitoire en type d'erreur télémétrique.
+     *
+     * @param e Exception réseau à classifier.
+     * @return Le type d'erreur (`DNS_FAILURE`, `SSL_ERROR`, `TIMEOUT` ou `NETWORK_ERROR`).
+     */
+    private fun classifyErrorType(e: IOException): String = when (e) {
+        is UnknownHostException -> "DNS_FAILURE"
+        is SSLException -> "SSL_ERROR"
+        is SocketTimeoutException -> "TIMEOUT"
+        else -> "NETWORK_ERROR"
     }
 }
 
