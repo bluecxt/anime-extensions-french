@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.get
 import fr.bluecxt.core.HUB_SEASON_NUMBER
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.TmdbMetadata
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
@@ -235,7 +234,8 @@ class FrAnime : ConfigurableSource() {
         val allEpisodes = mutableListOf<SEpisode>()
 
         val format = animeData.format.uppercase()
-        val isMovie = format == "FILM" || format == "OVA" || format == "SPECIAL"
+        val isMovie = format == "FILM"
+        val isOavFormat = format == "OVA" || format == "SPECIAL"
         val isSingleEpisode = seasonsToProcess.size == 1 && seasonsToProcess[0].first.episodes.size == 1
 
         for ((season, seasonNumber) in seasonsToProcess) {
@@ -272,6 +272,8 @@ class FrAnime : ConfigurableSource() {
                 }
             }
 
+            val seasonIsOav = isOavFormat || season.title.contains("OAV", true) || season.title.contains("Special", true)
+
             val mappedEpisodes = coreMapEpisodes(
                 rawEpisodes = rawEpisodes,
                 tmdbMetadata = tmdbMetadata,
@@ -279,7 +281,7 @@ class FrAnime : ConfigurableSource() {
                 offsets = offsets,
                 sNum = tmdbSNum,
                 isMovie = isMovie,
-                isOav = season.title.contains("OAV", true) || season.title.contains("Special", true),
+                isOav = seasonIsOav,
             )
 
             mappedEpisodes.forEach {
@@ -354,10 +356,13 @@ class FrAnime : ConfigurableSource() {
 
                 var playerUrl = if (responseBody.contains("watch2")) {
                     val uri = responseBody.toHttpUrl()
-                    decryptFrAnime(uri.queryParameter("a") ?: "")
-                        ?: decryptFrAnime(uri.queryParameter("b") ?: "")
-                        ?: decryptFrAnime(uri.queryParameter("c") ?: "")
-                        ?: responseBody
+                    var decoded: String? = null
+                    for (paramName in uri.queryParameterNames) {
+                        val paramVal = uri.queryParameter(paramName) ?: continue
+                        decoded = decryptFrAnime(paramVal)
+                        if (decoded != null) break
+                    }
+                    decoded ?: responseBody
                 } else if (!responseBody.startsWith("http")) {
                     decryptFrAnime(responseBody) ?: responseBody
                 } else {
@@ -420,7 +425,12 @@ class FrAnime : ConfigurableSource() {
 
     private fun pageToSAnimes(page: List<Anime>): List<SAnime> = page.map { anime ->
         SAnime.create().apply {
-            title = anime.title
+            title = anime.title.takeIf { it.isNotBlank() }
+                ?: anime.originalTitle.takeIf { it.isNotBlank() }
+                ?: anime.titlesAlt.en?.takeIf { it.isNotBlank() }
+                ?: anime.titlesAlt.enJp?.takeIf { it.isNotBlank() }
+                ?: anime.titlesAlt.jaJp?.takeIf { it.isNotBlank() }
+                ?: "Anime ${anime.id}"
             thumbnail_url = anime.poster
             genre = anime.genres.joinToString()
             status = parseStatus(anime.status, anime.seasons.size, anime.seasons.size)
