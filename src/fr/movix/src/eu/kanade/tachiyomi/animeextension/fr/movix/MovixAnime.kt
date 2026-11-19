@@ -28,6 +28,9 @@ import okhttp3.Response
 import java.net.URLEncoder
 import java.util.concurrent.CancellationException
 
+/** Position du segment épisode dans l'URL. */
+private const val EPISODE_SEGMENT_INDEX = 4
+
 class MovixAnime : BaseMovix("Movix Anime") {
 
     private val animeCache = mutableMapOf<String, AnimeItem>()
@@ -525,7 +528,7 @@ class MovixAnime : BaseMovix("Movix Anime") {
         val apiPath = data[0]
         val targetUrl = "$apiUrl/api/$apiPath"
         val type = data.getOrNull(1) ?: "movie"
-        val episode = data.getOrNull(4)
+        val episode = data.getOrNull(EPISODE_SEGMENT_INDEX)
         val brand = hoster.hosterName
 
         Log.d(MOVIXANIME_LOG, "[$brand] → $targetUrl")

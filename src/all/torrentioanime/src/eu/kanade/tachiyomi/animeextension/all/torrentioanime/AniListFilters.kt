@@ -3,6 +3,10 @@ package eu.kanade.tachiyomi.animeextension.all.torrentioanime
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 
+/** Première et dernière année proposées dans les filtres. */
+private const val FIRST_YEAR = 1940
+private const val LAST_YEAR = 2025
+
 object AniListFilters {
     open class QueryPartFilter(
         displayName: String,
@@ -107,7 +111,7 @@ object AniListFilters {
 
         val YEAR_LIST: Array<Pair<String, String>> = arrayOf(
             Pair("Any", ""),
-        ) + (1940..2025).reversed().map { Pair(it.toString(), it.toString()) }.toTypedArray()
+        ) + (FIRST_YEAR..LAST_YEAR).reversed().map { Pair(it.toString(), it.toString()) }.toTypedArray()
 
         val SEASON_LIST = arrayOf(
             Pair("Any", ""),

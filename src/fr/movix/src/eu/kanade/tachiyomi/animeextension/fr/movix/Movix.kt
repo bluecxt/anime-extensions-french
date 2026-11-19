@@ -24,6 +24,10 @@ import okhttp3.Response
 import java.net.URLEncoder
 import java.util.concurrent.CancellationException
 
+/** Nombre maximal d'acteurs affichés et position du segment épisode. */
+private const val MAX_CAST_NAMES = 3
+private const val EPISODE_SEGMENT_INDEX = 4
+
 private val EPISODE_NAME_REGEX = Regex("(?i)Episode \\d+")
 
 class Movix : BaseMovix("Movix") {
@@ -143,7 +147,7 @@ class Movix : BaseMovix("Movix") {
         }
         anime.thumbnail_url = detail.posterPath?.let { "$tmdbImg500$it" } ?: anime.thumbnail_url
         anime.genre = detail.genres?.mapNotNull { it.name }?.joinToString(", ")
-        anime.author = detail.credits?.cast?.take(3)?.mapNotNull { it.name }?.joinToString(", ")
+        anime.author = detail.credits?.cast?.take(MAX_CAST_NAMES)?.mapNotNull { it.name }?.joinToString(", ")
         anime.status = when (detail.status) {
             "Returning Series", "In Production", "Planned" -> SAnime.ONGOING
             "Canceled", "Ended" -> SAnime.COMPLETED
@@ -290,7 +294,7 @@ class Movix : BaseMovix("Movix") {
         val apiPath = parts[0]
         val targetUrl = "$apiUrl/api/$apiPath"
         val type = parts.getOrNull(1) ?: "movie"
-        val episode = parts.getOrNull(4)
+        val episode = parts.getOrNull(EPISODE_SEGMENT_INDEX)
         val brand = hoster.hosterName
 
         Log.d(MOVIX_LOG, "[$brand] → $targetUrl")

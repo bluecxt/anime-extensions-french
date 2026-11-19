@@ -14,6 +14,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 
+/** Échelle utilisée pour détecter les demi-épisodes, et conversion ms. */
+private const val FRACTION_SCALE = 10
+private const val HALF_EPISODE_REMAINDER = 5
+private const val MILLIS_PER_SECOND = 1000L
+
 val EPISODE_REGEX = Regex("""(?i)\b(?:[ée]pisodes?|eps?)\b""")
 val HTML_TAG_REGEX = Regex("""<[^>]+>""")
 
@@ -92,14 +97,14 @@ data class Media(
         if (episodes.isNullOrEmpty()) return emptyList()
 
         val tvdbSeason1 = tvdbFetcher(mediaTitle, 1)
-        val hasHalfEpisodes = episodes.any { (it.epNum.times(10).toInt()) % 10 == 5 }
+        val hasHalfEpisodes = episodes.any { (it.epNum.times(FRACTION_SCALE).toInt()) % FRACTION_SCALE == HALF_EPISODE_REMAINDER }
         val tvdbSeason0 = if (hasHalfEpisodes) tvdbFetcher(mediaTitle, 0) else null
 
         var specialCounter = 0
 
         return episodes.map { episode ->
             val epNumFloat = episode.epNum
-            val isHalfEpisode = ((epNumFloat * 10).toInt() % 10) == 5
+            val isHalfEpisode = ((epNumFloat * FRACTION_SCALE).toInt() % FRACTION_SCALE) == HALF_EPISODE_REMAINDER
 
             val tvdbMeta = if (isHalfEpisode) {
                 specialCounter++
@@ -121,7 +126,7 @@ data class Media(
                     append(episode.epNum.toString().removeSuffix(".0"))
                     if (!epTitle.isNullOrBlank()) append(" - $epTitle")
                 }
-                date_upload = (episode.timeStamp.toLongOrNull() ?: 0L) * 1000L
+                date_upload = (episode.timeStamp.toLongOrNull() ?: 0L) * MILLIS_PER_SECOND
                 episode_number = epNumFloat
                 preview_url = tvdbMeta?.thumbnail
                 summary = tvdbMeta?.summary

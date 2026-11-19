@@ -22,6 +22,15 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import uy.kohesive.injekt.injectLazy
 
+/** Heuristiques de recherche et de matching de FrAnime. */
+private const val MAX_YEAR_DISTANCE = 30
+private const val LANG_PART_INDEX = 3
+private const val WORD_MATCH_WEIGHT = 90
+private const val DISTANCE_SIMILARITY_WEIGHT = 80
+private const val PAGES_CHUNK_SIZE = 20
+private const val XOR_KEY_MAX = 255
+private const val HEX_RADIX = 16
+
 class FrAnime : ConfigurableSource() {
 
     override val name = "FrAnime"
@@ -121,7 +130,7 @@ class FrAnime : ConfigurableSource() {
             )
             val maxScore = titles.maxOfOrNull { similarityScore(trimmedQuery, it) } ?: 0
             anime to maxScore
-        }.filter { it.second > 30 }
+        }.filter { it.second > MAX_YEAR_DISTANCE }
             .sortedByDescending { it.second }
             .map { it.first }
 
@@ -338,7 +347,7 @@ class FrAnime : ConfigurableSource() {
         val animeId = data[0]
         val seasonIdx = data[1].toInt()
         val episodeIdx = data[2].toInt()
-        val lang = data[3]
+        val lang = data[LANG_PART_INDEX]
 
         val animeData = database.firstOrNull { it.id.toString() == animeId } ?: error("Anime introuvable")
         val episodeData = animeData.seasons[seasonIdx].episodes[episodeIdx]
@@ -405,17 +414,17 @@ class FrAnime : ConfigurableSource() {
         val tWords = t.split(" ")
         if (qWords.isNotEmpty()) {
             val wordMatches = qWords.count { qw -> tWords.any { tw -> tw == qw } }
-            val wordScore = (wordMatches.toDouble() / qWords.size * 90).toInt()
+            val wordScore = (wordMatches.toDouble() / qWords.size * WORD_MATCH_WEIGHT).toInt()
             if (wordScore > 0) return wordScore
         }
         val longer = if (q.length > t.length) q else t
         if (longer.isEmpty()) return 0
         val dist = editDistance(q, t)
-        return ((longer.length - dist).toDouble() / longer.length * 80).toInt()
+        return ((longer.length - dist).toDouble() / longer.length * DISTANCE_SIMILARITY_WEIGHT).toInt()
     }
 
     private fun pagesToAnimesPage(pages: List<Anime>, page: Int): AnimesPage {
-        val chunks = pages.chunked(20)
+        val chunks = pages.chunked(PAGES_CHUNK_SIZE)
         val hasNextPage = chunks.size > page
         val entries = pageToSAnimes(chunks.getOrNull(page - 1) ?: emptyList())
         return AnimesPage(entries, hasNextPage)
@@ -466,13 +475,13 @@ class FrAnime : ConfigurableSource() {
             return null
         }
         if (hexData.isEmpty()) return null
-        for (key in 0..255) {
+        for (key in 0..XOR_KEY_MAX) {
             val sb = StringBuilder()
             try {
                 var i = 0
                 while (i < hexData.length) {
                     val hex = hexData.substring(i, i + 2)
-                    val charCode = hex.toInt(16)
+                    val charCode = hex.toInt(HEX_RADIX)
                     sb.append((charCode xor key).toChar())
                     i += 2
                 }

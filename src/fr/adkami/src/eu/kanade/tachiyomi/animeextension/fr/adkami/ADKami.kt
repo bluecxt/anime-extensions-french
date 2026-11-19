@@ -29,6 +29,10 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
+/** Nombre maximal de segments conservés et secret XOR du slug. */
+private const val MAX_PATH_PARTS = 3
+private const val SLUG_XOR_SECRET = 175
+
 class ADKami : ConfigurableSource() {
 
     override val name = "ADKami"
@@ -298,7 +302,7 @@ class ADKami : ConfigurableSource() {
     private fun cleanUrl(url: String): String {
         if (url.contains("/hentai/")) {
             val parts = url.split("/")
-            if (parts.size > 3) return "/${parts[1]}/${parts[2]}"
+            if (parts.size > MAX_PATH_PARTS) return "/${parts[1]}/${parts[2]}"
         }
         return url
     }
@@ -312,7 +316,7 @@ class ADKami : ConfigurableSource() {
             val n = "ETEfazefzeaZa13MnZEe"
             var i = 0
             for (o in e) {
-                t += ((175 xor o.code) - n[i].code).toChar()
+                t += ((SLUG_XOR_SECRET xor o.code) - n[i].code).toChar()
                 i = if (i > n.length - 2) 0 else i + 1
             }
             t

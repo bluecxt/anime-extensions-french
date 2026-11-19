@@ -1,5 +1,5 @@
 // Copyright bluecxt
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: ApacheSEASON_SENTINEL_MOVIE
 package eu.kanade.tachiyomi.animeextension.fr.animesamafan
 
 import android.util.Log
@@ -25,9 +25,16 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 
+/** Identité de l'extension et bornes de parsing. */
+private const val EXTENSION_ID = 5887546926527754620L
+private const val MIN_TITLE_LENGTH = 3
+private const val MAX_SEASON_NUMBER = 20
+private const val SEASON_SENTINEL_MOVIE = -2.0
+private const val MIN_EPISODE_SUMMARIES = 5
+
 class AnimeSamaFan : ConfigurableSource() {
     override val name = "AnimeSamaFan"
-    override val id: Long = 5887546926527754620L
+    override val id: Long = EXTENSION_ID
 
     override val defaultBaseUrl = "https://animesama.co"
     override val supportedServers = listOf("Sibnet", "Sendvid")
@@ -185,7 +192,7 @@ class AnimeSamaFan : ConfigurableSource() {
         val animeId = anime.url.substringAfter("/anime/").substringBefore("/")
 
         // If title is just "Saison X", try to get the real name from the URL slug
-        if (pageTitle.matches(Regex("(?i)^Saison\\s*\\d+$")) || pageTitle.length < 3) {
+        if (pageTitle.matches(Regex("(?i)^Saison\\s*\\d+$")) || pageTitle.length < MIN_TITLE_LENGTH) {
             val slug = animeId.replace(Regex("^\\d+-"), "").replace("-", " ").trim()
             if (slug.isNotBlank() && slug != "anime") pageTitle = slug
         }
@@ -195,7 +202,7 @@ class AnimeSamaFan : ConfigurableSource() {
             ?: anime.url.substringBefore(".html").substringAfterLast("-").toIntOrNull()
             ?: 1
 
-        if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
+        if (sNum > MAX_SEASON_NUMBER) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
 
         val cleanTitle = sanitizeTitle(pageTitle)
 
@@ -204,8 +211,8 @@ class AnimeSamaFan : ConfigurableSource() {
 
         // Use Core Engine for title optimization
         anime.coreOptimizeDisplayTitle(pageTitle, pageTitle.replace(Regex("(?i)\\s*-\\s*Saison.*|\\s*Saison.*"), "").trim())
-        // AniZen bypass: Force -2.0 to totally disable auto-labeling and use our provided title
-        anime.coreSetSeasonNumber(-2.0)
+        // AniZen bypass: Force SEASON_SENTINEL_MOVIE to totally disable auto-labeling and use our provided title
+        anime.coreSetSeasonNumber(SEASON_SENTINEL_MOVIE)
 
         // Baseline description from site
         val siteDescription = document.selectFirst(".synopsis-content p")?.text()
@@ -269,7 +276,7 @@ class AnimeSamaFan : ConfigurableSource() {
         var sNum = seasonRegex.find(url)?.groupValues?.get(1)?.toIntOrNull()
             ?: url.substringBefore(".html").substringAfterLast("-").toIntOrNull()
             ?: 1
-        if (sNum > 20) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
+        if (sNum > MAX_SEASON_NUMBER) sNum = sNum.toString().substring(0, 1).toIntOrNull() ?: 1
         return sNum
     }
 
@@ -290,7 +297,7 @@ class AnimeSamaFan : ConfigurableSource() {
             Triple(fullSeasonTitle, url, siteSNum)
         }
 
-        return coreBuildSeasonList(baseTitle, siteSeasons, anime.status).onEach { it.coreSetSeasonNumber(-2.0) }
+        return coreBuildSeasonList(baseTitle, siteSeasons, anime.status).onEach { it.coreSetSeasonNumber(SEASON_SENTINEL_MOVIE) }
     }
 
     // ================== Episodes ==================
@@ -383,7 +390,7 @@ class AnimeSamaFan : ConfigurableSource() {
         var tmdbMetadata = fetchTmdbMetadata(animeTitle, sNum)
         if (sNum > 1 && (tmdbMetadata == null || (tmdbMetadata.episodeSummaries.size < 2))) {
             val fallback = fetchTmdbMetadata(animeTitle, sNum - 1)
-            if (fallback != null && fallback.episodeSummaries.size > 5) {
+            if (fallback != null && fallback.episodeSummaries.size > MIN_EPISODE_SUMMARIES) {
                 tmdbMetadata = fallback
             }
         }

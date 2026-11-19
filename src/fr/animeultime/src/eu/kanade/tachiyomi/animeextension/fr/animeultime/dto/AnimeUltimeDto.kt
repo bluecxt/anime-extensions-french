@@ -17,6 +17,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
+/** Borne haute d'un octet non signé. */
+private const val BYTE_MAX = 255
+
 enum class Categories {
     Anime,
     Drama,
@@ -166,7 +169,7 @@ fun String.fixEncoding(): String {
             '\u0153' -> 0x9C.toByte()
             '\u017E' -> 0x9E.toByte()
             '\u0178' -> 0x9F.toByte()
-            else -> if (c.code in 0..255) c.code.toByte() else '?'.code.toByte()
+            else -> if (c.code in 0..BYTE_MAX) c.code.toByte() else '?'.code.toByte()
         }
         bytes[i] = b
     }

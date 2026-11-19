@@ -60,6 +60,9 @@ import org.jsoup.select.Elements
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
+/** Nombre minimal de segments d'URL pour cibler une saison précise. */
+private const val MIN_SEASON_PATH_SEGMENTS = 3
+
 private const val MIN_PAGE_SIZE_JSON = 36
 private const val MIN_PAGE_SIZE_HTML = 10
 
@@ -445,7 +448,7 @@ class DessinAnime : ConfigurableSource() {
 
         val seriesData = soup.extractNextJs<SeriesDataDto> { it is JsonObject && "seasons" in it.jsonObject }
         val pathSegments = anime.url.removePrefix("/").split("/").filter { it.isNotEmpty() }
-        val isTargetingSpecificSeason = pathSegments.size >= 3
+        val isTargetingSpecificSeason = pathSegments.size >= MIN_SEASON_PATH_SEGMENTS
 
         val seasonCount = seriesData?.seasons?.size ?: soup.select("a.bg-card").size
         val isHub = !isTargetingSpecificSeason && seasonCount > 1

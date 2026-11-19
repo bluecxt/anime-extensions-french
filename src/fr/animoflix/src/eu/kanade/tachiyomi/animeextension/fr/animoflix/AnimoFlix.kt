@@ -1,5 +1,5 @@
 // Copyright bluecxt
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: ApacheSEASON_SENTINEL_MOVIE
 package eu.kanade.tachiyomi.animeextension.fr.animoflix
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -27,6 +27,10 @@ import okhttp3.Response
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+
+/** Sentinelles de saison utilisées par le core : film et OVA. */
+private const val SEASON_SENTINEL_MOVIE = -2.0
+private const val SEASON_SENTINEL_OVA = -3.0
 
 class AnimoFlix : ConfigurableSource() {
 
@@ -99,9 +103,9 @@ class AnimoFlix : ConfigurableSource() {
     private fun parseSeasonNumber(title: String): Double {
         val t = title.trim()
         return when {
-            t.contains("Film", true) || t.contains("Movie", true) -> -2.0
+            t.contains("Film", true) || t.contains("Movie", true) -> SEASON_SENTINEL_MOVIE
 
-            t.contains("OAV", true) || t.contains("OVA", true) -> -3.0
+            t.contains("OAV", true) || t.contains("OVA", true) -> SEASON_SENTINEL_OVA
 
             else -> {
                 val result = seasonRegex.find(t)
@@ -132,8 +136,8 @@ class AnimoFlix : ConfigurableSource() {
         val hubName = url.trim('/').split("/").getOrNull(1)?.replace("-", " ") ?: ""
 
         return when {
-            sNum == -2.0 -> fetchTmdbMovieMetadata(baseTitle) ?: fetchTmdbMetadata(baseTitle)
-            sNum == -3.0 -> fetchTmdbMetadata(baseTitle, 0)
+            sNum == SEASON_SENTINEL_MOVIE -> fetchTmdbMovieMetadata(baseTitle) ?: fetchTmdbMetadata(baseTitle)
+            sNum == SEASON_SENTINEL_OVA -> fetchTmdbMetadata(baseTitle, 0)
             else -> fetchTmdbMetadata(baseTitle, sNum.toInt()) ?: fetchTmdbMetadata(hubName, sNum.toInt())
         }
     }
@@ -256,7 +260,7 @@ class AnimoFlix : ConfigurableSource() {
             ?: document.selectFirst("meta[property=og:image]")?.attr("content")
 
         // TMDB Metadata with type precision
-        val tmdbType = if (anime.season_number == -2.0) "movie" else "tv"
+        val tmdbType = if (anime.season_number == SEASON_SENTINEL_MOVIE) "movie" else "tv"
         val tmdbMetadata = fetchTmdbMetadata(getCleanTitle(fullTitle), type = tmdbType)
 
         tmdbMetadata?.summary?.let { anime.description = it }
@@ -359,7 +363,7 @@ class AnimoFlix : ConfigurableSource() {
                 val siteEpTitle = titlesMap[epNum] ?: "Episode $epNum"
 
                 // Metadata direct lookup only
-                val epLookup = if (sNumRaw == -2.0) 1 else epNum.toInt()
+                val epLookup = if (sNumRaw == SEASON_SENTINEL_MOVIE) 1 else epNum.toInt()
                 val epMeta = tmdbMetadata?.episodeSummaries?.get(epLookup)
                 val tmdbName = epMeta?.first
 
@@ -373,8 +377,8 @@ class AnimoFlix : ConfigurableSource() {
                 name = if (totalSeasons > 1 && seasonName.isNotBlank()) {
                     val sN = sNumRaw
                     val sPrefix = when {
-                        sN == -2.0 -> "[Movie]"
-                        sN == -3.0 -> "[OVA]"
+                        sN == SEASON_SENTINEL_MOVIE -> "[Movie]"
+                        sN == SEASON_SENTINEL_OVA -> "[OVA]"
                         sN > 0 -> "[S${sN.toInt()}]"
                         else -> "[Special]"
                     }

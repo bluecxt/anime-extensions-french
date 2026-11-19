@@ -29,6 +29,10 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/** Nombre maximal d'acteurs et taille de page de l'API. */
+private const val MAX_ACTORS = 4
+private const val PAGE_SIZE = 40
+
 class Torrentio : Source() {
 
     override val name = "Torrentio (Torrent / Debrid)"
@@ -154,7 +158,7 @@ class Torrentio : Source() {
 
                     val directors = content.credits?.filter { it.role == "DIRECTOR" }?.mapNotNull { it.name }
                     author = directors?.joinToString()
-                    val actors = content.credits?.filter { it.role == "ACTOR" }?.take(4)?.mapNotNull { it.name }
+                    val actors = content.credits?.filter { it.role == "ACTOR" }?.take(MAX_ACTORS)?.mapNotNull { it.name }
                     artist = actors?.joinToString()
                     initialized = true
                 }
@@ -167,7 +171,7 @@ class Torrentio : Source() {
     override fun popularAnimeRequest(page: Int): Request {
         val country = preferences.getString(PREF_REGION_KEY, PREF_REGION_DEFAULT)
         val language = preferences.getString(PREF_JW_LANG_KEY, PREF_JW_LANG_DEFAULT)
-        val perPage = 40
+        val perPage = PAGE_SIZE
         val packages = ""
         val year = 0
         val objectTypes = ""
@@ -220,7 +224,7 @@ class Torrentio : Source() {
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         val country = preferences.getString(PREF_REGION_KEY, PREF_REGION_DEFAULT)
         val language = preferences.getString(PREF_JW_LANG_KEY, PREF_JW_LANG_DEFAULT)
-        val perPage = 40
+        val perPage = PAGE_SIZE
         val packages = ""
         val year = 0
         val objectTypes = ""

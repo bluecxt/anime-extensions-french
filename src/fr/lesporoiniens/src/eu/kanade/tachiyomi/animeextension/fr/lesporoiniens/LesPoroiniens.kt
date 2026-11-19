@@ -23,6 +23,9 @@ import java.io.File
 import java.text.Normalizer
 import kotlin.time.Duration.Companion.minutes
 
+/** Radix utilisé pour nommer le cache disque. */
+private const val HEX_RADIX = 16
+
 private val MAX_CACHE_SIZE = 10.megabytes
 private val MAX_CACHE_TIME = 30.minutes
 
@@ -38,7 +41,7 @@ class LesPoroiniens : ConfigurableSource() {
     override val supportsLatest = false
 
     override val client = super.client.newBuilder()
-        .cache(Cache(File(context.cacheDir, baseUrl.hashCode().toUInt().toString(16)), MAX_CACHE_SIZE))
+        .cache(Cache(File(context.cacheDir, baseUrl.hashCode().toUInt().toString(HEX_RADIX)), MAX_CACHE_SIZE))
         .addNetworkInterceptor { chain ->
             chain.proceed(chain.request())
                 .newBuilder()

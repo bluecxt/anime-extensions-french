@@ -37,6 +37,9 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/** Taille de page demandée à AniList. */
+private const val DEFAULT_PAGE_SIZE = 30
+
 class Torrentio : Source() {
 
     override val name = "Torrentio Anime (Torrent / Debrid)"
@@ -174,7 +177,7 @@ class Torrentio : Source() {
         val params = AniListFilters.getSearchParameters(filters)
         val variablesObject = buildJsonObject {
             put("page", page)
-            put("perPage", 30)
+            put("perPage", DEFAULT_PAGE_SIZE)
             put("sort", params.sort)
             if (query.isNotBlank()) put("search", query)
 

@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.animeextension.all.torrentioanime
 
+/** Fenêtre de diffusion et conversion millisecondes. */
+private const val MILLIS_PER_SECOND = 1000
+private const val AIRING_WINDOW_SECONDS = 10000
+
 private fun String.toQuery() = this.trimIndent().replace("%", "$")
 
 fun anilistQuery() = """
@@ -69,7 +73,7 @@ fun anilistLatestQuery() = """
             }
             airingSchedules(
                 airingAt_greater: 0,
-                airingAt_lesser: ${System.currentTimeMillis() / 1000 - 10000},
+                airingAt_lesser: ${System.currentTimeMillis() / MILLIS_PER_SECOND - AIRING_WINDOW_SECONDS},
                 sort: %sort
             ) {
                 media {
