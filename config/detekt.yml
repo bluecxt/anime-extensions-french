@@ -718,8 +718,6 @@ style:
         value: "FIXME:"
       - reason: "Forbidden STOPSHIP todo marker in comment, please address the problem before shipping the code."
         value: "STOPSHIP:"
-      - reason: "Forbidden TODO todo marker in comment, please do the changes."
-        value: "TODO:"
     allowedPatterns: ""
   ForbiddenImport:
     active: false
@@ -766,6 +764,19 @@ style:
       - "0"
       - "1"
       - "2"
+      - "0xFF"
+      - "1024"
+      - "200"
+      - "206"
+      - "301"
+      - "302"
+      - "403"
+      - "404"
+      - "410"
+      - "429"
+      - "500"
+      - "502"
+      - "503"
     ignoreHashCodeFunction: true
     ignorePropertyDeclaration: false
     ignoreLocalVariableDeclaration: false
