@@ -16,6 +16,7 @@ import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 class WaveAnime : ConfigurableSource() {
@@ -37,7 +38,7 @@ class WaveAnime : ConfigurableSource() {
         val id: String,
         val title: String,
         val format: String? = null,
-        val release_year: Int? = null,
+        @SerialName("release_year") val releaseYear: Int? = null,
     )
 
     @Serializable
@@ -46,9 +47,9 @@ class WaveAnime : ConfigurableSource() {
     @Serializable
     data class WaveSerieInfo(
         val id: String,
-        val title_jpn: String? = null,
-        val title_eng: String? = null,
-        val title_fra: String? = null,
+        @SerialName("title_jpn") val titleJpn: String? = null,
+        @SerialName("title_eng") val titleEng: String? = null,
+        @SerialName("title_fra") val titleFra: String? = null,
         val format: String? = null,
     )
 
@@ -57,8 +58,8 @@ class WaveAnime : ConfigurableSource() {
         val id: String,
         val title: String? = null,
         val number: Int,
-        val season_number: Int = 1,
-        val has_thumbnail: Int = 0,
+        @SerialName("season_number") val seasonNumber: Int = 1,
+        @SerialName("has_thumbnail") val hasThumbnail: Int = 0,
     )
 
     @Serializable
@@ -81,7 +82,7 @@ class WaveAnime : ConfigurableSource() {
 
     @Serializable
     data class WaveEpisodeTrack(
-        val episode_id: String,
+        @SerialName("episode_id") val episodeId: String,
         val type: String,
         val language: String,
         val flags: Int = 0,
@@ -133,9 +134,9 @@ class WaveAnime : ConfigurableSource() {
         val id = anime.url.trim('/').substringAfterLast("/")
         val details = client.get("$baseUrl/api/series/$id", headers).parseAs<WaveSerieDetails>(json)
 
-        val mainTitle = details.serie.title_fra
-            ?: details.serie.title_jpn
-            ?: details.serie.title_eng
+        val mainTitle = details.serie.titleFra
+            ?: details.serie.titleJpn
+            ?: details.serie.titleEng
             ?: anime.title
 
         anime.title = mainTitle
@@ -174,14 +175,14 @@ class WaveAnime : ConfigurableSource() {
         val multipleSeasons = details.seasons.size > 1
 
         details.episodes.forEach { ep ->
-            val sPrefix = if (multipleSeasons) "[S${ep.season_number}] " else ""
+            val sPrefix = if (multipleSeasons) "[S${ep.seasonNumber}] " else ""
             val titlePart = if (!ep.title.isNullOrBlank()) " - ${ep.title}" else ""
             episodes.add(
                 SEpisode.create().apply {
                     url = ep.id
                     name = "${sPrefix}Épisode ${ep.number}$titlePart"
                     episode_number = ep.number.toFloat()
-                    scanlator = "Saison ${ep.season_number}"
+                    scanlator = "Saison ${ep.seasonNumber}"
                 },
             )
         }
@@ -220,7 +221,7 @@ class WaveAnime : ConfigurableSource() {
 
         data.tracks.filter { it.type == "subtitle" }.map { track ->
             val flagSuffix = if (track.flags == 1) "forced" else "full"
-            val trackUrl = "$baseUrl/playback/subtitles/${track.episode_id}-${track.language}-$flagSuffix.ass"
+            val trackUrl = "$baseUrl/playback/subtitles/${track.episodeId}-${track.language}-$flagSuffix.ass"
             val label = if (track.language == "fra") "Français (${if (track.flags == 1) "Forcés" else "Complets"})" else track.language
             Track(trackUrl, label)
         }

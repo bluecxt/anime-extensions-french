@@ -4,6 +4,7 @@ package eu.kanade.tachiyomi.animeextension.fr.animeultime.dto
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KeepGeneratedSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -30,7 +31,7 @@ enum class Categories {
 data class SearchResponseItem(
     val id: Int,
     val title: String,
-    val img_url: String,
+    val imgUrl: String,
     val url: String,
     val searchType: Categories,
 )
@@ -39,7 +40,7 @@ data class SearchResponseItem(
 data class SearchResponse(
     val id: Int,
     val title: String,
-    val img_url: String,
+    @SerialName("img_url") val imgUrl: String,
     val url: String,
 )
 
@@ -72,7 +73,7 @@ data class VideoPlayerResponse(
     val title: String,
     val quality: String,
     val videoData: VideoFormats,
-    val fansub_link: String,
+    @SerialName("fansub_link") val fansubLink: String,
 )
 
 @Serializable
@@ -113,8 +114,8 @@ data class AlbumResponse(
 
 @Serializable
 data class Track(
-    val music_title: String,
-    val serie_title: String,
+    @SerialName("music_title") val musicTitle: String,
+    @SerialName("serie_title") val serieTitle: String,
     val duration: String,
     val url: String,
     val image: String,

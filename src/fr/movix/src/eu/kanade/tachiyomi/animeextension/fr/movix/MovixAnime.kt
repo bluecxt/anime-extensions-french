@@ -494,8 +494,10 @@ class MovixAnime : BaseMovix("Movix Anime") {
         val tmdbSeason = queryParams.substringAfter("tmdbS=", "").substringBefore("&").takeIf { it.isNotBlank() }
         val tmdbEpisode = queryParams.substringAfter("tmdbE=", "").substringBefore("&").takeIf { it.isNotBlank() }
 
-        if (tmdbId != null && tmdbType != null && tmdbSeason != null && tmdbEpisode != null) {
-            endpoints.addAll(buildMovixHosters(tmdbType, tmdbId, tmdbSeason, tmdbEpisode))
+        if (tmdbId != null && tmdbType != null) {
+            if (tmdbSeason != null && tmdbEpisode != null) {
+                endpoints.addAll(buildMovixHosters(tmdbType, tmdbId, tmdbSeason, tmdbEpisode))
+            }
         }
 
         return endpoints

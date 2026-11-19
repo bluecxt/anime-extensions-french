@@ -75,7 +75,7 @@ class AnimeUltime : ConfigurableSource() {
                 SearchResponseItem(
                     id = element.selectFirst("div.box-hover")?.attr("onmousemove")?.filter { it.isDigit() }?.toIntOrNull() ?: return@mapNotNull null,
                     title = element.selectFirst(".box-text p")?.text() ?: element.selectFirst("p")?.text() ?: "",
-                    img_url = element.selectFirst("img")?.attr("src")?.takeIf { it.isNotEmpty() } ?: "",
+                    imgUrl = element.selectFirst("img")?.attr("src")?.takeIf { it.isNotEmpty() } ?: "",
                     url = element.selectFirst("a")?.attr("abs:href") ?: "",
                     searchType = categorie,
                 )
@@ -117,7 +117,7 @@ class AnimeUltime : ConfigurableSource() {
                 SearchResponseItem(
                     id = responseItem.id,
                     title = responseItem.title,
-                    img_url = responseItem.img_url,
+                    imgUrl = responseItem.imgUrl,
                     url = responseItem.url,
                     searchType = categorie,
                 )
@@ -158,7 +158,7 @@ class AnimeUltime : ConfigurableSource() {
             )
             SAnime.create().apply {
                 url = jsonUrl
-                thumbnail_url = animeItem.img_url
+                thumbnail_url = animeItem.imgUrl
                 title = if (animeItem.searchType != Categories.OST) animeItem.title else "${animeItem.title} OST"
             }
         }
@@ -245,7 +245,7 @@ class AnimeUltime : ConfigurableSource() {
 
         return tracks.parallelMap { track ->
             SEpisode.create().apply {
-                name = track.music_title
+                name = track.musicTitle
                 url = "ost#" + json.encodeToString(track)
                 preview_url = track.image
                 summary = track.duration + "\n" + title
@@ -292,7 +292,7 @@ class AnimeUltime : ConfigurableSource() {
 
             val data = json.decodeFromStringFixed<VideoPlayerResponse>(responseBody)
 
-            val fansub = parse(data.fansub_link).selectFirst("a")?.text()
+            val fansub = parse(data.fansubLink).selectFirst("a")?.text()
 
             Hoster(
                 hosterName = if (!fansub.isNullOrBlank()) fansub else "Unknown",
@@ -316,7 +316,7 @@ class AnimeUltime : ConfigurableSource() {
         return listOf(
             Video(
                 videoUrl = track.url,
-                videoTitle = track.music_title,
+                videoTitle = track.musicTitle,
                 preferred = true,
             ),
         )
