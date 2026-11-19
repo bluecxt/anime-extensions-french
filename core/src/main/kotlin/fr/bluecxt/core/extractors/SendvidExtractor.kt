@@ -9,31 +9,22 @@ import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.video.PlaylistUtils
+import fr.bluecxt.core.utils.video.detectMp4Resolution
 import keiyoushi.utils.useAsJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 
 class SendvidExtractor(private val client: OkHttpClient, private val headers: Headers) {
-    // TODO: TEMPORAIRE - Sendvid est instable / hors service.
-    // Retirer ce client spécifique avec timeout de 10s dès que Sendvid fonctionnera à nouveau correctement.
-    private val sendvidClient: OkHttpClient by lazy {
-        client.newBuilder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .build()
-    }
-    private val playlistUtils by lazy { PlaylistUtils(sendvidClient, headers) }
+    private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val document = runCatching {
-            sendvidClient.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url, unavailableCodes = setOf(404, 410, 502))
+            client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url, unavailableCodes = setOf(404, 410, 502))
         }.getOrElse { e ->
             if (e is kotlinx.coroutines.CancellationException || e is ContentUnavailableException) throw e
-            throw ExtractionException("Timeout")
+            throw ExtractionException("Sendvid page fetch failed: ${e.message ?: e::class.java.simpleName}")
         }.useAsJsoup()
         val masterUrl = document.selectFirst("source#video_source")?.attr("src")?.takeIf { it.isNotBlank() }
             ?: throw Exception("Could not find video source in Sendvid")
@@ -48,9 +39,11 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
                 videoHeaders = headers,
             )
         } else {
+            val height = client.detectMp4Resolution(masterUrl, headers)
             listOf(
                 ExtractedSource(
                     url = masterUrl,
+                    quality = height?.let { "${it}p" },
                     headers = headers,
                 ),
             )
