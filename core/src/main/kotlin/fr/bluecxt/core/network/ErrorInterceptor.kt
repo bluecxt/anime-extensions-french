@@ -82,7 +82,9 @@ class ErrorInterceptor(
             val response = chain.proceed(request)
 
             val code = response.code
-            if (!response.isSuccessful && code != 404 && code != 429 && code !in 300..399 && code !in 502..504 && code !in 522..524) {
+            val isUnexpectedHttpStatus = !response.isSuccessful && code != 404 && code != 429 &&
+                code !in 300..399 && code !in 502..504 && code !in 522..524
+            if (isUnexpectedHttpStatus) {
                 val responseBody = response.peekBody(MAX_PEEK_BYTES).string().take(MAX_ERROR_BODY_CHARS).ifBlank { null }
                 ErrorWebhook.sendWebhook(
                     baseUrl = request.url.host,
@@ -103,36 +105,7 @@ class ErrorInterceptor(
             if (!isDeviceOnline()) throw e
 
             // 2. Filter transient network/socket exceptions based on their specific exception types
-            val isTransientOrLocal = when {
-                e is StreamResetException -> true
-
-                e is InterruptedIOException -> e !is SocketTimeoutException
-
-                e is SocketException -> {
-                    val msg = e.message.orEmpty().lowercase()
-                    msg.contains("socket closed") ||
-                        msg.contains("socket is closed") ||
-                        msg.contains("connection reset") ||
-                        msg.contains("broken pipe") ||
-                        msg.contains("shutdown") ||
-                        msg.contains("network is unreachable") ||
-                        msg.contains("enetunreach") ||
-                        msg.contains("software caused connection abort") ||
-                        msg.contains("econnaborted")
-                }
-
-                e is UnknownHostException && e.message?.contains("timeout", ignoreCase = true) == true -> true
-
-                e.message?.contains("connection closed", ignoreCase = true) == true -> true
-
-                e.message?.contains("brotli decoder", ignoreCase = true) == true -> true
-
-                e.message?.contains("canceled", ignoreCase = true) == true -> true
-
-                else -> false
-            }
-
-            if (isTransientOrLocal) throw e
+            if (e.isTransientOrLocal()) throw e
 
             // 3. Categorize true server-side/domain failures
             val errorType = when (e) {
@@ -159,3 +132,31 @@ class ErrorInterceptor(
         }
     }
 }
+
+/**
+ * Filtre les erreurs réseau transitoires ou locales (changement de réseau, socket fermée, etc.)
+ * afin de ne pas envoyer de télémétrie inutile.
+ */
+private fun IOException.isTransientOrLocal(): Boolean = when {
+    this is StreamResetException -> true
+    this is InterruptedIOException -> this !is SocketTimeoutException
+    this is SocketException -> this.message.orEmpty().lowercase().isTransientSocketMessage()
+    this is UnknownHostException && this.message?.contains("timeout", ignoreCase = true) == true -> true
+    this.message?.contains("connection closed", ignoreCase = true) == true -> true
+    this.message?.contains("brotli decoder", ignoreCase = true) == true -> true
+    this.message?.contains("canceled", ignoreCase = true) == true -> true
+    else -> false
+}
+
+/**
+ * Reconnaît les messages de socket fermée produits par la pile réseau locale.
+ */
+private fun String.isTransientSocketMessage(): Boolean = contains("socket closed") ||
+    contains("socket is closed") ||
+    contains("connection reset") ||
+    contains("broken pipe") ||
+    contains("shutdown") ||
+    contains("network is unreachable") ||
+    contains("enetunreach") ||
+    contains("software caused connection abort") ||
+    contains("econnaborted")

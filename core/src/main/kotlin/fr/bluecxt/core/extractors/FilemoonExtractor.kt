@@ -33,6 +33,16 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
+/**
+ * Variante conservant la cause d'origine de l'échec.
+ */
+private fun extractionFailure(message: String, cause: Throwable): Nothing = throw ExtractionException(message, cause)
+
 // based on https://github.com/skoruppa/docchi-players/blob/main/filemoon.py
 
 /** Taille du tag d'authentification GCM, en bits. */
@@ -92,7 +102,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         }
 
         val mediaId = Regex("/(?:e|eyi|d|download|j\\d+)/([0-9a-zA-Z]+)").find(resolvedUrl.toString())?.groupValues?.get(1)
-            ?: throw ExtractionException("Filemoon: Could not extract media ID from $resolvedUrl")
+            ?: extractionFailure("Filemoon: Could not extract media ID from $resolvedUrl")
 
         val apiHeaders = initialHeaders.newBuilder()
             .set("Referer", url)
@@ -113,7 +123,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             try {
                 playbackData = doChallengeFlow(host, mediaId, apiHeaders, resolvedUrl.toString())
             } catch (e: Exception) {
-                throw ExtractionException("Filemoon: All extraction flows failed: ${e.message}", e)
+                extractionFailure("Filemoon: All extraction flows failed: ${e.message}", e)
             }
         }
 
@@ -132,7 +142,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             }
         }
 
-        if (sources.isEmpty()) throw ExtractionException("Filemoon: No sources found in playback data")
+        if (sources.isEmpty()) extractionFailure("Filemoon: No sources found in playback data")
 
         val streamUrl = sources.first().url.let {
             if (it.startsWith("/")) "https://$host$it" else it
@@ -251,7 +261,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         ).awaitSuccessOrUnavailable(verifyUrl).parseAs<VerifyResponse>()
 
         if (verifyResponse.status != "ok" || verifyResponse.token == null) {
-            throw ExtractionException("PoW verification failed: ${verifyResponse.status}")
+            extractionFailure("PoW verification failed: ${verifyResponse.status}")
         }
 
         val playbackUrl = "$base/api/videos/$mediaId/embed/playback"
@@ -420,7 +430,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                 return counter.toString()
             }
         }
-        throw ExtractionException("PoW solver: no solution found in $maxIterations iterations")
+        extractionFailure("PoW solver: no solution found in $maxIterations iterations")
     }
 
     private fun generateClientFingerprint(userAgent: String): ClientFingerprint {
@@ -501,7 +511,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
     private inline fun <reified T> Response.parseAs(): T {
         val bodyStr = body.string()
         if (!isSuccessful) {
-            throw ExtractionException("HTTP $code: $bodyStr")
+            extractionFailure("HTTP $code: $bodyStr")
         }
         return json.decodeFromString(bodyStr)
     }

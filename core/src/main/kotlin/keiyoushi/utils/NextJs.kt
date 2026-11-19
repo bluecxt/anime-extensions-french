@@ -80,7 +80,8 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
 
         // Validate everything before colon is hex digits
         val id = body.substring(pos, colonIdx)
-        if (id.isEmpty() || !id.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }) {
+        val isInvalidChunkId = id.isEmpty() || !id.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+        if (isInvalidChunkId) {
             pos++
             continue
         }

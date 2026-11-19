@@ -18,6 +18,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
 class SibnetExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
@@ -42,7 +47,7 @@ class SibnetExtractor(private val client: OkHttpClient) {
                 if (retryHtml.contains("Видео недоступно") || retryHtml.contains("Video not available")) {
                     throw ContentUnavailableException("Sibnet: Video explicitly marked as unavailable")
                 }
-                throw ExtractionException("Could not find player script in Sibnet (Title: ${document.title()})")
+                extractionFailure("Could not find player script in Sibnet (Title: ${document.title()})")
             }
         }
 

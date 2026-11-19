@@ -16,6 +16,11 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
 /** Masque d'octet et constantes du hachage d'URL FSVid. */
 private const val BYTE_MASK = 255
 private const val URL_HASH_BASE = 0x3D
@@ -43,17 +48,17 @@ class FSVidExtractor(private val client: OkHttpClient) {
         val html = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url).bodyString()
 
         val unpacked = if (html.contains("eval(function(p,a,c,k,e")) {
-            autoUnpacker(html) ?: throw ExtractionException("Could not unpack script")
+            autoUnpacker(html) ?: extractionFailure("Could not unpack script")
         } else {
             html
         }
 
         val m3u8Url = decryptM3u8Url(unpacked, url)
-            ?: throw ExtractionException("Could not decrypt m3u8 URL")
+            ?: extractionFailure("Could not decrypt m3u8 URL")
 
         if (m3u8Url.contains(trollPhrase)) {
             ErrorWebhook.sendWebhook(url, m3u8Url, listOf(headers.toString()), "FSVidExtractor", VERSION.toString())
-            throw ExtractionException("detected as scrapper")
+            extractionFailure("detected as scrapper")
         }
 
         val sources = playlistUtils.extractFromHls(
@@ -76,7 +81,7 @@ class FSVidExtractor(private val client: OkHttpClient) {
             isTroll
         }
         if (validSources.isEmpty() && sources.isNotEmpty()) {
-            throw ExtractionException("detected as scrapper (hls troll)")
+            extractionFailure("detected as scrapper (hls troll)")
         }
 
         return validSources

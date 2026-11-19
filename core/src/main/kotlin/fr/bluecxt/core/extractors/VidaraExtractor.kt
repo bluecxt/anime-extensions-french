@@ -11,6 +11,7 @@ import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.utils.awaitSuccessOrUnavailable
 import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -18,6 +19,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
 // writed using https://github.com/skoruppa/docchi-players/blob/main/vidara.py
+
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
 
 open class VidaraExtractor(private val client: OkHttpClient) {
 
@@ -27,10 +33,10 @@ open class VidaraExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
         val regex = Regex("""/(?:e|v)/([0-9a-zA-Z]+)""")
-        val mediaId = regex.find(url)?.groupValues?.get(1) ?: throw ExtractionException("Could not extract mediaId for Vidara/Streamix")
+        val mediaId = regex.find(url)?.groupValues?.get(1) ?: extractionFailure("Could not extract mediaId for Vidara/Streamix")
         Log.d(VIDARA_LOG, "Extracted mediaId: $mediaId")
 
-        val httpUrl = url.toHttpUrlOrNull() ?: throw ExtractionException("Invalid URL for Vidara/Streamix")
+        val httpUrl = url.toHttpUrlOrNull() ?: extractionFailure("Invalid URL for Vidara/Streamix")
         val host = httpUrl.host
 
         val apiUrl = "https://$host$apiPath"
@@ -55,7 +61,7 @@ open class VidaraExtractor(private val client: OkHttpClient) {
 
         val data = runCatching { json.decodeFromString<VidaraResponse>(responseBody) }.getOrNull()
 
-        val streamingUrl = data?.streaming_url
+        val streamingUrl = data?.streamingUrl
             ?: throw ContentUnavailableException("Vidara: streaming_url not found in response: $responseBody")
 
         val videoHeaders = headers.newBuilder()
@@ -82,6 +88,6 @@ open class VidaraExtractor(private val client: OkHttpClient) {
 
     @Serializable
     data class VidaraResponse(
-        val streaming_url: String? = null,
+        @SerialName("streaming_url") val streamingUrl: String? = null,
     )
 }

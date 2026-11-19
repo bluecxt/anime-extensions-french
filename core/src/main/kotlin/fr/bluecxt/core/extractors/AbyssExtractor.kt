@@ -180,7 +180,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
     }
 
     private fun decryptMedia(encryptedText: String, userId: String, slug: String, md5Id: String): JSONObject? {
-        if (encryptedText.isEmpty() || userId.isEmpty() || slug.isEmpty() || md5Id.isEmpty()) return null
+        val isMissingParameter = encryptedText.isEmpty() || userId.isEmpty() || slug.isEmpty() || md5Id.isEmpty()
+        if (isMissingParameter) return null
         val keySeed = "$userId:$slug:$md5Id"
 
         val rawBytes = ByteArray(encryptedText.length) { i ->
@@ -292,7 +293,8 @@ class AbyssExtractor(private val client: OkHttpClient) {
                     }
 
                     // Sora token URL
-                    if (size.isNotEmpty() && resId.isNotEmpty() && sub.isNotEmpty() && domains != null) {
+                    val hasSoraFields = size.isNotEmpty() && resId.isNotEmpty() && sub.isNotEmpty()
+                    if (hasSoraFields && domains != null) {
                         val domain = (0 until domains.length())
                             .map { domains.optString(it, "") }
                             .firstOrNull { it.isNotEmpty() && it.contains(sub) }

@@ -18,6 +18,11 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
 class MinochinosExtractor(private val client: OkHttpClient) {
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
@@ -32,20 +37,20 @@ class MinochinosExtractor(private val client: OkHttpClient) {
 
         val script = document.select("script").find {
             it.html().contains("eval(function(p,a,c,k,e,d)")
-        }?.html() ?: throw ExtractionException("MinoChinos: Could not find packed script")
+        }?.html() ?: extractionFailure("MinoChinos: Could not find packed script")
 
-        val unpacked = autoUnpacker(script) ?: throw ExtractionException("MinoChinos: Could not unpack script")
+        val unpacked = autoUnpacker(script) ?: extractionFailure("MinoChinos: Could not unpack script")
 
         // Extract links from the unpacked script
         // var links={"hls3":"...","hls4":"...","hls2":"..."};
         val linksJson = unpacked.substringAfter("var links=", "").substringBefore(";", "")
-        if (linksJson.isEmpty()) throw ExtractionException("MinoChinos: Could not find links in unpacked script")
+        if (linksJson.isEmpty()) extractionFailure("MinoChinos: Could not find links in unpacked script")
 
         val videoEntries = linkRegex.findAll(linksJson).map {
             it.groupValues[1] to it.groupValues[2]
         }.filter { (key, _) -> key == "hls3" }.toList()
 
-        if (videoEntries.isEmpty()) throw ExtractionException("MinoChinos: No hls3 links found in script")
+        if (videoEntries.isEmpty()) extractionFailure("MinoChinos: No hls3 links found in script")
 
         val subtitleList = extractSubtitles(unpacked, url)
 
@@ -64,7 +69,7 @@ class MinochinosExtractor(private val client: OkHttpClient) {
             )
         }
 
-        if (result.isEmpty()) throw ExtractionException("MinoChinos: Failed to extract any videos from links")
+        if (result.isEmpty()) extractionFailure("MinoChinos: Failed to extract any videos from links")
 
         return result
     }

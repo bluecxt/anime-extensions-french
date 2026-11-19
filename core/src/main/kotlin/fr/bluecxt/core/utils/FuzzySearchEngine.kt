@@ -428,7 +428,8 @@ class FuzzySearchEngine<T>(
                     min(cur[j - 1] + 1, prev[j] + 1),
                     prev[j - 1] + cost,
                 )
-                if (i > 1 && j > 1 && ca == b[bStart + j - 2] && a[i - 2] == cb) {
+                val isTransposition = i > 1 && j > 1 && ca == b[bStart + j - 2] && a[i - 2] == cb
+                if (isTransposition) {
                     v = min(v, prev2[j - 2] + 1)
                 }
                 cur[j] = v

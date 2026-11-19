@@ -16,6 +16,11 @@ import keiyoushi.utils.parallelCatchingFlatMap
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
 class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Headers.EMPTY) {
 
     companion object {
@@ -57,10 +62,10 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
             throw ContentUnavailableException("Video non available (detected in DOM) $url")
         }
         val script = document.selectFirst("script:containsData(sources)")?.data()
-            ?: throw ExtractionException("Could not find player script for $url")
+            ?: extractionFailure("Could not find player script for $url")
 
         val sources = sourcesRegex.find(script)?.groupValues[1]
-            ?: throw ExtractionException("Could not find sources in script for $url")
+            ?: extractionFailure("Could not find sources in script for $url")
 
         val urls = urlsRegex.findAll(sources)
             .mapNotNull { match -> match.groupValues[1].takeIf { it.isNotBlank() } }
@@ -73,7 +78,7 @@ class VidmolyExtractor(private val client: OkHttpClient, headers: Headers = Head
             }
             .toList()
 
-        if (urls.isEmpty()) throw ExtractionException("No video URLs found in sources for $url")
+        if (urls.isEmpty()) extractionFailure("No video URLs found in sources for $url")
 
         Log.d(VIDMOLY_LOG, "Script found (${urls.size} video URLs), extracting HLS playlists...")
 

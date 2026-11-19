@@ -16,6 +16,11 @@ import keiyoushi.utils.useAsJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
 // writed using https://github.com/skoruppa/docchi-players/blob/main/uqload.py
 
 class UqloadExtractor(private val client: OkHttpClient) {
@@ -39,9 +44,9 @@ class UqloadExtractor(private val client: OkHttpClient) {
         }
         val soup = response.useAsJsoup()
 
-        val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: throw ExtractionException("Could not find script with video data in Uqload")
+        val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: extractionFailure("Could not find script with video data in Uqload")
 
-        val unpackedJs = autoUnpacker(script) ?: throw ExtractionException("Could not unpack script in Uqload")
+        val unpackedJs = autoUnpacker(script) ?: extractionFailure("Could not unpack script in Uqload")
 
         val m3u8Master = Regex("""sources:\s*\[\{\s*file:\s*"([^"]+)"""").find(unpackedJs)?.groupValues?.get(1)
 
@@ -81,6 +86,6 @@ class UqloadExtractor(private val client: OkHttpClient) {
             }
         }
 
-        throw ExtractionException("Uqload: No video sources found (HLS or MP4)")
+        extractionFailure("Uqload: No video sources found (HLS or MP4)")
     }
 }

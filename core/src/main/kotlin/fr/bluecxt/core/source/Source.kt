@@ -238,19 +238,19 @@ abstract class Source :
                 }
             }
         } catch (e: Exception) {
-            if (e is CancellationException) {
+            if (e.isCancellation()) {
                 Log.d(SERVER_LOG, "Job was cancelled by the app for ${server.name}")
                 throw e
             }
 
             val httpCode = e.safeHttpCode
-            val isUnavailable = e is ContentUnavailableException ||
+            val isUnavailable = e.isUnavailable() ||
                 httpCode == 404 || httpCode == 410
 
             if (isUnavailable) {
                 Log.w(SERVER_LOG, "Content unavailable on ${server.name}: ${e.message}")
                 emptyList()
-            } else if (e is RateLimitException) {
+            } else if (e.isRateLimited()) {
                 Log.w(SERVER_LOG, "Rate limited on ${server.name}: ${e.message}")
                 if (BuildConfig.DEBUG) {
                     listOf(
@@ -668,3 +668,18 @@ abstract class Source :
         const val PREF_PLAYER_DEFAULT = "sibnet"
     }
 }
+
+/**
+ * Indique si l'exception correspond à une annulation de coroutine.
+ */
+private fun Throwable.isCancellation(): Boolean = this is CancellationException
+
+/**
+ * Indique si l'exception signale un contenu indisponible (supprimé, dépublié ou géobloqué).
+ */
+private fun Throwable.isUnavailable(): Boolean = this is ContentUnavailableException
+
+/**
+ * Indique si l'exception signale un dépassement de quota côté serveur.
+ */
+private fun Throwable.isRateLimited(): Boolean = this is RateLimitException

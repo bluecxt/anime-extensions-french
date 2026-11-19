@@ -16,6 +16,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
 class SendvidExtractor(private val client: OkHttpClient, private val headers: Headers) {
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
@@ -24,10 +29,10 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
             client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url, unavailableCodes = setOf(404, 410, 502))
         }.getOrElse { e ->
             if (e is kotlinx.coroutines.CancellationException || e is ContentUnavailableException) throw e
-            throw ExtractionException("Sendvid page fetch failed: ${e.message ?: e::class.java.simpleName}")
+            extractionFailure("Sendvid page fetch failed: ${e.message ?: e::class.java.simpleName}")
         }.useAsJsoup()
         val masterUrl = document.selectFirst("source#video_source")?.attr("src")?.takeIf { it.isNotBlank() }
-            ?: throw ExtractionException("Could not find video source in Sendvid")
+            ?: extractionFailure("Could not find video source in Sendvid")
         val httpUrl = "https://${url.toHttpUrl().host}".toHttpUrlOrNull()
 
         val headers = defaultHeaders(httpUrl.toString())

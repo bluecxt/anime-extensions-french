@@ -12,6 +12,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.text.RegexOption
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
 /** Taille de la table de hachage Doodstream. */
 private const val HASH_TABLE_SIZE = 10
 
@@ -61,7 +66,7 @@ class DoodExtractor(private val client: OkHttpClient) {
             if (src == "/e/" || src == "/e") {
                 throw ContentUnavailableException("Doodstream: Video not found")
             }
-            val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: throw ExtractionException("Doodstream: Could not resolve iframe URL")
+            val iframeUrl = webUrl.toHttpUrl().resolve(src)?.toString() ?: extractionFailure("Doodstream: Could not resolve iframe URL")
             response = client.newCall(GET(iframeUrl, currentHeaders)).awaitSuccessOrUnavailable(iframeUrl)
             html = response.body.string()
         } else {
@@ -81,12 +86,12 @@ class DoodExtractor(private val client: OkHttpClient) {
         )
         val match = mainRegex.find(html)
         if (match == null) {
-            throw ExtractionException("Doodstream: Could find token in script")
+            extractionFailure("Doodstream: Could find token in script")
         }
 
         val passPath = match.groupValues[1]
         val token = match.groupValues[2]
-        val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: throw ExtractionException("Doodstream: Could not resolve pass URL")
+        val passUrl = webUrl.toHttpUrl().resolve(passPath)?.toString() ?: extractionFailure("Doodstream: Could not resolve pass URL")
 
         val baseResponse = client.newCall(GET(passUrl, currentHeaders)).awaitSuccessOrUnavailable(passUrl)
         val baseUrl = baseResponse.body.string().trim()

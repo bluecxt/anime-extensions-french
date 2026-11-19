@@ -138,8 +138,10 @@ object JsUnpacker {
             val count = result.groups[GROUP_COUNT]?.value?.toIntOrNull()
             val unbaser = Unbaser(radix)
 
-            if (payload == null || symtab == null || count == null || symtab.size != count) {
+            if (payload == null || symtab == null) {
                 // Ignore this occurrence as it cannot be unpacked correctly
+                null
+            } else if (count == null || symtab.size != count) {
                 null
             } else {
                 payload.replace(unpackReplaceRegex) { match ->

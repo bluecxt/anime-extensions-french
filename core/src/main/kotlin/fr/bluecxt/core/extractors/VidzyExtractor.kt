@@ -19,6 +19,16 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
+/**
+ * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
+ */
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
+/**
+ * Fabrique centralisée des échecs de sélection DOM, pour limiter le nombre de `throw` par fonction.
+ */
+private fun selectorFailure(message: String): Nothing = throw SelectorException(message)
+
 class VidzyExtractor(private val client: OkHttpClient) {
 
     private val resolutionRegex = """(?<=^|[^a-zA-Z0-9])\d{3,4}p(?=$|[^a-zA-Z0-9])""".toRegex(RegexOption.IGNORE_CASE)
@@ -58,14 +68,14 @@ class VidzyExtractor(private val client: OkHttpClient) {
     }
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val downloadUrl = getDownloadUrl(url) ?: throw ExtractionException("could not parse the url")
+        val downloadUrl = getDownloadUrl(url) ?: extractionFailure("could not parse the url")
         val headers = getHeaders(url)
         val document = client.newCall(GET(downloadUrl, headers)).awaitSuccessOrUnavailable(downloadUrl).useAsJsoup()
 
-        val op = document.selectFirst("input[name=op]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find op")
-        val id = document.selectFirst("input[name=id]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find id")
-        val mode = document.selectFirst("input[name=mode]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find mode")
-        val hash = document.selectFirst("input[name=hash]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: throw SelectorException("could not find hash")
+        val op = document.selectFirst("input[name=op]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: selectorFailure("could not find op")
+        val id = document.selectFirst("input[name=id]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: selectorFailure("could not find id")
+        val mode = document.selectFirst("input[name=mode]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: selectorFailure("could not find mode")
+        val hash = document.selectFirst("input[name=hash]")?.attr("value")?.takeIf { it.isNotEmpty() } ?: selectorFailure("could not find hash")
 
         val formBody = FormBody.Builder()
             .add("op", op)
@@ -81,7 +91,7 @@ class VidzyExtractor(private val client: OkHttpClient) {
 
         val downloadLink = downloadDocument.selectFirst("a.main-button")?.attr("abs:href")
 
-        if (downloadLink.isNullOrBlank()) throw SelectorException("could not find the download button")
+        if (downloadLink.isNullOrBlank()) selectorFailure("could not find the download button")
 
         val title = downloadDocument.selectFirst("h3")?.text() ?: ""
 

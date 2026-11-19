@@ -122,6 +122,15 @@ fun String.normalize(): String = buildString(length) {
 }
 
 /**
+ * Fabriques dédiées aux échecs de [Call.awaitSuccessOrUnavailable], une par type d'exception.
+ */
+private fun unavailableFailure(message: String): Nothing = throw ContentUnavailableException(message)
+
+private fun rateLimitFailure(message: String): Nothing = throw RateLimitException(message)
+
+private fun extractionFailure(message: String): Nothing = throw ExtractionException(message)
+
+/**
  * Awaits response and verifies status:
  * - Throws ContentUnavailableException on 404 or 410 (dead/unavailable content)
  * - Throws ExtractionException on non-2xx status codes
@@ -136,17 +145,17 @@ suspend fun Call.awaitSuccessOrUnavailable(
     val response = this.await()
     if (response.code in unavailableCodes) {
         response.close()
-        throw ContentUnavailableException("Video unavailable (${response.code}) $url")
+        unavailableFailure("Video unavailable (${response.code}) $url")
     }
     if (response.code in rateLimitCodes) {
         response.close()
-        throw RateLimitException("Rate limited (${response.code}) for $url")
+        rateLimitFailure("Rate limited (${response.code}) for $url")
     }
     if (throwNonSuccessful && !response.isSuccessful) {
         val errCode = response.code
         val errMsg = response.message
         response.close()
-        throw ExtractionException("HTTP $errCode ($errMsg) for $url")
+        extractionFailure("HTTP $errCode ($errMsg) for $url")
     }
     return response
 }
