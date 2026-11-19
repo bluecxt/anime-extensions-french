@@ -34,6 +34,54 @@ fun interface SearchableAdapter<T> {
     fun extract(item: T): SearchMetadata
 }
 
+/** Longueur de token sous laquelle aucune faute de frappe n'est tolérée. */
+private const val TOKEN_TOLERANCE_NONE_MAX_LENGTH = 3
+
+/** Longueur de token sous laquelle une seule faute est tolérée. */
+private const val TOKEN_TOLERANCE_ONE_MAX_LENGTH = 6
+
+/** Tolérance par défaut pour un token long. */
+private const val TOKEN_TOLERANCE_DEFAULT = 2
+
+/** Longueur de requête sous laquelle la tolérance globale est nulle. */
+private const val QUERY_TOLERANCE_NONE_MAX_LENGTH = 4
+
+/** Longueur de requête sous laquelle la tolérance globale vaut 1. */
+private const val QUERY_TOLERANCE_ONE_MAX_LENGTH = 8
+
+/** Longueur de requête sous laquelle la tolérance globale vaut 2. */
+private const val QUERY_TOLERANCE_TWO_MAX_LENGTH = 14
+
+/** Tolérance globale par défaut. */
+private const val QUERY_TOLERANCE_DEFAULT = 3
+
+/** Longueur minimale de requête pour lancer la passe fuzzy. */
+private const val MIN_LENGTH_FOR_FUZZY = 3
+
+/** Capacité initiale des collections de travail. */
+private const val EXACT_MATCH_CAPACITY = 32
+private const val FUZZY_CANDIDATE_CAPACITY = 128
+private const val FUZZY_MATCH_CAPACITY = 16
+
+/** Scores de pertinence de la passe 1. */
+private const val SCORE_EXACT_TITLE = 120
+private const val SCORE_TITLE_PREFIX = 105
+private const val SCORE_TITLE_MATCH = 95
+private const val SCORE_SIMILAR_TITLE = 80
+private const val SCORE_TAG_MATCH = 60
+
+/** Similarité minimale pour retenir un candidat de la passe 2. */
+private const val MIN_FUZZY_SIMILARITY = 0.6
+
+/** Poids de la distance d'édition dans le score fuzzy. */
+private const val FUZZY_DISTANCE_PENALTY = 0.6
+
+/** Dernier code ASCII : au-delà, le caractère est non-ASCII. */
+private const val ASCII_LIMIT = 127
+
+/** Écart entre un caractère ASCII majuscule et son équivalent minuscule. */
+private const val ASCII_LOWERCASE_OFFSET = 32
+
 /**
  * High-performance polymorphic search engine implementing a two-pass weighted substring
  * and bounded Damerau-Levenshtein fuzzy matching algorithm.
@@ -93,17 +141,17 @@ class FuzzySearchEngine<T>(
         val tokenTolerances: IntArray = IntArray(tokens.size) { i ->
             val len = tokens[i].length
             when {
-                len <= 3 -> 0
-                len <= 6 -> 1
-                else -> 2
+                len <= TOKEN_TOLERANCE_NONE_MAX_LENGTH -> 0
+                len <= TOKEN_TOLERANCE_ONE_MAX_LENGTH -> 1
+                else -> TOKEN_TOLERANCE_DEFAULT
             }
         }
         val flat: String = nq.replace(" ", "")
         val globalTolerance: Int = when {
-            nq.length <= 4 -> 0
-            nq.length <= 8 -> 1
-            nq.length <= 14 -> 2
-            else -> 3
+            nq.length <= QUERY_TOLERANCE_NONE_MAX_LENGTH -> 0
+            nq.length <= QUERY_TOLERANCE_ONE_MAX_LENGTH -> 1
+            nq.length <= QUERY_TOLERANCE_TWO_MAX_LENGTH -> 2
+            else -> QUERY_TOLERANCE_DEFAULT
         }
         val workspace = LevenshteinWorkspace()
     }
@@ -134,9 +182,9 @@ class FuzzySearchEngine<T>(
         val nq = fastNormalize(query)
         if (nq.isEmpty()) return emptyList()
 
-        val exactMatches = ArrayList<ScoredEntry<T>>(32)
-        val canRunFuzzy = nq.length >= 3
-        val candidatesForFuzzy = if (canRunFuzzy) ArrayList<Pair<T, SearchMetadata>>(128) else null
+        val exactMatches = ArrayList<ScoredEntry<T>>(EXACT_MATCH_CAPACITY)
+        val canRunFuzzy = nq.length >= MIN_LENGTH_FOR_FUZZY
+        val candidatesForFuzzy = if (canRunFuzzy) ArrayList<Pair<T, SearchMetadata>>(FUZZY_CANDIDATE_CAPACITY) else null
 
         // --- PASS 1: Exact and substring matching ---
         for (item in items) {
@@ -168,11 +216,11 @@ class FuzzySearchEngine<T>(
 
             if (titleMatch || simMatch || tagMatch) {
                 val score = when {
-                    titleN == nq -> 120
-                    titleN.startsWith(nq) -> 105
-                    titleMatch -> 95
-                    simMatch -> 80
-                    else -> 60
+                    titleN == nq -> SCORE_EXACT_TITLE
+                    titleN.startsWith(nq) -> SCORE_TITLE_PREFIX
+                    titleMatch -> SCORE_TITLE_MATCH
+                    simMatch -> SCORE_SIMILAR_TITLE
+                    else -> SCORE_TAG_MATCH
                 }
                 exactMatches.add(ScoredEntry(item, meta.primaryTitle, meta.distinctId, score))
             } else if (exactMatches.isEmpty() && candidatesForFuzzy != null) {
@@ -185,12 +233,12 @@ class FuzzySearchEngine<T>(
         } else if (!candidatesForFuzzy.isNullOrEmpty()) {
             // --- PASS 2: Fuzzy fallback (executed only when Pass 1 returns 0 matches) ---
             val qCtx = QueryContext(nq)
-            val fuzzyMatches = ArrayList<ScoredEntry<T>>(16)
+            val fuzzyMatches = ArrayList<ScoredEntry<T>>(FUZZY_MATCH_CAPACITY)
 
             for (i in candidatesForFuzzy.indices) {
                 val (item, meta) = candidatesForFuzzy[i]
                 val fs = computeBestFuzzy(qCtx, meta.primaryTitle, meta.alternativeTitles)
-                if (fs >= 0.6) {
+                if (fs >= MIN_FUZZY_SIMILARITY) {
                     fuzzyMatches.add(
                         ScoredEntry(
                             item = item,
@@ -289,7 +337,7 @@ class FuzzySearchEngine<T>(
                 }
                 val d = min(d1, d2)
                 if (d <= tol) {
-                    val score = 1.0 - (d.toDouble() / max(q.length, 1)) * 0.6
+                    val score = 1.0 - (d.toDouble() / max(q.length, 1)) * FUZZY_DISTANCE_PENALTY
                     if (score > bestSub) bestSub = score
                 }
             }
@@ -325,7 +373,7 @@ class FuzzySearchEngine<T>(
     ): Double {
         val d = damerauLevenshteinBounded(q, target, 0, targetEnd, tol, ws)
         if (d <= tol) {
-            val score = 1.0 - (d.toDouble() / max(q.length, 1)) * 0.6
+            val score = 1.0 - (d.toDouble() / max(q.length, 1)) * FUZZY_DISTANCE_PENALTY
             if (score > currentBest) return score
         }
         return currentBest
@@ -415,7 +463,7 @@ class FuzzySearchEngine<T>(
 
             var hasNonAscii = false
             for (i in input.indices) {
-                if (input[i].code > 127) {
+                if (input[i].code > ASCII_LIMIT) {
                     hasNonAscii = true
                     break
                 }
@@ -435,13 +483,13 @@ class FuzzySearchEngine<T>(
                 val c = src[i]
                 val code = c.code
 
-                if (code > 127 && Character.getType(c).toByte() == Character.NON_SPACING_MARK) {
+                if (code > ASCII_LIMIT && Character.getType(c).toByte() == Character.NON_SPACING_MARK) {
                     continue
                 }
 
                 val normChar = when (c) {
                     in 'a'..'z', in '0'..'9' -> c
-                    in 'A'..'Z' -> (code + 32).toChar()
+                    in 'A'..'Z' -> (code + ASCII_LOWERCASE_OFFSET).toChar()
                     else -> ' '
                 }
 

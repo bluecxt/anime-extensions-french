@@ -20,9 +20,9 @@ internal object AnilistCache {
 
     private data class CacheEntry<T>(val value: T?, val timestamp: Long)
 
-    private val byAnilistId = Collections.synchronizedMap(LinkedHashMap<Int, CacheEntry<AnilistMetadata>>(300, 0.75f, true))
-    private val byMalId = Collections.synchronizedMap(LinkedHashMap<Int, CacheEntry<AnilistMetadata>>(300, 0.75f, true))
-    private val bySearchKey = Collections.synchronizedMap(LinkedHashMap<String, CacheEntry<AnilistMetadata>>(400, 0.75f, true))
+    private val byAnilistId = Collections.synchronizedMap(LinkedHashMap<Int, CacheEntry<AnilistMetadata>>(CACHE_MAX_BY_ANILIST_ID, CACHE_LOAD_FACTOR, true))
+    private val byMalId = Collections.synchronizedMap(LinkedHashMap<Int, CacheEntry<AnilistMetadata>>(CACHE_MAX_BY_ANILIST_ID, CACHE_LOAD_FACTOR, true))
+    private val bySearchKey = Collections.synchronizedMap(LinkedHashMap<String, CacheEntry<AnilistMetadata>>(CACHE_MAX_BY_SEARCH_KEY, CACHE_LOAD_FACTOR, true))
 
     fun getByAnilistId(id: Int): Pair<Boolean, AnilistMetadata?> = checkEntry(byAnilistId[id])
     fun getByMalId(idMal: Int): Pair<Boolean, AnilistMetadata?> = checkEntry(byMalId[idMal])
@@ -58,6 +58,34 @@ internal object AnilistCache {
         bySearchKey.clear()
     }
 }
+
+/** Facteur de charge des caches LRU. */
+private const val CACHE_LOAD_FACTOR = 0.75f
+
+/** Capacités des caches d'AniListSearch. */
+private const val CACHE_MAX_BY_ANILIST_ID = 300
+private const val CACHE_MAX_BY_SEARCH_KEY = 400
+
+/** Similarité minimale pour accepter un résultat de recherche. */
+private const val MIN_SEARCH_SIMILARITY = 0.25
+
+/** Ajustements de score appliqués par le classement heuristique. */
+private const val SCORE_SEASON_MATCH_BONUS = 0.18
+private const val SCORE_SEASON_MISMATCH_PENALTY = 0.25
+private const val SCORE_SEASON_ABSENT_PENALTY = 0.15
+private const val SCORE_YEAR_EXACT_BONUS = 0.15
+private const val SCORE_YEAR_ADJACENT_BONUS = 0.05
+private const val SCORE_YEAR_MISMATCH_PENALTY = 0.15
+private const val SCORE_FORMAT_MATCH_BONUS = 0.10
+private const val SCORE_FORMAT_PREFERRED_BONUS = 0.04
+private const val SCORE_FORMAT_MUSIC_PENALTY = 0.20
+
+/** Poids du logarithme de popularité dans le score. */
+private const val SCORE_POPULARITY_LOG_WEIGHT = 0.004
+
+/** Pondération des deux mesures de similarité de titre. */
+private const val SIMILARITY_DICE_WEIGHT = 0.65
+private const val SIMILARITY_TOKEN_WEIGHT = 0.35
 
 /**
  * Nettoyage des suffixes FR et scoring de pertinence appuyé sur `String.normalize()`.
@@ -120,7 +148,7 @@ internal object AnilistTitleMatcher {
         return candidates
             .map { media -> media to scoreCandidate(media, cleanedQuery, targetYear, targetFormat) }
             .maxByOrNull { it.second }
-            ?.takeIf { it.second >= 0.25 }
+            ?.takeIf { it.second >= MIN_SEARCH_SIMILARITY }
             ?.first
     }
 
@@ -154,35 +182,35 @@ internal object AnilistTitleMatcher {
             if (candidateSeason == query.extractedSeason ||
                 candidateCombinedTitles.contains(query.extractedSeason.toString())
             ) {
-                score += 0.18
+                score += SCORE_SEASON_MATCH_BONUS
             } else {
-                score -= 0.25
+                score -= SCORE_SEASON_MISMATCH_PENALTY
             }
         } else if (query.extractedSeason == null || query.extractedSeason == 1) {
             if (candidateSeason != null && candidateSeason > 1) {
-                score -= 0.15
+                score -= SCORE_SEASON_ABSENT_PENALTY
             }
         }
 
         val mediaYear = media.seasonYear ?: media.startDate?.year
         if (targetYear != null && mediaYear != null) {
             when {
-                mediaYear == targetYear -> score += 0.15
-                abs(mediaYear - targetYear) == 1 -> score += 0.05
-                else -> score -= 0.15
+                mediaYear == targetYear -> score += SCORE_YEAR_EXACT_BONUS
+                abs(mediaYear - targetYear) == 1 -> score += SCORE_YEAR_ADJACENT_BONUS
+                else -> score -= SCORE_YEAR_MISMATCH_PENALTY
             }
         }
 
         if (targetFormat != null && media.format == targetFormat.name) {
-            score += 0.10
+            score += SCORE_FORMAT_MATCH_BONUS
         } else if (targetFormat == null) {
             when (media.format) {
-                "TV", "ONA", "MOVIE" -> score += 0.04
-                "MUSIC" -> score -= 0.20
+                "TV", "ONA", "MOVIE" -> score += SCORE_FORMAT_PREFERRED_BONUS
+                "MUSIC" -> score -= SCORE_FORMAT_MUSIC_PENALTY
             }
         }
 
-        val popBonus = media.popularity?.takeIf { it > 0 }?.let { ln(it.toDouble()) * 0.004 } ?: 0.0
+        val popBonus = media.popularity?.takeIf { it > 0 }?.let { ln(it.toDouble()) * SCORE_POPULARITY_LOG_WEIGHT } ?: 0.0
         return score + popBonus
     }
 
@@ -200,7 +228,7 @@ internal object AnilistTitleMatcher {
             0.0
         }
 
-        return (dice * 0.65) + (tokenOverlap * 0.35)
+        return (dice * SIMILARITY_DICE_WEIGHT) + (tokenOverlap * SIMILARITY_TOKEN_WEIGHT)
     }
 
     private fun bigramsSimilarity(s1: String, s2: String): Double {
