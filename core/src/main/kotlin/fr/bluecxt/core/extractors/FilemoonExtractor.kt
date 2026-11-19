@@ -32,6 +32,33 @@ import kotlin.random.Random
 
 // based on https://github.com/skoruppa/docchi-players/blob/main/filemoon.py
 
+/** Taille du tag d'authentification GCM, en bits. */
+private const val AES_GCM_TAG_BITS = 128
+
+/** Taille d'un quantum Base64 (les entrées incomplètes sont complétées avec '='). */
+private const val BASE64_QUANTUM = 4
+
+/** Taille des coordonnées d'une clé EC P-256, en octets. */
+private const val EC_COORDINATE_BYTES = 32
+
+/** Taille des empreintes encodées en base64url (canvas, audio, WebGL, fontes, codecs). */
+private const val FINGERPRINT_HASH_BYTES = 32
+
+/** Taille des identifiants aléatoires du fingerprint legacy. */
+private const val FINGERPRINT_ID_BYTES = 16
+
+/** Nombre de millisecondes par seconde. */
+private const val MILLIS_PER_SECOND = 1000L
+
+/** Borne basse du score de confiance du fingerprint legacy. */
+private const val FINGERPRINT_CONFIDENCE_MIN = 0.6
+
+/** Borne haute du score de confiance du fingerprint legacy. */
+private const val FINGERPRINT_CONFIDENCE_MAX = 0.9
+
+/** Durée de validité du jeton de fingerprint legacy, en secondes. */
+private const val FINGERPRINT_TOKEN_TTL_SECONDS = 600
+
 class FilemoonExtractor(private val client: OkHttpClient) {
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
@@ -240,7 +267,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         val payload = ft(playback.payload)
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val spec = GCMParameterSpec(128, iv)
+        val spec = GCMParameterSpec(AES_GCM_TAG_BITS, iv)
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), spec)
 
         return String(cipher.doFinal(payload), Charsets.ISO_8859_1)
@@ -257,7 +284,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
 
     private fun ft(e: String): ByteArray {
         var t = e.replace("-", "+").replace("_", "/")
-        val r = if (t.length % 4 == 0) 0 else 4 - t.length % 4
+        val r = if (t.length % BASE64_QUANTUM == 0) 0 else BASE64_QUANTUM - t.length % BASE64_QUANTUM
         t += "=".repeat(r)
         return Base64.decode(t, Base64.DEFAULT)
     }
@@ -268,8 +295,8 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         val kp = kpg.generateKeyPair()
         val publicKey = kp.public as ECPublicKey
 
-        val x = publicKey.w.affineX.toByteArray().normalize(32)
-        val y = publicKey.w.affineY.toByteArray().normalize(32)
+        val x = publicKey.w.affineX.toByteArray().normalize(EC_COORDINATE_BYTES)
+        val y = publicKey.w.affineY.toByteArray().normalize(EC_COORDINATE_BYTES)
 
         val jwk = Jwk(
             x = Base64.encodeToString(x, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),
@@ -286,6 +313,9 @@ class FilemoonExtractor(private val client: OkHttpClient) {
         return Base64.encodeToString(signatureBytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     }
 
+    // Constantes d'état et angles de rotation imposés par l'algorithme PoW type BLAKE :
+    // les nommer serait du bruit, elles ne sont pas paramétrables.
+    @Suppress("MagicNumber")
     private fun solvePow(nonce: String, difficulty: Int, maxIterations: Int = 200000): String {
         val bufferSize = 512
         val bufferMask = 511
@@ -391,8 +421,8 @@ class FilemoonExtractor(private val client: OkHttpClient) {
     }
 
     private fun generateClientFingerprint(userAgent: String): ClientFingerprint {
-        val screenWidths = listOf(1920, 2560, 1366, 1440, 1680)
-        val screenHeights = listOf(1080, 1440, 768, 900, 1050)
+        val screenWidths = SCREEN_WIDTHS
+        val screenHeights = SCREEN_HEIGHTS
         val idx = Random.nextInt(screenWidths.size)
 
         return ClientFingerprint(
@@ -403,7 +433,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             colorDepth = 24,
             languages = listOf("fr-FR", "fr", "en-US", "en"),
             timezone = "Europe/Paris",
-            hardwareConcurrency = listOf(4, 8, 12, 16).random(),
+            hardwareConcurrency = HARDWARE_CONCURRENCY_OPTIONS.random(),
             touchPoints = 0,
             webglVendor = listOf("Intel", "NVIDIA Corporation", "AMD").random(),
             webglRenderer = listOf(
@@ -411,11 +441,11 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                 "NVIDIA GeForce GTX 1070",
                 "Mesa Intel(R) UHD Graphics 620",
             ).random(),
-            canvasHash = randomB64Url(32),
-            audioHash = randomB64Url(32),
-            webglParamsHash = randomB64Url(32),
-            fontsHash = randomB64Url(32),
-            codecsHash = randomB64Url(32),
+            canvasHash = randomB64Url(FINGERPRINT_HASH_BYTES),
+            audioHash = randomB64Url(FINGERPRINT_HASH_BYTES),
+            webglParamsHash = randomB64Url(FINGERPRINT_HASH_BYTES),
+            fontsHash = randomB64Url(FINGERPRINT_HASH_BYTES),
+            codecsHash = randomB64Url(FINGERPRINT_HASH_BYTES),
             mediaDevices = "ai0ao0vi0",
             pointerType = "fine,hover",
             extra = mapOf("vendor" to "", "appVersion" to "5.0 (X11)"),
@@ -423,16 +453,16 @@ class FilemoonExtractor(private val client: OkHttpClient) {
     }
 
     private fun buildLegacyFingerprint(): Map<String, JsonElement> {
-        val vId = Random.nextBytes(16).toHex()
-        val dId = Random.nextBytes(16).toHex()
-        val ctime = System.currentTimeMillis() / 1000
+        val vId = Random.nextBytes(FINGERPRINT_ID_BYTES).toHex()
+        val dId = Random.nextBytes(FINGERPRINT_ID_BYTES).toHex()
+        val ctime = System.currentTimeMillis() / MILLIS_PER_SECOND
 
         val tData = mutableMapOf<String, JsonElement>(
             "viewer_id" to JsonPrimitive(vId),
             "device_id" to JsonPrimitive(dId),
-            "confidence" to JsonPrimitive(Random.nextDouble(0.6, 0.9)),
+            "confidence" to JsonPrimitive(Random.nextDouble(FINGERPRINT_CONFIDENCE_MIN, FINGERPRINT_CONFIDENCE_MAX)),
             "iat" to JsonPrimitive(ctime),
-            "exp" to JsonPrimitive(ctime + 600),
+            "exp" to JsonPrimitive(ctime + FINGERPRINT_TOKEN_TTL_SECONDS),
         )
 
         val tBdata = Base64.encodeToString(json.encodeToString(tData).toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
@@ -594,6 +624,13 @@ class FilemoonExtractor(private val client: OkHttpClient) {
 
     companion object {
         private val REDIRECT_DOMAINS = listOf("boosteradx.online", "byse.sx")
+
+        /** Résolutions écran du fingerprint navigateur. */
+        private val SCREEN_WIDTHS = listOf(1920, 2560, 1366, 1440, 1680)
+        private val SCREEN_HEIGHTS = listOf(1080, 1440, 768, 900, 1050)
+
+        /** Nombre de cœurs exposé au fingerprint. */
+        private val HARDWARE_CONCURRENCY_OPTIONS = listOf(4, 8, 12, 16)
 
         @Volatile
         private var cachedFingerprint: Fingerprint? = null
