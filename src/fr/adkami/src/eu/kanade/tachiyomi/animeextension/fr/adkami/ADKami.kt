@@ -26,6 +26,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
@@ -167,74 +168,8 @@ class ADKami : ConfigurableSource() {
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val response = client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
         val document = response.useAsJsoup()
-        val episodes = mutableListOf<SEpisode>()
 
-        val elements = document.select("#row-nav-episode ul li")
-        if (elements.isNotEmpty()) {
-            elements.forEach { el ->
-                if (el.hasClass("saison")) return@forEach
-
-                val a = el.selectFirst("a") ?: return@forEach
-                val rawName = a.text().trim()
-                val lang = when {
-                    rawName.contains("vostfr", true) -> "VOSTFR"
-                    rawName.contains("vf", true) -> "VF"
-                    rawName.contains("vosta", true) || rawName.contains("en", true) -> "VOSTA"
-                    rawName.contains("raw", true) -> "RAW"
-                    else -> "VOSTFR"
-                }
-
-                val parts = rawName.split(Regex("\\s+")).filter { it.isNotBlank() }
-                val typeStr = parts.getOrNull(0)?.uppercase() ?: ""
-                val numStr = parts.getOrNull(1)?.trimStart('0')?.ifEmpty { "0" } ?: "1"
-
-                val isOav = rawName.contains("OAV", true) || rawName.contains("OVA", true)
-                val isSpecial = rawName.contains("Special", true) || rawName.contains("Spécial", true) || typeStr == "SPECIAL"
-                val isMovie = rawName.contains("Film", true) || rawName.contains("Movie", true) || typeStr == "FILM"
-                val isOna = typeStr == "ONA" || rawName.contains("ONA", true)
-
-                val sType = when {
-                    isOav -> "[OAV] "
-                    isMovie -> "[Movie] "
-                    isSpecial -> "[Special] "
-                    isOna -> "[ONA] "
-                    else -> ""
-                }
-
-                episodes.add(
-                    SEpisode.create().apply {
-                        name = "${sType}Episode $numStr"
-                        episode_number = numStr.toFloatOrNull() ?: 1f
-                        scanlator = lang
-                        url = a.safeRelativePath() + "?lang=$lang"
-                    },
-                )
-            }
-        } else {
-            val sEp = SEpisode.create().apply {
-                name = "Episode 1"
-                episode_number = 1f
-                url = anime.url + "?lang=VOSTFR"
-            }
-            episodes.add(sEp)
-        }
-
-        val hasSpecialContent = episodes.any { it.name.startsWith("[") }
-
-        val mergedEpisodes = episodes.groupBy { it.name }.map { entry ->
-            val first = entry.value.first()
-            val combinedUrl = entry.value.map { it.url }.distinct().joinToString("|")
-            val combinedLangs = entry.value.map { it.scanlator ?: "VOSTFR" }.distinct().joinToString(", ")
-
-            SEpisode.create().apply {
-                name = if (hasSpecialContent && !entry.key.startsWith("[")) "[S1] ${entry.key}" else entry.key
-                episode_number = first.episode_number
-                url = combinedUrl
-                scanlator = combinedLangs
-            }
-        }
-
-        return mergedEpisodes.sortedByDescending { it.episode_number }
+        return mergeEpisodes(parseEpisodes(anime, document))
     }
 
     // ============================ Video Links =============================
@@ -273,6 +208,89 @@ class ADKami : ConfigurableSource() {
     }
 
     // ============================ Helpers =============================
+    private fun parseEpisodes(anime: SAnime, document: Document): List<SEpisode> {
+        val episodes = mutableListOf<SEpisode>()
+
+        val elements = document.select("#row-nav-episode ul li")
+        if (elements.isNotEmpty()) {
+            elements.forEach { el ->
+                if (el.hasClass("saison")) return@forEach
+
+                val a = el.selectFirst("a") ?: return@forEach
+                episodes.add(buildEpisode(a))
+            }
+        } else {
+            val sEp = SEpisode.create().apply {
+                name = "Episode 1"
+                episode_number = 1f
+                url = anime.url + "?lang=VOSTFR"
+            }
+            episodes.add(sEp)
+        }
+
+        return episodes
+    }
+
+    private fun detectLanguage(rawName: String): String = when {
+        rawName.contains("vostfr", true) -> "VOSTFR"
+        rawName.contains("vf", true) -> "VF"
+        rawName.contains("vosta", true) || rawName.contains("en", true) -> "VOSTA"
+        rawName.contains("raw", true) -> "RAW"
+        else -> "VOSTFR"
+    }
+
+    private fun detectSpecialPrefix(rawName: String, typeStr: String): String {
+        val isOav = rawName.contains("OAV", true) || rawName.contains("OVA", true)
+        val isSpecial = rawName.contains("Special", true) || rawName.contains("Spécial", true) || typeStr == "SPECIAL"
+        val isMovie = rawName.contains("Film", true) || rawName.contains("Movie", true) || typeStr == "FILM"
+        val isOna = typeStr == "ONA" || rawName.contains("ONA", true)
+
+        return when {
+            isOav -> "[OAV] "
+            isMovie -> "[Movie] "
+            isSpecial -> "[Special] "
+            isOna -> "[ONA] "
+            else -> ""
+        }
+    }
+
+    private fun buildEpisode(a: Element): SEpisode {
+        val rawName = a.text().trim()
+        val lang = detectLanguage(rawName)
+
+        val parts = rawName.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val typeStr = parts.getOrNull(0)?.uppercase() ?: ""
+        val numStr = parts.getOrNull(1)?.trimStart('0')?.ifEmpty { "0" } ?: "1"
+
+        val sType = detectSpecialPrefix(rawName, typeStr)
+
+        return SEpisode.create().apply {
+            name = "${sType}Episode $numStr"
+            episode_number = numStr.toFloatOrNull() ?: 1f
+            scanlator = lang
+            url = a.safeRelativePath() + "?lang=$lang"
+        }
+    }
+
+    private fun mergeEpisodes(episodes: List<SEpisode>): List<SEpisode> {
+        val hasSpecialContent = episodes.any { it.name.startsWith("[") }
+
+        val mergedEpisodes = episodes.groupBy { it.name }.map { entry ->
+            val first = entry.value.first()
+            val combinedUrl = entry.value.map { it.url }.distinct().joinToString("|")
+            val combinedLangs = entry.value.map { it.scanlator ?: "VOSTFR" }.distinct().joinToString(", ")
+
+            SEpisode.create().apply {
+                name = if (hasSpecialContent && !entry.key.startsWith("[")) "[S1] ${entry.key}" else entry.key
+                episode_number = first.episode_number
+                url = combinedUrl
+                scanlator = combinedLangs
+            }
+        }
+
+        return mergedEpisodes.sortedByDescending { it.episode_number }
+    }
+
     private fun parseAnimesPage(response: Response, selector: String = "div.video-item-list"): AnimesPage {
         val document = response.useAsJsoup()
         val animes = document.select(selector).mapNotNull { element: Element ->

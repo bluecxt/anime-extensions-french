@@ -1,16 +1,17 @@
 package eu.kanade.tachiyomi.animeextension.all.torrentioanime
 
 import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AniZipEpisode
+import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AniZipMappings
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AniZipResponse
+import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AnilistMedia
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AnilistMeta
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AnilistMetaLatest
+import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.AnilistStreamingEpisode
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.DetailsById
 import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.StreamDataTorrent
+import eu.kanade.tachiyomi.animeextension.all.torrentioanime.dto.TorrentioStream
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -22,7 +23,6 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.ExtractionException
 import fr.bluecxt.core.source.Source
-import keiyoushi.core.R
 import keiyoushi.utils.bodyString
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
@@ -61,65 +61,74 @@ class Torrentio : Source() {
 
     private fun parseSearchJson(jsonLine: String?, isLatestQuery: Boolean = false): AnimesPage {
         val jsonData = jsonLine ?: return AnimesPage(emptyList(), false)
-        val metaData: Any = if (!isLatestQuery) {
-            json.decodeFromString<AnilistMeta>(jsonData)
-        } else {
-            json.decodeFromString<AnilistMetaLatest>(jsonData)
-        }
+        val metaData: Any = parseSearchMetaData(jsonData, isLatestQuery)
 
-        val mediaList = when (metaData) {
-            is AnilistMeta -> metaData.data?.page?.media.orEmpty()
-            is AnilistMetaLatest -> metaData.data?.page?.airingSchedules.orEmpty().map { it.media }
-            else -> emptyList()
-        }
+        val mediaList = extractMediaList(metaData)
 
-        val hasNextPage: Boolean = when (metaData) {
-            is AnilistMeta -> metaData.data?.page?.pageInfo?.hasNextPage ?: false
-            is AnilistMetaLatest -> metaData.data?.page?.pageInfo?.hasNextPage ?: false
-            else -> false
-        }
+        val hasNextPage: Boolean = extractHasNextPage(metaData)
 
         val animeList = mediaList
             .filterNot { (it?.countryOfOrigin == "CN" || it?.isAdult == true) && isLatestQuery }
-            .map { media ->
-                val anime = SAnime.create().apply {
-                    url = media?.id.toString()
-                    title = when (preferences.getString(PREF_TITLE_KEY, "romaji")) {
-                        "romaji" -> media?.title?.romaji.toString()
-                        "english" -> (media?.title?.english?.takeIf { it.isNotBlank() } ?: media?.title?.romaji).toString()
-                        "native" -> media?.title?.native.toString()
-                        else -> ""
-                    }
-                    thumbnail_url = media?.coverImage?.extraLarge
-                    description = media?.description
-                        ?.replace(Regex("<br><br>"), "\n")
-                        ?.replace(Regex("<.*?>"), "")
-                        ?: "No Description"
-
-                    status = when (media?.status) {
-                        "RELEASING" -> SAnime.ONGOING
-                        "FINISHED" -> SAnime.COMPLETED
-                        "HIATUS" -> SAnime.ON_HIATUS
-                        "NOT_YET_RELEASED" -> SAnime.LICENSED
-                        else -> SAnime.UNKNOWN
-                    }
-
-                    // Extracting tags
-                    val tagsList = media?.tags?.mapNotNull { it.name }.orEmpty()
-                    // Extracting genres
-                    val genresList = media?.genres.orEmpty()
-                    genre = (tagsList + genresList).toSet().sorted().joinToString()
-
-                    // Extracting studios
-                    val studiosList = media?.studios?.nodes?.mapNotNull { it.name }.orEmpty()
-                    author = studiosList.sorted().joinToString()
-
-                    initialized = true
-                }
-                anime
-            }
+            .map { media -> searchMediaToSAnime(media) }
 
         return AnimesPage(animeList, hasNextPage)
+    }
+
+    private fun parseSearchMetaData(jsonData: String, isLatestQuery: Boolean): Any = if (!isLatestQuery) {
+        json.decodeFromString<AnilistMeta>(jsonData)
+    } else {
+        json.decodeFromString<AnilistMetaLatest>(jsonData)
+    }
+
+    private fun extractMediaList(metaData: Any): List<AnilistMedia?> = when (metaData) {
+        is AnilistMeta -> metaData.data?.page?.media.orEmpty()
+        is AnilistMetaLatest -> metaData.data?.page?.airingSchedules.orEmpty().map { it.media }
+        else -> emptyList()
+    }
+
+    private fun extractHasNextPage(metaData: Any): Boolean = when (metaData) {
+        is AnilistMeta -> metaData.data?.page?.pageInfo?.hasNextPage ?: false
+        is AnilistMetaLatest -> metaData.data?.page?.pageInfo?.hasNextPage ?: false
+        else -> false
+    }
+
+    private fun searchMediaToSAnime(media: AnilistMedia?): SAnime = SAnime.create().apply {
+        url = media?.id.toString()
+        title = searchResultTitle(media)
+        thumbnail_url = media?.coverImage?.extraLarge
+        description = media?.description
+            ?.replace(Regex("<br><br>"), "\n")
+            ?.replace(Regex("<.*?>"), "")
+            ?: "No Description"
+
+        status = anilistStatusToSAnime(media?.status)
+
+        // Extracting tags
+        val tagsList = media?.tags?.mapNotNull { it.name }.orEmpty()
+        // Extracting genres
+        val genresList = media?.genres.orEmpty()
+        genre = (tagsList + genresList).toSet().sorted().joinToString()
+
+        // Extracting studios
+        val studiosList = media?.studios?.nodes?.mapNotNull { it.name }.orEmpty()
+        author = studiosList.sorted().joinToString()
+
+        initialized = true
+    }
+
+    private fun searchResultTitle(media: AnilistMedia?): String = when (preferences.getString(PREF_TITLE_KEY, "romaji")) {
+        "romaji" -> media?.title?.romaji.toString()
+        "english" -> (media?.title?.english?.takeIf { it.isNotBlank() } ?: media?.title?.romaji).toString()
+        "native" -> media?.title?.native.toString()
+        else -> ""
+    }
+
+    private fun anilistStatusToSAnime(status: String?): Int = when (status) {
+        "RELEASING" -> SAnime.ONGOING
+        "FINISHED" -> SAnime.COMPLETED
+        "HIATUS" -> SAnime.ON_HIATUS
+        "NOT_YET_RELEASED" -> SAnime.LICENSED
+        else -> SAnime.UNKNOWN
     }
 
     // ============================== Popular ===============================
@@ -230,59 +239,66 @@ class Torrentio : Source() {
     override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val anilistId = anime.url
-        val variables = """{"id": $anilistId}"""
+        val metaData = fetchDetailsMedia(anime) ?: return anime
 
-        val metaData = runCatching {
-            json.decodeFromString<DetailsById>(client.newCall(makeGraphQLRequest(getDetailsQuery(), variables)).awaitSuccess().bodyString())
-        }.getOrNull()?.data?.media ?: return anime
-
-        anime.title = metaData.title?.let { title ->
-            when (preferences.getString(PREF_TITLE_KEY, "romaji")) {
-                "romaji" -> title.romaji
-                "english" -> (metaData.title.english?.takeIf { it.isNotBlank() } ?: metaData.title.romaji).toString()
-                "native" -> title.native
-                else -> ""
-            }
-        } ?: anime.title
+        anime.title = detailsTitle(metaData) ?: anime.title
 
         anime.thumbnail_url = metaData.coverImage?.extraLarge ?: anime.thumbnail_url
 
-        anime.description = buildString {
-            metaData.description?.let {
-                append(
-                    Jsoup.parseBodyFragment(
-                        it.replace("<br>\n", "br2n")
-                            .replace("<br>", "br2n")
-                            .replace("\n", "br2n"),
-                    ).text().replace("br2n", "\n"),
-                )
-            }
-            append("\n\n")
-            if (!(metaData.season == null && metaData.seasonYear == null)) {
-                append("Release: ${ metaData.season ?: ""} ${ metaData.seasonYear ?: ""}")
-            }
-            metaData.format?.let { append("\nType: $it") }
-            metaData.episodes?.let { append("\nTotal Episode Count: $it") }
-        }.trim()
+        anime.description = buildDetailsDescription(metaData)
 
-        anime.status = when (metaData.status) {
-            "RELEASING" -> SAnime.ONGOING
-            "FINISHED" -> SAnime.COMPLETED
-            "HIATUS" -> SAnime.ON_HIATUS
-            "NOT_YET_RELEASED" -> SAnime.LICENSED
-            else -> SAnime.UNKNOWN
-        }
+        anime.status = anilistStatusToSAnime(metaData.status)
 
         // Extracting tags, genres, and studios
+        applyTagsGenresAndStudios(anime, metaData)
+
+        return anime
+    }
+
+    private suspend fun fetchDetailsMedia(anime: SAnime): AnilistMedia? {
+        val anilistId = anime.url
+        val variables = """{"id": $anilistId}"""
+
+        return runCatching {
+            json.decodeFromString<DetailsById>(client.newCall(makeGraphQLRequest(getDetailsQuery(), variables)).awaitSuccess().bodyString())
+        }.getOrNull()?.data?.media
+    }
+
+    private fun detailsTitle(metaData: AnilistMedia): String? {
+        val title = metaData.title ?: return null
+        return when (preferences.getString(PREF_TITLE_KEY, "romaji")) {
+            "romaji" -> title.romaji
+            "english" -> (title.english?.takeIf { it.isNotBlank() } ?: title.romaji).toString()
+            "native" -> title.native
+            else -> ""
+        }
+    }
+
+    private fun buildDetailsDescription(metaData: AnilistMedia): String = buildString {
+        metaData.description?.let {
+            append(
+                Jsoup.parseBodyFragment(
+                    it.replace("<br>\n", "br2n")
+                        .replace("<br>", "br2n")
+                        .replace("\n", "br2n"),
+                ).text().replace("br2n", "\n"),
+            )
+        }
+        append("\n\n")
+        if (!(metaData.season == null && metaData.seasonYear == null)) {
+            append("Release: ${ metaData.season ?: ""} ${ metaData.seasonYear ?: ""}")
+        }
+        metaData.format?.let { append("\nType: $it") }
+        metaData.episodes?.let { append("\nTotal Episode Count: $it") }
+    }.trim()
+
+    private fun applyTagsGenresAndStudios(anime: SAnime, metaData: AnilistMedia) {
         val tagsList = metaData.tags?.mapNotNull { it.name } ?: emptyList()
         val genresList = metaData.genres ?: emptyList()
         val studiosList = metaData.studios?.nodes?.mapNotNull { it.name } ?: emptyList()
 
         anime.genre = (tagsList + genresList).toSet().sorted().joinToString()
         anime.author = studiosList.sorted().joinToString()
-
-        return anime
     }
 
     // ============================== Episodes ==============================
@@ -293,70 +309,82 @@ class Torrentio : Source() {
         val responseString = response.body.string()
         val aniZipResponse = json.decodeFromString<AniZipResponse>(responseString)
 
-        val anilistId = anime.url
-        val variables = """{"id": $anilistId}"""
-        val anilistDetails = runCatching {
-            json.decodeFromString<DetailsById>(client.newCall(makeGraphQLRequest(getDetailsQuery(), variables)).awaitSuccess().bodyString())
-        }.getOrNull()?.data?.media
+        val anilistDetails = fetchDetailsMedia(anime)
         val streamingEpisodes = anilistDetails?.streamingEpisodes.orEmpty()
 
         return when (aniZipResponse.mappings?.type) {
-            "TV", "ONA", "OVA" -> {
-                aniZipResponse.episodes
-                    ?.let { episodes ->
-                        if (preferences.getBoolean(UPCOMING_EP_KEY, UPCOMING_EP_DEFAULT)) {
-                            episodes
-                        } else {
-                            episodes.filter { (_, episode) -> episode?.airDate.let(DATE_FORMATTER::tryParse) <= System.currentTimeMillis() }
-                        }
-                    }
-                    ?.mapNotNull { (_, episode) ->
-                        val episodeNumber = runCatching { episode?.episode?.toFloat() }.getOrNull()
-
-                        if (episodeNumber == null) {
-                            return@mapNotNull null
-                        }
-
-                        val title = episode?.title?.get("en")
-
-                        SEpisode.create().apply {
-                            episode_number = episodeNumber
-                            url = "/stream/series/kitsu:${aniZipResponse.mappings.kitsuId}:${String.format(Locale.ENGLISH, "%.0f", episodeNumber)}.json"
-                            date_upload = episode?.airDate.let(DATE_FORMATTER::tryParse)
-                            name = if (title == null) "Episode ${episode?.episode}" else "Episode ${episode.episode}: $title"
-                            scanlator = episode?.airDate.let(DATE_FORMATTER::tryParse).takeIf { it > System.currentTimeMillis() }?.let { "Upcoming" } ?: ""
-
-                            // Match thumbnail from Anilist
-                            val alEp = streamingEpisodes.find { al ->
-                                al.title?.contains(Regex("(?i)Episode\\s*${episode?.episode}\\b")) == true ||
-                                    al.title?.startsWith("EP ${episode?.episode} -") == true ||
-                                    al.title?.startsWith("${episode?.episode} -") == true
-                            }
-                            preview_url = alEp?.thumbnail ?: episode?.image
-                        }
-                    }.orEmpty().asReversed()
-            }
-
-            "MOVIE" -> {
-                val dateUpload = if (!aniZipResponse.episodes.isNullOrEmpty()) {
-                    aniZipResponse.episodes["1"]?.airDate.let(DATE_FORMATTER::tryParse)
-                } else {
-                    0L
-                }
-
-                listOf(
-                    SEpisode.create().apply {
-                        episode_number = 1.0F
-                        url = "/stream/movie/kitsu:${aniZipResponse.mappings.kitsuId}.json"
-                        name = "Movie"
-                        date_upload = dateUpload
-                        preview_url = anilistDetails?.coverImage?.extraLarge
-                    },
-                ).asReversed()
-            }
-
+            "TV", "ONA", "OVA" -> buildSeriesEpisodes(aniZipResponse, aniZipResponse.mappings, streamingEpisodes)
+            "MOVIE" -> buildMovieEpisodes(aniZipResponse, aniZipResponse.mappings, anilistDetails)
             else -> emptyList()
         }
+    }
+
+    private fun buildSeriesEpisodes(
+        aniZipResponse: AniZipResponse,
+        mappings: AniZipMappings,
+        streamingEpisodes: List<AnilistStreamingEpisode>,
+    ): List<SEpisode> = aniZipResponse.episodes
+        ?.let { episodes ->
+            if (preferences.getBoolean(UPCOMING_EP_KEY, UPCOMING_EP_DEFAULT)) {
+                episodes
+            } else {
+                episodes.filter { (_, episode) -> episode?.airDate.let(DATE_FORMATTER::tryParse) <= System.currentTimeMillis() }
+            }
+        }
+        ?.mapNotNull { (_, episode) -> buildSeriesEpisode(episode, mappings, streamingEpisodes) }
+        .orEmpty()
+        .asReversed()
+
+    private fun buildSeriesEpisode(
+        episode: AniZipEpisode?,
+        mappings: AniZipMappings,
+        streamingEpisodes: List<AnilistStreamingEpisode>,
+    ): SEpisode? {
+        val episodeNumber = runCatching { episode?.episode?.toFloat() }.getOrNull() ?: return null
+
+        val title = episode?.title?.get("en")
+
+        return SEpisode.create().apply {
+            episode_number = episodeNumber
+            url = "/stream/series/kitsu:${mappings.kitsuId}:${String.format(Locale.ENGLISH, "%.0f", episodeNumber)}.json"
+            date_upload = episode?.airDate.let(DATE_FORMATTER::tryParse)
+            name = if (title == null) "Episode ${episode?.episode}" else "Episode ${episode.episode}: $title"
+            scanlator = episode?.airDate.let(DATE_FORMATTER::tryParse).takeIf { it > System.currentTimeMillis() }?.let { "Upcoming" } ?: ""
+
+            // Match thumbnail from Anilist
+            preview_url = findStreamingThumbnail(streamingEpisodes, episode?.episode) ?: episode?.image
+        }
+    }
+
+    private fun findStreamingThumbnail(
+        streamingEpisodes: List<AnilistStreamingEpisode>,
+        episodeNumber: String?,
+    ): String? = streamingEpisodes.find { al ->
+        al.title?.contains(Regex("(?i)Episode\\s*$episodeNumber\\b")) == true ||
+            al.title?.startsWith("EP $episodeNumber -") == true ||
+            al.title?.startsWith("$episodeNumber -") == true
+    }?.thumbnail
+
+    private fun buildMovieEpisodes(
+        aniZipResponse: AniZipResponse,
+        mappings: AniZipMappings,
+        anilistDetails: AnilistMedia?,
+    ): List<SEpisode> {
+        val dateUpload = if (!aniZipResponse.episodes.isNullOrEmpty()) {
+            aniZipResponse.episodes["1"]?.airDate.let(DATE_FORMATTER::tryParse)
+        } else {
+            0L
+        }
+
+        return listOf(
+            SEpisode.create().apply {
+                episode_number = 1.0F
+                url = "/stream/movie/kitsu:${mappings.kitsuId}.json"
+                name = "Movie"
+                date_upload = dateUpload
+                preview_url = anilistDetails?.coverImage?.extraLarge
+            },
+        ).asReversed()
     }
 
     override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
@@ -364,49 +392,60 @@ class Torrentio : Source() {
     // ============================ Video Links =============================
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val mainURL = buildString {
-            append("$baseUrl/")
-
-            val appendQueryParam: (String, Set<String>?) -> Unit = { key, values ->
-                values?.takeIf { it.isNotEmpty() }?.let {
-                    append("$key=${it.filter(String::isNotBlank).joinToString(",")}|")
-                }
-            }
-
-            appendQueryParam("providers", preferences.getStringSet(PREF_PROVIDER_KEY, PREF_PROVIDERS_DEFAULT))
-            appendQueryParam("language", preferences.getStringSet(PREF_LANG_KEY, PREF_LANG_DEFAULT))
-            appendQueryParam("qualityfilter", preferences.getStringSet(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT))
-
-            val sortKey = preferences.getString(PREF_SORT_KEY, "quality")
-            appendQueryParam("sort", sortKey?.let { setOf(it) })
-
-            val token = preferences.getString(PREF_TOKEN_KEY, null)
-            val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
-
-            when {
-                token.isNullOrBlank() && debridProvider != "none" -> {
-                    handler.post {
-                        context.let {
-                            Toast.makeText(
-                                it,
-                                "Kindly input the debrid token in the extension settings.",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    }
-                    throw UnsupportedOperationException()
-                }
-
-                !token.isNullOrBlank() && debridProvider != "none" -> append("$debridProvider=$token|")
-            }
-            append(episode.url)
-        }.removeSuffix("|")
+        val mainURL = buildStreamUrl(episode)
 
         val responseString = client.newCall(GET(mainURL)).awaitSuccess().body.string()
         val streamList = json.decodeFromString<StreamDataTorrent>(responseString)
         val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
 
-        val animeTrackers = """http://nyaa.tracker.wf:7777/announce,
+        val animeTrackers = buildAnimeTrackers()
+
+        return streamList.streams?.map { stream ->
+            val urlOrHash = streamUrlOrHash(stream, animeTrackers, debridProvider)
+            val title = ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title)
+            Hoster(hosterName = title, internalData = urlOrHash)
+        }.orEmpty()
+    }
+
+    private fun buildStreamUrl(episode: SEpisode): String = buildString {
+        append("$baseUrl/")
+
+        val appendQueryParam: (String, Set<String>?) -> Unit = { key, values ->
+            values?.takeIf { it.isNotEmpty() }?.let {
+                append("$key=${it.filter(String::isNotBlank).joinToString(",")}|")
+            }
+        }
+
+        appendQueryParam("providers", preferences.getStringSet(PREF_PROVIDER_KEY, PREF_PROVIDERS_DEFAULT))
+        appendQueryParam("language", preferences.getStringSet(PREF_LANG_KEY, PREF_LANG_DEFAULT))
+        appendQueryParam("qualityfilter", preferences.getStringSet(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT))
+
+        val sortKey = preferences.getString(PREF_SORT_KEY, "quality")
+        appendQueryParam("sort", sortKey?.let { setOf(it) })
+
+        val token = preferences.getString(PREF_TOKEN_KEY, null)
+        val debridProvider = preferences.getString(PREF_DEBRID_KEY, "none")
+
+        when {
+            token.isNullOrBlank() && debridProvider != "none" -> {
+                handler.post {
+                    context.let {
+                        Toast.makeText(
+                            it,
+                            "Kindly input the debrid token in the extension settings.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+                throw UnsupportedOperationException()
+            }
+
+            !token.isNullOrBlank() && debridProvider != "none" -> append("$debridProvider=$token|")
+        }
+        append(episode.url)
+    }.removeSuffix("|")
+
+    private suspend fun buildAnimeTrackers(): String = """http://nyaa.tracker.wf:7777/announce,
             http://anidex.moe:6969/announce,http://tracker.anirena.com:80/announce,
             udp://tracker.uw0.xyz:6969/announce,
             http://share.camoe.cn:8080/announce,
@@ -432,19 +471,13 @@ class Torrentio : Source() {
             udp://valakas.rollo.dnsabr.com:2710/announce,
             udp://www.torrent.eu.org:451/announce,
             ${fetchTrackers().split("\n").joinToString(",")}
-        """.trimIndent()
+    """.trimIndent()
 
-        return streamList.streams?.map { stream ->
-            val urlOrHash =
-                if (debridProvider == "none") {
-                    val trackerList = animeTrackers.split(",").map { it.trim() }.filter { it.isNotBlank() }.joinToString("&tr=")
-                    "magnet:?xt=urn:btih:${stream.infoHash}&dn=${stream.infoHash}&tr=$trackerList&index=${stream.fileIdx}"
-                } else {
-                    stream.url ?: ""
-                }
-            val title = ((stream.name?.replace("Torrentio\n", "") ?: "") + "\n" + stream.title)
-            Hoster(hosterName = title, internalData = urlOrHash)
-        }.orEmpty()
+    private fun streamUrlOrHash(stream: TorrentioStream, animeTrackers: String, debridProvider: String?): String = if (debridProvider == "none") {
+        val trackerList = animeTrackers.split(",").map { it.trim() }.filter { it.isNotBlank() }.joinToString("&tr=")
+        "magnet:?xt=urn:btih:${stream.infoHash}&dn=${stream.infoHash}&tr=$trackerList&index=${stream.fileIdx}"
+    } else {
+        stream.url ?: ""
     }
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
@@ -506,414 +539,11 @@ class Torrentio : Source() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val context = screen.context
-
-        // Debrid provider
-        ListPreference(context).apply {
-            key = PREF_DEBRID_KEY
-            title = context.getString(R.string.pref_debrid_title)
-            entries = PREF_DEBRID_ENTRIES
-            entryValues = PREF_DEBRID_VALUES
-            setDefaultValue("none")
-            summary = context.getString(R.string.pref_debrid_summary)
-        }.also(screen::addPreference)
-
-        // Token
-        EditTextPreference(context).apply {
-            key = PREF_TOKEN_KEY
-            title = context.getString(R.string.pref_token_title)
-            setDefaultValue(PREF_TOKEN_DEFAULT)
-            summary = PREF_TOKEN_SUMMARY
-
-            setOnPreferenceChangeListener { _, newValue ->
-                runCatching {
-                    val value = (newValue as String).trim().ifBlank { PREF_TOKEN_DEFAULT }
-                    Toast.makeText(context, context.getString(R.string.pref_restart_message), Toast.LENGTH_LONG).show()
-                    preferences.edit().putString(key, value).commit()
-                }.getOrDefault(false)
-            }
-        }.also(screen::addPreference)
-
-        // Provider
-        MultiSelectListPreference(context).apply {
-            key = PREF_PROVIDER_KEY
-            title = context.getString(R.string.pref_providers_title)
-            entries = PREF_PROVIDERS
-            entryValues = PREF_PROVIDERS_VALUE
-            setDefaultValue(PREF_PROVIDERS_DEFAULT)
-        }.also(screen::addPreference)
-
-        // Exclude Qualities
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_QUALITY_KEY
-            title = "Exclude Qualities/Resolutions"
-            entries = PREF_QUALITY
-            entryValues = PREF_QUALITY_VALUE
-            setDefaultValue(PREF_QUALITY_DEFAULT)
-        }.also(screen::addPreference)
-
-        // Priority foreign language
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_LANG_KEY
-            title = "Priority foreign language"
-            entries = PREF_LANG
-            entryValues = PREF_LANG_VALUE
-            setDefaultValue(PREF_LANG_DEFAULT)
-        }.also(screen::addPreference)
-
-        // Sorting
-        ListPreference(screen.context).apply {
-            key = PREF_SORT_KEY
-            title = "Sorting"
-            entries = PREF_SORT_ENTRIES
-            entryValues = PREF_SORT_VALUES
-            setDefaultValue("quality")
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        // Title handler
-        ListPreference(screen.context).apply {
-            key = PREF_TITLE_KEY
-            title = "Preferred Title"
-            entries = PREF_TITLE_ENTRIES
-            entryValues = PREF_TITLE_VALUES
-            setDefaultValue("romaji")
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = UPCOMING_EP_KEY
-            title = "Show Upcoming Episodes"
-            setDefaultValue(UPCOMING_EP_DEFAULT)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = IS_DUB_KEY
-            title = "Dubbed Video Priority"
-            setDefaultValue(IS_DUB_DEFAULT)
-        }.also(screen::addPreference)
-
-        val efficientPref = SwitchPreferenceCompat(screen.context).apply {
-            key = IS_EFFICIENT_KEY
-            title = "Efficient Video Priority"
-            setDefaultValue(IS_EFFICIENT_DEFAULT)
-            setVisible(codecPreferences.isEmpty())
-            summary = "Codec: (HEVC / x265)  & AV1. High-quality video with less data usage."
-        }.also(screen::addPreference)
-
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_CODEC_KEY
-            title = "Preferred Codecs"
-            entries = PREF_CODEC
-            entryValues = PREF_CODEC_VALUE
-            setDefaultValue(PREF_CODEC_DEFAULT)
-            summary = codecPreferences.joinToString()
-
-            setOnPreferenceChangeListener { _, newValue ->
-                @Suppress("UNCHECKED_CAST")
-                val newSet = newValue as Set<String>
-                preferences.edit().putStringSet(key, newSet).apply()
-                summary = newSet.joinToString()
-                efficientPref.setVisible(newSet.isEmpty())
-                true
-            }
-        }.also(screen::addPreference)
+        addTorrentioAnimePreferences(screen)
     }
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-
-        // Token
-        private const val PREF_TOKEN_KEY = "token"
-        private const val PREF_TOKEN_DEFAULT = ""
-        private const val PREF_TOKEN_SUMMARY = "Exclusive to Debrid providers; not intended for Torrents."
-
-        // Debrid
-        private const val PREF_DEBRID_KEY = "debrid_provider"
-        private val PREF_DEBRID_ENTRIES = arrayOf(
-            "None",
-            "RealDebrid",
-            "Premiumize",
-            "AllDebrid",
-            "DebridLink",
-            "Offcloud",
-            "TorBox",
-        )
-        private val PREF_DEBRID_VALUES = arrayOf(
-            "none",
-            "realdebrid",
-            "premiumize",
-            "alldebrid",
-            "debridlink",
-            "offcloud",
-            "torbox",
-        )
-
-        // Sort
-        private const val PREF_SORT_KEY = "sorting_link"
-        private val PREF_SORT_ENTRIES = arrayOf(
-            "By quality then seeders",
-            "By quality then size",
-            "By seeders",
-            "By size",
-        )
-        private val PREF_SORT_VALUES = arrayOf(
-            "quality",
-            "qualitysize",
-            "seeders",
-            "size",
-        )
-
-        // Provider
-        private const val PREF_PROVIDER_KEY = "provider_selection"
-        private val PREF_PROVIDERS = arrayOf(
-            "YTS",
-            "EZTV",
-            "RARBG",
-            "1337x",
-            "ThePirateBay",
-            "KickassTorrents",
-            "TorrentGalaxy",
-            "MagnetDL",
-            "HorribleSubs",
-            "NyaaSi",
-            "TokyoTosho",
-            "AniDex",
-            "🇷🇺 Rutor",
-            "🇷🇺 Rutracker",
-            "🇵🇹 Comando",
-            "🇵🇹 BluDV",
-            "🇫🇷 Torrent9",
-            "🇪🇸 MejorTorrent",
-            "🇲🇽 Cinecalidad",
-            "🇮🇹 ilCorsaroNero",
-            "🇪🇸 Wolfmax4k",
-        )
-
-        private val PREF_PROVIDERS_VALUE = arrayOf(
-            "yts",
-            "eztv",
-            "rarbg",
-            "1337x",
-            "thepiratebay",
-            "kickasstorrents",
-            "torrentgalaxy",
-            "magnetdl",
-            "horriblesubs",
-            "nyaasi",
-            "tokyotosho",
-            "anidex",
-            "rutor",
-            "rutracker",
-            "comando",
-            "bludv",
-            "torrent9",
-            "mejortorrent",
-            "cinecalidad",
-            "ilcorsaronero",
-            "wolfmax4k",
-        )
-
-        private val PREF_DEFAULT_PROVIDERS_VALUE = arrayOf(
-            "yts",
-            "eztv",
-            "rarbg",
-            "1337x",
-            "thepiratebay",
-            "kickasstorrents",
-            "torrentgalaxy",
-            "magnetdl",
-            "horriblesubs",
-            "nyaasi",
-            "tokyotosho",
-            "anidex",
-        )
-        private val PREF_PROVIDERS_DEFAULT = PREF_DEFAULT_PROVIDERS_VALUE.toSet()
-
-        // Qualities/Resolutions
-        private const val PREF_QUALITY_KEY = "quality_selection"
-        private val PREF_QUALITY = arrayOf(
-            "BluRay REMUX",
-            "HDR/HDR10+/Dolby Vision",
-            "Dolby Vision",
-            "Dolby Vision + HDR",
-            "3D",
-            "Non 3D (DO NOT SELECT IF NOT SURE)",
-            "4k",
-            "1080p",
-            "720p",
-            "480p",
-            "Other (DVDRip/HDRip/BDRip...)",
-            "Screener",
-            "Cam",
-            "Unknown",
-        )
-
-        private val PREF_QUALITY_VALUE = arrayOf(
-            "brremux",
-            "hdrall",
-            "dolbyvision",
-            "dolbyvisionwithhdr",
-            "threed",
-            "nonthreed",
-            "4k",
-            "1080p",
-            "720p",
-            "480p",
-            "other",
-            "scr",
-            "cam",
-            "unknown",
-        )
-
-        private val PREF_DEFAULT_QUALITY_VALUE = arrayOf(
-            "720p",
-            "480p",
-            "other",
-            "scr",
-            "cam",
-            "unknown",
-        )
-
-        private val PREF_QUALITY_DEFAULT = PREF_DEFAULT_QUALITY_VALUE.toSet()
-
-        // Qualities/Resolutions
-        private const val PREF_LANG_KEY = "lang_selection"
-        private val PREF_LANG = arrayOf(
-            "🇯🇵 Japanese",
-            "🇷🇺 Russian",
-            "🇮🇹 Italian",
-            "🇵🇹 Portuguese",
-            "🇪🇸 Spanish",
-            "🇲🇽 Latino",
-            "🇰🇷 Korean",
-            "🇨🇳 Chinese",
-            "🇹🇼 Taiwanese",
-            "🇫🇷 French",
-
-            "🇩🇪 German",
-            "🇳🇱 Dutch",
-            "🇮🇳 Hindi",
-            "🇮🇳 Telugu",
-            "🇮🇳 Tamil",
-            "🇵🇱 Polish",
-            "🇱🇹 Lithuanian",
-            "🇱🇻 Latvian",
-            "🇪🇪 Estonian",
-            "🇨🇿 Czech",
-
-            "🇸🇰 Slovakian",
-            "🇸🇮 Slovenian",
-            "🇭🇺 Hungarian",
-            "🇷🇴 Romanian",
-            "🇧🇬 Bulgarian",
-            "🇷🇸 Serbian",
-            "🇭🇷 Croatian",
-            "🇺🇦 Ukrainian",
-            "🇬🇷 Greek",
-            "🇩🇰 Danish",
-
-            "🇫🇮 Finnish",
-            "🇸🇪 Swedish",
-            "🇳🇴 Norwegian",
-            "🇹🇷 Turkish",
-            "🇸🇦 Arabic",
-            "🇮🇷 Persian",
-            "🇮🇱 Hebrew",
-            "🇻🇳 Vietnamese",
-            "🇮🇩 Indonesian",
-            "🇲🇾 Malay",
-
-            "🇹🇭 Thai",
-        )
-        private val PREF_LANG_VALUE = arrayOf(
-            "japanese",
-            "russian",
-            "italian",
-            "portuguese",
-            "spanish",
-            "latino",
-            "korean",
-            "chinese",
-            "taiwanese",
-            "french",
-
-            "german",
-            "dutch",
-            "hindi",
-            "telugu",
-            "tamil",
-            "polish",
-            "lithuanian",
-            "latvian",
-            "estonian",
-            "czech",
-
-            "slovakian",
-            "slovenian",
-            "hungarian",
-            "romanian",
-            "bulgarian",
-            "serbian",
-            "croatian",
-            "ukrainian",
-            "greek",
-            "danish",
-
-            "finnish",
-            "swedish",
-            "norwegian",
-            "turkish",
-            "arabic",
-            "persian",
-            "hebrew",
-            "vietnamese",
-            "indonesian",
-            "malay",
-
-            "thai",
-
-        )
-
-        private val PREF_LANG_DEFAULT = setOf<String>()
-
-        // Title
-        private const val PREF_TITLE_KEY = "pref_title"
-        private val PREF_TITLE_ENTRIES = arrayOf(
-            "Romaji",
-            "English",
-            "Native",
-        )
-        private val PREF_TITLE_VALUES = arrayOf(
-            "romaji",
-            "english",
-            "native",
-        )
-
-        private const val UPCOMING_EP_KEY = "upcoming_ep"
-        private const val UPCOMING_EP_DEFAULT = false
-
-        private const val IS_DUB_KEY = "dubbed"
-        private const val IS_DUB_DEFAULT = false
-
-        private const val IS_EFFICIENT_KEY = "efficient"
-        private const val IS_EFFICIENT_DEFAULT = false
-
-        private const val PREF_CODEC_KEY = "codec_selection"
-        private val PREF_CODEC = arrayOf(
-            "x264",
-            "x265/HEVC",
-            "AV1",
-            "VP9",
-            "Other",
-        )
-        private val PREF_CODEC_VALUE = arrayOf(
-            "x264",
-            "x265",
-            "av1",
-            "vp9",
-            "other",
-        )
-        private val PREF_CODEC_DEFAULT = setOf<String>() // Empty by default to show all
 
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
