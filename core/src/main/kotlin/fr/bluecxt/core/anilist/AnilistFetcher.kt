@@ -22,6 +22,7 @@ import kotlinx.serialization.json.buildJsonObject
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -199,46 +200,12 @@ internal suspend inline fun <reified T> Source.executeAnilistGraphQl(
         var retryDelay: Duration? = null
 
         val result: T? = client.newCall(request).await().use { response ->
-            if (response.code == 429 && attempt < maxRetries) {
-                val retryAfterSeconds = response.header("Retry-After")?.trim()?.toLongOrNull()
-                retryDelay = if (retryAfterSeconds != null && retryAfterSeconds > 0) {
-                    retryAfterSeconds.seconds.coerceIn(1.seconds, MAX_RATE_LIMIT_DELAY)
-                } else {
-                    DEFAULT_RATE_LIMIT_DELAY
-                }
+            if (response.isRateLimited(attempt, maxRetries)) {
+                retryDelay = response.readRateLimitDelay()
                 return@use null
             }
 
-            val rawBody = response.body.string()
-
-            if (response.code == 404 && ignoreNotFound) {
-                return@use null
-            }
-
-            if (!response.isSuccessful) {
-                error(
-                    "HTTP ${response.code} from AniList [$context]: ${rawBody.take(MAX_ERROR_BODY_CHARS)}",
-                )
-            }
-
-            if (rawBody.isBlank()) {
-                error("Empty response body from AniList [$context]")
-            }
-
-            val graphQlResponse = anilistJson.decodeFromString<AnilistGraphQlResponse<T>>(rawBody)
-
-            val errors = graphQlResponse.errors.orEmpty()
-            if (errors.isNotEmpty()) {
-                val isOnlyNotFound = ignoreNotFound && errors.all {
-                    it.status == 404 || it.message.contains("Not Found", ignoreCase = true)
-                }
-                if (isOnlyNotFound) return@use null
-
-                val joinedMessages = errors.joinToString("; ") { "${it.message} (status=${it.status})" }
-                error("GraphQL errors [$context]: $joinedMessages")
-            }
-
-            graphQlResponse.data
+            return@use parseGraphQlResponse<T>(response, context, ignoreNotFound)
         }
 
         val waitDuration = retryDelay
@@ -251,4 +218,61 @@ internal suspend inline fun <reified T> Source.executeAnilistGraphQl(
     }
 
     return null
+}
+
+/**
+ * Returns `true` when [this] response is a rate-limit answer that still has retries left.
+ */
+private fun Response.isRateLimited(attempt: Int, maxRetries: Int): Boolean = code == 429 && attempt < maxRetries
+
+/**
+ * Reads the delay announced by a rate-limited response, clamped to the allowed window.
+ */
+private fun Response.readRateLimitDelay(): Duration {
+    val retryAfterSeconds = header("Retry-After")?.trim()?.toLongOrNull()
+    return if (retryAfterSeconds != null && retryAfterSeconds > 0) {
+        retryAfterSeconds.seconds.coerceIn(1.seconds, MAX_RATE_LIMIT_DELAY)
+    } else {
+        DEFAULT_RATE_LIMIT_DELAY
+    }
+}
+
+/**
+ * Reads and decodes one AniList GraphQL response, raising the same errors as the inline caller.
+ */
+private inline fun <reified T> parseGraphQlResponse(
+    response: Response,
+    context: String,
+    ignoreNotFound: Boolean,
+): T? {
+    val rawBody = response.body.string()
+
+    if (response.code == 404 && ignoreNotFound) {
+        return null
+    }
+
+    if (!response.isSuccessful) {
+        error(
+            "HTTP ${response.code} from AniList [$context]: ${rawBody.take(MAX_ERROR_BODY_CHARS)}",
+        )
+    }
+
+    if (rawBody.isBlank()) {
+        error("Empty response body from AniList [$context]")
+    }
+
+    val graphQlResponse = anilistJson.decodeFromString<AnilistGraphQlResponse<T>>(rawBody)
+
+    val errors = graphQlResponse.errors.orEmpty()
+    if (errors.isNotEmpty()) {
+        val isOnlyNotFound = ignoreNotFound && errors.all {
+            it.status == 404 || it.message.contains("Not Found", ignoreCase = true)
+        }
+        if (isOnlyNotFound) return null
+
+        val joinedMessages = errors.joinToString("; ") { "${it.message} (status=${it.status})" }
+        error("GraphQL errors [$context]: $joinedMessages")
+    }
+
+    return graphQlResponse.data
 }

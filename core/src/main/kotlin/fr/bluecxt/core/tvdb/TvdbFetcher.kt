@@ -12,8 +12,10 @@ import fr.bluecxt.core.TVDB_LOG
 import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
+import fr.bluecxt.core.tvdb.dto.TvdbArtworkDto
 import fr.bluecxt.core.tvdb.dto.TvdbAuthRequest
 import fr.bluecxt.core.tvdb.dto.TvdbAuthResponse
+import fr.bluecxt.core.tvdb.dto.TvdbEpisodeDto
 import fr.bluecxt.core.tvdb.dto.TvdbEpisodesResponse
 import fr.bluecxt.core.tvdb.dto.TvdbMovieExtendedData
 import fr.bluecxt.core.tvdb.dto.TvdbMovieExtendedResponse
@@ -52,6 +54,10 @@ private const val ARTWORK_TYPE_SEASON_BANNER = 8
 
 /** Longueur minimale d'un titre pour accepter un match partiel. */
 private const val MIN_PARTIAL_MATCH_LENGTH = 3
+
+/** Codes de langue TVDB utilisés pour départager les visuels. */
+private const val LANGUAGE_JAPANESE = "jpn"
+private const val LANGUAGE_ENGLISH = "eng"
 
 /** Scores de ressemblance et ajustements par préférence de média. */
 private const val SCORE_EXACT_TITLE = 100
@@ -387,34 +393,13 @@ class TvdbFetcher(
         val artworks = sDto?.artwork.orEmpty()
         val rawSeasonPoster = artworks
             .filter { it.type == ARTWORK_TYPE_SEASON_POSTER && !it.image.isNullOrBlank() }
-            .let { list ->
-                if (preferJapanesePoster) {
-                    list.filter { it.language?.equals("jpn", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                        ?: list.filter { it.language?.equals(lang, ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                        ?: list.filter { it.language?.equals("eng", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                        ?: list.maxByOrNull { it.score }?.image
-                } else {
-                    list.filter { it.language?.equals(lang, ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                        ?: list.filter { it.language?.equals("jpn", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                        ?: list.filter { it.language?.equals("eng", ignoreCase = true) == true }.maxByOrNull { it.score }?.image
-                        ?: list.maxByOrNull { it.score }?.image
-                }
-            } ?: sDto?.image
+            .pickSeasonPosterImage(lang, preferJapanesePoster) ?: sDto?.image
 
-        val fullSeasonPoster = rawSeasonPoster?.takeIf { it.isNotBlank() }?.let {
-            if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
-        }
-
-        val rawSeasonBackdrop = artworks.firstOrNull { it.type == ARTWORK_TYPE_SEASON_BANNER && it.language?.equals(lang, ignoreCase = true) == true }?.image
-            ?: artworks.firstOrNull { it.type == ARTWORK_TYPE_SEASON_BANNER }?.image
-
-        val fullSeasonBackdrop = rawSeasonBackdrop?.takeIf { it.isNotBlank() }?.let {
-            if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
-        }
+        val rawSeasonBackdrop = artworks.pickSeasonBackdropImage(lang)
 
         TvdbSeasonDetails(
-            posterUrl = fullSeasonPoster,
-            backdropUrl = fullSeasonBackdrop,
+            posterUrl = rawSeasonPoster.toFullArtworkUrl(),
+            backdropUrl = rawSeasonBackdrop.toFullArtworkUrl(),
             overview = trDto?.overview?.takeIf { it.isNotBlank() },
         )
     }
@@ -438,18 +423,9 @@ class TvdbFetcher(
         val order = if (seasonOrderType.isNotBlank() && seasonOrderType != "official") seasonOrderType else "default"
 
         page@ for (page in 0..maxPageNumber) {
-            val episodesUrl = "$TVDB_BASE_URL/series/$tvdbId/episodes/$order/$lang?page=$page"
-            val epDto = runCatchingCancellable {
-                fetchTvdb<TvdbEpisodesResponse>(episodesUrl) ?: break@page
-            }.getOrElse { break@page }
+            val episodes = fetchEpisodesPage(tvdbId, order, page) ?: break@page
 
-            val episodes = epDto.data?.episodes?.takeIf { it.isNotEmpty() } ?: break@page
-
-            seasonCountLoop@ for (ep in episodes) {
-                if (ep.number <= 0) continue@seasonCountLoop
-
-                seasonCounts.merge(ep.seasonNumber, ep.number, ::maxOf)
-            }
+            seasonCounts.mergeSeasonCounts(episodes)
 
             val seasonEps = episodes.filter { it.seasonNumber == seasonNumber }
             if (seasonReleaseDate == null) {
@@ -457,14 +433,7 @@ class TvdbFetcher(
                 seasonReleaseDate = seasonEps.firstOrNull { !it.aired.isNullOrBlank() }?.aired
             }
 
-            episodesMap@ for (ep in seasonEps) {
-                val epNum = ep.number
-                if (epNum <= 0 || epMap.containsKey(epNum)) continue@episodesMap
-                val fullImgUrl = ep.episodeImage?.let {
-                    if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
-                }
-                epMap[epNum] = TvdbEpisode(ep.name, fullImgUrl, ep.overview)
-            }
+            epMap.collectSeasonEpisodes(seasonEps)
         }
 
         return TvdbSeriesEpisode(
@@ -472,6 +441,20 @@ class TvdbFetcher(
             seasonCounts,
             seasonReleaseDate,
         )
+    }
+
+    /** Récupère une page d'épisodes ; `null` interrompt la pagination (page vide ou erreur). */
+    private suspend fun fetchEpisodesPage(
+        tvdbId: Long,
+        order: String,
+        page: Int,
+    ): List<TvdbEpisodeDto>? {
+        val episodesUrl = "$TVDB_BASE_URL/series/$tvdbId/episodes/$order/$lang?page=$page"
+        val epDto = runCatchingCancellable {
+            fetchTvdb<TvdbEpisodesResponse>(episodesUrl) ?: return null
+        }.getOrElse { return null }
+
+        return epDto.data?.episodes?.takeIf { it.isNotEmpty() }
     }
     private data class TvdbSeriesEpisode(
         val episodesMap: Map<Int, TvdbEpisode>,
@@ -589,86 +572,134 @@ class TvdbFetcher(
                 return it
             }
 
-            val searchData = if (targetTvdbId != null && targetTvdbId > 0) {
-                TvdbSearchResultData(
-                    id = targetTvdbId.toString(),
-                    title = title,
-                    posterUrl = null,
-                    isMovie = isMovie,
-                    overview = null,
-                    releaseDate = null,
-                    score = 100,
-                    status = null,
-                )
-            } else {
-                val searchUrl = "$TVDB_BASE_URL/search?q=${URLEncoder.encode(sanitizedTitle, "UTF-8")}"
-                Log.d(
-                    TVDB_LOG,
-                    "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title', isMovie=$isMovie, pref=$preference)",
-                )
+            val searchData = resolveSearchData(
+                title = title,
+                sanitizedTitle = sanitizedTitle,
+                isMovie = isMovie,
+                preference = preference,
+                targetTvdbId = targetTvdbId,
+            ) ?: return@withLock null
 
-                try {
-                    val searchDto = fetchTvdb<TvdbSearchResponse>(searchUrl) ?: return@withLock null
-
-                    val targetType = if (isMovie) "movie" else "series"
-                    val candidatePool = searchDto.data.filter { it.type == targetType }
-
-                    val jpnResult = candidatePool.maxByOrNull { scoreTvdbResult(it, sanitizedTitle, preference) }
-                        ?: candidatePool.firstOrNull()
-                        ?: run {
-                            Log.w(TVDB_LOG, "TVDB Search returned 0 results for '$sanitizedTitle'")
-                            return@withLock null
-                        }
-                    val bestScore = scoreTvdbResult(jpnResult, sanitizedTitle, preference)
-                    val id = jpnResult.tvdbId.ifBlank { jpnResult.objectId.substringAfter("-") }
-                    val poster = jpnResult.imageUrl?.takeIf { it.isNotBlank() }?.let {
-                        if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
-                    }
-                    val officialTitle = jpnResult.translations["fra"] ?: jpnResult.name
-                    val movieType = jpnResult.type == "movie" || jpnResult.objectId.startsWith("movie-")
-                    val overview = jpnResult.overviews[lang] ?: jpnResult.overview
-                    val releaseDate =
-                        jpnResult.firstAirTime?.takeIf { it.isNotBlank() } ?: jpnResult.year?.takeIf { it.isNotBlank() }
-                    TvdbSearchResultData(
-                        id = id,
-                        title = officialTitle,
-                        posterUrl = poster,
-                        isMovie = movieType,
-                        overview = overview,
-                        releaseDate = releaseDate,
-                        score = bestScore,
-                        status = jpnResult.status,
-                    )
-                } catch (e: Exception) {
-                    Log.e(TVDB_LOG, "TVDB Search failed for '$sanitizedTitle': ${e.message}")
-                    return@withLock null
-                }
-            }
-
-            val tvdbIdLong = searchData.id.toLongOrNull() ?: return@withLock null
-            val isMovieResolved = searchData.isMovie
-
-            Log.d(
-                TVDB_LOG,
-                "TVDB resolved tvdbId='$tvdbIdLong', title='${searchData.title}', isMovie=$isMovieResolved",
+            resolveMetadataFromSearchData(
+                searchData = searchData,
+                season = season,
+                seasonOrderType = seasonOrderType,
+                episodeOrderType = episodeOrderType,
+                preferJapanesePoster = preferJapanesePoster,
             )
-
-            if (isMovieResolved) {
-                fetchMovieExtended(tvdbIdLong)?.toTvdbMetadata()?.copy(matchScore = searchData.score)
-            } else {
-                val extended = fetchSeriesExtended(tvdbIdLong) ?: return@withLock null
-                populateSeriesMetadata(
-                    extendedMetadata = extended,
-                    season = season,
-                    seasonOrderType = seasonOrderType,
-                    episodeOrderType = episodeOrderType,
-                    preferJapanesePoster = preferJapanesePoster,
-                    matchScore = searchData.score,
-                )
-            }
         }?.also { result ->
             tvdbMetadataCache[cacheKey] = result to System.currentTimeMillis()
         }
+    }
+
+    /** Résout les données de recherche : cible TVDB explicite ou recherche par titre. */
+    private suspend fun resolveSearchData(
+        title: String,
+        sanitizedTitle: String,
+        isMovie: Boolean,
+        preference: MediaPreference,
+        targetTvdbId: Long?,
+    ): TvdbSearchResultData? = if (targetTvdbId != null && targetTvdbId > 0) {
+        TvdbSearchResultData(
+            id = targetTvdbId.toString(),
+            title = title,
+            posterUrl = null,
+            isMovie = isMovie,
+            overview = null,
+            releaseDate = null,
+            score = 100,
+            status = null,
+        )
+    } else {
+        searchTvdbByTitle(title, sanitizedTitle, isMovie, preference)
+    }
+
+    private suspend fun searchTvdbByTitle(
+        title: String,
+        sanitizedTitle: String,
+        isMovie: Boolean,
+        preference: MediaPreference,
+    ): TvdbSearchResultData? {
+        val searchUrl = "$TVDB_BASE_URL/search?q=${URLEncoder.encode(sanitizedTitle, "UTF-8")}"
+        Log.d(
+            TVDB_LOG,
+            "fetchTvdbMetadata: searching '$sanitizedTitle' (original: '$title', isMovie=$isMovie, pref=$preference)",
+        )
+
+        return try {
+            val searchDto = fetchTvdb<TvdbSearchResponse>(searchUrl) ?: return null
+            toSearchResultData(searchDto, sanitizedTitle, isMovie, preference)
+        } catch (e: Exception) {
+            Log.e(TVDB_LOG, "TVDB Search failed for '$sanitizedTitle': ${e.message}")
+            null
+        }
+    }
+
+    /** Sélectionne le meilleur résultat de recherche et projette les champs utiles. */
+    private fun toSearchResultData(
+        searchDto: TvdbSearchResponse,
+        sanitizedTitle: String,
+        isMovie: Boolean,
+        preference: MediaPreference,
+    ): TvdbSearchResultData? {
+        val targetType = if (isMovie) "movie" else "series"
+        val candidatePool = searchDto.data.filter { it.type == targetType }
+
+        val jpnResult = candidatePool.maxByOrNull { scoreTvdbResult(it, sanitizedTitle, preference) }
+            ?: candidatePool.firstOrNull()
+            ?: run {
+                Log.w(TVDB_LOG, "TVDB Search returned 0 results for '$sanitizedTitle'")
+                return null
+            }
+        val bestScore = scoreTvdbResult(jpnResult, sanitizedTitle, preference)
+        val id = jpnResult.tvdbId.ifBlank { jpnResult.objectId.substringAfter("-") }
+        val poster = jpnResult.imageUrl.toFullArtworkUrl()
+        val officialTitle = jpnResult.translations["fra"] ?: jpnResult.name
+        val movieType = jpnResult.type == "movie" || jpnResult.objectId.startsWith("movie-")
+        val overview = jpnResult.overviews[lang] ?: jpnResult.overview
+        val releaseDate =
+            jpnResult.firstAirTime?.takeIf { it.isNotBlank() } ?: jpnResult.year?.takeIf { it.isNotBlank() }
+        return TvdbSearchResultData(
+            id = id,
+            title = officialTitle,
+            posterUrl = poster,
+            isMovie = movieType,
+            overview = overview,
+            releaseDate = releaseDate,
+            score = bestScore,
+            status = jpnResult.status,
+        )
+    }
+
+    /** Charge les métadonnées (film ou série) correspondant au résultat de recherche. */
+    private suspend fun resolveMetadataFromSearchData(
+        searchData: TvdbSearchResultData,
+        season: Int,
+        seasonOrderType: String,
+        episodeOrderType: String?,
+        preferJapanesePoster: Boolean,
+    ): TvdbMetadata? {
+        val tvdbIdLong = searchData.id.toLongOrNull() ?: return null
+        val isMovieResolved = searchData.isMovie
+
+        Log.d(
+            TVDB_LOG,
+            "TVDB resolved tvdbId='$tvdbIdLong', title='${searchData.title}', isMovie=$isMovieResolved",
+        )
+
+        if (isMovieResolved) {
+            return fetchMovieExtended(tvdbIdLong)?.toTvdbMetadata()?.copy(matchScore = searchData.score)
+        }
+
+        val extended = fetchSeriesExtended(tvdbIdLong) ?: return null
+        return populateSeriesMetadata(
+            extendedMetadata = extended,
+            season = season,
+            seasonOrderType = seasonOrderType,
+            episodeOrderType = episodeOrderType,
+            preferJapanesePoster = preferJapanesePoster,
+            matchScore = searchData.score,
+        )
     }
 
     companion object {
@@ -691,31 +722,14 @@ class TvdbFetcher(
         preference: MediaPreference = MediaPreference.ANIME,
     ): Int {
         val normQuery = query.normalize()
-        val candidateTitles = buildList {
-            result.name?.let { add(it) }
-            result.translations["fra"]?.let { add(it) }
-            result.translations["eng"]?.let { add(it) }
-            result.slug?.let { add(it) }
-            addAll(result.aliases)
-        }.map { it.normalize() }.filter { it.isNotBlank() }
+        val candidateTitles = buildCandidateTitles(result)
 
         if (candidateTitles.isEmpty() || normQuery.isBlank()) return 0
 
         var maxScore = 0
 
         for (candidate in candidateTitles) {
-            var currentScore = 0
-            when {
-                candidate == normQuery -> currentScore += SCORE_EXACT_TITLE
-
-                candidate.contains(normQuery) || normQuery.contains(candidate) -> {
-                    val longer = maxOf(candidate.length, normQuery.length)
-                    val shorter = minOf(candidate.length, normQuery.length)
-                    val ratio = shorter.toDouble() / longer
-                    currentScore += (SCORE_CONTAINS_BASE * ratio).toInt()
-                }
-            }
-
+            val currentScore = similarityScore(candidate, normQuery)
             if (currentScore > maxScore) {
                 maxScore = currentScore
             }
@@ -731,45 +745,145 @@ class TvdbFetcher(
         val isLiveActionSlug = liveActionSlugRegex.containsMatchIn(slug)
         val isAnimeSlug = animeSlugRegex.containsMatchIn(slug)
 
-        when (preference) {
-            MediaPreference.ANIME -> {
-                if (isAnimation) {
-                    maxScore += BONUS_ANIMATION_GENRE
-                } else if (result.genres.isNotEmpty()) {
-                    maxScore -= PENALTY_NO_ANIMATION_GENRE
-                }
-
-                if (isAnimeSlug) maxScore += BONUS_ANIME_SLUG
-                if (isLiveActionSlug) maxScore -= PENALTY_LIVE_ACTION_SLUG
-
-                if (result.primaryLanguage == "jpn" || result.country == "jpn") {
-                    maxScore += BONUS_JAPANESE_ORIGIN
-                }
-                if ((result.country == "usa" || result.country == "gbr") && !isAnimation) {
-                    maxScore -= PENALTY_WESTERN_ORIGIN
-                }
-            }
-
-            MediaPreference.DRAMA -> {
-                if (isAnimation) {
-                    maxScore -= PENALTY_NO_ANIMATION_GENRE
-                }
-                if (isLiveActionSlug) maxScore += PENALTY_LIVE_ACTION_SLUG
-                if (isAnimeSlug) maxScore -= PENALTY_LIVE_ACTION_SLUG
-                if (result.primaryLanguage == "jpn" || result.country == "jpn" || result.country == "kor") {
-                    maxScore += BONUS_JAPANESE_ORIGIN
-                }
-            }
-
-            MediaPreference.ANY -> {
-                if (result.primaryLanguage == "jpn" || result.country == "jpn") {
-                    maxScore += 15
-                }
-            }
-        }
+        maxScore += preferenceAdjustment(result, preference, isAnimation, isLiveActionSlug, isAnimeSlug)
 
         return maxOf(0, maxScore)
     }
+}
+
+/**
+ * Sélectionne l'affiche de saison par ordre de préférence :
+ * langue préférée, langue alternative (jpn/lang), anglais, puis meilleur score.
+ */
+private fun List<TvdbArtworkDto>.pickSeasonPosterImage(
+    lang: String,
+    preferJapanesePoster: Boolean,
+): String? {
+    val primaryLanguage = if (preferJapanesePoster) LANGUAGE_JAPANESE else lang
+    val fallbackLanguage = if (preferJapanesePoster) lang else LANGUAGE_JAPANESE
+    return maxImageByLanguage(primaryLanguage)
+        ?: maxImageByLanguage(fallbackLanguage)
+        ?: maxImageByLanguage(LANGUAGE_ENGLISH)
+        ?: maxByOrNull { it.score }?.image
+}
+
+/** Bannière de saison : langue préférée d'abord, puis la première disponible. */
+private fun List<TvdbArtworkDto>.pickSeasonBackdropImage(lang: String): String? = firstOrNull { it.type == ARTWORK_TYPE_SEASON_BANNER && it.language?.equals(lang, ignoreCase = true) == true }?.image
+    ?: firstOrNull { it.type == ARTWORK_TYPE_SEASON_BANNER }?.image
+
+private fun List<TvdbArtworkDto>.maxImageByLanguage(language: String): String? = filter { it.language?.equals(language, ignoreCase = true) == true }.maxByOrNull { it.score }?.image
+
+/** Complète une URL d'artwork relative avec la base TVDB. */
+private fun String?.toFullArtworkUrl(): String? = this?.takeIf { it.isNotBlank() }?.let {
+    if (it.startsWith("http")) it else "$TVDB_ARTWORK_BASE_URL$it"
+}
+
+private fun MutableMap<Int, Int>.mergeSeasonCounts(episodes: List<TvdbEpisodeDto>) {
+    for (ep in episodes) {
+        if (ep.number <= 0) continue
+        merge(ep.seasonNumber, ep.number, ::maxOf)
+    }
+}
+
+private fun MutableMap<Int, TvdbEpisode>.collectSeasonEpisodes(seasonEps: List<TvdbEpisodeDto>) {
+    for (ep in seasonEps) {
+        val epNum = ep.number
+        if (epNum <= 0 || containsKey(epNum)) continue
+        this[epNum] = TvdbEpisode(ep.name, ep.episodeImage.toFullArtworkUrl(), ep.overview)
+    }
+}
+
+/** Titres candidats normalisés : nom, traductions, slug et alias. */
+private fun buildCandidateTitles(result: TvdbSearchResult): List<String> = buildList {
+    result.name?.let { add(it) }
+    result.translations["fra"]?.let { add(it) }
+    result.translations["eng"]?.let { add(it) }
+    result.slug?.let { add(it) }
+    addAll(result.aliases)
+}.map { it.normalize() }.filter { it.isNotBlank() }
+
+/** Score de ressemblance d'un titre candidat avec la requête normalisée. */
+private fun similarityScore(candidate: String, normQuery: String): Int = when {
+    candidate == normQuery -> SCORE_EXACT_TITLE
+
+    candidate.contains(normQuery) || normQuery.contains(candidate) -> {
+        val longer = maxOf(candidate.length, normQuery.length)
+        val shorter = minOf(candidate.length, normQuery.length)
+        val ratio = shorter.toDouble() / longer
+        (SCORE_CONTAINS_BASE * ratio).toInt()
+    }
+
+    else -> 0
+}
+
+/** Ajustements de score liés à la préférence de média. */
+private fun preferenceAdjustment(
+    result: TvdbSearchResult,
+    preference: MediaPreference,
+    isAnimation: Boolean,
+    isLiveActionSlug: Boolean,
+    isAnimeSlug: Boolean,
+): Int = when (preference) {
+    MediaPreference.ANIME -> animePreferenceAdjustment(result, isAnimation, isLiveActionSlug, isAnimeSlug)
+    MediaPreference.DRAMA -> dramaPreferenceAdjustment(result, isAnimation, isLiveActionSlug, isAnimeSlug)
+    MediaPreference.ANY -> anyPreferenceAdjustment(result)
+}
+
+private fun animePreferenceAdjustment(
+    result: TvdbSearchResult,
+    isAnimation: Boolean,
+    isLiveActionSlug: Boolean,
+    isAnimeSlug: Boolean,
+): Int {
+    var delta = 0
+
+    if (isAnimation) {
+        delta += BONUS_ANIMATION_GENRE
+    } else if (result.genres.isNotEmpty()) {
+        delta -= PENALTY_NO_ANIMATION_GENRE
+    }
+
+    if (isAnimeSlug) delta += BONUS_ANIME_SLUG
+    if (isLiveActionSlug) delta -= PENALTY_LIVE_ACTION_SLUG
+
+    if (result.primaryLanguage == "jpn" || result.country == "jpn") {
+        delta += BONUS_JAPANESE_ORIGIN
+    }
+    if ((result.country == "usa" || result.country == "gbr") && !isAnimation) {
+        delta -= PENALTY_WESTERN_ORIGIN
+    }
+
+    return delta
+}
+
+private fun dramaPreferenceAdjustment(
+    result: TvdbSearchResult,
+    isAnimation: Boolean,
+    isLiveActionSlug: Boolean,
+    isAnimeSlug: Boolean,
+): Int {
+    var delta = 0
+
+    if (isAnimation) {
+        delta -= PENALTY_NO_ANIMATION_GENRE
+    }
+    if (isLiveActionSlug) delta += PENALTY_LIVE_ACTION_SLUG
+    if (isAnimeSlug) delta -= PENALTY_LIVE_ACTION_SLUG
+    if (result.primaryLanguage == "jpn" || result.country == "jpn" || result.country == "kor") {
+        delta += BONUS_JAPANESE_ORIGIN
+    }
+
+    return delta
+}
+
+private fun anyPreferenceAdjustment(result: TvdbSearchResult): Int {
+    var delta = 0
+
+    if (result.primaryLanguage == "jpn" || result.country == "jpn") {
+        delta += 15
+    }
+
+    return delta
 }
 
 suspend fun Source.fetchTvdbMetadata(

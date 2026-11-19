@@ -158,12 +158,7 @@ internal object AnilistTitleMatcher {
         targetYear: Int?,
         targetFormat: AnilistFormat?,
     ): Double {
-        val candidateTitles = buildList {
-            media.title?.romaji?.let(::add)
-            media.title?.english?.let(::add)
-            media.title?.native?.let(::add)
-            addAll(media.synonyms)
-        }
+        val candidateTitles = buildCandidateTitles(media)
 
         if (candidateTitles.isEmpty()) return 0.0
 
@@ -174,44 +169,84 @@ internal object AnilistTitleMatcher {
         var score = bestTitleScore
 
         val candidateCombinedTitles = candidateTitles.joinToString(" ")
+        val candidateSeason = detectCandidateSeason(candidateCombinedTitles)
+
+        score = applySeasonAdjustment(score, query, candidateSeason, candidateCombinedTitles)
+
+        val mediaYear = media.seasonYear ?: media.startDate?.year
+        score = applyYearAdjustment(score, mediaYear, targetYear)
+
+        score = applyFormatAdjustment(score, media.format, targetFormat)
+
+        val popBonus = media.popularity?.takeIf { it > 0 }?.let { ln(it.toDouble()) * SCORE_POPULARITY_LOG_WEIGHT } ?: 0.0
+        return score + popBonus
+    }
+
+    private fun buildCandidateTitles(media: AnilistMediaDto): List<String> = buildList {
+        media.title?.romaji?.let(::add)
+        media.title?.english?.let(::add)
+        media.title?.native?.let(::add)
+        addAll(media.synonyms)
+    }
+
+    private fun detectCandidateSeason(candidateCombinedTitles: String): Int? {
         val candidateSeasonMatch = SEASON_EN_REGEX.find(candidateCombinedTitles)
             ?: Regex("""\bii+\b""", RegexOption.IGNORE_CASE).find(candidateCombinedTitles)
-        val candidateSeason = candidateSeasonMatch?.groupValues?.drop(1)?.firstOrNull { it.isNotEmpty() }?.toIntOrNull()
+        return candidateSeasonMatch?.groupValues?.drop(1)?.firstOrNull { it.isNotEmpty() }?.toIntOrNull()
+    }
+
+    private fun applySeasonAdjustment(
+        score: Double,
+        query: CleanedQuery,
+        candidateSeason: Int?,
+        candidateCombinedTitles: String,
+    ): Double {
+        var adjusted = score
 
         if (query.extractedSeason != null && query.extractedSeason > 1) {
             if (candidateSeason == query.extractedSeason ||
                 candidateCombinedTitles.contains(query.extractedSeason.toString())
             ) {
-                score += SCORE_SEASON_MATCH_BONUS
+                adjusted += SCORE_SEASON_MATCH_BONUS
             } else {
-                score -= SCORE_SEASON_MISMATCH_PENALTY
+                adjusted -= SCORE_SEASON_MISMATCH_PENALTY
             }
         } else if (query.extractedSeason == null || query.extractedSeason == 1) {
             if (candidateSeason != null && candidateSeason > 1) {
-                score -= SCORE_SEASON_ABSENT_PENALTY
+                adjusted -= SCORE_SEASON_ABSENT_PENALTY
             }
         }
 
-        val mediaYear = media.seasonYear ?: media.startDate?.year
+        return adjusted
+    }
+
+    private fun applyYearAdjustment(score: Double, mediaYear: Int?, targetYear: Int?): Double {
+        var adjusted = score
+
         if (targetYear != null && mediaYear != null) {
             when {
-                mediaYear == targetYear -> score += SCORE_YEAR_EXACT_BONUS
-                abs(mediaYear - targetYear) == 1 -> score += SCORE_YEAR_ADJACENT_BONUS
-                else -> score -= SCORE_YEAR_MISMATCH_PENALTY
+                mediaYear == targetYear -> adjusted += SCORE_YEAR_EXACT_BONUS
+                abs(mediaYear - targetYear) == 1 -> adjusted += SCORE_YEAR_ADJACENT_BONUS
+                else -> adjusted -= SCORE_YEAR_MISMATCH_PENALTY
             }
         }
 
-        if (targetFormat != null && media.format == targetFormat.name) {
-            score += SCORE_FORMAT_MATCH_BONUS
+        return adjusted
+    }
+
+    private fun applyFormatAdjustment(score: Double, mediaFormat: String?, targetFormat: AnilistFormat?): Double {
+        var adjusted = score
+
+        if (targetFormat != null && mediaFormat == targetFormat.name) {
+            adjusted += SCORE_FORMAT_MATCH_BONUS
         } else if (targetFormat == null) {
-            when (media.format) {
-                "TV", "ONA", "MOVIE" -> score += SCORE_FORMAT_PREFERRED_BONUS
-                "MUSIC" -> score -= SCORE_FORMAT_MUSIC_PENALTY
+            when (mediaFormat) {
+                "TV", "ONA", "MOVIE" -> adjusted += SCORE_FORMAT_PREFERRED_BONUS
+                "MUSIC" -> adjusted -= SCORE_FORMAT_MUSIC_PENALTY
             }
         }
 
-        val popBonus = media.popularity?.takeIf { it > 0 }?.let { ln(it.toDouble()) * SCORE_POPULARITY_LOG_WEIGHT } ?: 0.0
-        return score + popBonus
+        return adjusted
     }
 
     private fun computeSimilarity(a: String, b: String): Double {

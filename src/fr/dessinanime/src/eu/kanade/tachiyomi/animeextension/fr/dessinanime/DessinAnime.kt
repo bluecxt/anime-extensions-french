@@ -348,26 +348,39 @@ class DessinAnime : ConfigurableSource() {
         val seasonCount = seriesData?.seasons?.size ?: soup.select("a.bg-card").size
         val isHub = !isSeasonPage && seasonCount > 1
 
-        val seasonSpecificPoster = if (targetSeasonNum != null && seriesData != null) {
-            seriesData.seasons.firstOrNull { it.seasonNumber == targetSeasonNum }?.posterPath
-        } else {
-            null
-        }
+        val seasonSpecificPoster = extractSeasonSpecificPoster(seriesData, targetSeasonNum)
 
-        anime.apply {
-            title = mediaDto?.title?.takeIf { it.isNotBlank() } ?: title
-            thumbnail_url = seasonSpecificPoster ?: anime.thumbnail_url?.takeIf { it.isNotBlank() && it != POSTER_PLACEHOLDER } ?: resolveThumbnail(soup, posterDto)
-            description = soup.selectFirst("meta[name=description]")?.attr("content") ?: ""
-            genre = extractGenres(soup)
-            initialized = true
-        }
+        applyDetailsToAnime(anime, soup, posterDto, mediaDto, seasonSpecificPoster)
+        applyDetailsStatus(anime, isHub, isMovie, soup)
+        return anime
+    }
 
+    private fun extractSeasonSpecificPoster(seriesData: SeriesDataDto?, targetSeasonNum: Int?): String? = if (targetSeasonNum != null && seriesData != null) {
+        seriesData.seasons.firstOrNull { it.seasonNumber == targetSeasonNum }?.posterPath
+    } else {
+        null
+    }
+
+    private fun applyDetailsToAnime(
+        anime: SAnime,
+        soup: Document,
+        posterDto: DessinAnimePosterDto?,
+        mediaDto: DessinAnimeMediaDto?,
+        seasonSpecificPoster: String?,
+    ) = anime.apply {
+        title = mediaDto?.title?.takeIf { it.isNotBlank() } ?: title
+        thumbnail_url = seasonSpecificPoster ?: anime.thumbnail_url?.takeIf { it.isNotBlank() && it != POSTER_PLACEHOLDER } ?: resolveThumbnail(soup, posterDto)
+        description = soup.selectFirst("meta[name=description]")?.attr("content") ?: ""
+        genre = extractGenres(soup)
+        initialized = true
+    }
+
+    private fun applyDetailsStatus(anime: SAnime, isHub: Boolean, isMovie: Boolean, soup: Document) {
         if (isHub) {
             anime.fetch_type = Seasons
         } else if (isMovie || soup.selectFirst("a.group.rounded-xl") == null) {
             anime.status = SAnime.COMPLETED
         }
-        return anime
     }
 
     private fun resolveThumbnail(soup: Document, posterDto: DessinAnimePosterDto?): String = posterDto?.src

@@ -141,41 +141,54 @@ fun JsonElement.fixEncoding(): JsonElement = when (this) {
 fun String.fixEncoding(): String {
     val bytes = ByteArray(this.length)
     for (i in this.indices) {
-        val c = this[i]
-        val b = when (c) {
-            '\u20AC' -> 0x80.toByte()
-            '\u201A' -> 0x82.toByte()
-            '\u0192' -> 0x83.toByte()
-            '\u201E' -> 0x84.toByte()
-            '\u2026' -> 0x85.toByte()
-            '\u2020' -> 0x86.toByte()
-            '\u2021' -> 0x87.toByte()
-            '\u02C6' -> 0x88.toByte()
-            '\u2030' -> 0x89.toByte()
-            '\u0160' -> 0x8A.toByte()
-            '\u2039' -> 0x8B.toByte()
-            '\u0152' -> 0x8C.toByte()
-            '\u017D' -> 0x8E.toByte()
-            '\u2018' -> 0x91.toByte()
-            '\u2019' -> 0x92.toByte()
-            '\u201C' -> 0x93.toByte()
-            '\u201D' -> 0x94.toByte()
-            '\u2022' -> 0x95.toByte()
-            '\u2013' -> 0x96.toByte()
-            '\u2014' -> 0x97.toByte()
-            '\u02DC' -> 0x98.toByte()
-            '\u2122' -> 0x99.toByte()
-            '\u0161' -> 0x9A.toByte()
-            '\u203A' -> 0x9B.toByte()
-            '\u0153' -> 0x9C.toByte()
-            '\u017E' -> 0x9E.toByte()
-            '\u0178' -> 0x9F.toByte()
-            else -> if (c.code in 0..BYTE_MAX) c.code.toByte() else '?'.code.toByte()
-        }
-        bytes[i] = b
+        bytes[i] = this[i].toLegacyByte()
     }
     return String(bytes, Charsets.UTF_8)
 }
+
+/** Table CP1252 scindée en sous-étapes : correspondances et ordre d'origine conservés. */
+private fun Char.toLegacyByte(): Byte = legacyByteFirstGroup() ?: legacyByteSecondGroup() ?: legacyByteThirdGroup() ?: legacyByteFallback()
+
+private fun Char.legacyByteFirstGroup(): Byte? = when (this) {
+    '\u20AC' -> 0x80.toByte()
+    '\u201A' -> 0x82.toByte()
+    '\u0192' -> 0x83.toByte()
+    '\u201E' -> 0x84.toByte()
+    '\u2026' -> 0x85.toByte()
+    '\u2020' -> 0x86.toByte()
+    '\u2021' -> 0x87.toByte()
+    '\u02C6' -> 0x88.toByte()
+    '\u2030' -> 0x89.toByte()
+    else -> null
+}
+
+private fun Char.legacyByteSecondGroup(): Byte? = when (this) {
+    '\u0160' -> 0x8A.toByte()
+    '\u2039' -> 0x8B.toByte()
+    '\u0152' -> 0x8C.toByte()
+    '\u017D' -> 0x8E.toByte()
+    '\u2018' -> 0x91.toByte()
+    '\u2019' -> 0x92.toByte()
+    '\u201C' -> 0x93.toByte()
+    '\u201D' -> 0x94.toByte()
+    '\u2022' -> 0x95.toByte()
+    else -> null
+}
+
+private fun Char.legacyByteThirdGroup(): Byte? = when (this) {
+    '\u2013' -> 0x96.toByte()
+    '\u2014' -> 0x97.toByte()
+    '\u02DC' -> 0x98.toByte()
+    '\u2122' -> 0x99.toByte()
+    '\u0161' -> 0x9A.toByte()
+    '\u203A' -> 0x9B.toByte()
+    '\u0153' -> 0x9C.toByte()
+    '\u017E' -> 0x9E.toByte()
+    '\u0178' -> 0x9F.toByte()
+    else -> null
+}
+
+private fun Char.legacyByteFallback(): Byte = if (code in 0..BYTE_MAX) code.toByte() else '?'.code.toByte()
 
 inline fun <reified T> Json.decodeFromStringFixed(string: String): T {
     val element = this.parseToJsonElement(string)

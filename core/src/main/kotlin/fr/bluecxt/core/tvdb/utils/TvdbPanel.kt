@@ -156,6 +156,140 @@ private val tvdbOverridesMap: Map<String, TvdbSeriesOverride> = mapOf(
 
 private val genericMovieTitleRegex = Regex("""(?i)^(?:Film|Films|Movie)\s*\d*(\s*[-:]\s*\d+)?$""")
 
+/** Paramètres TVDB effectifs d'un panneau, après application des surcharges. */
+private data class ResolvedTvdbTarget(
+    val seasonNumber: Int,
+    val episodeOffset: Int,
+    val seasonOrderType: String,
+    val episodeOrderType: String?,
+    val targetTvdbId: Long?,
+    val isMovie: Boolean,
+    val preferJapanesePoster: Boolean,
+    val preference: MediaPreference,
+)
+
+/** Croise les titres recherchés avec les clés de surcharge de série. */
+private fun findSeriesOverride(allLookupTitles: List<String>): TvdbSeriesOverride? = tvdbOverridesMap.entries.find { entry ->
+    val normKey = entry.key.normalize()
+    allLookupTitles.any { it.contains(normKey) || it.contains(entry.key) }
+}?.value
+
+/**
+ * Croise les libellés de saison avec les clés de surcharge, en testant les clés les plus
+ * longues d'abord et avec contrôle de frontière numérique pour éviter que "saga 1"
+ * ne capture "saga 10/11/12".
+ */
+private fun findSeasonOverrideEntry(
+    seriesOverride: TvdbSeriesOverride?,
+    allSeasonLookups: List<String>,
+): TvdbOverrideEntry? = seriesOverride?.seasons?.entries
+    ?.sortedByDescending { it.key.length }
+    ?.find { entry ->
+        val normKey = entry.key.normalize()
+        allSeasonLookups.any { lookup ->
+            val idx = lookup.indexOf(normKey)
+            if (idx >= 0) {
+                val afterIdx = idx + normKey.length
+                afterIdx >= lookup.length || !lookup[afterIdx].isDigit()
+            } else {
+                false
+            }
+        }
+    }?.value
+
+/** Applique la surcharge à la saison calculée pour obtenir les paramètres TVDB effectifs. */
+private fun resolveTvdbTarget(
+    overrideEntry: TvdbOverrideEntry?,
+    seriesOverride: TvdbSeriesOverride?,
+    rawSeasonName: String?,
+    isMovie: Boolean,
+    isSpecial: Boolean,
+    preference: MediaPreference,
+): ResolvedTvdbTarget {
+    val calculatedSeasonNumber = if (isSpecial) 0 else (rawSeasonName?.let { extractSeasonNumber(it) } ?: 1)
+    return ResolvedTvdbTarget(
+        seasonNumber = overrideEntry?.tvdbSeason ?: calculatedSeasonNumber,
+        episodeOffset = overrideEntry?.episodeOffset ?: 0,
+        seasonOrderType = overrideEntry?.seasonOrderType ?: "official",
+        episodeOrderType = overrideEntry?.episodeOrderType,
+        targetTvdbId = overrideEntry?.seriesId ?: seriesOverride?.seriesId,
+        isMovie = overrideEntry?.isMovie ?: isMovie,
+        preferJapanesePoster = overrideEntry?.preferJapanesePoster ?: false,
+        preference = preference,
+    )
+}
+
+/** Titres de recherche principaux, assainis et dédoublonnés. */
+private fun Source.resolvePrimaryTitles(
+    seriesTitle: String,
+    fullTitle: String,
+    rawSeasonName: String?,
+    isMovieResolved: Boolean,
+): List<String> = if (isMovieResolved && !rawSeasonName.isNullOrBlank() && !rawSeasonName.matches(genericMovieTitleRegex)) {
+    Log.e(TVDB_LOG, "ici et $rawSeasonName + $fullTitle")
+    listOfNotNull(sanitizeTitle(rawSeasonName), sanitizeTitle(fullTitle))
+} else {
+    listOf(sanitizeTitle(seriesTitle), sanitizeTitle(fullTitle))
+}.filter { it.isNotBlank() }.distinct()
+
+/** Titres de recherche secondaires, plus courts que les titres principaux et jamais déjà testés. */
+private fun Source.resolveSecondaryTitles(
+    titles: Set<String>,
+    primaryTitles: List<String>,
+    seriesTitle: String,
+): List<String> {
+    val minLen = if (seriesTitle.length <= TITLE_PREFIX_LENGTH) seriesTitle.length else TITLE_PREFIX_LENGTH
+    return titles.map { sanitizeTitle(it) }
+        .filter { it.isNotBlank() && it.length >= minLen && !primaryTitles.contains(it) }
+        .distinct()
+}
+
+/** Interroge TVDB pour chaque titre candidat, en conservant les seuls résultats non nuls. */
+private suspend fun Source.fetchTvdbMetadataForTitles(
+    lookupTitles: List<String>,
+    target: ResolvedTvdbTarget,
+): List<TvdbMetadata> = lookupTitles.mapNotNull { title ->
+    fetchTvdbMetadata(
+        title,
+        target.seasonNumber,
+        isMovie = target.isMovie,
+        preference = target.preference,
+        seasonOrderType = target.seasonOrderType,
+        targetTvdbId = target.targetTvdbId,
+        preferJapanesePoster = target.preferJapanesePoster,
+        episodeOrderType = target.episodeOrderType,
+    )
+}
+
+/**
+ * Récupère les métadonnées via l'identifiant TMDB externe, uniquement si le panneau
+ * ne redirige pas explicitement vers un autre `seriesId`.
+ */
+private suspend fun Source.fetchExternalTvdbCandidate(
+    externalTmdbId: Long?,
+    overrideEntry: TvdbOverrideEntry?,
+    seriesTitle: String,
+    fullTitle: String,
+    titles: Set<String>,
+    target: ResolvedTvdbTarget,
+): TvdbMetadata? {
+    if (externalTmdbId == null || externalTmdbId <= 0 || overrideEntry?.seriesId != null) return null
+
+    val externalExpectedNames = (listOf(seriesTitle, fullTitle) + titles)
+        .filter { it.isNotBlank() }
+        .toSet()
+    return TvdbFetcher(this).fetchTvdbMetadataFromExternal(
+        remoteId = externalTmdbId,
+        source = ExternalSourceId.TMDB,
+        season = target.seasonNumber,
+        expectedNames = externalExpectedNames,
+        movieWanted = target.isMovie,
+        seasonOrderType = target.seasonOrderType,
+        episodeOrderType = target.episodeOrderType,
+        preferJapanesePoster = target.preferJapanesePoster,
+    )
+}
+
 /**
  * High-level helper function for extensions to fetch TVDB metadata for any panel/tab.
  */
@@ -170,110 +304,40 @@ suspend fun Source.fetchTvdbForPanel(
     externalTmdbId: Long? = null,
 ): TvdbMetadata? {
     val allLookupTitles = (listOf(seriesTitle, fullTitle) + titles).map { it.normalize() }
-    val seriesOverride = tvdbOverridesMap.entries.find { entry ->
-        val normKey = entry.key.normalize()
-        allLookupTitles.any { it.contains(normKey) || it.contains(entry.key) }
-    }?.value
+    val seriesOverride = findSeriesOverride(allLookupTitles)
 
     Log.d(TVDB_LOG, "override found = $seriesOverride")
 
     val allSeasonLookups = listOfNotNull(rawSeasonName, fullTitle, seriesTitle).map { it.normalize() }
     // Match override keys longest-first and ensure digit-boundary check to avoid "saga 1" matching "saga 10/11/12"
-    val overrideEntry = seriesOverride?.seasons?.entries
-        ?.sortedByDescending { it.key.length }
-        ?.find { entry ->
-            val normKey = entry.key.normalize()
-            allSeasonLookups.any { lookup ->
-                val idx = lookup.indexOf(normKey)
-                if (idx >= 0) {
-                    val afterIdx = idx + normKey.length
-                    afterIdx >= lookup.length || !lookup[afterIdx].isDigit()
-                } else {
-                    false
-                }
-            }
-        }?.value
+    val overrideEntry = findSeasonOverrideEntry(seriesOverride, allSeasonLookups)
 
     // skipTvdb: panel explicitement marqué pour conserver les métadonnées de la source
     if (overrideEntry?.skipTvdb == true) return null
 
-    val calculatedSeasonNumber = if (isSpecial) 0 else (rawSeasonName?.let { extractSeasonNumber(it) } ?: 1)
-    val seasonNumber = overrideEntry?.tvdbSeason ?: calculatedSeasonNumber
-    val episodeOffset = overrideEntry?.episodeOffset ?: 0
-    val seasonOrderType = overrideEntry?.seasonOrderType ?: "official"
-    val episodeOrderType = overrideEntry?.episodeOrderType
-    val targetTvdbId = overrideEntry?.seriesId ?: seriesOverride?.seriesId
-    val isMovieResolved = overrideEntry?.isMovie ?: isMovie
-
-    val preferJapanesePoster = overrideEntry?.preferJapanesePoster ?: false
+    val target = resolveTvdbTarget(overrideEntry, seriesOverride, rawSeasonName, isMovie, isSpecial, preference)
 
     // Try External TMDB ID first when available (only if the panel doesn't explicitly redirect to another seriesId)
-    if (externalTmdbId != null && externalTmdbId > 0 && overrideEntry?.seriesId == null) {
-        val externalExpectedNames = (listOf(seriesTitle, fullTitle) + titles)
-            .filter { it.isNotBlank() }
-            .toSet()
-        val externalMeta = TvdbFetcher(this).fetchTvdbMetadataFromExternal(
-            remoteId = externalTmdbId,
-            source = ExternalSourceId.TMDB,
-            season = seasonNumber,
-            expectedNames = externalExpectedNames,
-            movieWanted = isMovieResolved,
-            seasonOrderType = seasonOrderType,
-            episodeOrderType = episodeOrderType,
-            preferJapanesePoster = preferJapanesePoster,
-        )
-        if (externalMeta != null) {
-            return externalMeta.copy(episodeOffset = episodeOffset)
-        }
+    val externalMeta = fetchExternalTvdbCandidate(externalTmdbId, overrideEntry, seriesTitle, fullTitle, titles, target)
+    if (externalMeta != null) {
+        return externalMeta.copy(episodeOffset = target.episodeOffset)
     }
 
     // 1. Try Primary Titles first
-    val primaryTitles = if (isMovieResolved && !rawSeasonName.isNullOrBlank() && !rawSeasonName.matches(genericMovieTitleRegex)) {
-        Log.e(TVDB_LOG, "ici et $rawSeasonName + $fullTitle")
-        listOfNotNull(sanitizeTitle(rawSeasonName), sanitizeTitle(fullTitle))
-    } else {
-        listOf(sanitizeTitle(seriesTitle), sanitizeTitle(fullTitle))
-    }.filter { it.isNotBlank() }.distinct()
-
-    val primaryResults = primaryTitles.mapNotNull { title ->
-        fetchTvdbMetadata(
-            title,
-            seasonNumber,
-            isMovie = isMovieResolved,
-            preference = preference,
-            seasonOrderType = seasonOrderType,
-            targetTvdbId = targetTvdbId,
-            preferJapanesePoster = preferJapanesePoster,
-            episodeOrderType = episodeOrderType,
-        )
-    }
+    val primaryTitles = resolvePrimaryTitles(seriesTitle, fullTitle, rawSeasonName, target.isMovie)
+    val primaryResults = fetchTvdbMetadataForTitles(primaryTitles, target)
 
     val bestPrimary = primaryResults.maxByOrNull { it.matchScore }
-    if (targetTvdbId != null || (bestPrimary != null && bestPrimary.matchScore >= MIN_MATCH_SCORE)) {
-        return bestPrimary?.copy(episodeOffset = episodeOffset)
+    if (target.targetTvdbId != null || (bestPrimary != null && bestPrimary.matchScore >= MIN_MATCH_SCORE)) {
+        return bestPrimary?.copy(episodeOffset = target.episodeOffset)
     }
 
     // 2. Fallback to Secondary Titles only if primary score is < 60 and no explicit targetTvdbId
-    val minLen = if (seriesTitle.length <= TITLE_PREFIX_LENGTH) seriesTitle.length else TITLE_PREFIX_LENGTH
-    val secondaryTitles = titles.map { sanitizeTitle(it) }
-        .filter { it.isNotBlank() && it.length >= minLen && !primaryTitles.contains(it) }
-        .distinct()
-
-    val secondaryResults = secondaryTitles.take(MAX_SECONDARY_TITLES).mapNotNull { title ->
-        fetchTvdbMetadata(
-            title,
-            seasonNumber,
-            isMovie = isMovieResolved,
-            preference = preference,
-            seasonOrderType = seasonOrderType,
-            targetTvdbId = targetTvdbId,
-            preferJapanesePoster = preferJapanesePoster,
-            episodeOrderType = episodeOrderType,
-        )
-    }
+    val secondaryTitles = resolveSecondaryTitles(titles, primaryTitles, seriesTitle)
+    val secondaryResults = fetchTvdbMetadataForTitles(secondaryTitles.take(MAX_SECONDARY_TITLES), target)
 
     val allCandidates = primaryResults + secondaryResults
     val result = allCandidates.maxByOrNull { it.matchScore } ?: bestPrimary
 
-    return result?.copy(episodeOffset = episodeOffset)
+    return result?.copy(episodeOffset = target.episodeOffset)
 }

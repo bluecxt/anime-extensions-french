@@ -330,6 +330,35 @@ class AnimoFlix : ConfigurableSource() {
     }
 
     private suspend fun parseEpisodesFromSeasonPage(document: Document, seasonName: String, totalSeasons: Int, animeTitle: String, animeUrl: String): List<SEpisode> {
+        val (episodesMap, titlesMap) = buildEpisodeMaps(document)
+
+        // --- Simplified Metadata Fetching ---
+        val sNumRaw = parseSeasonNumber(seasonName)
+        val tmdbMetadata = getBestTmdbMetadata(animeTitle, animeUrl, sNumRaw)
+
+        return episodesMap.keys.sorted().map { epNum ->
+            val langs = episodesMap[epNum]!!
+            SEpisode.create().apply {
+                episode_number = epNum
+                val siteEpTitle = titlesMap[epNum] ?: "Episode $epNum"
+
+                // Metadata direct lookup only
+                val epMeta = tmdbMetadata?.episodeSummaries?.get(episodeLookupIndex(sNumRaw, epNum))
+                val tmdbName = epMeta?.first
+
+                // GEMINI.md Naming Rules: [S1] Episode Y - [Titre]
+                name = buildSeasonEpisodeName(siteEpTitle, epNum, tmdbName, totalSeasons, seasonName, sNumRaw)
+
+                scanlator = buildScanlator(langs)
+
+                this.preview_url = epMeta?.second
+                this.summary = epMeta?.third
+                url = json.encodeToString(langs)
+            }
+        }
+    }
+
+    private fun buildEpisodeMaps(document: Document): Pair<MutableMap<Float, MutableMap<String, String>>, MutableMap<Float, String>> {
         val allEpisodeCards = document.select("a.sw-ep-card, a.episode-card")
         val episodesMap = mutableMapOf<Float, MutableMap<String, String>>()
         val titlesMap = mutableMapOf<Float, String>()
@@ -345,60 +374,55 @@ class AnimoFlix : ConfigurableSource() {
                 titlesMap[epNum] = epTitle.replace("Épisode", "Episode", true)
             }
             val epLabel = card.selectFirst(".sw-ep-label")?.text()?.trim()
-            val lang = when {
-                epLabel?.contains("VF", true) == true -> "VF"
-                epLabel?.contains("VOSTFR", true) == true -> "VOSTFR"
-                url.contains("/vf/") -> "VF"
-                else -> "VOSTFR"
-            }
-            episodesMap[epNum]!![lang] = url
+            episodesMap[epNum]!![detectEpisodeLang(epLabel, url)] = url
         }
+        return episodesMap to titlesMap
+    }
 
-        // --- Simplified Metadata Fetching ---
-        val sNumRaw = parseSeasonNumber(seasonName)
-        val tmdbMetadata = getBestTmdbMetadata(animeTitle, animeUrl, sNumRaw)
+    private fun detectEpisodeLang(epLabel: String?, url: String): String = when {
+        epLabel?.contains("VF", true) == true -> "VF"
+        epLabel?.contains("VOSTFR", true) == true -> "VOSTFR"
+        url.contains("/vf/") -> "VF"
+        else -> "VOSTFR"
+    }
 
-        return episodesMap.keys.sorted().map { epNum ->
-            val langs = episodesMap[epNum]!!
-            SEpisode.create().apply {
-                episode_number = epNum
-                val siteEpTitle = titlesMap[epNum] ?: "Episode $epNum"
+    private fun episodeLookupIndex(sNumRaw: Double, epNum: Float): Int = if (sNumRaw == SEASON_SENTINEL_MOVIE) 1 else epNum.toInt()
 
-                // Metadata direct lookup only
-                val epLookup = if (sNumRaw == SEASON_SENTINEL_MOVIE) 1 else epNum.toInt()
-                val epMeta = tmdbMetadata?.episodeSummaries?.get(epLookup)
-                val tmdbName = epMeta?.first
+    private fun buildSeasonEpisodeName(
+        siteEpTitle: String,
+        epNum: Float,
+        tmdbName: String?,
+        totalSeasons: Int,
+        seasonName: String,
+        sNumRaw: Double,
+    ): String {
+        val formattedName = formatEpisodeDisplayName(siteEpTitle, epNum, tmdbName)
 
-                // GEMINI.md Naming Rules: [S1] Episode Y - [Titre]
-                val formattedName = if (siteEpTitle.matches(Regex("(?i)^Episode\\s*\\d+$")) || siteEpTitle.isBlank()) {
-                    if (tmdbName != null) "Episode ${epNum.toInt()} - $tmdbName" else "Episode ${epNum.toInt()}"
-                } else {
-                    if (siteEpTitle.contains("Episode", true)) siteEpTitle else "Episode ${epNum.toInt()} - $siteEpTitle"
-                }
-
-                name = if (totalSeasons > 1 && seasonName.isNotBlank()) {
-                    val sN = sNumRaw
-                    val sPrefix = when {
-                        sN == SEASON_SENTINEL_MOVIE -> "[Movie]"
-                        sN == SEASON_SENTINEL_OVA -> "[OVA]"
-                        sN > 0 -> "[S${sN.toInt()}]"
-                        else -> "[Special]"
-                    }
-                    "$sPrefix $formattedName"
-                } else {
-                    formattedName
-                }
-
-                val scanlatorsList = mutableListOf<String>()
-                if (langs.containsKey("VOSTFR")) scanlatorsList.add("VOSTFR")
-                if (langs.containsKey("VF")) scanlatorsList.add("VF")
-                scanlator = scanlatorsList.joinToString(", ")
-
-                this.preview_url = epMeta?.second
-                this.summary = epMeta?.third
-                url = json.encodeToString(langs)
+        return if (totalSeasons > 1 && seasonName.isNotBlank()) {
+            val sN = sNumRaw
+            val sPrefix = when {
+                sN == SEASON_SENTINEL_MOVIE -> "[Movie]"
+                sN == SEASON_SENTINEL_OVA -> "[OVA]"
+                sN > 0 -> "[S${sN.toInt()}]"
+                else -> "[Special]"
             }
+            "$sPrefix $formattedName"
+        } else {
+            formattedName
         }
+    }
+
+    private fun formatEpisodeDisplayName(siteEpTitle: String, epNum: Float, tmdbName: String?): String = if (siteEpTitle.matches(Regex("(?i)^Episode\\s*\\d+$")) || siteEpTitle.isBlank()) {
+        if (tmdbName != null) "Episode ${epNum.toInt()} - $tmdbName" else "Episode ${epNum.toInt()}"
+    } else {
+        if (siteEpTitle.contains("Episode", true)) siteEpTitle else "Episode ${epNum.toInt()} - $siteEpTitle"
+    }
+
+    private fun buildScanlator(langs: Map<String, String>): String {
+        val scanlatorsList = mutableListOf<String>()
+        if (langs.containsKey("VOSTFR")) scanlatorsList.add("VOSTFR")
+        if (langs.containsKey("VF")) scanlatorsList.add("VF")
+        return scanlatorsList.joinToString(", ")
     }
 
     // ================== Hoster ==================

@@ -184,64 +184,12 @@ fun SAnime.applyAnilistMetadata(
 
 internal fun AnilistMediaDto.toMetadata(): AnilistMetadata {
     val cleanDesc = description?.let(::sanitizeAnilistDescription)
-
-    val animStudios = studios?.nodes
-        .orEmpty()
-        .filter { it.isAnimationStudio }
-        .map { it.name }
-        .distinct()
-
-    val prodStudios = studios?.nodes
-        .orEmpty()
-        .filterNot { it.isAnimationStudio }
-        .map { it.name }
-        .distinct()
-
-    val relevantRoles = setOf(
-        "original creator",
-        "original story",
-        "director",
-        "chief director",
-        "series composition",
-        "script",
-    )
-
-    val extractedStaff = staff?.edges
-        .orEmpty()
-        .filter { edge ->
-            val r = edge.role?.lowercase() ?: return@filter false
-            relevantRoles.any { r.contains(it) }
-        }
-        .mapNotNull { it.node?.name?.full }
-        .distinct()
-        .take(MAX_RELEVANT_STAFF)
-
-    val mappedTags = tags.map {
-        AnilistTag(
-            name = it.name,
-            description = it.description,
-            rank = it.rank ?: 0,
-            isSpoiler = it.isMediaSpoiler || it.isGeneralSpoiler,
-        )
-    }.sortedByDescending { it.rank }
-
-    val mappedTrailer = trailer?.let { t ->
-        val id = t.id
-        val site = t.site
-        if (!id.isNullOrBlank() && !site.isNullOrBlank()) {
-            AnilistTrailer(id = id, site = site, thumbnailUrl = t.thumbnail)
-        } else {
-            null
-        }
-    }
-
-    val mappedNextAiring = nextAiringEpisode?.let {
-        AnilistNextAiring(
-            episode = it.episode,
-            airingAtEpochSeconds = it.airingAt,
-            timeUntilAiringSeconds = it.timeUntilAiring,
-        )
-    }
+    val animStudios = extractAnimationStudioNames()
+    val prodStudios = extractProducerStudioNames()
+    val extractedStaff = extractRelevantStaffNames()
+    val mappedTags = mapTags()
+    val mappedTrailer = mapTrailer()
+    val mappedNextAiring = mapNextAiring()
 
     val resolvedYear = seasonYear ?: startDate?.year
 
@@ -274,6 +222,66 @@ internal fun AnilistMediaDto.toMetadata(): AnilistMetadata {
         trailer = mappedTrailer,
         nextAiring = mappedNextAiring,
         siteUrl = siteUrl,
+    )
+}
+
+private fun AnilistMediaDto.extractAnimationStudioNames(): List<String> = studios?.nodes
+    .orEmpty()
+    .filter { it.isAnimationStudio }
+    .map { it.name }
+    .distinct()
+
+private fun AnilistMediaDto.extractProducerStudioNames(): List<String> = studios?.nodes
+    .orEmpty()
+    .filterNot { it.isAnimationStudio }
+    .map { it.name }
+    .distinct()
+
+private fun AnilistMediaDto.extractRelevantStaffNames(): List<String> {
+    val relevantRoles = setOf(
+        "original creator",
+        "original story",
+        "director",
+        "chief director",
+        "series composition",
+        "script",
+    )
+
+    return staff?.edges
+        .orEmpty()
+        .filter { edge ->
+            val r = edge.role?.lowercase() ?: return@filter false
+            relevantRoles.any { r.contains(it) }
+        }
+        .mapNotNull { it.node?.name?.full }
+        .distinct()
+        .take(MAX_RELEVANT_STAFF)
+}
+
+private fun AnilistMediaDto.mapTags(): List<AnilistTag> = tags.map {
+    AnilistTag(
+        name = it.name,
+        description = it.description,
+        rank = it.rank ?: 0,
+        isSpoiler = it.isMediaSpoiler || it.isGeneralSpoiler,
+    )
+}.sortedByDescending { it.rank }
+
+private fun AnilistMediaDto.mapTrailer(): AnilistTrailer? = trailer?.let { t ->
+    val id = t.id
+    val site = t.site
+    if (!id.isNullOrBlank() && !site.isNullOrBlank()) {
+        AnilistTrailer(id = id, site = site, thumbnailUrl = t.thumbnail)
+    } else {
+        null
+    }
+}
+
+private fun AnilistMediaDto.mapNextAiring(): AnilistNextAiring? = nextAiringEpisode?.let {
+    AnilistNextAiring(
+        episode = it.episode,
+        airingAtEpochSeconds = it.airingAt,
+        timeUntilAiringSeconds = it.timeUntilAiring,
     )
 }
 

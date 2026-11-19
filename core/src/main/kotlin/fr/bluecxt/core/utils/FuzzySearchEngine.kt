@@ -189,75 +189,107 @@ class FuzzySearchEngine<T>(
         // --- PASS 1: Exact and substring matching ---
         for (item in items) {
             val meta = adapter.extract(item)
-            val titleN = fastNormalize(meta.primaryTitle)
-
-            val titleMatch = titleN.isNotEmpty() && titleN.contains(nq)
-            var simMatch = false
-            if (!titleMatch) {
-                val alt = meta.alternativeTitles
-                for (i in alt.indices) {
-                    if (fastNormalize(alt[i]).contains(nq)) {
-                        simMatch = true
-                        break
-                    }
-                }
-            }
-
-            var tagMatch = false
-            if (!titleMatch && !simMatch) {
-                val tags = meta.tags
-                for (i in tags.indices) {
-                    if (fastNormalize(tags[i]).contains(nq)) {
-                        tagMatch = true
-                        break
-                    }
-                }
-            }
-
-            if (titleMatch || simMatch || tagMatch) {
-                val score = when {
-                    titleN == nq -> SCORE_EXACT_TITLE
-                    titleN.startsWith(nq) -> SCORE_TITLE_PREFIX
-                    titleMatch -> SCORE_TITLE_MATCH
-                    simMatch -> SCORE_SIMILAR_TITLE
-                    else -> SCORE_TAG_MATCH
-                }
+            val score = computePass1Score(meta, nq)
+            if (score != null) {
                 exactMatches.add(ScoredEntry(item, meta.primaryTitle, meta.distinctId, score))
             } else if (exactMatches.isEmpty() && candidatesForFuzzy != null) {
                 candidatesForFuzzy.add(item to meta)
             }
         }
 
-        val finalPool: MutableList<ScoredEntry<T>> = if (exactMatches.isNotEmpty()) {
-            exactMatches
-        } else if (!candidatesForFuzzy.isNullOrEmpty()) {
-            // --- PASS 2: Fuzzy fallback (executed only when Pass 1 returns 0 matches) ---
-            val qCtx = QueryContext(nq)
-            val fuzzyMatches = ArrayList<ScoredEntry<T>>(FUZZY_MATCH_CAPACITY)
-
-            for (i in candidatesForFuzzy.indices) {
-                val (item, meta) = candidatesForFuzzy[i]
-                val fs = computeBestFuzzy(qCtx, meta.primaryTitle, meta.alternativeTitles)
-                if (fs >= MIN_FUZZY_SIMILARITY) {
-                    fuzzyMatches.add(
-                        ScoredEntry(
-                            item = item,
-                            primaryTitle = meta.primaryTitle,
-                            distinctId = meta.distinctId,
-                            score = (fs * 50.0).toInt(),
-                        ),
-                    )
-                }
-            }
-            fuzzyMatches
-        } else {
-            return emptyList()
-        }
+        val finalPool = buildFinalPool(nq, exactMatches, candidatesForFuzzy) ?: return emptyList()
 
         if (finalPool.isEmpty()) return emptyList()
 
         finalPool.sort()
 
+        return collectResults(finalPool, limit)
+    }
+
+    /**
+     * Evaluates Pass 1 substring matching for [meta] and returns its relevance score,
+     * or `null` when no title, alternative title or tag matches [nq].
+     */
+    private fun computePass1Score(meta: SearchMetadata, nq: String): Int? {
+        val titleN = fastNormalize(meta.primaryTitle)
+
+        val titleMatch = titleN.isNotEmpty() && titleN.contains(nq)
+        val simMatch = !titleMatch && hasAnyMatch(meta.alternativeTitles, nq)
+        val tagMatch = !titleMatch && !simMatch && hasAnyMatch(meta.tags, nq)
+
+        if (!titleMatch && !simMatch && !tagMatch) return null
+
+        return pass1Score(titleN, nq, titleMatch, simMatch)
+    }
+
+    /**
+     * Returns the Pass 1 relevance score, keeping the original branch precedence.
+     */
+    private fun pass1Score(titleN: String, nq: String, titleMatch: Boolean, simMatch: Boolean): Int = when {
+        titleN == nq -> SCORE_EXACT_TITLE
+        titleN.startsWith(nq) -> SCORE_TITLE_PREFIX
+        titleMatch -> SCORE_TITLE_MATCH
+        simMatch -> SCORE_SIMILAR_TITLE
+        else -> SCORE_TAG_MATCH
+    }
+
+    /**
+     * Returns `true` as soon as one normalized entry of [values] contains [nq].
+     */
+    private fun hasAnyMatch(values: List<String>, nq: String): Boolean {
+        for (i in values.indices) {
+            if (fastNormalize(values[i]).contains(nq)) return true
+        }
+        return false
+    }
+
+    /**
+     * Selects the pool to sort: Pass 1 matches, else Pass 2 fuzzy matches, else `null`
+     * (no candidate at all).
+     */
+    private fun buildFinalPool(
+        nq: String,
+        exactMatches: MutableList<ScoredEntry<T>>,
+        candidatesForFuzzy: List<Pair<T, SearchMetadata>>?,
+    ): MutableList<ScoredEntry<T>>? {
+        if (exactMatches.isNotEmpty()) return exactMatches
+
+        if (!candidatesForFuzzy.isNullOrEmpty()) {
+            // --- PASS 2: Fuzzy fallback (executed only when Pass 1 returns 0 matches) ---
+            return buildFuzzyMatches(nq, candidatesForFuzzy)
+        }
+
+        return null
+    }
+
+    private fun buildFuzzyMatches(
+        nq: String,
+        candidatesForFuzzy: List<Pair<T, SearchMetadata>>,
+    ): MutableList<ScoredEntry<T>> {
+        val qCtx = QueryContext(nq)
+        val fuzzyMatches = ArrayList<ScoredEntry<T>>(FUZZY_MATCH_CAPACITY)
+
+        for (i in candidatesForFuzzy.indices) {
+            val (item, meta) = candidatesForFuzzy[i]
+            val fs = computeBestFuzzy(qCtx, meta.primaryTitle, meta.alternativeTitles)
+            if (fs >= MIN_FUZZY_SIMILARITY) {
+                fuzzyMatches.add(
+                    ScoredEntry(
+                        item = item,
+                        primaryTitle = meta.primaryTitle,
+                        distinctId = meta.distinctId,
+                        score = (fs * 50.0).toInt(),
+                    ),
+                )
+            }
+        }
+        return fuzzyMatches
+    }
+
+    /**
+     * Deduplicates [finalPool] by distinct id and truncates it to [limit] entries.
+     */
+    private fun collectResults(finalPool: MutableList<ScoredEntry<T>>, limit: Int): List<T> {
         val result = ArrayList<T>(min(limit, finalPool.size))
         val seenIds = HashSet<Any>(min(limit * 2, finalPool.size))
 
@@ -287,15 +319,27 @@ class FuzzySearchEngine<T>(
             if (best >= 1.0) return best
         }
 
+        return bestAlternativeSimilarity(qCtx, altTitles, best)
+    }
+
+    /**
+     * Returns the highest similarity across [altTitles], never below [currentBest], with the
+     * same early exit on a perfect match.
+     */
+    private fun bestAlternativeSimilarity(
+        qCtx: QueryContext,
+        altTitles: List<String>,
+        currentBest: Double,
+    ): Double {
+        var best = currentBest
+
         for (i in altTitles.indices) {
             val normAlt = fastNormalize(altTitles[i])
-            if (normAlt.isNotEmpty()) {
-                val s = fuzzySim(qCtx, normAlt)
-                if (s > best) {
-                    best = s
-                    if (best >= 1.0) return best
-                }
-            }
+            if (normAlt.isEmpty()) continue
+            val s = fuzzySim(qCtx, normAlt)
+            if (s <= best) continue
+            best = s
+            if (best >= 1.0) return best
         }
         return best
     }
@@ -319,28 +363,7 @@ class FuzzySearchEngine<T>(
         for (qi in qt.indices) {
             val q = qt[qi]
             val tol = qCtx.tokenTolerances[qi]
-            var bestSub = 0.0
-
-            for (ti in tt.indices) {
-                val t = tt[ti]
-                if (t.isEmpty()) continue
-                if (t.startsWith(q)) {
-                    bestSub = 1.0
-                    break
-                }
-                val headLen = min(t.length, q.length + 1)
-                val d1 = damerauLevenshteinBounded(q, t, 0, t.length, tol, ws)
-                val d2 = if (headLen < t.length) {
-                    damerauLevenshteinBounded(q, t, 0, headLen, tol, ws)
-                } else {
-                    d1
-                }
-                val d = min(d1, d2)
-                if (d <= tol) {
-                    val score = 1.0 - (d.toDouble() / max(q.length, 1)) * FUZZY_DISTANCE_PENALTY
-                    if (score > bestSub) bestSub = score
-                }
-            }
+            val bestSub = bestTokenSimilarity(q, tol, tt, ws)
 
             if (bestSub == 0.0) {
                 ok = false
@@ -361,6 +384,41 @@ class FuzzySearchEngine<T>(
         best = evalGlobalCandidate(flatQuery, targetFlat, min(targetFlat.length, flatQuery.length + 2), tol2, ws, best)
 
         return best
+    }
+
+    /**
+     * Returns the best similarity of token [q] against every token of [targetTokens], or `0.0`
+     * when no token is close enough under tolerance [tol].
+     */
+    private fun bestTokenSimilarity(
+        q: String,
+        tol: Int,
+        targetTokens: List<String>,
+        ws: LevenshteinWorkspace,
+    ): Double {
+        var bestSub = 0.0
+
+        for (ti in targetTokens.indices) {
+            val t = targetTokens[ti]
+            if (t.isEmpty()) continue
+            if (t.startsWith(q)) {
+                return 1.0
+            }
+            val headLen = min(t.length, q.length + 1)
+            val d1 = damerauLevenshteinBounded(q, t, 0, t.length, tol, ws)
+            val d2 = if (headLen < t.length) {
+                damerauLevenshteinBounded(q, t, 0, headLen, tol, ws)
+            } else {
+                d1
+            }
+            val d = min(d1, d2)
+            if (d <= tol) {
+                val score = 1.0 - (d.toDouble() / max(q.length, 1)) * FUZZY_DISTANCE_PENALTY
+                if (score > bestSub) bestSub = score
+            }
+        }
+
+        return bestSub
     }
 
     private fun evalGlobalCandidate(
@@ -417,24 +475,7 @@ class FuzzySearchEngine<T>(
         for (j in 0..bl) prev[j] = j
 
         for (i in 1..al) {
-            cur[0] = i
-            var minInRow = cur[0]
-            val ca = a[i - 1]
-
-            for (j in 1..bl) {
-                val cb = b[bStart + j - 1]
-                val cost = if (ca == cb) 0 else 1
-                var v = min(
-                    min(cur[j - 1] + 1, prev[j] + 1),
-                    prev[j - 1] + cost,
-                )
-                val isTransposition = i > 1 && j > 1 && ca == b[bStart + j - 2] && a[i - 2] == cb
-                if (isTransposition) {
-                    v = min(v, prev2[j - 2] + 1)
-                }
-                cur[j] = v
-                if (v < minInRow) minInRow = v
-            }
+            val minInRow = fillLevenshteinRow(a, b, bStart, bl, i, prev2, prev, cur)
 
             if (minInRow > maxDist) return maxDist + 1
 
@@ -450,6 +491,41 @@ class FuzzySearchEngine<T>(
         return prev[bl]
     }
 
+    /**
+     * Fills the row [i] of the distance matrix and returns the smallest value it contains.
+     */
+    private fun fillLevenshteinRow(
+        a: String,
+        b: String,
+        bStart: Int,
+        bl: Int,
+        i: Int,
+        prev2: IntArray,
+        prev: IntArray,
+        cur: IntArray,
+    ): Int {
+        cur[0] = i
+        var minInRow = cur[0]
+        val ca = a[i - 1]
+
+        for (j in 1..bl) {
+            val cb = b[bStart + j - 1]
+            val cost = if (ca == cb) 0 else 1
+            var v = min(
+                min(cur[j - 1] + 1, prev[j] + 1),
+                prev[j - 1] + cost,
+            )
+            val isTransposition = i > 1 && j > 1 && ca == b[bStart + j - 2] && a[i - 2] == cb
+            if (isTransposition) {
+                v = min(v, prev2[j - 2] + 1)
+            }
+            cur[j] = v
+            if (v < minInRow) minInRow = v
+        }
+
+        return minInRow
+    }
+
     companion object {
         /**
          * Single-pass string normalizer that strips diacritics, converts characters to lowercase
@@ -462,21 +538,33 @@ class FuzzySearchEngine<T>(
         fun fastNormalize(input: String?): String {
             if (input.isNullOrEmpty()) return ""
 
-            var hasNonAscii = false
-            for (i in input.indices) {
-                if (input[i].code > ASCII_LIMIT) {
-                    hasNonAscii = true
-                    break
-                }
-            }
-
-            val src = if (hasNonAscii) {
+            val src = if (hasNonAscii(input)) {
                 Normalizer.normalize(input, Normalizer.Form.NFD)
             } else {
                 input
             }
 
             val out = CharArray(src.length)
+            val outLen = normalizeInto(src, out)
+
+            return if (outLen == 0) "" else String(out, 0, outLen)
+        }
+
+        /**
+         * Returns `true` when [input] contains at least one non-ASCII character.
+         */
+        private fun hasNonAscii(input: String): Boolean {
+            for (i in input.indices) {
+                if (input[i].code > ASCII_LIMIT) return true
+            }
+            return false
+        }
+
+        /**
+         * Writes the normalized characters of [src] into [out] and returns the written length,
+         * collapsing consecutive delimiters into a single space and trimming the trailing one.
+         */
+        private fun normalizeInto(src: String, out: CharArray): Int {
             var outLen = 0
             var lastWasSpace = true
 
@@ -509,7 +597,7 @@ class FuzzySearchEngine<T>(
                 outLen--
             }
 
-            return if (outLen == 0) "" else String(out, 0, outLen)
+            return outLen
         }
     }
 }

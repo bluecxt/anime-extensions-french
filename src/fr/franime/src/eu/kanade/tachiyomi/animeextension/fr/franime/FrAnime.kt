@@ -4,6 +4,7 @@ package eu.kanade.tachiyomi.animeextension.fr.franime
 
 import android.util.Log
 import eu.kanade.tachiyomi.animeextension.fr.franime.dto.Anime
+import eu.kanade.tachiyomi.animeextension.fr.franime.dto.Season
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
@@ -141,51 +142,71 @@ class FrAnime : ConfigurableSource() {
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val cleanUrl = anime.url.substringBefore("#").substringBefore("?")
         val pathSegment = (baseUrl + cleanUrl).toHttpUrl().encodedPathSegments.last()
-        val animeData = database.firstOrNull { it.id.toString() == pathSegment }
-            ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment }
+        val animeData = findAnimeData(pathSegment)
 
-        val searchTitle = animeData?.title?.takeIf { it.isNotBlank() } ?: animeData?.originalTitle ?: anime.title
-        val tmdbSearchTitle = searchTitle.replace(kaiRegex, " ").trim()
-
+        val searchTitle = resolveDetailsSearchTitle(animeData, anime.title)
         val sNumFromUrl = anime.url.substringAfter("#s", "").substringBefore("|").toIntOrNull()
+        val searchQueries = buildTmdbSearchQueries(animeData, searchTitle)
+        val tmdbMetadata = fetchFirstTmdbMetadata(searchQueries, sNumFromUrl)
+
+        anime.description = buildAnimeDescription(animeData, tmdbMetadata)
+        applyTmdbPosterAndCredits(anime, tmdbMetadata)
+        applyDetailsFetchType(anime, animeData, sNumFromUrl)
+
+        anime.initialized = true
+        return anime
+    }
+
+    private fun findAnimeData(pathSegment: String): Anime? = database.firstOrNull { it.id.toString() == pathSegment }
+        ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment }
+
+    private fun resolveDetailsSearchTitle(animeData: Anime?, fallbackTitle: String): String = animeData?.title?.takeIf { it.isNotBlank() } ?: animeData?.originalTitle ?: fallbackTitle
+
+    private fun buildTmdbSearchQueries(animeData: Anime?, searchTitle: String): MutableList<String> {
+        val tmdbSearchTitle = searchTitle.replace(kaiRegex, " ").trim()
         val searchQueries = mutableListOf(tmdbSearchTitle)
         animeData?.titlesAlt?.en?.let { if (it.isNotBlank()) searchQueries.add(it) }
         animeData?.titlesAlt?.enJp?.let { if (it.isNotBlank()) searchQueries.add(it) }
         animeData?.titlesAlt?.jaJp?.let { if (it.isNotBlank()) searchQueries.add(it) }
+        return searchQueries
+    }
 
+    private suspend fun fetchFirstTmdbMetadata(searchQueries: List<String>, sNumFromUrl: Int?): TmdbMetadata? {
         var tmdbMetadata: TmdbMetadata? = null
         for (query in searchQueries.distinct()) {
             tmdbMetadata = if (sNumFromUrl != null) fetchTmdbMetadata(query, sNumFromUrl) else fetchTmdbMetadata(query)
             if (tmdbMetadata != null) break
         }
+        return tmdbMetadata
+    }
 
-        anime.description = buildString {
-            animeData?.let {
-                if (!tmdbMetadata?.releaseDate.isNullOrBlank()) {
-                    append("Date de sortie : ${tmdbMetadata.releaseDate}\n")
-                } else if (!it.startDate.isNullOrBlank()) {
-                    append("Date de sortie : ${it.startDate}\n")
-                }
-                append("Note : ${it.note} / 10\n\n")
+    private fun buildAnimeDescription(animeData: Anime?, tmdbMetadata: TmdbMetadata?): String = buildString {
+        animeData?.let {
+            if (!tmdbMetadata?.releaseDate.isNullOrBlank()) {
+                append("Date de sortie : ${tmdbMetadata.releaseDate}\n")
+            } else if (!it.startDate.isNullOrBlank()) {
+                append("Date de sortie : ${it.startDate}\n")
             }
+            append("Note : ${it.note} / 10\n\n")
+        }
 
-            val synopsis = tmdbMetadata?.summary ?: animeData?.description?.replace("\\n", "\n")
-            append(synopsis ?: "")
-        }.trim()
+        val synopsis = tmdbMetadata?.summary ?: animeData?.description?.replace("\\n", "\n")
+        append(synopsis ?: "")
+    }.trim()
 
+    private fun applyTmdbPosterAndCredits(anime: SAnime, tmdbMetadata: TmdbMetadata?) {
         (tmdbMetadata?.seasonPosterUrl ?: tmdbMetadata?.mainPosterUrl)?.let { anime.thumbnail_url = it }
         tmdbMetadata?.author?.let { anime.author = it }
         tmdbMetadata?.artist?.let { anime.artist = it }
+    }
 
+    private fun applyDetailsFetchType(anime: SAnime, animeData: Anime?, sNumFromUrl: Int?) {
         if (sNumFromUrl == null && animeData != null && animeData.seasons.size > 1) {
             anime.fetch_type = FetchType.Seasons
         } else {
             anime.fetch_type = FetchType.Episodes
             if (sNumFromUrl != null) anime.season_number = HUB_SEASON_NUMBER
         }
-
-        anime.initialized = true
-        return anime
     }
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
@@ -230,88 +251,145 @@ class FrAnime : ConfigurableSource() {
             ?: database.firstOrNull { titleToUrl(it.originalTitle) == pathSegment } ?: error("Anime introuvable")
 
         val searchTitle = animeData.title.takeIf { it.isNotBlank() } ?: animeData.originalTitle
-        val isKai = searchTitle.contains("Kai", ignoreCase = true) || animeData.format.equals("KAI", ignoreCase = true)
+        val isKai = isKaiAnime(searchTitle, animeData)
         val tmdbSearchTitle = searchTitle.replace(kaiRegex, " ").trim()
 
         val sNumFromUrl = anime.url.substringAfter("#s", "").substringBefore("|").toIntOrNull()
-        val seasonsToProcess = if (sNumFromUrl != null) {
-            listOf(animeData.seasons[sNumFromUrl - 1] to sNumFromUrl)
-        } else {
-            animeData.seasons.mapIndexed { index, season -> season to (index + 1) }
-        }
-
-        var globalEpisodeNumber = 1f
-        val allEpisodes = mutableListOf<SEpisode>()
+        val seasonsToProcess = selectSeasonsToProcess(animeData, sNumFromUrl)
 
         val format = animeData.format.uppercase()
         val isMovie = format == "FILM"
         val isOavFormat = format == "OVA" || format == "SPECIAL"
         val isSingleEpisode = seasonsToProcess.size == 1 && seasonsToProcess[0].first.episodes.size == 1
 
+        var globalEpisodeNumber = 1f
+        val allEpisodes = mutableListOf<SEpisode>()
+
         for ((season, seasonNumber) in seasonsToProcess) {
-            val tmdbSNum = season.title.replace("Saison ", "").toDoubleOrNull()?.toInt() ?: seasonNumber
-            val offsets = if (sNumFromUrl != null) {
-                var siteOffset = 0
-                for (i in 0 until (seasonNumber - 1)) {
-                    val prevSeason = animeData.seasons[i]
-                    val prevTmdbS = prevSeason.title.replace("Saison ", "").toDoubleOrNull()?.toInt() ?: (i + 1)
-                    if (prevTmdbS == tmdbSNum) siteOffset += prevSeason.episodes.size
-                }
-                siteOffset to 0
-            } else {
-                Pair(0, 0)
-            }
-
-            val tmdbMetadata = if (isKai) null else fetchTmdbMetadata(tmdbSearchTitle, tmdbSNum)
-
-            val rawEpisodes = season.episodes.mapIndexedNotNull { eIndex, episode ->
-                val availableLangs = mutableListOf<String>()
-                if (episode.languages.vo.players.isNotEmpty()) availableLangs.add("VOSTFR")
-                if (episode.languages.vf.players.isNotEmpty()) availableLangs.add("VF")
-
-                if (availableLangs.isEmpty()) return@mapIndexedNotNull null
-
-                SEpisode.create().apply {
-                    val epNumber = eIndex + 1
-                    setUrlWithoutDomain("$cleanUrl?s=$seasonNumber&ep=$epNumber")
-                    var epTitle = episode.title?.trim() ?: ""
-                    epTitle = epTitle.replace("Épisode", "Episode", true)
-                    name = if (isSingleEpisode) searchTitle else epTitle
-                    episode_number = epNumber.toFloat()
-                    scanlator = availableLangs.joinToString(", ")
-                }
-            }
-
-            val seasonIsOav = isOavFormat || season.title.contains("OAV", true) || season.title.contains("Special", true)
-
-            val mappedEpisodes = coreMapEpisodes(
-                rawEpisodes = rawEpisodes,
-                tmdbMetadata = tmdbMetadata,
-                tmdbS0Metadata = null,
-                offsets = offsets,
-                sNum = tmdbSNum,
+            val mappedEpisodes = mapSeasonEpisodes(
+                animeData = animeData,
+                season = season,
+                seasonNumber = seasonNumber,
+                sNumFromUrl = sNumFromUrl,
+                isKai = isKai,
+                tmdbSearchTitle = tmdbSearchTitle,
                 isMovie = isMovie,
-                isOav = seasonIsOav,
+                isOavFormat = isOavFormat,
+                isSingleEpisode = isSingleEpisode,
+                searchTitle = searchTitle,
+                cleanUrl = cleanUrl,
             )
-
-            mappedEpisodes.forEach {
-                if (isKai) {
-                    it.preview_url = null
-                    it.summary = null
-                }
-                if (isSingleEpisode) {
-                    val prefix = when (format) {
-                        "FILM" -> "[Movie] "
-                        "OVA", "SPECIAL" -> "[Special] "
-                        else -> ""
-                    }
-                    it.name = "$prefix$searchTitle".trim()
-                }
-                if (sNumFromUrl == null && seasonsToProcess.size > 1) it.episode_number = globalEpisodeNumber++
-            }
+            globalEpisodeNumber = applyEpisodePostProcessing(
+                mappedEpisodes = mappedEpisodes,
+                isKai = isKai,
+                isSingleEpisode = isSingleEpisode,
+                format = format,
+                searchTitle = searchTitle,
+                sNumFromUrl = sNumFromUrl,
+                seasonCount = seasonsToProcess.size,
+                globalEpisodeNumber = globalEpisodeNumber,
+            )
             allEpisodes.addAll(mappedEpisodes)
         }
         return allEpisodes.asReversed()
+    }
+
+    private fun isKaiAnime(searchTitle: String, animeData: Anime): Boolean = searchTitle.contains("Kai", ignoreCase = true) || animeData.format.equals("KAI", ignoreCase = true)
+
+    private fun selectSeasonsToProcess(animeData: Anime, sNumFromUrl: Int?): List<Pair<Season, Int>> = if (sNumFromUrl != null) {
+        listOf(animeData.seasons[sNumFromUrl - 1] to sNumFromUrl)
+    } else {
+        animeData.seasons.mapIndexed { index, season -> season to (index + 1) }
+    }
+
+    private fun computeSeasonOffsets(animeData: Anime, sNumFromUrl: Int?, seasonNumber: Int, tmdbSNum: Int): Pair<Int, Int> = if (sNumFromUrl != null) {
+        var siteOffset = 0
+        for (i in 0 until (seasonNumber - 1)) {
+            val prevSeason = animeData.seasons[i]
+            val prevTmdbS = prevSeason.title.replace("Saison ", "").toDoubleOrNull()?.toInt() ?: (i + 1)
+            if (prevTmdbS == tmdbSNum) siteOffset += prevSeason.episodes.size
+        }
+        siteOffset to 0
+    } else {
+        Pair(0, 0)
+    }
+
+    private suspend fun mapSeasonEpisodes(
+        animeData: Anime,
+        season: Season,
+        seasonNumber: Int,
+        sNumFromUrl: Int?,
+        isKai: Boolean,
+        tmdbSearchTitle: String,
+        isMovie: Boolean,
+        isOavFormat: Boolean,
+        isSingleEpisode: Boolean,
+        searchTitle: String,
+        cleanUrl: String,
+    ): List<SEpisode> {
+        val tmdbSNum = season.title.replace("Saison ", "").toDoubleOrNull()?.toInt() ?: seasonNumber
+        val offsets = computeSeasonOffsets(animeData, sNumFromUrl, seasonNumber, tmdbSNum)
+
+        val tmdbMetadata = if (isKai) null else fetchTmdbMetadata(tmdbSearchTitle, tmdbSNum)
+
+        val rawEpisodes = season.episodes.mapIndexedNotNull { eIndex, episode ->
+            val availableLangs = mutableListOf<String>()
+            if (episode.languages.vo.players.isNotEmpty()) availableLangs.add("VOSTFR")
+            if (episode.languages.vf.players.isNotEmpty()) availableLangs.add("VF")
+
+            if (availableLangs.isEmpty()) return@mapIndexedNotNull null
+
+            SEpisode.create().apply {
+                val epNumber = eIndex + 1
+                setUrlWithoutDomain("$cleanUrl?s=$seasonNumber&ep=$epNumber")
+                var epTitle = episode.title?.trim() ?: ""
+                epTitle = epTitle.replace("Épisode", "Episode", true)
+                name = if (isSingleEpisode) searchTitle else epTitle
+                episode_number = epNumber.toFloat()
+                scanlator = availableLangs.joinToString(", ")
+            }
+        }
+
+        val seasonIsOav = isOavFormat || season.title.contains("OAV", true) || season.title.contains("Special", true)
+
+        return coreMapEpisodes(
+            rawEpisodes = rawEpisodes,
+            tmdbMetadata = tmdbMetadata,
+            tmdbS0Metadata = null,
+            offsets = offsets,
+            sNum = tmdbSNum,
+            isMovie = isMovie,
+            isOav = seasonIsOav,
+        )
+    }
+
+    private fun applyEpisodePostProcessing(
+        mappedEpisodes: List<SEpisode>,
+        isKai: Boolean,
+        isSingleEpisode: Boolean,
+        format: String,
+        searchTitle: String,
+        sNumFromUrl: Int?,
+        seasonCount: Int,
+        globalEpisodeNumber: Float,
+    ): Float {
+        var currentEpisodeNumber = globalEpisodeNumber
+        mappedEpisodes.forEach {
+            if (isKai) {
+                it.preview_url = null
+                it.summary = null
+            }
+            if (isSingleEpisode) {
+                val prefix = when (format) {
+                    "FILM" -> "[Movie] "
+                    "OVA", "SPECIAL" -> "[Special] "
+                    else -> ""
+                }
+                it.name = "$prefix$searchTitle".trim()
+            }
+            if (sNumFromUrl == null && seasonCount > 1) it.episode_number = currentEpisodeNumber++
+        }
+        return currentEpisodeNumber
     }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
@@ -364,22 +442,27 @@ class FrAnime : ConfigurableSource() {
                 val responseBody = client.get("$baseApiAnimeUrl/$animeId/$seasonIdx/$episodeIdx/$lang/$playerIdx", headers)
                     .use { it.body.string() }
 
-                var playerUrl = if (responseBody.contains("watch2")) {
-                    val uri = responseBody.toHttpUrl()
-                    var decoded: String? = null
-                    for (paramName in uri.queryParameterNames) {
-                        val paramVal = uri.queryParameter(paramName) ?: continue
-                        decoded = decryptFrAnime(paramVal)
-                        if (decoded != null) break
-                    }
-                    decoded ?: responseBody
-                } else if (!responseBody.startsWith("http")) {
-                    decryptFrAnime(responseBody) ?: responseBody
-                } else {
-                    responseBody
-                }
+                val playerUrl = resolvePlayerUrl(responseBody)
                 extractVideos(playerUrl, langLabel, supportedServers)
             }
+    }
+
+    private fun resolvePlayerUrl(responseBody: String): String {
+        if (!responseBody.contains("watch2")) {
+            return if (!responseBody.startsWith("http")) {
+                decryptFrAnime(responseBody) ?: responseBody
+            } else {
+                responseBody
+            }
+        }
+        val uri = responseBody.toHttpUrl()
+        var decoded: String? = null
+        for (paramName in uri.queryParameterNames) {
+            val paramVal = uri.queryParameter(paramName) ?: continue
+            decoded = decryptFrAnime(paramVal)
+            if (decoded != null) break
+        }
+        return decoded ?: responseBody
     }
 
     private fun normalize(s: String): String = s.lowercase()
