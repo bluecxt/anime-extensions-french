@@ -47,6 +47,15 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk # Si nécessaire
 ./gradlew :src:fr:exemple:assembleDebug
 ```
 
+### 🧪 Mode embed brut (`RAW_EMBED_MODE`)
+Flag de build **réservé à un outillage personnel**, désactivé par défaut. Activé
+(`RAW_EMBED_MODE=true`, env ou `local.properties`), `Source.extractVideos()` court-circuite les
+extracteurs et renvoie directement l'URL du lecteur :
+```bash
+RAW_EMBED_MODE=true ./gradlew :src:fr:exemple:assembleDebug
+```
+À ne pas activer pour un build destiné au dépôt public.
+
 ## ✅ État des Extensions (Septembre 2026)
 
 Le repository regroupe les sources francophones les plus fiables et maintenues. Pour le détail des sources de métadonnées, consultez [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
