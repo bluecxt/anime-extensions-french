@@ -99,7 +99,16 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidmoly" -> VideoServer(
         name = "Vidmoly",
-        hosts = listOf("vidmoly.me", "vidmoly.to", "vidmoly.biz", "vidmoly.net", "vidmoly.org", "vidmoly.cc", "ansembed.net", "voembed.net"),
+        hosts = listOf(
+            "vidmoly.me",
+            "vidmoly.to",
+            "vidmoly.biz",
+            "vidmoly.net",
+            "vidmoly.org",
+            "vidmoly.cc",
+            "ansembed.net",
+            "voembed.net",
+        ),
         extractor = { url -> VidmolyExtractor(source.extractorClient, source.headers).videosFromUrl(url) },
     )
 
@@ -135,13 +144,31 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Streamtape" -> VideoServer(
         name = "Streamtape",
-        hosts = listOf("streamtape.com", "shavetape.cash", "streamtape.to", "streamtape.net", "streamtape.pe", "streamtape.org", "shavetape.com"),
+        hosts = listOf(
+            "streamtape.com",
+            "shavetape.cash",
+            "streamtape.to",
+            "streamtape.net",
+            "streamtape.pe",
+            "streamtape.org",
+            "shavetape.com",
+        ),
         extractor = { url -> StreamtapeExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
     "Filemoon" -> VideoServer(
         name = "Filemoon",
-        hosts = listOf("filemoon.to", "filemoon.sx", "filemoon.ps", "filemoon.eu", "nzn3.org", "boosteradx.online", "byse.sx", "bysewihe.com", "bysedikamoum.com"),
+        hosts = listOf(
+            "filemoon.to",
+            "filemoon.sx",
+            "filemoon.ps",
+            "filemoon.eu",
+            "nzn3.org",
+            "boosteradx.online",
+            "byse.sx",
+            "bysewihe.com",
+            "bysedikamoum.com",
+        ),
         extractor = { url -> FilemoonExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
@@ -178,7 +205,18 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Vidara" -> VideoServer(
         name = "Vidara",
-        hosts = listOf("vidara.so", "vidara.to", "vidaraa.cc", "vidavaca.cc", "viewdara.com", "vidchampions.com", "thebesthosterv.com", "kitchenstories.fit", "odysseusa.cc", "shadowbyte.site"),
+        hosts = listOf(
+            "vidara.so",
+            "vidara.to",
+            "vidaraa.cc",
+            "vidavaca.cc",
+            "viewdara.com",
+            "vidchampions.com",
+            "thebesthosterv.com",
+            "kitchenstories.fit",
+            "odysseusa.cc",
+            "shadowbyte.site",
+        ),
         extractor = { url -> VidaraExtractor(source.extractorClient).videosFromUrl(url) },
     )
 
@@ -231,7 +269,18 @@ fun getVideoServer(source: Source, name: String): VideoServer? = when (name) {
 
     "Uqload" -> VideoServer(
         name = "Uqload",
-        hosts = listOf("uqload.com", "uqload.co", "uqload.to", "uqload.is", "uqload.bz", "uqload.io", "uqload.cx", "uqload.vc", "uqload.net", "uqload.ws"),
+        hosts = listOf(
+            "uqload.com",
+            "uqload.co",
+            "uqload.to",
+            "uqload.is",
+            "uqload.bz",
+            "uqload.io",
+            "uqload.cx",
+            "uqload.vc",
+            "uqload.net",
+            "uqload.ws",
+        ),
         extractor = { url -> UqloadExtractor(source.extractorClient).videosFromUrl(url) },
     )
 

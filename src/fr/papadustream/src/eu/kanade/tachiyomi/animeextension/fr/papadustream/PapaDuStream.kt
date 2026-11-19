@@ -22,7 +22,6 @@ import fr.bluecxt.core.DEFAULT_USER_AGENT
 import fr.bluecxt.core.HUB_SEASON_NUMBER
 import fr.bluecxt.core.PAPADUSTREAM_LOG
 import fr.bluecxt.core.filters.FilterSpec
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.utils.extractSeasonNumber
 import fr.bluecxt.core.tvdb.TvdbMetadata

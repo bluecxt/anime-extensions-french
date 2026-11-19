@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.RateLimitException
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.tmdb.fetchTmdbMetadata
 import fr.bluecxt.core.utils.runCatchingCancellable

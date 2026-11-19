@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.model.SelectorException
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.useAsJsoup

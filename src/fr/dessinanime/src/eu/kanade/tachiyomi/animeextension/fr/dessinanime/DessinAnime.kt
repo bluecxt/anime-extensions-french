@@ -29,7 +29,6 @@ import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.ContentUnavailableException
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.model.RateLimitException
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath

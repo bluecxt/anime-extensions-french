@@ -21,7 +21,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import fr.bluecxt.core.ANIMEULTIME_LOG
 import fr.bluecxt.core.model.ExtractedSource
 import fr.bluecxt.core.model.VoiceLanguage
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.get

@@ -18,7 +18,6 @@ import fr.bluecxt.core.filters.FilterSpec
 import fr.bluecxt.core.model.VoiceLanguage.RAW
 import fr.bluecxt.core.model.VoiceLanguage.VF
 import fr.bluecxt.core.model.VoiceLanguage.VOSTFR
-import fr.bluecxt.core.preference.CommonPreferences
 import fr.bluecxt.core.source.ConfigurableSource
 import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.safeRelativePath
