@@ -19,6 +19,7 @@ import fr.bluecxt.core.tmdb.dto.TmdbSeasonResponse
 import fr.bluecxt.core.tmdb.utils.calculateSimilarityScore
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
 import keiyoushi.core.BuildConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import java.net.URLEncoder
 
@@ -43,6 +44,8 @@ private val ignoredRegex by lazy {
         val jsonStream = Source::class.java.getResourceAsStream("/tmdb_ignored.json")
         val jsonString = jsonStream?.bufferedReader()?.use { it.readText() } ?: "[]"
         tmdbJson.decodeFromString<List<String>>(jsonString)
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         emptyList()
     }
@@ -77,6 +80,8 @@ suspend fun Source.fetchTmdbMovieMetadata(query: String, lang: String = "fr-FR")
         } else {
             null
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         null
     }
@@ -152,6 +157,8 @@ fun Source.filterSmartMetadata(meta: TmdbMetadata, isSpecialSeason: Boolean = fa
 suspend fun Source.fetchTmdbMetadataById(id: Int, type: String, season: Int = 1, lang: String = "fr-FR"): TmdbMetadata? = try {
     val typeClean = if (type == "tv" || type == "series") "tv" else "movie"
     constructMetadata(id, typeClean, season, lang)
+} catch (e: CancellationException) {
+    throw e
 } catch (_: Exception) {
     null
 }
@@ -196,6 +203,8 @@ private suspend fun Source.alternativeTitleScore(query: String, mediaType: Strin
         for (alt in altDto.results) {
             altScore = maxOf(altScore, calculateSimilarityScore(query, alt.title))
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {}
     return altScore
 }
@@ -277,6 +286,8 @@ private suspend fun Source.performTmdbSearch(query: String, season: Int, type: S
         val mediaType = bestMatch.mediaType ?: (targetType ?: "tv")
 
         return constructMetadata(id, mediaType, season, lang)
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         return if (lang != "en-US") performTmdbSearch(query, season, type, "en-US") else null
     }
@@ -341,6 +352,8 @@ private suspend fun Source.fetchSeasonEpisodes(id: Int, season: Int, lang: Strin
     val langSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$lang")).awaitSuccess().use { it.body.string() }
     val seasonDto = tmdbJson.decodeFromString<TmdbSeasonResponse>(langSeasonBody)
     (seasonDto.overview?.takeIf { it.isNotBlank() } ?: mainSummary) to seasonDto.episodes
+} catch (e: CancellationException) {
+    throw e
 } catch (_: Exception) {
     mainSummary to emptyList<TmdbEpisodeDto>()
 }
@@ -361,6 +374,8 @@ private suspend fun Source.fetchSeasonPoster(id: Int, season: Int, originalLang:
     } else {
         fallback
     }
+} catch (e: CancellationException) {
+    throw e
 } catch (_: Exception) {
     fallback
 }
@@ -384,6 +399,8 @@ private suspend fun Source.fetchEnglishEpisodes(id: Int, season: Int, lang: Stri
     return try {
         val enSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=en-US")).awaitSuccess().use { it.body.string() }
         tmdbJson.decodeFromString<TmdbSeasonResponse>(enSeasonBody).episodes
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         null
     }
@@ -409,6 +426,8 @@ private suspend fun Source.fetchOriginalEpisodes(id: Int, season: Int, originalL
     return try {
         val origSeasonBody = client.newCall(GET("$TMDB_BASE_URL/tv/$id/season/$season?api_key=$TMDB_API_KEY&language=$originalLang")).awaitSuccess().use { it.body.string() }
         tmdbJson.decodeFromString<TmdbSeasonResponse>(origSeasonBody).episodes
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         null
     }
@@ -464,6 +483,8 @@ private suspend fun Source.applySeasonOffset(
                 fillOffsetEpisode(epMap, ep, relNum, genericRegex)
             }
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {}
 }
 
