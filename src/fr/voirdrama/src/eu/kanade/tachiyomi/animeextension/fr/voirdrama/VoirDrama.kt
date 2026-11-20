@@ -10,9 +10,13 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import fr.bluecxt.core.VOIRDRAMA_LOG
 import fr.bluecxt.core.filters.FilterSpec
+import fr.bluecxt.core.tvdb.TvdbMetadata
 import fr.bluecxt.core.tvdb.fetchTvdbMetadata
+import fr.bluecxt.core.utils.runCatchingCancellable
 import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.core.R
 import keiyoushi.utils.get
@@ -98,9 +102,7 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
             }
         }
 
-        if (thumbnail_url.isNullOrBlank()) {
-            thumbnail_url = metadata.seasonPosterUrl ?: metadata.mainPosterUrl
-        }
+        thumbnail_url = resolveThumbnail(thumbnail_url, metadata, anime)
         if (genre.isNullOrBlank()) {
             genre = metadata.genre
         }
@@ -210,4 +212,17 @@ class VoirDrama : Madara("VoirDrama", "https://voirdrama.to", "fr") {
             "Tokusatsu" to "tokusatsu", "Vie quotidienne" to "vie-quotidienne", "Wuxia" to "wuxia",
         )
     }
+
+    /** Affiche du drama : métadonnées TVDB d'abord, puis l'affiche déclarée par la fiche (`og:image`). */
+    private suspend fun resolveThumbnail(current: String?, metadata: TvdbMetadata, anime: SAnime): String? = current?.takeIf { it.isNotBlank() }
+        ?: metadata.seasonPosterUrl?.takeIf { it.isNotBlank() }
+        ?: metadata.mainPosterUrl?.takeIf { it.isNotBlank() }
+        ?: pagePosterUrl(anime)
+
+    /** Affiche déclarée par la fiche (`og:image`), utilisée quand les métadonnées n'en fournissent pas. */
+    private suspend fun pagePosterUrl(anime: SAnime): String? = runCatchingCancellable {
+        client.newCall(GET("$baseUrl${anime.url}", headers)).awaitSuccess()
+            .useAsJsoup()
+            .selectFirst("meta[property=og:image]")?.attr("content")
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 }

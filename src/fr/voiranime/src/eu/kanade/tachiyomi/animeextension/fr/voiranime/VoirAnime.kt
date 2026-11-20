@@ -22,6 +22,8 @@ import keiyoushi.utils.useAsJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 
+private val LANGUAGE_REGEX = Regex("""\b(VOSTFR|VF|VA|VO)\b""", RegexOption.IGNORE_CASE)
+
 class VoirAnime : ConfigurableSource() {
 
     override val name = "VoirAnime"
@@ -193,7 +195,25 @@ class VoirAnime : ConfigurableSource() {
     // ============================ Video Links =============================
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val response = client.newCall(GET("$baseUrl${episode.url}", headers)).awaitSuccess()
-        val html = response.use { it.body.string() }
+        val document = response.use { it.useAsJsoup() }
+
+        val fromDom = document.select("section.vr-readers").mapNotNull { section ->
+            val lang = LANGUAGE_REGEX.find(section.selectFirst("h2")?.text().orEmpty())
+                ?.groupValues?.get(1)?.uppercase() ?: return@mapNotNull null
+            val urls = section.select("#epLecteurSelect option").mapNotNull { option ->
+                option.attr("value")
+                    .takeIf { it.isNotBlank() && !option.attr("data-restricted").equals("true", true) }
+            }.distinct()
+            if (urls.isEmpty()) {
+                null
+            } else {
+                Hoster(hosterName = lang, hosterUrl = urls.first(), internalData = "$lang|${urls.toJsonString()}")
+            }
+        }
+        if (fromDom.isNotEmpty()) return fromDom.sortHosters()
+
+        // Ancien format : objet JS `const readers = {...};`
+        val html = document.html()
         val readersJson = Regex("""const\s+readers\s*=\s*(\{.*?\});""").find(html)?.groupValues?.get(1)
             ?: return emptyList()
 
@@ -210,13 +230,7 @@ class VoirAnime : ConfigurableSource() {
 
             if (urls.isNotEmpty()) {
                 val lang = langKey.uppercase()
-                hosters.add(
-                    Hoster(
-                        hosterName = lang,
-                        hosterUrl = urls.first(),
-                        internalData = "$lang|${urls.toJsonString()}",
-                    ),
-                )
+                hosters.add(Hoster(hosterName = lang, hosterUrl = urls.first(), internalData = "$lang|${urls.toJsonString()}"))
             }
         }
         return hosters.sortHosters()

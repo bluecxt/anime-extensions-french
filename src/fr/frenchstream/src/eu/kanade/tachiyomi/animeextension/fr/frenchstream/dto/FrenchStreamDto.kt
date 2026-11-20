@@ -11,10 +11,24 @@ import fr.bluecxt.core.utils.safeRelativePath
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 private const val SEARCH_PAGE_SIZE = 15
+
+private val seasonsJson = Json { ignoreUnknownKeys = true }
+
+/**
+ * Une saison listée dans l'attribut `data-seasons` d'une carte de recherche :
+ * `n` numéro, `l` lien relatif, `p` affiche.
+ */
+@Serializable
+private data class SeasonEntryDto(
+    @SerialName("n") val number: Int = 0,
+    @SerialName("l") val link: String = "",
+    @SerialName("p") val poster: String? = null,
+)
 
 @Serializable
 data class RawCatalogItemDto(
@@ -44,9 +58,11 @@ data class CatalogItemDto(
         fun from(element: Element): CatalogItemDto? = with(element) {
             val title = selectFirst(".short-title, .search-title")?.text() ?: ""
             val posterUrl = selectFirst("img")?.attr("abs:src") ?: ""
-            val id = selectFirst("a.short-poster")?.safeRelativePath()?.linkToId()
+            val rawId = selectFirst("a.short-poster")?.safeRelativePath()?.linkToId()
                 ?: attr("onclick").takeIf { it.isNotBlank() }?.linkToId()
                 ?: return null
+            // Les liens « voir plus » (fssSearchMore(this)) et autres appels JS ne portent pas d'identifiant.
+            val id = rawId.takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
             return CatalogItemDto(title, posterUrl, id)
         }
     }
@@ -67,10 +83,31 @@ data class CatalogDto(
 
     companion object {
         fun from(document: Document, isSearch: Boolean = false): AnimesPage = with(document) {
-            val rawItems = select("#dle-content > .short, .search-item").mapNotNull { CatalogItemDto.from(it)?.toSAnime() }
+            val cards = select("#dle-content > .short, .search-item")
+            // Les cartes « série » exposent leurs saisons dans data-seasons (JSON) et n'ont plus de href.
+            val rawItems = cards.flatMap { card ->
+                card.seasonAnimes() ?: listOfNotNull(CatalogItemDto.from(card)?.toSAnime())
+            }
             val hasNextPage = selectFirst(".pnext a") != null ||
                 (isSearch && rawItems.size >= SEARCH_PAGE_SIZE)
             return AnimesPage(rawItems, hasNextPage)
+        }
+
+        /** Découpe une carte `search-series` en une entrée par saison, ou `null` si ce n'en est pas une. */
+        private fun Element.seasonAnimes(): List<SAnime>? {
+            val raw = attr("data-seasons").takeIf { it.isNotBlank() } ?: return null
+            val seasons = runCatching { seasonsJson.decodeFromString<List<SeasonEntryDto>>(raw) }.getOrNull()
+                ?.filter { it.link.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: return null
+            val baseTitle = selectFirst(".short-title, .search-title")?.text()
+                ?.substringBefore(" - ")?.trim().orEmpty()
+            val fallbackPoster = selectFirst("img")?.attr("abs:src").orEmpty()
+            return seasons.map { season ->
+                SAnime.create().apply {
+                    title = if (seasons.size > 1 && season.number > 0) "$baseTitle - Saison ${season.number}" else baseTitle
+                    url = season.link.linkToId()
+                    thumbnail_url = season.poster?.takeIf { it.isNotBlank() } ?: fallbackPoster
+                }
+            }
         }
     }
 }
