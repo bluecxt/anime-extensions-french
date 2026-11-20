@@ -18,6 +18,7 @@ import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 class WaveAnime : ConfigurableSource() {
 
@@ -59,7 +60,8 @@ class WaveAnime : ConfigurableSource() {
         val title: String? = null,
         val number: Int,
         @SerialName("season_number") val seasonNumber: Int = 1,
-        @SerialName("has_thumbnail") val hasThumbnail: Int = 0,
+        // L'API renvoie tantôt un entier, tantôt un booléen : on reste tolérant.
+        @SerialName("has_thumbnail") val hasThumbnail: JsonElement? = null,
     )
 
     @Serializable

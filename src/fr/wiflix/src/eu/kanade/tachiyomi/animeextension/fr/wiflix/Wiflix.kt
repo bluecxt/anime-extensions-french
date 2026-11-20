@@ -29,7 +29,7 @@ class Wiflix : ConfigurableSource() {
 
     override val name = "Wiflix"
 
-    override val defaultBaseUrl = "https://flemmix.studio"
+    override val defaultBaseUrl = "https://flemmix.uno"
 
     override val lang = "fr"
 

@@ -68,7 +68,7 @@ class PapaDuStream :
     JsoupExtensions {
 
     override val name = "PapaDuStream"
-    override val defaultBaseUrl = "https://papadustreami.forum"
+    override val defaultBaseUrl = "https://papadustreami.skin"
 
     override val supportedServers = listOf(
         "Voe",

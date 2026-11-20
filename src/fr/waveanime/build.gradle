@@ -1,7 +1,7 @@
 ext {
     extName = 'WaveAnime'
     extClass = '.WaveAnime'
-    extVersionCode = 22
+    extVersionCode = 23
     isNsfw = false
 }
 apply plugin: "kei.plugins.extension.legacy"
