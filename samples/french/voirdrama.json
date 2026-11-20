@@ -52,8 +52,7 @@
       "contract": {
         "requireNonBlankFields": [
           "title",
-          "description",
-          "thumbnail_url"
+          "url"
         ]
       }
     },

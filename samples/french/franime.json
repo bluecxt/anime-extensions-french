@@ -108,7 +108,7 @@
       }
     },
     {
-      "name": "FrAnime Video List Check",
+      "name": "FrAnime Video List Check — Filemoon présent et sans fallback",
       "target": "GET_VIDEO_LIST",
       "input": {
         "hoster": {
@@ -119,8 +119,58 @@
       "contract": {
         "minCount": 1,
         "requireNonBlankFields": [
-          "url"
-        ]
+          "url",
+          "quality"
+        ],
+        "fieldContains": {
+          "quality": [
+            "Filemoon"
+          ],
+          "url": [
+            ".m3u8"
+          ]
+        },
+        "fieldNotContains": {
+          "quality": [
+            "failed",
+            "Timeout",
+            "Rate Limited",
+            "All extraction flows failed"
+          ]
+        }
+      }
+    },
+    {
+      "name": "FrAnime Video List Check (VF) — Filemoon présent et sans fallback",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VF",
+          "internalData": "43222|0|0|vf"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url",
+          "quality"
+        ],
+        "fieldContains": {
+          "quality": [
+            "Filemoon"
+          ],
+          "url": [
+            ".m3u8"
+          ]
+        },
+        "fieldNotContains": {
+          "quality": [
+            "failed",
+            "Timeout",
+            "Rate Limited",
+            "All extraction flows failed"
+          ]
+        }
       }
     }
   ]
