@@ -58,10 +58,43 @@ jobs:
           fi
           cd ..
 
+      - name: Match local implementations
+        id: match
+        run: |
+          python3 .github/scripts/match-local-modules.py ${{ steps.detect.outputs.modules }} > matches.tsv 2> matches.log || true
+          cat matches.log
+          RELEVANT=""
+          TABLE=""
+          while IFS=$'\t' read -r MODULE STATUS LOCAL HINT; do
+            [ -z "$MODULE" ] && continue
+            if [ "$STATUS" != "absent" ]; then
+              # Un changement de build.gradle ou de README ne dit rien de notre code.
+              if (cd repo && git log --since="7 days ago" --name-only --pretty=format:"" -- "lib/$MODULE" | grep -E '\.(kt|java)$' | grep -v 'build\.gradle' | grep -q .); then
+                RELEVANT="$RELEVANT $MODULE"
+                TABLE="${TABLE}- \`$MODULE\` → \`$LOCAL\` ($([ "$STATUS" = lib ] && echo vendored || echo core))"$'\n'
+              else
+                TABLE="${TABLE}- \`$MODULE\` → \`$LOCAL\` (changement hors code, ignoré)"$'\n'
+              fi
+            else
+              TABLE="${TABLE}- \`$MODULE\` → absent ici"$'\n'
+              [ -n "$HINT" ] && TABLE="${TABLE}  - proche : \`$HINT\`"$'\n'
+            fi
+          done < matches.tsv
+          echo "table<<EOF" >> $GITHUB_OUTPUT
+          printf '%s' "$TABLE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "relevant=$RELEVANT" >> $GITHUB_OUTPUT
+          echo "### Correspondance locale" >> $GITHUB_STEP_SUMMARY
+          echo -e "$TABLE" >> $GITHUB_STEP_SUMMARY
+          if [ -z "$RELEVANT" ]; then
+            echo "Aucun module utilisé ici n'a de changement de code : pas d'issue." >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Create Issue on Changes
-        if: steps.detect.outputs.changed == 'true'
+        if: steps.detect.outputs.changed == 'true' && steps.match.outputs.relevant != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          MATCH_TABLE: ${{ steps.match.outputs.table }}
           MODULES: ${{ steps.detect.outputs.modules }}
           FILES: ${{ steps.detect.outputs.files }}
           COMMITS: ${{ steps.detect.outputs.commits }}
@@ -74,6 +107,9 @@ jobs:
 
           **Modules concernés :**
           $FORMATTED_MODULES
+
+          **Chez nous :**
+          $MATCH_TABLE
 
           **Commits :**
           \`\`\`
@@ -125,7 +161,9 @@ jobs:
           DIFF_FILES=$(git log --since="7 days ago" --name-only --pretty=format:"" | sort -u | grep -v '^$')
           
           if [ -n "$COMMITS" ]; then
+            MODIFIED_MODULES=$(echo "$DIFF_FILES" | grep -E '\.py$' | sed 's/\.py$//' | tr '\n' ' ' | sed 's/ $//')
             echo "changed=true" >> $GITHUB_OUTPUT
+            echo "modules=$MODIFIED_MODULES" >> $GITHUB_OUTPUT
             
             echo "files<<EOF" >> $GITHUB_OUTPUT
             echo "$DIFF_FILES" >> $GITHUB_OUTPUT
@@ -151,10 +189,38 @@ jobs:
           fi
           cd ..
 
+      - name: Match local implementations
+        id: match-docchi
+        run: |
+          python3 .github/scripts/match-local-modules.py ${{ steps.detect-docchi.outputs.modules }} > matches.tsv 2> matches.log || true
+          cat matches.log
+          RELEVANT=""
+          TABLE=""
+          while IFS=$'\t' read -r MODULE STATUS LOCAL HINT; do
+            [ -z "$MODULE" ] && continue
+            if [ "$STATUS" != "absent" ]; then
+              RELEVANT="$RELEVANT $MODULE"
+              TABLE="${TABLE}- \`$MODULE\` → \`$LOCAL\` ($([ "$STATUS" = lib ] && echo vendored || echo core))"$'\n'
+            else
+              TABLE="${TABLE}- \`$MODULE\` → absent ici"$'\n'
+              [ -n "$HINT" ] && TABLE="${TABLE}  - proche : \`$HINT\`"$'\n'
+            fi
+          done < matches.tsv
+          echo "table<<EOF" >> $GITHUB_OUTPUT
+          printf '%s' "$TABLE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "relevant=$RELEVANT" >> $GITHUB_OUTPUT
+          echo "### Correspondance locale" >> $GITHUB_STEP_SUMMARY
+          echo -e "$TABLE" >> $GITHUB_STEP_SUMMARY
+          if [ -z "$RELEVANT" ]; then
+            echo "Aucun player utilisé ici : pas d'issue." >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Create Issue on Weekly Docchi Changes
-        if: steps.detect-docchi.outputs.changed == 'true'
+        if: steps.detect-docchi.outputs.changed == 'true' && steps.match-docchi.outputs.relevant != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          MATCH_TABLE: ${{ steps.match-docchi.outputs.table }}
           FILES: ${{ steps.detect-docchi.outputs.files }}
           COMMITS: ${{ steps.detect-docchi.outputs.commits }}
           DIFF: ${{ steps.detect-docchi.outputs.diff }}
@@ -164,6 +230,9 @@ jobs:
           
           ISSUE_BODY="Des modifications ont été publiées cette semaine sur la branche \`main\` du dépôt **skoruppa/docchi-players**.
           
+          **Chez nous :**
+          $MATCH_TABLE
+
           **Commits de la semaine :**
           \`\`\`
           $COMMITS
