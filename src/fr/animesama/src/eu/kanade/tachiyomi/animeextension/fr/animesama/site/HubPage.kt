@@ -113,20 +113,24 @@ internal object HubPage {
      * @param hubPath absolute path of the work.
      * @return the declared seasons, deduplicated by season root.
      */
-    fun seasons(document: Document, hubPath: String): List<SeasonRef> {
-        val scripts = document.select("script").joinToString("\n") { it.html() }
-        val uncommented = lineCommentRegex.replace(blockCommentRegex.replace(scripts, ""), "")
-
-        return panelRegex.findAll(uncommented)
-            .mapNotNull { match ->
+    fun seasons(document: Document, hubPath: String): List<SeasonRef> = document.select("script")
+        .asSequence()
+        .map { it.data() }
+        .filter { it.contains("panneauAnime") }
+        .flatMap { scriptContent ->
+            val uncommented = lineCommentRegex.replace(blockCommentRegex.replace(scriptContent, ""), "")
+            panelRegex.findAll(uncommented).mapNotNull { match ->
                 val label = match.groupValues[1].trim()
                 val relativePath = match.groupValues[2].trim().trim('/')
-                if (relativePath.isBlank()) return@mapNotNull null
-                SeasonRef(label, SitePaths.normalize("$hubPath/$relativePath"))
+                if (relativePath.isBlank()) {
+                    null
+                } else {
+                    SeasonRef(label, SitePaths.normalize("$hubPath/$relativePath"))
+                }
             }
-            .distinctBy { SitePaths.seasonPath(it.path) }
-            .toList()
-    }
+        }
+        .distinctBy { SitePaths.seasonPath(it.path) }
+        .toList()
 
     /**
      * Reads the alternate titles advertised under the main title.

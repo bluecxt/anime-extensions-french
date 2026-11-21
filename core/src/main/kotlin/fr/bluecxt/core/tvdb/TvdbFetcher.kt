@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.post
 import fr.bluecxt.core.TVDB_LOG
+import fr.bluecxt.core.cache.LruCache
 import fr.bluecxt.core.monitoring.ErrorWebhook
 import fr.bluecxt.core.source.Source
 import fr.bluecxt.core.tmdb.utils.sanitizeTitle
@@ -44,7 +45,7 @@ import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
-import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.hours
 
 /** Type d'artwork TVDB : poster de saison. */
 private const val ARTWORK_TYPE_SEASON_POSTER = 7
@@ -100,19 +101,8 @@ private var tokenTimestamp: Long = 0L
 private val tokenMutex by lazy { Mutex() }
 private const val TOKEN_LIFETIME_MS = 28 * 24 * 3600 * 1000L // 28 Days
 
-// In-Memory Metadata Cache (1 hour TTL)
-private val tvdbMetadataCache = ConcurrentHashMap<String, Pair<TvdbMetadata, Long>>()
-private val requestMutexes = ConcurrentHashMap<String, Mutex>()
-private const val METADATA_CACHE_LIFETIME_MS = 3600 * 1000L
-
-private fun ConcurrentHashMap<String, Pair<TvdbMetadata, Long>>.getCache(cacheKey: String): TvdbMetadata? {
-    val cached = this[cacheKey]
-    if (cached != null && System.currentTimeMillis() - cached.second < METADATA_CACHE_LIFETIME_MS) {
-        Log.d(TVDB_LOG, "TVDB Cache hit for '$cacheKey'")
-        return cached.first
-    }
-    return null
-}
+// In-Memory Metadata Cache (1 hour TTL, max 500 entries with LRU eviction)
+private val tvdbMetadataCache = LruCache<String, TvdbMetadata>(maxEntries = 500, defaultTtl = 1.hours)
 
 private val liveActionSlugRegex = Regex("""(?i)(?:^|-)(?:dorama|drama|live-action|j-drama|k-drama)(?:$|-|\d)""")
 private val animeSlugRegex = Regex("""(?i)(?:^|-)(?:anime)(?:$|-|\d)""")
@@ -244,34 +234,25 @@ class TvdbFetcher(
     ): TvdbMetadata? {
         val sortedNamesKey = expectedNames.sorted().joinToString(";")
         val cacheKey = "$remoteId:$source:$season:$sortedNamesKey:$movieWanted:$seasonOrderType:$episodeOrderType:$preferJapanesePoster"
-        tvdbMetadataCache.getCache(cacheKey)?.let {
-            return it
-        }
-
-        val mutex = requestMutexes.computeIfAbsent(cacheKey) { Mutex() }
-        return mutex.withLock {
-            tvdbMetadataCache.getCache(cacheKey)?.let {
-                return it
-            }
-
+        return tvdbMetadataCache.getOrPut(cacheKey) {
             val remoteMedia: TvdbRemoteMedia = resolveRemoteMedia(remoteId, expectedNames, movieWanted)
-                ?: return@withLock null
+                ?: return@getOrPut null
 
             if (remoteMedia.isMovie) {
-                val movieExtended = fetchMovieExtended(remoteMedia.id) ?: return@withLock null
+                val movieExtended = fetchMovieExtended(remoteMedia.id) ?: return@getOrPut null
                 if (expectedNames.isNotEmpty()) {
                     val candidateTitles = sequence {
                         yield(movieExtended.name)
                         movieExtended.translations?.nameTranslations?.forEach { yield(it.name) }
                     }
                     if (expectedNames.none { expected -> matchesExpectedTitle(expected, candidateTitles) > 0 }) {
-                        return@withLock null
+                        return@getOrPut null
                     }
                 }
-                return@withLock movieExtended.toTvdbMetadata()
+                return@getOrPut movieExtended.toTvdbMetadata()
             }
 
-            val extendedMetadata: TvdbSeriesExtendedData = fetchSeriesExtended(remoteMedia.id) ?: return@withLock null
+            val extendedMetadata: TvdbSeriesExtendedData = fetchSeriesExtended(remoteMedia.id) ?: return@getOrPut null
 
             if (expectedNames.isNotEmpty()) {
                 val candidateTitles = sequence {
@@ -279,7 +260,7 @@ class TvdbFetcher(
                     extendedMetadata.translations?.nameTranslations?.forEach { yield(it.name) }
                 }
                 if (expectedNames.none { expected -> matchesExpectedTitle(expected, candidateTitles) > 0 }) {
-                    return@withLock null
+                    return@getOrPut null
                 }
             }
 
@@ -291,8 +272,6 @@ class TvdbFetcher(
                 preferJapanesePoster = preferJapanesePoster,
                 matchScore = 100,
             )
-        }?.also { result ->
-            tvdbMetadataCache[cacheKey] = result to System.currentTimeMillis()
         }
     }
 
@@ -566,24 +545,14 @@ class TvdbFetcher(
     ): TvdbMetadata? {
         val sanitizedTitle = source.sanitizeTitle(title)
         val cacheKey = "${targetTvdbId ?: sanitizedTitle}:$season:$lang:$isMovie:${preference.name}:$seasonOrderType:$episodeOrderType:$preferJapanesePoster"
-
-        tvdbMetadataCache.getCache(cacheKey)?.let {
-            return it
-        }
-
-        val mutex = requestMutexes.computeIfAbsent(cacheKey) { Mutex() }
-        return mutex.withLock {
-            tvdbMetadataCache.getCache(cacheKey)?.let {
-                return it
-            }
-
+        return tvdbMetadataCache.getOrPut(cacheKey) {
             val searchData = resolveSearchData(
                 title = title,
                 sanitizedTitle = sanitizedTitle,
                 isMovie = isMovie,
                 preference = preference,
                 targetTvdbId = targetTvdbId,
-            ) ?: return@withLock null
+            ) ?: return@getOrPut null
 
             resolveMetadataFromSearchData(
                 searchData = searchData,
@@ -592,8 +561,6 @@ class TvdbFetcher(
                 episodeOrderType = episodeOrderType,
                 preferJapanesePoster = preferJapanesePoster,
             )
-        }?.also { result ->
-            tvdbMetadataCache[cacheKey] = result to System.currentTimeMillis()
         }
     }
 
