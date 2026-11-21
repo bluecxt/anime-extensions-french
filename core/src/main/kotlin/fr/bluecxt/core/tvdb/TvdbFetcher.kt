@@ -194,13 +194,17 @@ class TvdbFetcher(
             source.client.newCall(GET(url, headers)).await()
         }.getOrNull() ?: return null
 
-        if (response.isSuccessful) {
-            return response.body.source().use { source ->
-                tvdbJson.decodeFromBufferedSource<T>(source)
+        val (isSuccessful, code) = response.use { res ->
+            if (res.isSuccessful) {
+                return res.body.source().use { source ->
+                    tvdbJson.decodeFromBufferedSource<T>(source)
+                }
             }
+            Pair(res.isSuccessful, res.code)
         }
-        if (response.code != 401 && response.code != 403) return null
-        Log.w(TVDB_LOG, "TVDB ${response.code} Unauthorized on '$url', refreshing JWT token and retrying...")
+
+        if (code != 401 && code != 403) return null
+        Log.w(TVDB_LOG, "TVDB $code Unauthorized on '$url', refreshing JWT token and retrying...")
 
         val freshToken = getTvdbToken(forceRefresh = true) ?: return null
         val newHeaders = headers.newBuilder()
@@ -208,18 +212,19 @@ class TvdbFetcher(
             .build()
 
         return runCatchingCancellable {
-            val retryRes = source.client.newCall(GET(url, newHeaders)).await()
-            if (retryRes.isSuccessful) {
-                retryRes.body.source().use { source ->
-                    tvdbJson.decodeFromBufferedSource<T>(source)
+            source.client.newCall(GET(url, newHeaders)).await().use { retryRes ->
+                if (retryRes.isSuccessful) {
+                    retryRes.body.source().use { source ->
+                        tvdbJson.decodeFromBufferedSource<T>(source)
+                    }
+                } else {
+                    sendWebhook(
+                        url = url,
+                        context = "API TVDB v4 inaccessible (HTTP ${retryRes.code}) après rafraîchissement du token",
+                        exception = IllegalStateException("TVDB API v4 returned HTTP ${retryRes.code} for $url"),
+                    )
+                    null
                 }
-            } else {
-                sendWebhook(
-                    url = url,
-                    context = "API TVDB v4 inaccessible (HTTP ${retryRes.code}) après rafraîchissement du token",
-                    exception = IllegalStateException("TVDB API v4 returned HTTP ${retryRes.code} for $url"),
-                )
-                null
             }
         }.getOrNull()
     }
