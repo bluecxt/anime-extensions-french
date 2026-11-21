@@ -131,9 +131,12 @@ internal suspend fun Source.buildSeasonAnime(
     val isSpecial = contentType == ContentType.SPECIAL || contentType == ContentType.OAV
     val tmdbId = hub.tmdb?.takeIf { it.isMovie == isMovie }?.id
 
+    // Same correction as in the source: a sequel split into its own work is a later TVDB
+    // season, not a first one.
+    val tvdbSeasonLabel = SequelSeasons.seasonLabel(seriesTitle, titles, season.label) ?: season.label
     val tvdb = fetchTvdbForPanel(
         seriesTitle = seriesTitle,
-        rawSeasonName = season.label,
+        rawSeasonName = tvdbSeasonLabel,
         fullTitle = fullTitle,
         titles = titles,
         isMovie = isMovie,

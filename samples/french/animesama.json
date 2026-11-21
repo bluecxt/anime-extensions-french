@@ -101,6 +101,50 @@
       }
     },
     {
+      "name": "AnimeSama Split Sequel - Cyberpunk Edgerunners 2 uses TVDB season 2",
+      "target": "GET_EPISODE_LIST",
+      "input": {
+        "anime": {
+          "title": "Cyberpunk: Edgerunners 2",
+          "url": "{\"url\":\"/catalogue/cyberpunk-edgerunners-2/saison1/vostfr\",\"titles\":[\"Cyberpunk: Edgerunners 2\"],\"season\":\"Saison 1\"}"
+        }
+      },
+      "contract": {
+        "minCount": 10,
+        "requireNonBlankFields": [
+          "name",
+          "url",
+          "thumbnail_url"
+        ],
+        "fieldContains": {
+          "name": [
+            "Last Chance for a Slow Dance"
+          ]
+        },
+        "fieldNotContains": {
+          "name": [
+            "Let You Down"
+          ]
+        }
+      }
+    },
+    {
+      "name": "AnimeSama Split Sequel - poster comes from TVDB season 2",
+      "target": "GET_SEASON_LIST",
+      "input": {
+        "anime": {
+          "title": "Cyberpunk: Edgerunners 2",
+          "url": "{\"url\":\"/catalogue/cyberpunk-edgerunners-2\",\"titles\":[\"Cyberpunk: Edgerunners 2\"]}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "disallowedThumbnails": [
+          "https://artworks.thetvdb.com/banners/v4/season/1961134/posters/63227ca9b482b.jpg"
+        ]
+      }
+    },
+    {
       "name": "AnimeSama Related Anime Check",
       "target": "FETCH_RELATED",
       "input": {

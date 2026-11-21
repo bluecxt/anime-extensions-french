@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacyEpisodeLi
 import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacyHosterList
 import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacySeasonList
 import eu.kanade.tachiyomi.animeextension.fr.animesama.legacy.getLegacyVideoList
+import eu.kanade.tachiyomi.animeextension.fr.animesama.metadata.SequelSeasons
 import eu.kanade.tachiyomi.animeextension.fr.animesama.metadata.buildSeasonAnime
 import eu.kanade.tachiyomi.animeextension.fr.animesama.metadata.enrichFromHub
 import eu.kanade.tachiyomi.animeextension.fr.animesama.model.ContentType
@@ -506,9 +507,12 @@ class AnimeSama :
         tmdbId: Long?,
     ): TvdbMetadata? {
         val contentType = ContentType.from(seasonLabel ?: seriesTitle, path)
+        // Some sequels are a separate work on the site with a single "Saison 1" panel, while
+        // TVDB keeps them as a later season of the main series.
+        val tvdbSeasonLabel = SequelSeasons.seasonLabel(seriesTitle, titles, seasonLabel) ?: seasonLabel
         return fetchTvdbForPanel(
             seriesTitle = seriesTitle,
-            rawSeasonName = seasonLabel,
+            rawSeasonName = tvdbSeasonLabel,
             fullTitle = fullTitle,
             titles = titles,
             isMovie = contentType == ContentType.MOVIE,
