@@ -129,6 +129,22 @@
       }
     },
     {
+      "name": "AnimeSama Expired Link Token (401) Recovery",
+      "target": "GET_VIDEO_LIST",
+      "input": {
+        "hoster": {
+          "hosterName": "VOSTFR",
+          "internalData": "{\"seasonPath\":\"/catalogue/relife/saison1\",\"links\":[{\"lang\":\"vostfr\",\"host\":\"ansembed.net\",\"server\":\"Vidmoly\",\"id\":\"91806\",\"token\":\"2641.1795741200.1ca38e458ccf490eec17bd9f\"}]}"
+        }
+      },
+      "contract": {
+        "minCount": 1,
+        "requireNonBlankFields": [
+          "url"
+        ]
+      }
+    },
+    {
       "name": "AnimeSama Split Sequel - poster comes from TVDB season 2",
       "target": "GET_SEASON_LIST",
       "input": {

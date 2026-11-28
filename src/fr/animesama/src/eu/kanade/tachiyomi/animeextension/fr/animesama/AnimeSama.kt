@@ -75,6 +75,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Anime-Sama source.
@@ -162,6 +165,14 @@ class AnimeSama :
 
     /** Resolves stored references into embed URLs, renewing an expired token once. */
     private val linkResolver = LinkResolver(::callLinkApi, ::freshToken)
+
+    /**
+     * Token obtained for the current playback, per season and language.
+     *
+     * The links of one episode are resolved in parallel: without this, a hoster holding three
+     * links would reload the season page three times.
+     */
+    private val freshTokens = ConcurrentHashMap<String, Pair<String, TimeMark>>()
 
     /** Router name of each hostname already seen, avoiding a lookup per link. */
     private val serverNames = ConcurrentHashMap<String, String>()
@@ -553,18 +564,28 @@ class AnimeSama :
     /**
      * Loads a season page again to obtain a token the link API will accept.
      *
-     * The token is embedded in the page and expires, so the cached copy is dropped first.
+     * The token is embedded in the page and expires, so the cached copy is dropped first. A token
+     * obtained here is reused for the other links of the same episode, which are resolved in
+     * parallel.
      */
     private suspend fun freshToken(seasonPath: String, lang: String): String? {
+        val key = "$seasonPath|$lang"
+        freshTokens[key]?.let { (token, expiry) ->
+            if (!expiry.hasPassedNow()) return token
+        }
+
         pages.invalidate(SitePaths.seasonUrl(seasonPath, lang))
-        return loadScript(seasonPath, lang)?.token
+        val token = loadScript(seasonPath, lang)?.token ?: return null
+        freshTokens[key] = token to (TimeSource.Monotonic.markNow() + FRESH_TOKEN_LIFETIME)
+        return token
     }
 
     /**
      * Resolves one reference through the link API.
      *
-     * The API answers `403` for an expired page token, `404` for an unknown reference and `400`
-     * for a malformed request; the HTTP client turns every non-2xx answer into an exception.
+     * The API answers `401` when the page token expired, `403` for an unknown or missing token,
+     * `404` for an unknown reference and `400` for a malformed request; the HTTP client turns
+     * every non-2xx answer into an exception.
      *
      * @param token page token the reference was read with.
      * @param id reference to resolve.
@@ -597,12 +618,13 @@ class AnimeSama :
     }
 
     /**
-     * Maps a failed link API call to a resolver outcome.
+     * Maps a failed link API call to a resolver outcome, so that an expired token (401) and an
+     * unknown one (403) both lead to a single refresh instead of a dead end.
      *
      * @param error failure raised by the HTTP client.
      */
     private fun apiFailure(error: Throwable): LinkResolver.ApiResult = when (error.safeHttpCode) {
-        HTTP_FORBIDDEN -> LinkResolver.ApiResult.TokenRejected
+        HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> LinkResolver.ApiResult.TokenRejected
         HTTP_BAD_REQUEST, HTTP_NOT_FOUND -> LinkResolver.ApiResult.Unavailable
         else -> LinkResolver.ApiResult.Failed
     }
@@ -867,7 +889,10 @@ class AnimeSama :
         /** Default state of the "Early Fetch" switch: off, since it costs one request per card. */
         private const val PREF_EARLY_FETCH_TYPE_DEFAULT = false
 
-        /** Status returned by the link API for an expired page token. */
+        /** Status returned by the link API when the page token expired. */
+        private const val HTTP_UNAUTHORIZED = 401
+
+        /** Status returned by the link API for an unknown or missing page token. */
         private const val HTTP_FORBIDDEN = 403
 
         /** Status returned by the link API for a malformed request. */
@@ -875,6 +900,9 @@ class AnimeSama :
 
         /** Status returned by the link API for an unknown reference. */
         private const val HTTP_NOT_FOUND = 404
+
+        /** How long a freshly fetched page token is reused for the other links of an episode. */
+        private val FRESH_TOKEN_LIFETIME = 30.seconds
 
         /** Message shown when the work page cannot be loaded. */
         private const val WORK_UNAVAILABLE =
