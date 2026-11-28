@@ -13,8 +13,9 @@ import fr.bluecxt.core.utils.defaultHeaders
 import fr.bluecxt.core.utils.unpacker.autoUnpacker
 import fr.bluecxt.core.utils.video.PlaylistUtils
 import keiyoushi.utils.useAsJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Headers
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 
 /**
  * Fabrique centralisée des échecs d'extraction, pour limiter le nombre de `throw` par fonction.
@@ -26,25 +27,30 @@ private fun extractionFailure(message: String): Nothing = throw ExtractionExcept
 class UqloadExtractor(private val client: OkHttpClient) {
 
     suspend fun videosFromUrl(url: String): List<ExtractedSource> {
-        val trueUrl = url.replace("embed-", "")
-        val parsedUrl = trueUrl.toHttpUrl()
-
+        // Uqload refuse un Referer venu d'un autre domaine que le sien : la page répond alors
+        // « Video embed restricted for this domain ». Sans Referer, la page complète est servie.
         val headers = defaultHeaders(
-            referer = "${parsedUrl.scheme}://${parsedUrl.host}",
             accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         )
 
-        val streamingHeaders = defaultHeaders(referer = "${parsedUrl.scheme}://${parsedUrl.host}")
+        val streamingHeaders = defaultHeaders()
 
-        val response = client.newCall(GET(trueUrl, headers)).awaitSuccessOrUnavailable(trueUrl)
-        val finalUrl = response.request.url
-        val path = finalUrl.encodedPath
-        if (path == "/" || path.isEmpty()) {
-            throw ContentUnavailableException("Uqload: Video not found (redirected to host homepage: ${finalUrl.host})")
+        // Le script JWPlayer vit désormais sur la page `embed-…` ; les anciens liens gardaient
+        // leurs sources sur la page sans ce préfixe, donc les deux sont essayées.
+        val candidates = listOf(url, url.replace("embed-", "")).distinct()
+        var playerPage: Document? = null
+        var script = ""
+
+        for (candidate in candidates) {
+            val (page, foundScript) = loadPlayerPage(candidate, headers)
+            playerPage = page
+            if (foundScript.isNotEmpty()) {
+                script = foundScript
+                break
+            }
         }
-        val soup = response.useAsJsoup()
 
-        val script = soup.selectFirst("script:containsData(eval):containsData(m3u8)")?.data() ?: extractionFailure("Could not find script with video data in Uqload")
+        if (script.isEmpty()) extractionFailure("Could not find script with video data in Uqload")
 
         val unpackedJs = autoUnpacker(script) ?: extractionFailure("Could not unpack script in Uqload")
 
@@ -70,9 +76,10 @@ class UqloadExtractor(private val client: OkHttpClient) {
             }
         }
 
-        // mp4 fallback
+        // Repli MP4 pour les anciennes pages.
         val mp4Regex = Regex("""sources:\s*\["(https?.*?\.mp4)"\]""")
-        soup.select("script").forEach { scriptTag ->
+        val scripts = playerPage?.select("script") ?: emptyList()
+        for (scriptTag in scripts) {
             val content = scriptTag.data()
             if (content.contains("sources:")) {
                 mp4Regex.find(content)?.groupValues?.get(1)?.let { mp4Url ->
@@ -87,5 +94,32 @@ class UqloadExtractor(private val client: OkHttpClient) {
         }
 
         extractionFailure("Uqload: No video sources found (HLS or MP4)")
+    }
+
+    /**
+     * Charge une page de lecteur et en extrait le script JWPlayer.
+     *
+     * @param url page à charger.
+     * @param headers en-têtes de la requête.
+     * @return la page et le script packé, vide quand la page n'en contient pas.
+     */
+    private suspend fun loadPlayerPage(url: String, headers: Headers): Pair<Document, String> {
+        val response = client.newCall(GET(url, headers)).awaitSuccessOrUnavailable(url)
+        val finalUrl = response.request.url
+        val path = finalUrl.encodedPath
+        if (path == "/" || path.isEmpty()) {
+            throw ContentUnavailableException("Uqload: Video not found (redirected to host homepage: ${finalUrl.host})")
+        }
+        val page = response.useAsJsoup()
+        if (page.text().contains(RESTRICTED_MARKER, ignoreCase = true)) {
+            throw ContentUnavailableException("Uqload: embed restricted for this domain")
+        }
+        val script = page.selectFirst("script:containsData(eval):containsData(m3u8)")?.data().orEmpty()
+        return page to script
+    }
+
+    /** Texte servi par Uqload quand le Referer ne lui plaît pas. */
+    private companion object {
+        const val RESTRICTED_MARKER = "embed restricted"
     }
 }
