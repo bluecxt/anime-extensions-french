@@ -283,6 +283,8 @@ private fun voeServer(source: Source): VideoServer = VideoServer(
         "voeunblock6.com", "voeunblock7.com", "voeunblock8.com", "voeunblock9.com", "voeunblock10.com",
         "jessicayeahcatch.com", "kathyinformationwhether.com", "ralphysuccessfull.org", "bryantenunder.com",
         "sandratableother.com", "derricknationtop.com", "teresapoliticallearn.com",
+        // Redirect stubs the site hands out for the current Voe mirrors.
+        "arianathankspecial.com", "caseyseemavoid.com",
     ),
     extractor = { url -> VoeExtractor(source.extractorClient).videosFromUrl(url) },
 )
